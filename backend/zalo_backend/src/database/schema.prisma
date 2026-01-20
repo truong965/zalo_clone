@@ -1,0 +1,339 @@
+// 
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  extensions = [pgcrypto, uuidOssp(map: "uuid-ossp")]
+}
+
+// =======================
+// 1. ENUMS 
+// =======================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DELETED
+  @@map("user_status")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  @@map("gender_type")
+}
+
+enum PrivacyLevel {
+  EVERYONE
+  CONTACTS
+  NOBODY
+  @@map("privacy_level")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  @@map("friendship_status")
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP
+  @@map("conversation_type")
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
+  @@map("member_role")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+  STICKER
+  SYSTEM
+  @@map("message_type")
+}
+
+// =======================
+// 2. MODELS (TABLES)
+// =======================
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(50) // VD: 'ADMIN', 'USER'
+  description String?  @db.VarChar(255)
+  
+  
+  // --- Audit Fields ---
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  
+  createdById String?   @map("created_by") @db.Uuid
+  updatedById String?   @map("updated_by") @db.Uuid
+  deletedById String?   @map("deleted_by") @db.Uuid
+  
+  // Relations
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(100) // VD: 'Create User', 'Delete Message'
+  apiPath     String   @map("api_path") // VD: '/api/v1/users' (Optional - dùng để map route)
+  method      String   @db.VarChar(10)  // VD: 'POST', 'GET'
+  module      String   @db.VarChar(50)  // VD: 'USERS', 'CHAT' (Gom nhóm quyền)
+  
+  // --- Audit Fields ---
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  
+  createdById String?   @map("created_by") @db.Uuid
+  updatedById String?   @map("updated_by") @db.Uuid
+  deletedById String?   @map("deleted_by") @db.Uuid
+  
+  // Relations
+  roles RolePermission[]
+  @@unique([apiPath, method, module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+  
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phoneNumber String   @unique @map("phone_number") @db.VarChar(20)
+  phoneCode   String   @default("+84") @map("phone_country_code") @db.VarChar(5)
+  
+  displayName String   @map("display_name") @db.VarChar(100)
+  avatarUrl   String?  @map("avatar_url")
+  bio         String?  @db.Text
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+  gender      Gender?
+  
+  status      UserStatus @default(ACTIVE)
+
+  roleId      String?  @map("role_id") @db.Uuid // Để null lúc đầu để dễ migrate, sau này set required
+  role        Role?    @relation(fields: [roleId], references: [id])
+
+  lastSeenAt  DateTime?  @map("last_seen_at") @db.Timestamptz
+  passwordHash String    @map("password_hash")
+
+  // --- Audit Fields ---
+  // Vẫn giữ createdById vì có thể Admin tạo User, hoặc System import
+  createdById String?   @map("created_by") @db.Uuid
+  updatedById String?   @map("updated_by") @db.Uuid
+  deletedById String?   @map("deleted_by") @db.Uuid
+  
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  
+  // --- Relationships ---
+  privacySettings PrivacySettings?
+  devices         UserDevice[]
+  
+  // Friends
+  sentFriendRequests     Friendship[] @relation("User1")
+  receivedFriendRequests Friendship[] @relation("User2")
+  friendshipInitiator    Friendship[] @relation("Requester")
+  
+  // Blocks
+  blocksBlocked    Block[] @relation("Blocker")
+  blocksWasBlocked Block[] @relation("Blocked")
+
+  // Chat
+  conversations    ConversationMember[]
+  messagesSent     Message[]
+  messagesDeleted  Message[] @relation("DeletedBy")
+
+  @@index([phoneNumber])
+  @@index([roleId])
+  @@map("users")
+}
+
+model PrivacySettings {
+  userId String @id @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  showOnlineStatus PrivacyLevel @default(CONTACTS) @map("show_online_status")
+  showPhoneNumber  PrivacyLevel @default(CONTACTS) @map("show_phone_number")
+  whoCanMessageMe  PrivacyLevel @default(EVERYONE) @map("who_can_message_me")
+  whoCanCallMe     PrivacyLevel @default(CONTACTS) @map("who_can_call_me")
+
+  // --- Audit Fields ---
+  // Loại bỏ createdById vì User tự tạo setting cho mình
+  updatedById String?   @map("updated_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("privacy_settings")
+}
+
+model Friendship {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user1Id     String           @map("user1_id") @db.Uuid
+  user2Id     String           @map("user2_id") @db.Uuid
+  requesterId String           @map("requester_id") @db.Uuid
+  status      FriendshipStatus @default(PENDING)
+  
+  // --- Audit Fields ---
+  // Đã xóa createdById vì requesterId chính là người tạo
+  updatedById String?   @map("updated_by") @db.Uuid
+  deletedById String?   @map("deleted_by") @db.Uuid
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  
+  // Relations
+  user1     User @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
+  requester User @relation("Requester", fields: [requesterId], references: [id])
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id, status])
+  @@index([user2Id, status])
+  @@map("friendships")
+}
+
+model Block {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@map("blocks")
+}
+
+model Conversation {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type          ConversationType
+  name          String?          @db.VarChar(255)
+  avatarUrl     String?          @map("avatar_url")
+  lastMessageAt DateTime?        @map("last_message_at") @db.Timestamptz
+
+  // --- Audit Fields ---
+  createdById String?   @map("created_by") @db.Uuid // Người tạo nhóm
+  updatedById String?   @map("updated_by") @db.Uuid
+  deletedById String?   @map("deleted_by") @db.Uuid
+  
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  members  ConversationMember[]
+  messages Message[]
+
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model ConversationMember {
+  conversationId String @map("conversation_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
+  role           MemberRole @default(MEMBER)
+  
+  lastReadMessageId String?   @map("last_read_message_id") @db.Uuid
+  lastReadAt        DateTime? @map("last_read_at") @db.Timestamptz
+  unreadCount       Int       @default(0) @map("unread_count")
+  
+  joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamptz
+  isActive Boolean  @default(true) @map("is_active")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId, unreadCount(sort: Desc)])
+  @@map("conversation_members")
+}
+
+model Message {
+  id             BigInt      @id @default(autoincrement())
+  conversationId String      @map("conversation_id") @db.Uuid
+  senderId       String?     @map("sender_id") @db.Uuid
+  type           MessageType @default(TEXT)
+  content        String?     @db.Text
+  metadata       Json?       @default("{}") @db.JsonB
+  replyToId      BigInt?     @map("reply_to_message_id")
+
+  // --- Audit Fields ---
+  // Đã xóa createdById vì senderId chính là người tạo
+  updatedById String?   @map("updated_by") @db.Uuid // Có thể edit tin nhắn
+  deletedById String?   @map("deleted_by") @db.Uuid // Có thể thu hồi (soft delete)
+  
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?        @relation(fields: [senderId], references: [id])
+  deletedBy    User?        @relation("DeletedBy", fields: [deletedById], references: [id])
+  parentMessage Message?    @relation("Reply", fields: [replyToId], references: [id])
+  replies       Message[]   @relation("Reply")
+  mediaAttachments MediaAttachment[]
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@map("messages")
+}
+
+model MediaAttachment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId BigInt   @map("message_id")
+  url       String
+  type      String   @db.VarChar(50)
+  size      BigInt?
+  
+  // --- Audit Fields ---
+  // Đã xóa createdById vì ăn theo Message
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("media_attachments")
+}
+
+model UserDevice {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  deviceId     String   @map("device_id") @db.VarChar(255)
+  fcmToken     String?  @map("fcm_token")
+  platform     String?  @db.VarChar(20)
+  lastActiveAt DateTime @default(now()) @map("last_active_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@map("user_devices")
+}

@@ -1,0 +1,15 @@
+{
+      // Tắt format mặc định của VS Code để tránh xung đột
+      "editor.formatOnSave": false,
+      // Kích hoạt tính năng "Tự động sửa lỗi" của ESLint khi Save
+      "editor.codeActionsOnSave": {
+            "source.fixAll.eslint": "explicit"
+      },
+      // Đảm bảo Validate ESLint cho các file này
+      "eslint.validate": [
+            "javascript",
+            "javascriptreact",
+            "typescript",
+            "typescriptreact"
+      ]
+}
