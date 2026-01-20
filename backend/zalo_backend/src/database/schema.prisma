@@ -185,9 +185,7 @@ model PrivacySettings {
   whoCanCallMe     PrivacyLevel @default(CONTACTS) @map("who_can_call_me")
 
   // --- Audit Fields ---
-  // Loại bỏ createdById vì User tự tạo setting cho mình
   updatedById String?   @map("updated_by") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("privacy_settings")
@@ -317,7 +315,8 @@ model MediaAttachment {
   // Đã xóa createdById vì ăn theo Message
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
-
+  deletedById String?   @map("deleted_by") @db.Uuid // Có thể thu hồi (soft delete)
+  
   // Relations
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 

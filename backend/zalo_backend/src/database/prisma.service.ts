@@ -1,25 +1,149 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
   Injectable,
   OnModuleInit,
   OnModuleDestroy,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { ClsService } from 'nestjs-cls';
+import { Pool } from 'pg';
 
-// / Định nghĩa Interface cho dữ liệu Audit để tránh dùng 'any'
 interface AuditData {
   createdById?: string;
   updatedById?: string;
   deletedById?: string;
   deletedAt?: Date;
-  [key: string]: unknown; // Cho phép các trường khác
+  [key: string]: unknown;
 }
-// Interface cho Soft Delete Filter
+
 interface SoftDeleteCriteria {
   deletedAt?: Date | null | object;
   [key: string]: unknown;
 }
+
+// 1. TÁCH LOGIC TẠO CLIENT RA HÀM RIÊNG (PURE FUNCTION)
+// Để TypeScript có thể suy luận (Infer) được Type trả về
+const createExtendedClient = (
+  baseClient: PrismaClient,
+  cls: ClsService,
+  sets: {
+    create: Set<string>;
+    update: Set<string>;
+    softDelete: Set<string>;
+  },
+  logger: Logger,
+) => {
+  return baseClient.$extends({
+    query: {
+      $allModels: {
+        create: async ({ model, args, query }) => {
+          const userId = cls.get<string>('userId');
+          if (sets.create.has(model) && userId) {
+            const data = args.data as AuditData;
+            data.createdById = userId;
+            if (sets.update.has(model)) {
+              data.updatedById = userId;
+            }
+          }
+          return query(args);
+        },
+
+        update: async ({ model, args, query }) => {
+          const userId = cls.get<string>('userId');
+          if (sets.update.has(model) && userId) {
+            const data = args.data as AuditData;
+            data.updatedById = userId;
+          }
+          return query(args);
+        },
+
+        updateMany: async ({ model, args, query }) => {
+          const userId = cls.get<string>('userId');
+          if (sets.update.has(model) && userId) {
+            const data = args.data as AuditData;
+            data.updatedById = userId;
+          }
+          return query(args);
+        },
+
+        delete: async ({ model, args, query }) => {
+          if (sets.softDelete.has(model)) {
+            const userId = cls.get<string>('userId');
+            const modelKey = model.charAt(0).toLowerCase() + model.slice(1);
+
+            // Note: Ở đây ta dùng 'any' tạm thời để truy cập dynamic key,
+            // nhưng type trả về của cả hàm này vẫn được TS hiểu đúng.
+            const extendedClient = baseClient as any;
+
+            if (!extendedClient[modelKey]) {
+              logger.error(`Model delegate for ${modelKey} not found!`);
+              return query(args);
+            }
+
+            return extendedClient[modelKey].update({
+              ...args,
+              data: {
+                deletedAt: new Date(),
+                ...(userId ? { deletedById: userId } : {}),
+              },
+            });
+          }
+          return query(args);
+        },
+
+        deleteMany: async ({ model, args, query }) => {
+          if (sets.softDelete.has(model)) {
+            const userId = cls.get<string>('userId');
+            const modelKey = model.charAt(0).toLowerCase() + model.slice(1);
+            const extendedClient = baseClient as any;
+
+            if (!extendedClient[modelKey]) {
+              logger.error(`Model delegate for ${modelKey} not found!`);
+              return query(args);
+            }
+
+            return extendedClient[modelKey].updateMany({
+              ...args,
+              data: {
+                deletedAt: new Date(),
+                ...(userId ? { deletedById: userId } : {}),
+              },
+            });
+          }
+          return query(args);
+        },
+
+        findMany: async ({ model, args, query }) => {
+          if (sets.softDelete.has(model)) {
+            const where = (args.where || {}) as SoftDeleteCriteria;
+            if (where.deletedAt === undefined) {
+              where.deletedAt = null;
+            }
+            args.where = where;
+          }
+          return query(args);
+        },
+
+        findFirst: async ({ model, args, query }) => {
+          if (sets.softDelete.has(model)) {
+            const where = (args.where || {}) as SoftDeleteCriteria;
+            if (where.deletedAt === undefined) {
+              where.deletedAt = null;
+            }
+            args.where = where;
+          }
+          return query(args);
+        },
+      },
+    },
+  });
+};
+
+//  XUẤT TYPE CỦA CLIENT ĐÃ EXTEND RA NGOÀI
+export type ExtendedPrismaClient = ReturnType<typeof createExtendedClient>;
 
 @Injectable()
 export class PrismaService
@@ -28,145 +152,55 @@ export class PrismaService
 {
   private readonly logger = new Logger(PrismaService.name);
 
-  // Cache để lưu danh sách các bảng có hỗ trợ các cột đặc biệt
-  private modelsWithAudit = new Set<string>(); // Có createdById, updatedById
-  private modelsWithSoftDelete = new Set<string>(); // Có deletedAt, deletedById
-  constructor(private readonly cls: ClsService) {
-    super();
+  private modelsWithCreateBy = new Set<string>();
+  private modelsWithUpdateBy = new Set<string>();
+  private modelsWithSoftDelete = new Set<string>();
+
+  //  SỬ DỤNG TYPE ĐÃ ĐỊNH NGHĨA (KHÔNG CÒN LÀ ANY NỮA)
+  private _extendedClient: ExtendedPrismaClient;
+
+  constructor(
+    private readonly cls: ClsService,
+    private readonly configService: ConfigService,
+  ) {
+    const connectionString = configService.get<string>('DATABASE_URL');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+    const pool = new Pool({ connectionString });
+    const adapter = new PrismaPg(pool);
+    super({ adapter });
+
+    // 4. GỌI HÀM HELPER ĐỂ TẠO CLIENT
+    this._extendedClient = createExtendedClient(
+      this,
+      this.cls,
+      {
+        create: this.modelsWithCreateBy,
+        update: this.modelsWithUpdateBy,
+        softDelete: this.modelsWithSoftDelete,
+      },
+      this.logger,
+    );
   }
 
-  get extended() {
-    // 1. CAPTURE CONTEXT: Lưu các biến class vào biến cục bộ để dùng trong closure
-    // Giúp tránh lỗi "this" bị undefined hoặc any bên trong $extends
-    const cls = this.cls;
-    const auditModels = this.modelsWithAudit;
-    const softDeleteModels = this.modelsWithSoftDelete;
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const self = this; // Capture chính instance PrismaService để gọi lại hàm update
-
-    return this.$extends({
-      query: {
-        $allModels: {
-          // Dùng Arrow Function để code gọn hơn (dù đã capture biến ở trên)
-          create: async ({ model, args, query }) => {
-            const userId = cls.get<string>('userId'); // Định rõ kiểu trả về là string
-
-            if (auditModels.has(model) && userId) {
-              // Cast về AuditData thay vì any -> Type Safe hơn
-              const data = args.data as AuditData;
-              data.createdById = userId;
-              data.updatedById = userId;
-            }
-
-            return query(args);
-          },
-
-          update: async ({ model, args, query }) => {
-            const userId = cls.get<string>('userId');
-
-            if (auditModels.has(model) && userId) {
-              const data = args.data as AuditData;
-              data.updatedById = userId;
-            }
-
-            return query(args);
-          },
-
-          updateMany: async ({ model, args, query }) => {
-            const userId = cls.get<string>('userId');
-
-            if (auditModels.has(model) && userId) {
-              // Với updateMany, args.data cũng cần ép kiểu tương tự
-              const data = args.data as AuditData;
-              data.updatedById = userId;
-            }
-
-            return query(args);
-          },
-
-          delete: async ({ model, args, query }) => {
-            if (softDeleteModels.has(model)) {
-              const userId = cls.get<string>('userId');
-
-              //truy cập model động (self[model]) trả về any,
-              //eslint-disable-next-line
-              return (self as any)[model].update({
-                ...args,
-                data: {
-                  deletedAt: new Date(),
-                  ...(userId ? { deletedById: userId } : {}),
-                },
-              });
-            }
-
-            return query(args);
-          },
-
-          deleteMany: async ({ model, args, query }) => {
-            if (softDeleteModels.has(model)) {
-              const userId = cls.get<string>('userId');
-              //truy cập model động (self[model]) trả về any,
-              // eslint-disable-next-line
-              return (self as any)[model].updateMany({
-                ...args,
-                data: {
-                  deletedAt: new Date(),
-                  ...(userId ? { deletedById: userId } : {}),
-                },
-              });
-            }
-            return query(args);
-          },
-          findMany: async ({ model, args, query }) => {
-            if (softDeleteModels.has(model)) {
-              const where = (args.where || {}) as SoftDeleteCriteria;
-
-              if (where.deletedAt === undefined) {
-                where.deletedAt = null;
-              }
-
-              args.where = where;
-            }
-            return query(args);
-          },
-
-          findFirst: async ({ model, args, query }) => {
-            if (softDeleteModels.has(model)) {
-              const where = (args.where || {}) as SoftDeleteCriteria;
-
-              if (where.deletedAt === undefined) {
-                where.deletedAt = null;
-              }
-
-              args.where = where;
-            }
-            return query(args);
-          },
-        },
-      },
-    });
+  // Getter bây giờ đã có Type xịn
+  get extended(): ExtendedPrismaClient {
+    return this._extendedClient;
   }
 
   async onModuleInit() {
     await this.$connect();
     this.logger.log('Connected to Database');
 
-    // 1. INTROSPECTION: Soi Schema để xem bảng nào có cột nào
-    // Prisma.dmmf chứa toàn bộ định nghĩa bảng của bạn
     const dmmf = Prisma.dmmf as Prisma.DMMF.Document;
-
     dmmf.datamodel.models.forEach((model) => {
       const fieldNames = model.fields.map((f) => f.name);
 
-      // Check xem bảng có đủ cặp createdById & updatedById không
-      if (
-        fieldNames.includes('createdById') &&
-        fieldNames.includes('updatedById')
-      ) {
-        this.modelsWithAudit.add(model.name);
+      if (fieldNames.includes('createdById')) {
+        this.modelsWithCreateBy.add(model.name);
       }
-
-      // Check xem bảng có hỗ trợ Soft Delete không
+      if (fieldNames.includes('updatedById')) {
+        this.modelsWithUpdateBy.add(model.name);
+      }
       if (
         fieldNames.includes('deletedAt') &&
         fieldNames.includes('deletedById')
@@ -175,12 +209,7 @@ export class PrismaService
       }
     });
 
-    this.logger.log(
-      `Audit Models detected: ${Array.from(this.modelsWithAudit).join(', ')}`,
-    );
-    this.logger.log(
-      `Soft Delete Models detected: ${Array.from(this.modelsWithSoftDelete).join(', ')}`,
-    );
+    this.logger.log(`Audit Init Completed`);
   }
 
   async onModuleDestroy() {

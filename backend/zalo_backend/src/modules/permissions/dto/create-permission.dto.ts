@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsUppercase } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
@@ -16,12 +16,16 @@ export class CreatePermissionDto {
   @ApiProperty({ example: 'POST', description: 'Method: GET, POST, PUT...' })
   @IsNotEmpty()
   @IsString()
-  @Transform(({ value }) => value?.toUpperCase()) // Tự động viết hoa
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  ) // Tự động viết hoa
   method: string;
 
   @ApiProperty({ example: 'USERS', description: 'Thuộc module nào' })
   @IsNotEmpty()
   @IsString()
-  @Transform(({ value }) => value?.toUpperCase())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  )
   module: string;
 }

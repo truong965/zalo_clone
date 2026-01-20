@@ -28,7 +28,7 @@ export abstract class BaseService<T> {
 
   // 2. FIND ALL (Tích hợp api-query-params)
   async findAll(currentPage: number, limit: number, qs: string) {
-    const { filter, sort } = aqp(qs);
+    const { filter, sort = {} } = aqp(qs);
 
     // Xử lý Pagination
     const page = currentPage ? +currentPage : 1;
@@ -90,7 +90,7 @@ export abstract class BaseService<T> {
   // 5. REMOVE (Soft Delete đã được PrismaService xử lý)
   async remove(id: string) {
     await this.findOne(id);
-    return await this.model.delete({
+    await this.model.delete({
       where: { id },
     });
   }

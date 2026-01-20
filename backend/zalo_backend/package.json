@@ -41,6 +41,7 @@
     "nestjs-cls": "^6.2.0",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
+    "pg": "^8.17.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1"
@@ -56,6 +57,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
     "@types/passport-local": "^1.0.38",
+    "@types/pg": "^8.16.0",
     "@types/supertest": "^6.0.2",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9.18.0",

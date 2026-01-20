@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ClsModule } from 'nestjs-cls';
 import { RolesModule } from './modules/roles/roles.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { DatabaseModule } from './database/prisma.module';
 @Module({
   imports: [
     // config schedule and cron jobs
@@ -33,7 +34,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
     RolesModule,
 
     PermissionsModule,
-
+    DatabaseModule,
     // public file
     // ServeStaticModule.forRoot({
     //   rootPath: join(__dirname, '..', 'public'), // Trỏ đến thư mục public ở root dự án
