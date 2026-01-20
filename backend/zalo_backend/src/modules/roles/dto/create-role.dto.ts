@@ -7,12 +7,16 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class CreateRoleDto {
   @ApiProperty({ example: 'ADMIN', description: 'Tên vai trò (Unique)' })
   @IsNotEmpty({ message: 'Tên vai trò không được để trống' })
   @IsString()
   @MaxLength(50)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  )
   name: string;
 
   @ApiProperty({ example: 'Quản trị viên hệ thống', required: false })
