@@ -10,7 +10,7 @@ export interface PrismaDelegate<T> {
   update(args: { where: any; data: any }): Promise<T>;
   delete(args: { where: any }): Promise<T>;
 
-  // 👇 Sửa return type thành number | any để chấp nhận kiểu của Extension
+  // Sửa return type thành number | any để chấp nhận kiểu của Extension
   count(args?: any): Promise<number | any>;
 }
 

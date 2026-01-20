@@ -83,12 +83,20 @@ const createExtendedClient = (
               return query(args);
             }
 
+            const data: any = {
+              deletedAt: new Date(),
+              ...(userId ? { deletedById: userId } : {}),
+            };
+
+            // Nếu là model User thì cập nhật thêm status
+            // Prisma tự động hiểu string 'DELETED' map vào Enum UserStatus.DELETED
+            if (model === 'User') {
+              data.status = 'DELETED';
+            }
+
             return extendedClient[modelKey].update({
               ...args,
-              data: {
-                deletedAt: new Date(),
-                ...(userId ? { deletedById: userId } : {}),
-              },
+              data,
             });
           }
           return query(args);
