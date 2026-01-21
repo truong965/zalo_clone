@@ -172,7 +172,7 @@ export class PrismaService
     private readonly configService: ConfigService,
   ) {
     const connectionString = configService.get<string>('DATABASE_URL');
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+
     const pool = new Pool({ connectionString });
     const adapter = new PrismaPg(pool);
     super({ adapter });
@@ -223,4 +223,27 @@ export class PrismaService
   async onModuleDestroy() {
     await this.$disconnect();
   }
+  /**
+   * Clean database for testing
+   */
+  // async cleanDatabase() {
+  //   if (process.env.NODE_ENV === 'production') {
+  //     throw new Error('Cannot clean database in production');
+  //   }
+
+  //   const models = Reflect.ownKeys(this).filter((key) => key[0] !== '_');
+
+  //   return Promise.all(
+  //     models.map((modelKey) => {
+  //       const model = this[modelKey as keyof this];
+  //       if (
+  //         typeof model === 'object' &&
+  //         model !== null &&
+  //         'deleteMany' in model
+  //       ) {
+  //         return (model as any).deleteMany();
+  //       }
+  //     }),
+  //   );
+  // }
 }

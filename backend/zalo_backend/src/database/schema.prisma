@@ -65,6 +65,36 @@ enum MessageType {
 }
 
 // =======================
+// AUTH-RELATED ENUMS
+// =======================
+
+enum DeviceType {
+  WEB
+  MOBILE
+  DESKTOP
+  @@map("device_type")
+}
+
+enum Platform {
+  IOS
+  ANDROID
+  WEB
+  WINDOWS
+  MACOS
+  LINUX
+  @@map("platform")
+}
+
+enum TokenRevocationReason {
+  MANUAL_LOGOUT
+  PASSWORD_CHANGED
+  SUSPICIOUS_ACTIVITY
+  TOKEN_ROTATION
+  ADMIN_ACTION
+  @@map("token_revocation_reason")
+}
+
+// =======================
 // 2. MODELS (TABLES)
 // =======================
 model Role {
@@ -141,6 +171,7 @@ model User {
 
   lastSeenAt  DateTime?  @map("last_seen_at") @db.Timestamptz
   passwordHash String    @map("password_hash")
+  passwordVersion Int    @default(1) @map("password_version") // For instant token invalidation
 
   // --- Audit Fields ---
   // Vẫn giữ createdById vì có thể Admin tạo User, hoặc System import
@@ -155,7 +186,8 @@ model User {
   // --- Relationships ---
   privacySettings PrivacySettings?
   devices         UserDevice[]
-  
+  tokens          UserToken[]
+
   // Friends
   sentFriendRequests     Friendship[] @relation("User1")
   receivedFriendRequests Friendship[] @relation("User2")
@@ -175,6 +207,53 @@ model User {
   @@map("users")
 }
 
+// =======================
+//  AUTH TABLES 
+// =======================
+
+model UserToken {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  
+  // TOKEN STORAGE (HASH ONLY - NEVER PLAIN TEXT)
+  refreshTokenHash String  @unique @map("refresh_token_hash") @db.VarChar(64)
+  
+  //  DEVICE IDENTIFICATION
+  deviceId      String    @map("device_id") @db.VarChar(255) // Unique device fingerprint
+  deviceName    String?   @map("device_name") @db.VarChar(100) // "iPhone 14 Pro", "Chrome on Windows"
+  deviceType    DeviceType? @map("device_type")
+  platform      Platform?
+  
+  //  SECURITY TRACKING
+  ipAddress     String?   @map("ip_address") @db.VarChar(45) // IPv6 support
+  userAgent     String?   @map("user_agent") @db.Text
+  
+  //  TOKEN LIFECYCLE
+  issuedAt      DateTime  @default(now()) @map("issued_at") @db.Timestamptz
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  lastUsedAt    DateTime  @default(now()) @map("last_used_at") @db.Timestamptz
+  
+  //  REVOCATION (CRITICAL FOR SECURITY)
+  isRevoked     Boolean   @default(false) @map("is_revoked")
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
+  revokedReason TokenRevocationReason? @map("revoked_reason")
+  
+  //  TOKEN FAMILY CHAIN (Detect token reuse attack)
+  parentTokenId String?   @map("parent_token_id") @db.Uuid
+  parentToken   UserToken? @relation("TokenFamily", fields: [parentTokenId], references: [id], onDelete: SetNull)
+  childTokens   UserToken[] @relation("TokenFamily")
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  //  INDEXES FOR PERFORMANCE
+  @@unique([userId, deviceId]) // One active token per device
+  @@index([userId, isRevoked])
+  @@index([refreshTokenHash])
+  @@index([expiresAt])
+  @@index([lastUsedAt])
+  @@map("user_tokens")
+}
 model PrivacySettings {
   userId String @id @map("user_id") @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

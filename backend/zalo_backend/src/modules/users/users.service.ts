@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -20,6 +24,62 @@ export class UsersService extends BaseService<User> {
     const salt = bcrypt.genSaltSync(10);
     return bcrypt.hashSync(password, salt);
   };
+  /**
+   *Find user by phone number
+   */
+  async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { phoneNumber },
+      include: {
+        role: {
+          include: {
+            rolePermissions: {
+              include: {
+                permission: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Find user by ID
+   */
+  async findById(id: string): Promise<User> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        role: {
+          include: {
+            rolePermissions: {
+              include: {
+                permission: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  /**Get user profile without password
+   */
+  async getProfile(id: string) {
+    const user = await this.findById(id);
+    return new UserEntity(user);
+  }
+  //helper check pass an toàn
+  isValidPassword(password: string, hash: string): boolean {
+    return bcrypt.compareSync(password, hash);
+  }
 
   private async checkExistPhone(phoneNumber: string) {
     const exist = await this.prisma.extended.user.findUnique({

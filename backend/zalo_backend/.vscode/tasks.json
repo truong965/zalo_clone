@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "tsc: build - tsconfig.json",
+      "type": "shell",
+      "command": "npx tsc -p tsconfig.json",  // Use npx to run tsc without full path
+      "group": "build",
+      "presentation": {
+        "reveal": "always"
+      },
+      "options": {
+        "shell": {
+          "executable": "C:\\Windows\\System32\\cmd.exe",  // Force cmd.exe
+          "args": ["/d", "/c"]
+        }
+      }
+    }
+  ]
+}

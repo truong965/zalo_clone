@@ -3,19 +3,41 @@ import {
   ExecutionContext,
   SetMetadata,
 } from '@nestjs/common';
-// import { IUser } from 'src/modules/users/users.interface';
+import { User } from '@prisma/client';
+import { DeviceInfo } from 'src/modules/auth/interfaces/device-info.interface';
 
 export const IS_PUBLIC_KEY = 'isPublic';
+/**
+ * Decorator to mark routes as public (no authentication required)
+ * Usage: @Public()
+ */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 export const RESPONSE_MESSAGE = 'response_message';
 export const ResponseMessage = (message: string) =>
   SetMetadata(RESPONSE_MESSAGE, message);
 
-export const User = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext) => {
+/**
+ * Decorator to extract current authenticated user from request
+ * Usage: @CurrentUser() user: User
+ */
+export const CurrentUser = createParamDecorator(
+  (data: keyof User | undefined, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
-    return request.user;
+    const user = request.user;
+    return data ? user?.[data] : user;
+  },
+);
+
+/**
+ * Decorator to extract device information from request
+ * Must be used after DeviceFingerprintService has processed the request
+ * Usage: @GetDeviceInfo() deviceInfo: DeviceInfo
+ */
+export const GetDeviceInfo = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext): DeviceInfo => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.deviceInfo;
   },
 );
 

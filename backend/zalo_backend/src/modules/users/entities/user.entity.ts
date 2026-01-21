@@ -23,6 +23,8 @@ export class UserEntity implements User {
   // 🔒 BẢO MẬT: Luôn ẩn Password khi trả về
   @Exclude()
   passwordHash: string;
+  @Exclude() // Ẩn đi, không trả về cho client
+  passwordVersion: number;
 
   // Các trường Audit
   createdById: string | null;
