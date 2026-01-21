@@ -32,8 +32,13 @@ import {
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import type { User } from '@prisma/client';
 import jwtConfig from '../../config/jwt.config';
-import { CurrentUser, Public } from 'src/common/decorator/customize';
+import {
+  CurrentUser,
+  Public,
+  ResponseMessage,
+} from 'src/common/decorator/customize';
 import ms, { StringValue } from 'ms';
+import { CreateUserDto } from '../users/dto/create-user.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -45,6 +50,13 @@ export class AuthController {
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
   ) {}
+
+  @Public()
+  @Post('register')
+  @ResponseMessage('Register new user')
+  register(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.register(createUserDto);
+  }
 
   /**
    * Login endpoint

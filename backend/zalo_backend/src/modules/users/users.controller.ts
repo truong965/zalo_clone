@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ResponseMessage } from 'src/common/decorator/customize';
-import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateUserAdminDto } from './dto/create-user-admin.dto';
@@ -25,11 +24,6 @@ import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post('register') // Endpoint: /api/v1/users/register
-  @ResponseMessage('Register new user')
-  register(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.register(createUserDto);
-  }
   // 2. ADMIN CREATE (Cần bảo vệ bằng Guard sau này)
   @Post() // Endpoint: /api/v1/users
   @ResponseMessage('Create user by Admin')

@@ -10,6 +10,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { FriendshipsModule } from './modules/friendships/friendships.module';
 @Module({
   imports: [
     // config schedule and cron jobs
@@ -41,6 +42,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     DatabaseModule,
     UsersModule,
     AuthModule,
+    FriendshipsModule,
     // public file
     // ServeStaticModule.forRoot({
     //   rootPath: join(__dirname, '..', 'public'), // Trỏ đến thư mục public ở root dự án
