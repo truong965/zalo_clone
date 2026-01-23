@@ -3,18 +3,23 @@ import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptor/transform.interceptor';
 import {
   ClassSerializerInterceptor,
+  Logger,
   ValidationPipe,
   VersioningType,
 } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { RedisIoAdapter } from './socket/adapters/redis-io.adapter';
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
+  const port = process.env.PORT || 3000;
+
   const app = await NestFactory.create(AppModule);
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new TransformInterceptor(reflector));
   app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
-
+  //Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // Tự động loại bỏ các field không khai báo trong DTO
@@ -51,6 +56,10 @@ async function bootstrap() {
       'X-Timezone',
     ],
   });
+  // --- CẤU HÌNH SOCKET ADAPTER ---
+  const redisIoAdapter = new RedisIoAdapter(app);
+  app.useWebSocketAdapter(redisIoAdapter);
+
   //Swagger documentation
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
@@ -65,6 +74,10 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(port);
+  logger.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
+  logger.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+  logger.log(`🏥 Health Check: http://localhost:${port}/api/v1/health`);
+  logger.log(`🔌 Socket.IO: ws://localhost:${port}/socket.io`);
 }
 bootstrap();

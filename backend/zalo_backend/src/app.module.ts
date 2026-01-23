@@ -11,6 +11,12 @@ import { AuthModule } from './modules/auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { FriendshipsModule } from './modules/friendships/friendships.module';
+import { RedisModule } from './modules/redis/redis.module';
+import { HealthModule } from './modules/health/health.module';
+import { SocketModule } from './socket/socket.module';
+import jwtConfig from './config/jwt.config';
+import redisConfig from './config/redis.config';
+import socketConfig from './config/socket.config';
 @Module({
   imports: [
     // config schedule and cron jobs
@@ -27,6 +33,7 @@ import { FriendshipsModule } from './modules/friendships/friendships.module';
     ConfigModule.forRoot({
       isGlobal: true,
       // CHỈ ĐỊNH FILE ENV TẠI ĐÂY
+      load: [jwtConfig, redisConfig, socketConfig],
       envFilePath: '.env.development.local',
     }),
 
@@ -35,14 +42,18 @@ import { FriendshipsModule } from './modules/friendships/friendships.module';
       global: true,
       middleware: { mount: true }, // Tự động gắn middleware
     }),
-
-    RolesModule,
-
-    PermissionsModule,
+    // Core modules
     DatabaseModule,
+    RedisModule,
+
+    // Feature modules
+    RolesModule,
+    PermissionsModule,
     UsersModule,
     AuthModule,
     FriendshipsModule,
+    HealthModule,
+    SocketModule,
     // public file
     // ServeStaticModule.forRoot({
     //   rootPath: join(__dirname, '..', 'public'), // Trỏ đến thư mục public ở root dự án

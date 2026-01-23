@@ -202,6 +202,9 @@ model User {
   messagesSent     Message[]
   messagesDeleted  Message[] @relation("DeletedBy")
 
+  //Socket Infrastructure
+  socketConnections SocketConnection[]
+  presenceLogs      PresenceLog[]
   @@index([phoneNumber])
   @@index([roleId])
   @@map("users")
@@ -247,7 +250,7 @@ model UserToken {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   //  INDEXES FOR PERFORMANCE
-  @@unique([userId, deviceId]) // One active token per device
+  @@index([userId, deviceId]) // One active token per device
   @@index([userId, isRevoked])
   @@index([refreshTokenHash])
   @@index([expiresAt])
@@ -414,4 +417,53 @@ model UserDevice {
 
   @@unique([userId, deviceId])
   @@map("user_devices")
+}
+
+
+// Socket Connection Logs (for debugging & analytics)
+model SocketConnection {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  socketId     String   @map("socket_id") @db.VarChar(100)
+  
+  // Connection Details
+  deviceId     String   @map("device_id") @db.VarChar(255)
+  serverInstance String? @map("server_instance") @db.VarChar(50) // server-1, server-2, etc.
+  ipAddress    String   @map("ip_address") @db.VarChar(45)
+  userAgent    String?  @map("user_agent") @db.Text
+  
+  // Lifecycle
+  connectedAt  DateTime @default(now()) @map("connected_at") @db.Timestamptz
+  disconnectedAt DateTime? @map("disconnected_at") @db.Timestamptz
+  disconnectReason String? @map("disconnect_reason") @db.VarChar(100)
+  // Reasons: 'client_disconnect', 'server_shutdown', 'timeout', 'auth_failed', 'transport_error', 'ping_timeout'
+  
+  // Metrics
+  messagesSent     Int @default(0) @map("messages_sent")
+  messagesReceived Int @default(0) @map("messages_received")
+  duration         Int? @map("duration_seconds") // Calculate on disconnect
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, connectedAt(sort: Desc)])
+  @@index([socketId])
+  @@index([serverInstance])
+  @@index([connectedAt]) // For cleanup queries
+  @@map("socket_connections")
+}
+
+//Presence History (analytics & debugging)
+model PresenceLog {
+  id        BigInt   @id @default(autoincrement())
+  userId    String   @map("user_id") @db.Uuid
+  status    String   @db.VarChar(20) // online, offline, away
+  deviceId  String?  @map("device_id") @db.VarChar(255)
+  timestamp DateTime @default(now()) @db.Timestamptz
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([timestamp]) // For cleanup
+  @@map("presence_logs")
 }

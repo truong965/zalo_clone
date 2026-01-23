@@ -62,6 +62,6 @@ import jwtConfig from '../../config/jwt.config';
     JwtStrategy,
     JwtRefreshStrategy,
   ],
-  exports: [AuthService, TokenService],
+  exports: [AuthService, TokenService, DeviceFingerprintService],
 })
 export class AuthModule {}

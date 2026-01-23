@@ -1,182 +1,354 @@
 import {
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-  OnGatewayInit,
   WebSocketGateway,
   WebSocketServer,
+  OnGatewayInit,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  ConnectedSocket,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt'; // Giả định bạn dùng @nestjs/jwt
-import { ConfigService } from '@nestjs/config';
-import { SocketService } from './socket.service';
-import { JwtPayload } from 'src/modules/auth/interfaces/jwt-payload.interface';
-// Định nghĩa kiểu cho Auth Handshake để tránh dùng any
-interface SocketAuth {
-  token?: string;
-}
-@WebSocketGateway({
-  /**
-   * [CORS FIX] Bảo mật kết nối WebSocket
-   * LOGIC:
-   * - Thay vì để origin: '*', ta sử dụng callback để kiểm tra nguồn gốc request.
-   * - Chỉ cho phép các domain trong Whitelist (Localhost, Frontend URL, Admin URL).
-   *
-   * MỤC ĐÍCH:
-   * - Ngăn chặn tấn công CSWSH (Cross-Site WebSocket Hijacking).
-   * - Đảm bảo chỉ client hợp lệ của hệ thống mới kết nối được.
-   */
-  cors: {
-    origin: (origin, callback) => {
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        process.env.FRONTEND_URL,
-        process.env.ADMIN_URL,
-      ].filter(Boolean);
+import { Server } from 'socket.io';
+import { Logger, UseFilters, Inject } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
+import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
+import { DisconnectReason } from 'src/common/interfaces/socket-client.interface';
+import { SocketEvents } from 'src/common/constants/socket-events.constant';
+import { WsExceptionFilter } from './filters/ws-exception.filter';
+import { SocketAuthService } from './services/socket-auth.service';
+import { SocketStateService } from './services/socket-state.service';
+import { RedisPubSubService } from 'src/modules/redis/services/redis-pub-sub.service';
+import { RedisKeys } from 'src/common/constants/redis-keys.constant';
+import socketConfig from 'src/config/socket.config';
+// import { createAdapter } from '@socket.io/redis-adapter';
+// import { RedisService } from 'src/modules/redis/redis.service';
 
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+@WebSocketGateway({
+  cors: {
+    origin: [
+      process.env.CORS_ORIGIN || 'http://localhost:3001',
+      'http://127.0.0.1:5500',
+      '*',
+    ],
     credentials: true,
-    //     methods: ['GET', 'POST'],
   },
-  //   namespace: '',
+  namespace: '/socket.io',
+  transports: ['websocket', 'polling'],
+  pingInterval: 25000, // 25 seconds
+  pingTimeout: 20000, // 20 seconds
 })
+@UseFilters(WsExceptionFilter)
 export class SocketGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
-  @WebSocketServer() server: Server;
+  @WebSocketServer()
+  server: Server;
+
   private readonly logger = new Logger(SocketGateway.name);
-  private userSocketMap = new Map<string, Set<string>>();
-  private readonly allowedOrigins: string[];
+  private shuttingDown = false;
 
   constructor(
-    private readonly socketService: SocketService,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-  ) {
-    this.allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      this.configService.get<string>('FRONTEND_URL'),
-      this.configService.get<string>('ADMIN_URL'),
-    ].filter((origin): origin is string => Boolean(origin));
+    private readonly socketAuth: SocketAuthService,
+    private readonly socketState: SocketStateService,
+    private readonly redisPubSub: RedisPubSubService,
+    // private readonly redisService: RedisService,
+    @Inject(socketConfig.KEY)
+    private readonly config: ConfigType<typeof socketConfig>,
+  ) {}
 
-    this.logger.log(`Allowed CORS origins: ${this.allowedOrigins.join(', ')}`);
-  }
-
+  /**
+   * Gateway initialization
+   */
   afterInit(server: Server) {
-    // Inject server instance vào Service để dùng ở nơi khác
-    this.socketService.setServer(server);
-    this.logger.log('WebSocket Gateway Initialized');
+    this.logger.log('🔌 Socket.IO Gateway initialized');
+
+    // Setup Redis adapter for cluster support
+    // this.setupRedisAdapter(server);
+
+    // Subscribe to cross-server events
+    // Hàm afterInit là đồng bộ, nên ta dùng 'void' để đánh dấu promise được xử lý ngầm
+    // và thêm .catch để bắt lỗi nếu việc subscribe thất bại
+    void this.subscribeToCrossServerEvents().catch((err) => {
+      this.logger.error('Failed to subscribe to cross-server events', err);
+    });
+
+    // Setup graceful shutdown
+    this.setupGracefulShutdown();
+
+    this.logger.log(`📡 Server instance: ${this.config.serverInstance}`);
   }
 
   /**
-   * Xử lý khi Client kết nối
-   * 1. Lấy Token từ Handshake Auth hoặc Query
-   * 2. Validate Token
-   * 3. Join User vào Room riêng
+   * Setup Redis adapter for multi-instance support
    */
-  async handleConnection(client: Socket) {
-    const origin = client.handshake.headers.origin;
+  // private setupRedisAdapter(server: Server): void {
+  //   const pubClient = this.redisService.getPublisher();
+  //   const subClient = this.redisService.getSubscriber();
 
-    if (origin && !this.allowedOrigins.includes(origin)) {
-      this.logger.warn(
-        `Rejected connection from unauthorized origin: ${origin}`,
-      );
-      client.disconnect();
-      return;
-    }
+  //   // Create Redis adapter
+  //   const adapter = createAdapter(pubClient, subClient);
+  //   server.adapter(adapter);
 
+  //   this.logger.log('✅ Redis adapter configured for Socket.IO');
+  // }
+
+  /**
+   * Subscribe to Redis Pub/Sub channels for cross-server communication
+   */
+  private async subscribeToCrossServerEvents(): Promise<void> {
+    // Subscribe to presence updates
+    await this.redisPubSub.subscribe(
+      RedisKeys.channels.presenceOnline,
+      this.handlePresenceOnline.bind(this),
+    );
+
+    await this.redisPubSub.subscribe(
+      RedisKeys.channels.presenceOffline,
+      this.handlePresenceOffline.bind(this),
+    );
+
+    this.logger.log('✅ Subscribed to cross-server events');
+  }
+
+  /**
+   * Handle new client connection
+   */
+  async handleConnection(@ConnectedSocket() client: AuthenticatedSocket) {
     try {
-      // Client sẽ gửi token dạng: { auth: { token: "Bearer eyJ..." } }
-      // Hoặc query param: ?token=eyJ...
-      const token = this.extractTokenFromHeader(client);
-      if (!token) {
-        this.logger.warn(`Client ${client.id} không có token -> Disconnect`);
-        client.disconnect();
+      this.logger.log(`Socket connecting: ${client.id}`);
+
+      // Reject connections during shutdown
+      if (this.shuttingDown) {
+        client.emit(SocketEvents.SERVER_MAINTENANCE, {
+          message: 'Server is shutting down. Please reconnect.',
+        });
+        client.disconnect(true);
         return;
       }
 
-      // Verify Token (Lấy Secret từ Env)
-      const payload = this.jwtService.verify<JwtPayload>(token, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      // Authenticate socket
+      const user = await this.socketAuth.authenticateSocket(client);
+
+      if (!user) {
+        this.logger.warn(`Socket ${client.id}: Authentication failed`);
+        client.emit(SocketEvents.AUTH_FAILED, {
+          message: 'Authentication failed',
+        });
+        client.disconnect(true);
+        return;
+      }
+
+      // Attach user to socket
+      client.user = user;
+      client.userId = user.id;
+      client.authenticated = true;
+
+      // Register socket and update presence
+      await this.socketState.handleConnection(client);
+
+      // Notify client of successful authentication
+      client.emit(SocketEvents.AUTHENTICATED, {
+        socketId: client.id,
+        userId: user.id,
+        serverInstance: this.config.serverInstance,
       });
 
-      // --- AUTH CHECK NÂNG CAO (Optional - Giống JwtStrategy) ---
-      // Nếu muốn chặt chẽ như HTTP, bạn nên check thêm passwordVersion ở đây.
-      // Tuy nhiên với socket handshake, check verify signature là mức tối thiểu chấp nhận được.
-
-      // Lưu thông tin user vào socket instance để dùng sau này (nếu cần)
-      client.data.userId = payload.sub; // sub là userId trong JWT chuẩn
-
-      // [LOGIC] Mapping User <-> Socket ID
-      // Lưu danh sách socket ID vào Map theo User ID để khi Worker báo xong, ta biết gửi cho socket nào.
-      // (Lưu ý: Logic này lưu trên RAM, cần Redis Adapter nếu scale nhiều server)
-      if (!this.userSocketMap.has(client.data.userId)) {
-        this.userSocketMap.set(client.data.userId, new Set());
-      }
-      this.userSocketMap.get(client.data.userId)!.add(client.id);
-      // *** QUAN TRỌNG: JOIN ROOM ***
-      const userRoom = `user_${payload.sub}`;
-      await client.join(userRoom);
+      // Publish presence update (cross-server)
+      await this.redisPubSub.publish(RedisKeys.channels.presenceOnline, {
+        userId: user.id,
+        timestamp: new Date().toISOString(),
+      });
 
       this.logger.log(
-        `User [${payload.sub}] đã kết nối - SocketID: [${client.id}] - Joined Room: [${userRoom}]`,
+        `✅ Socket authenticated: ${client.id} | User: ${user.id} | ${user.displayName}`,
       );
-    } catch (err) {
-      this.logger.error(`Connection Unauthorized: ${(err as Error).message}`);
-      client.disconnect();
+    } catch (error) {
+      this.logger.error('Error handling connection:', error);
+      client.disconnect(true);
     }
   }
 
-  handleDisconnect(client: Socket) {
-    if (client.data.userId) {
-      const userSockets = this.userSocketMap.get(client.data.userId);
-      if (userSockets) {
-        userSockets.delete(client.id);
-        if (userSockets.size === 0) {
-          this.userSocketMap.delete(client.data.userId);
-        }
+  /**
+   * Handle client disconnection
+   */
+  async handleDisconnect(@ConnectedSocket() client: AuthenticatedSocket) {
+    try {
+      // Sử dụng unknown trước, sau đó ép về kiểu object an toàn
+      const handshakeData = client.handshake as unknown as Record<string, any>;
+
+      const reason =
+        (handshakeData.disconnectReason as string) ||
+        DisconnectReason.CLIENT_DISCONNECT;
+
+      this.logger.log(
+        `Socket disconnecting: ${client.id} | User: ${client.userId} | Reason: ${reason}`,
+      );
+
+      if (!client.userId) {
+        return;
       }
+
+      // Update state and presence
+      const isOffline = await this.socketState.handleDisconnection(
+        client,
+        reason,
+      );
+
+      // If user is now completely offline, publish presence update
+      if (isOffline) {
+        await this.redisPubSub.publish(RedisKeys.channels.presenceOffline, {
+          userId: client.userId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      this.logger.log(`❌ Socket disconnected: ${client.id}`);
+    } catch (error) {
+      this.logger.error('Error handling disconnect:', error);
     }
-    this.logger.log(`Client disconnected: ${client.id}`);
-    // Socket.io tự động remove client khỏi các room khi disconnect, không cần code thêm.
   }
 
-  private extractTokenFromHeader(client: Socket): string | undefined {
-    const auth = client.handshake.auth as Record<string, unknown>;
-    const headers = client.handshake.headers as Record<string, unknown>;
+  /**
+   * Handle presence online event from other servers
+   */
+  private async handlePresenceOnline(
+    channel: string,
+    message: string,
+  ): Promise<void> {
+    try {
+      const data = JSON.parse(message);
+      this.logger.debug(`Presence online (cross-server): ${data.userId}`);
 
-    // Lấy token raw
-    const tokenRaw = (auth.token ||
-      headers.authorization ||
-      client.handshake.query.token) as string | undefined;
-
-    if (!tokenRaw) return undefined;
-
-    // Xử lý Bearer Token
-    const [type, token] = tokenRaw.split(' ');
-
-    // Nếu client gửi dạng "Bearer <token>"
-    if (type === 'Bearer' && token) return token;
-
-    // Nếu client chỉ gửi raw token (thường gặp ở query param)
-    return type;
-  }
-  getActiveConnections(): number {
-    let total = 0;
-    this.userSocketMap.forEach((sockets) => {
-      total += sockets.size;
-    });
-    return total;
+      // TODO: Phase 2 - Notify user's friends
+      // For now, just log
+    } catch (error) {
+      this.logger.error('Error handling presence online:', error);
+    }
   }
 
-  getActiveUsers(): number {
-    return this.userSocketMap.size;
+  /**
+   * Handle presence offline event from other servers
+   */
+  private async handlePresenceOffline(
+    channel: string,
+    message: string,
+  ): Promise<void> {
+    try {
+      const data = JSON.parse(message);
+      this.logger.debug(`Presence offline (cross-server): ${data.userId}`);
+
+      // TODO: Phase 2 - Notify user's friends
+      // For now, just log
+    } catch (error) {
+      this.logger.error('Error handling presence offline:', error);
+    }
+  }
+
+  /**
+   * Setup graceful shutdown handler
+   */
+  private setupGracefulShutdown(): void {
+    const shutdown = async (signal: string) => {
+      if (this.shuttingDown) return;
+
+      this.shuttingDown = true;
+      this.logger.warn(`⚠️  ${signal} received. Starting graceful shutdown...`);
+
+      try {
+        // Stop accepting new connections
+        this.server.close();
+
+        // Notify all connected clients
+        this.server.emit(SocketEvents.SERVER_SHUTDOWN, {
+          message: 'Server is shutting down. Please reconnect.',
+          reconnect: true,
+        });
+
+        // Wait for clients to disconnect gracefully
+        await this.waitForClientsToDisconnect(
+          this.config.gracefulShutdownTimeout,
+        );
+
+        // Force disconnect remaining clients
+        const sockets = await this.server.fetchSockets();
+        for (const socket of sockets) {
+          socket.disconnect(true);
+        }
+
+        this.logger.log('✅ Graceful shutdown completed');
+        process.exit(0);
+      } catch (error) {
+        this.logger.error('Error during graceful shutdown:', error);
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGTERM', () => void shutdown('SIGTERM'));
+    process.on('SIGINT', () => void shutdown('SIGINT'));
+  }
+
+  /**
+   * Wait for clients to disconnect gracefully
+   */
+  private async waitForClientsToDisconnect(timeout: number): Promise<void> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+      const sockets = await this.server.fetchSockets();
+
+      if (sockets.length === 0) {
+        this.logger.log('All clients disconnected gracefully');
+        return;
+      }
+
+      this.logger.log(`Waiting for ${sockets.length} clients to disconnect...`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    this.logger.warn('Graceful shutdown timeout reached');
+  }
+
+  /**
+   * Emit event to specific user (all their sockets)
+   */
+  async emitToUser(userId: string, event: string, data: any): Promise<void> {
+    const socketIds = await this.socketState.getUserSockets(userId);
+
+    for (const socketId of socketIds) {
+      this.server.to(socketId).emit(event, data);
+    }
+  }
+
+  /**
+   * Emit event to multiple users
+   */
+  async emitToUsers(
+    userIds: string[],
+    event: string,
+    data: any,
+  ): Promise<void> {
+    await Promise.all(
+      userIds.map((userId) => this.emitToUser(userId, event, data)),
+    );
+  }
+
+  /**
+   * Broadcast to all connected clients
+   */
+  broadcastToAll(event: string, data: any): void {
+    this.server.emit(event, data);
+  }
+
+  /**
+   * Get server statistics
+   */
+  async getServerStats(): Promise<{
+    connectedSockets: number;
+    serverInstance: string;
+  }> {
+    const sockets = await this.server.fetchSockets();
+
+    return {
+      connectedSockets: sockets.length,
+      serverInstance: this.config.serverInstance,
+    };
   }
 }

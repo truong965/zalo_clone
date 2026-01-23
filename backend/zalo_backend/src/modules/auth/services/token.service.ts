@@ -1,7 +1,6 @@
 import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import type { ConfigType } from '@nestjs/config';
-import { User, TokenRevocationReason } from '@prisma/client';
 import * as crypto from 'crypto';
 
 import {
@@ -11,6 +10,7 @@ import {
 import { DeviceInfo } from '../interfaces/device-info.interface';
 import { PrismaService } from 'src/database/prisma.service';
 import jwtConfig from 'src/config/jwt.config';
+import { TokenRevocationReason, User } from '@prisma/client/index-browser';
 
 @Injectable()
 export class TokenService {
