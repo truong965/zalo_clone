@@ -2,13 +2,27 @@ import { Socket } from 'socket.io';
 import { User } from '@prisma/client';
 
 /**
+ * Lightweight User Context for Socket
+ * Chỉ chứa thông tin cần thiết để định danh và phân quyền
+ */
+export interface SocketUserContext {
+  id: string;
+  phoneNumber: string;
+  displayName: string;
+  avatarUrl: string | null;
+  roleId: string | null;
+  status: string;
+  passwordVersion: number;
+}
+/**
  * Extended Socket interface with user context
  */
 export interface AuthenticatedSocket extends Socket {
-  user?: User;
+  user?: SocketUserContext;
   userId?: string;
   deviceId?: string;
   authenticated?: boolean;
+  _cleanupTimers?: Array<NodeJS.Timeout>; // Chuẩn bị sẵn cho Task 2
 }
 
 /**

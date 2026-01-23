@@ -9,6 +9,7 @@ import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.
 import { DeviceFingerprintService } from 'src/modules/auth/services/device-fingerprint.service';
 import socketConfig from 'src/config/socket.config';
 import { Request } from 'express';
+import { SocketConnectionLoggerService } from './socket-connection-logger.service';
 
 @Injectable()
 export class SocketStateService {
@@ -18,6 +19,7 @@ export class SocketStateService {
     private readonly redisRegistry: RedisRegistryService,
     private readonly redisPresence: RedisPresenceService,
     private readonly deviceFingerprint: DeviceFingerprintService,
+    private readonly connectionLogger: SocketConnectionLoggerService,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
   ) {}
@@ -53,6 +55,9 @@ export class SocketStateService {
           client.userId,
           deviceInfo.deviceId,
         );
+
+        // Log connection to database
+        await this.connectionLogger.logConnection(metadata);
       }
       this.logger.log(
         `Socket connected: ${client.id} | User: ${client.userId} | Device: ${deviceInfo.deviceId}`,
@@ -88,6 +93,14 @@ export class SocketStateService {
       const isOffline = await this.redisPresence.removeUserDevice(
         client.userId,
         client.deviceId,
+      );
+      //  Log disconnection to database
+      // TODO: In Phase 2, track actual message counts from socket events
+      await this.connectionLogger.logDisconnection(
+        client.id,
+        reason,
+        0, // messagesSent - will be tracked in Phase 2
+        0, // messagesReceived - will be tracked in Phase 2
       );
 
       this.logger.log(

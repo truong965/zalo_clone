@@ -9,6 +9,9 @@ import { RedisModule } from 'src/modules/redis/redis.module';
 import { AuthModule } from 'src/modules/auth/auth.module';
 import socketConfig from 'src/config/socket.config';
 import { DatabaseModule } from 'src/database/prisma.module';
+import { SocketConnectionLoggerService } from './services/socket-connection-logger.service';
+import { ScheduleModule } from '@nestjs/schedule';
+import { SocketCleanupJob } from './jobs/socket-cleanup.job';
 
 @Module({
   imports: [
@@ -17,8 +20,16 @@ import { DatabaseModule } from 'src/database/prisma.module';
     RedisModule,
     AuthModule, // For DeviceFingerprintService
     DatabaseModule,
+    ScheduleModule.forRoot(),
   ],
-  providers: [SocketGateway, SocketAuthService, SocketStateService, WsJwtGuard],
+  providers: [
+    SocketGateway,
+    SocketAuthService,
+    SocketStateService,
+    WsJwtGuard,
+    SocketConnectionLoggerService,
+    SocketCleanupJob,
+  ],
   exports: [SocketGateway, SocketStateService],
 })
 export class SocketModule {}

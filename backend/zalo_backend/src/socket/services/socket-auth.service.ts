@@ -2,8 +2,11 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { ConfigType } from '@nestjs/config';
 import { PrismaService } from 'src/database/prisma.service';
-import { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
-import { User } from '@prisma/client';
+import {
+  AuthenticatedSocket,
+  SocketUserContext,
+} from 'src/common/interfaces/socket-client.interface';
+// import { User } from '@prisma/client';
 import { JwtPayload } from 'src/modules/auth/interfaces/jwt-payload.interface';
 import jwtConfig from 'src/config/jwt.config';
 
@@ -21,12 +24,14 @@ export class SocketAuthService {
   /**
    * Authenticate socket connection
    */
-  async authenticateSocket(client: AuthenticatedSocket): Promise<User | null> {
+  async authenticateSocket(
+    client: AuthenticatedSocket,
+  ): Promise<SocketUserContext | null> {
     try {
       const token = this.extractToken(client);
 
       if (!token) {
-        this.logger.warn(
+        this.logger.debug(
           `Socket ${client.id}: No authentication token provided`,
         );
         return null;
@@ -39,13 +44,25 @@ export class SocketAuthService {
 
       // Validate token type
       if (payload.type !== 'access') {
-        this.logger.warn(`Socket ${client.id}: Invalid token type`);
+        this.logger.debug(`Socket ${client.id}: Invalid token type`);
         return null;
       }
 
       // Find user
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
+        select: {
+          id: true,
+          phoneNumber: true,
+          displayName: true,
+          avatarUrl: true,
+          status: true,
+          passwordVersion: true,
+          roleId: true, // Cần cho RBAC (Role-Based Access Control) sau này
+          // bio: false,      -> BỎ
+          // createdAt: false -> BỎ
+          // updatedAt: false -> BỎ
+        },
       });
 
       if (!user) {
@@ -71,7 +88,7 @@ export class SocketAuthService {
 
       return user;
     } catch (error) {
-      this.logger.error(
+      this.logger.debug(
         `Socket ${client.id}: Authentication error:`,
         (error as Error).message,
       );

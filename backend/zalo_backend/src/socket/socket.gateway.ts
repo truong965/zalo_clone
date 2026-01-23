@@ -7,7 +7,13 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import { Logger, UseFilters, Inject } from '@nestjs/common';
+import {
+  Logger,
+  UseFilters,
+  Inject,
+  UseGuards,
+  UsePipes,
+} from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { DisconnectReason } from 'src/common/interfaces/socket-client.interface';
@@ -18,24 +24,47 @@ import { SocketStateService } from './services/socket-state.service';
 import { RedisPubSubService } from 'src/modules/redis/services/redis-pub-sub.service';
 import { RedisKeys } from 'src/common/constants/redis-keys.constant';
 import socketConfig from 'src/config/socket.config';
+import { WsThrottleGuard } from './guards/ws-throttle.guard';
+import { WsValidationPipe } from './pipes/ws-validation.pipe';
 // import { createAdapter } from '@socket.io/redis-adapter';
 // import { RedisService } from 'src/modules/redis/redis.service';
 
+// Helper Interface để quản lý subscription
+
 @WebSocketGateway({
   cors: {
-    origin: [
-      process.env.CORS_ORIGIN || 'http://localhost:3001',
-      'http://127.0.0.1:5500',
-      '*',
-    ],
+    origin: (requestOrigin, callback) => {
+      // 1. Lấy danh sách origin cho phép từ biến môi trường
+      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',');
+
+      // 2. Logic kiểm tra (Allow all nếu là '*' hoặc dev mode)
+      if (
+        !requestOrigin ||
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(requestOrigin)
+      ) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   },
   namespace: '/socket.io',
   transports: ['websocket', 'polling'],
-  pingInterval: 25000, // 25 seconds
-  pingTimeout: 20000, // 20 seconds
+  pingInterval: process.env.PING_INTERVAL
+    ? parseInt(process.env.PING_INTERVAL, 10)
+    : 25000, // 25 seconds
+  pingTimeout: process.env.PING_TIMEOUT
+    ? parseInt(process.env.PING_TIMEOUT, 10)
+    : 20000, // 20 seconds
 })
+// Exception filter for handling WS exceptions
 @UseFilters(WsExceptionFilter)
+// rate limiting guard
+@UseGuards(WsThrottleGuard)
+// Validation pipe for incoming messages
+@UsePipes(WsValidationPipe)
 export class SocketGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
@@ -45,6 +74,10 @@ export class SocketGateway
   private readonly logger = new Logger(SocketGateway.name);
   private shuttingDown = false;
 
+  // --- MEMORY MANAGEMENT START ---
+  // Lưu trữ các subscription động nếu sau này dùng (ví dụ subscribe chat room từ Redis)
+  private readonly clientSubscriptions = new Map<string, Array<() => void>>();
+  // --- MEMORY MANAGEMENT END ---
   constructor(
     private readonly socketAuth: SocketAuthService,
     private readonly socketState: SocketStateService,
@@ -76,6 +109,77 @@ export class SocketGateway
     this.logger.log(`📡 Server instance: ${this.config.serverInstance}`);
   }
 
+  // ==================================================================
+  // SAFE RESOURCE MANAGEMENT HELPERS (TASK 2)
+  // ==================================================================
+
+  /**
+   * Đăng ký Interval an toàn - Tự động dọn dẹp khi socket disconnect
+   */
+  private registerSafeInterval(
+    client: AuthenticatedSocket,
+    callback: () => void,
+    ms: number,
+  ) {
+    if (!client._cleanupTimers) {
+      client._cleanupTimers = [];
+    }
+    const timer = setInterval(callback, ms);
+    client._cleanupTimers.push(timer);
+  }
+
+  /**
+   * Đăng ký Timeout an toàn - Tự động dọn dẹp khi socket disconnect
+   */
+  private registerSafeTimeout(
+    client: AuthenticatedSocket,
+    callback: () => void,
+    ms: number,
+  ) {
+    if (!client._cleanupTimers) {
+      client._cleanupTimers = [];
+    }
+    const timer = setTimeout(() => {
+      callback();
+      // (Optional) Remove timer from array after execution logic could go here
+      // but for MVP, let cleanup handle it.
+    }, ms);
+    client._cleanupTimers.push(timer);
+  }
+
+  /**
+   * Dọn dẹp tài nguyên tập trung (Cleanup Central)
+   * Đây là chốt chặn cuối cùng để ngăn Memory Leak
+   */
+  private cleanupSocketResources(client: AuthenticatedSocket) {
+    // A. Clear Timers (Interval/Timeout)
+    if (client._cleanupTimers && client._cleanupTimers.length > 0) {
+      client._cleanupTimers.forEach((timer) => {
+        clearInterval(timer); // Works for both Timeout and Interval in Node.js
+        clearTimeout(timer);
+      });
+      client.removeAllListeners();
+      client._cleanupTimers = [];
+      // client.user = undefined;
+    }
+
+    // B. Unsubscribe Dynamic Redis Subscriptions (Phase 2 Chat)
+    const unsubscribers = this.clientSubscriptions.get(client.id);
+    if (unsubscribers) {
+      unsubscribers.forEach((unsub) => unsub());
+      this.clientSubscriptions.delete(client.id);
+    }
+
+    // C. Remove All Listeners on Socket Object
+    // Ngăn chặn việc listener cũ giữ reference tới object socket
+    client.removeAllListeners();
+
+    // D. Nullify References (Hint for Garbage Collector)
+    // Giúp V8 Engine nhận diện object này đã chết nhanh hơn
+    client.user = undefined;
+    client.userId = undefined;
+    client.deviceId = undefined;
+  }
   /**
    * Setup Redis adapter for multi-instance support
    */
@@ -140,7 +244,8 @@ export class SocketGateway
       client.user = user;
       client.userId = user.id;
       client.authenticated = true;
-
+      // Init timer array
+      client._cleanupTimers = [];
       // Register socket and update presence
       await this.socketState.handleConnection(client);
 
@@ -156,6 +261,19 @@ export class SocketGateway
         userId: user.id,
         timestamp: new Date().toISOString(),
       });
+
+      // --- VÍ DỤ SỬ DỤNG SAFE INTERVAL (TASK 2 APPLIED) ---
+      // Gửi packet 'pong' application-level mỗi 30s để đảm bảo kết nối "sống"
+      // Socket.IO có ping/pong riêng, nhưng cái này dùng để sync time hoặc check app state
+      this.registerSafeInterval(
+        client,
+        () => {
+          if (client.connected) {
+            client.emit('server_heartbeat', { ts: Date.now() });
+          }
+        },
+        30_000,
+      );
 
       this.logger.log(
         `✅ Socket authenticated: ${client.id} | User: ${user.id} | ${user.displayName}`,
@@ -199,6 +317,8 @@ export class SocketGateway
           timestamp: new Date().toISOString(),
         });
       }
+
+      this.cleanupSocketResources(client);
 
       this.logger.log(`❌ Socket disconnected: ${client.id}`);
     } catch (error) {
@@ -270,6 +390,9 @@ export class SocketGateway
         // Force disconnect remaining clients
         const sockets = await this.server.fetchSockets();
         for (const socket of sockets) {
+          // Cast về AuthenticatedSocket để gọi cleanup nếu cần
+          // Tuy nhiên socket.io object khác với class instance này.
+          // Ở đây chỉ cần force disconnect, handleDisconnect sẽ tự chạy.
           socket.disconnect(true);
         }
 

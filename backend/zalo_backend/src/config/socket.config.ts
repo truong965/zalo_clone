@@ -9,9 +9,15 @@ export default registerAs('socket', () => ({
   },
 
   // Connection settings
-  pingInterval: 25000, // 25 seconds
-  pingTimeout: 20000, // 20 seconds
-  upgradeTimeout: 10000, // 10 seconds
+  pingInterval: process.env.PING_INTERVAL
+    ? parseInt(process.env.PING_INTERVAL, 10)
+    : 25000, // 25 seconds
+  pingTimeout: process.env.PING_TIMEOUT
+    ? parseInt(process.env.PING_TIMEOUT, 10)
+    : 20000, // 20 seconds
+  upgradeTimeout: process.env.UPGRADE_TIMEOUT
+    ? parseInt(process.env.UPGRADE_TIMEOUT, 10)
+    : 10000, // 10 seconds
 
   // Transport settings
   transports: ['websocket', 'polling'],
@@ -25,7 +31,7 @@ export default registerAs('socket', () => ({
   namespace: '/socket.io',
 
   // Max payload size (64KB)
-  maxHttpBufferSize: 64 * 1024,
+  maxHttpBufferSize: parseInt(process.env.MAX_PAYLOAD_SIZE!, 10) || 64 * 1024,
 
   // Connection limits
   maxConnections: parseInt(process.env.MAX_SOCKET_CONNECTIONS!, 10) || 10000,
