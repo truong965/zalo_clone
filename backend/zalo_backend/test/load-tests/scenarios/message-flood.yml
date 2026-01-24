@@ -1,0 +1,92 @@
+config:
+  target: "http://localhost:8000"
+  socketio:
+    transports: ["websocket"]
+    path: "/socket.io"
+    auth:
+      token: "{{ token }}"
+  phases:
+    - name: "Gradual message load"
+      duration: 60
+      arrivalRate: 10
+      rampTo: 50
+    - name: "Message flood"
+      duration: 120
+      arrivalRate: 50
+  processor: "../processors/auth-processor.js"
+  plugins:
+    expect: {}
+    metrics-by-endpoint:
+      stripQueryString: true
+
+scenarios:
+  - name: "Normal Message Rate (Within Limits)"
+    engine: "socketio"
+    beforeScenario: "generateAuthToken"
+    weight: 60
+    flow:
+      
+      # Send messages at safe rate (25 msg/min = ~2.4 seconds interval)
+      - loop:
+          - function: "generateMessageData"
+          - think: 3
+          - emit:
+              channel: "test:message"
+              data:
+                content: "{{ msgContent }}"
+                conversationId: "e9f7c0a0-0000-0000-0000-000000000000"
+                type: "TEXT"
+                timestamp: "{{ msgTimestamp }}"
+        count: 20
+        acknowledge: 
+            match:
+              json: "$.event"
+              value: "message_sent"
+            timeout: 5000
+
+  - name: "Spam Attack (Rate Limit Test)"
+    engine: "socketio"
+    beforeScenario: "generateAuthToken"
+    weight: 30
+    flow:
+
+      # Try to spam (should get rate limited after 100 events)
+      - loop:
+          - function: "generateSpamData"
+          - emit:
+              channel: "test:spam"
+              data:
+                content: "{{ spamContent }}"
+        count: 150
+      
+      # Expect rate limit error
+      # Artillery will log if server emits 'error' event
+      
+      - think: 5
+
+  - name: "Large Payload Test"
+    engine: "socketio"
+    beforeScenario: "generateAuthToken"
+    weight: 10
+    flow:
+      - function: "generateLargePayload"
+      
+      
+      # Send progressively larger payloads
+      - loop:
+          - emit:
+              channel: "test:large_payload"
+              data:
+                content: "{{ largePayload }}"
+                size: "{{ payloadSize }}"
+          - think: 2
+        count: 5
+      
+      # Try to send 65KB payload (should fail)
+      - function: "generateTooLargePayload"
+      - emit:
+          channel: "test:oversized"
+          data:
+            content: "{{ oversizedPayload }}"
+      
+      - think: 2

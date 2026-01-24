@@ -5,6 +5,8 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   ConnectedSocket,
+  SubscribeMessage,
+  MessageBody,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import {
@@ -26,6 +28,8 @@ import { RedisKeys } from 'src/common/constants/redis-keys.constant';
 import socketConfig from 'src/config/socket.config';
 import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { WsValidationPipe } from './pipes/ws-validation.pipe';
+import { SendMessageDto } from './dto/socket-event.dto';
+import { sleep } from '@nestjs/terminus/dist/utils';
 // import { createAdapter } from '@socket.io/redis-adapter';
 // import { RedisService } from 'src/modules/redis/redis.service';
 
@@ -473,5 +477,78 @@ export class SocketGateway
       connectedSockets: sockets.length,
       serverInstance: this.config.serverInstance,
     };
+  }
+
+  @SubscribeMessage('test:message')
+  async handleTestMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: SendMessageDto, // Sử dụng DTO thật để test validation pipe
+  ) {
+    // 1. DTO Validation sẽ chạy tự động nhờ @UsePipes
+    await sleep(20);
+    // 2. Giả lập xử lý nghiệp vụ nhẹ (để tốn chút CPU)
+    this.logger.debug(
+      `[LoadTest] Received msg from ${client.userId}: ${payload.content.substring(0, 20)}...`,
+    );
+
+    // 3. Giả lập phản hồi (ACK) để Artillery đo được latency
+    return {
+      event: 'message_sent',
+      data: {
+        messageId: 'mock-uuid-' + Date.now(),
+        timestamp: new Date().toISOString(),
+      },
+    };
+  }
+
+  /**
+   * LOAD TEST HANDLER: Spam target
+   */
+  @SubscribeMessage('test:spam')
+  async handleTestSpam(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: any,
+  ) {
+    await sleep(5);
+    // Handler này để trống hoặc log nhẹ, chủ yếu để test WsThrottleGuard có chặn không
+    // Nếu Guard chặn, request sẽ không bao giờ vào đến đây (hoặc vào nhưng client đã nhận lỗi)
+    return { status: 'received' };
+  }
+
+  /**
+   * LOAD TEST HANDLER: Large Payload
+   */
+  @SubscribeMessage('test:large_payload')
+  async handleLargePayload(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: any,
+  ) {
+    await sleep(15);
+    // Test xem server có bị OOM khi nhận payload lớn không
+    return { size: JSON.stringify(data).length };
+  }
+  @SubscribeMessage('test:slow_message')
+  async handleSlowMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: any,
+  ) {
+    // Log nhẹ để biết client chậm vẫn đang gửi
+    // this.logger.debug(`[SlowClient] ${client.userId} sent message`);
+
+    // Giả lập server cũng xử lý chậm
+    await sleep(50);
+
+    return { status: 'ack_slow' };
+  }
+  @SubscribeMessage('test:after_idle')
+  async handleAfterIdle(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: any,
+  ) {
+    await sleep(1);
+    this.logger.log(
+      `[IdleTest] ${client.userId} is still alive after long idle!`,
+    );
+    return { status: 'alive' };
   }
 }

@@ -269,3 +269,98 @@ Redis được dùng như source of truth
 Có safety net khi logic fail
 
 Sẵn sàng scale & production debugging
+
+
+CHIẾN LƯỢC TEST (THE BATTLE PLAN)
+Vì đây là lần đầu, chúng ta sẽ đi theo mô hình "Crawl, Walk, Run" (Bò, Đi, Chạy). Đừng chạy tất cả cùng lúc.
+
+Bạn cần mở 3 Terminals:
+
+Terminal 1 (Server): Chạy npm run start:dev (Theo dõi log server).
+
+Terminal 2 (Monitor): Chạy docker stats (Theo dõi RAM/CPU của Redis & App nếu chạy docker) hoặc mở Task Manager.
+
+Terminal 3 (Attacker): Để chạy lệnh test Artillery.
+
+Giai đoạn 1: Sanity Check (Kiểm tra sức khỏe)
+Mục tiêu: Đảm bảo kết nối thành công, Auth hoạt động.
+
+Chạy lệnh:
+
+Bash
+npm run test:load
+# (Tương ứng: artillery run basic-connection.yml)
+Quan sát Terminal 1 (Server):
+
+Thấy log: ✅ Socket authenticated: ... hiện lên liên tục.
+
+Sau 30s thấy log: ❌ Socket disconnected....
+
+Không có lỗi đỏ ERROR.
+
+Kết quả mong đợi: Artillery báo cáo http.codes.200 (hoặc custom metric) và vusers.failed: 0.
+
+Giai đoạn 2: Stress Test CPU & I/O (Message Flood)
+Mục tiêu: Xem server chịu được bao nhiêu tin nhắn/giây.
+
+Chạy lệnh:
+
+Bash
+npm run test:load:message-flood
+Quan sát Terminal 1:
+
+Log có thể trôi rất nhanh.
+
+Chú ý log của WsThrottleGuard: Socket ... bị chặn do spam. Điều này chứng tỏ Rate Limit hoạt động tốt.
+
+Quan sát Terminal 2 (Monitor):
+
+CPU của Node.js process sẽ tăng cao. Nếu chạm 100% 1 Core -> Đó là giới hạn của bạn.
+
+Giai đoạn 3: Memory Leak Detection (Bài kiểm tra quan trọng nhất)
+Mục tiêu: Đảm bảo RAM không tăng mãi mãi.
+
+Chuẩn bị: Trong Terminal 1, start server với cờ GC (nếu chưa có trong script start): node --expose-gc dist/main.
+
+Chạy lệnh (Terminal 3):
+
+Bash
+# Test Connection Churn (Vào/Ra liên tục)
+npm run test:load:connection-churn
+Song song (Terminal 4 - Optional): Chạy Memory Profiler của bạn:
+
+Bash
+npm run test:memory
+Đánh giá:
+
+Sau khi test xong (3 phút), RAM phải giảm xuống (hình răng cưa).
+
+Nếu RAM tạo thành hình bậc thang đi lên -> Leak.
+
+Giai đoạn 4: Chaos Engineering (Phá hoại)
+Mục tiêu: Test khả năng phục hồi.
+
+Graceful Shutdown:
+
+Bash
+npm run test:graceful-shutdown
+Lưu ý: Bạn cần phải tắt server thủ công ở Terminal 1 khi script yêu cầu.
+
+Redis Failure:
+
+Bash
+npm run test:redis-failure
+Lưu ý: Cần chạy Redis bằng Docker.
+
+✅ CHECKLIST CUỐI CÙNG
+[ ] Đã thêm handleTestMessage, handleTestSpam vào SocketGateway.
+
+[ ] Đã sửa port thành 8000 trong redis-failure-sim.js.
+
+[ ] Redis và Database đang chạy.
+
+[ ] Đã cài đủ dependencies (npm install).
+
+Bạn đã sẵn sàng. Hãy bắt đầu với Giai đoạn 1 và báo cho tôi biết kết quả! Good luck!
+D:\HKII-2025-2026\zalo_clone\backend\zalo_backend\test\load-tests\processors\auth-processor.js
+D:\HKII-2025-2026\zalo_clone\backend\zalo_backend\test\load-tests\scenarios\processors\auth-processor.js
