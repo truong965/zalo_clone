@@ -20,6 +20,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
   ) {
+    this.logger.warn(
+      `Redis Config - Host: ${this.config.host}, Password Length: ${this.config.password?.length || 0}`,
+    );
     // Khởi tạo instance NGAY LẬP TỨC trong constructor
     // ioredis sẽ tự động bắt đầu kết nối ngầm
     const options = {

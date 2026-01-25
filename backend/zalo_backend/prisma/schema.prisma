@@ -54,6 +54,29 @@ enum MemberRole {
   @@map("member_role")
 }
 
+// ADD - Member status in group
+enum MemberStatus {
+  PENDING   // Chờ duyệt
+  ACTIVE    // Đã là thành viên
+  KICKED    // Bị kick
+  LEFT      // Tự rời
+  @@map("member_status")
+}
+
+//  ADD - Join request status
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  @@map("join_request_status")
+}
+
+enum ReceiptStatus {
+  SENT      // Server confirmed receipt
+  DELIVERED // Reached recipient's device
+  SEEN      // User viewed the message
+  @@map("receipt_status")
+}
 enum MessageType {
   TEXT
   IMAGE
@@ -202,6 +225,9 @@ model User {
   messagesSent     Message[]
   messagesDeleted  Message[] @relation("DeletedBy")
 
+  joinRequests        GroupJoinRequest[]
+  reviewedJoinRequests GroupJoinRequest[] @relation("ReviewedRequests")
+  
   //Socket Infrastructure
   socketConnections SocketConnection[]
   presenceLogs      PresenceLog[]
@@ -320,6 +346,10 @@ model Conversation {
   avatarUrl     String?          @map("avatar_url")
   lastMessageAt DateTime?        @map("last_message_at") @db.Timestamptz
 
+
+  requireApproval Boolean @default(false) @map("require_approval") // Chế độ duyệt thành viên
+  settings        Json    @default("{}") @db.JsonB // Pin messages, QR code, etc.
+  
   // --- Audit Fields ---
   createdById String?   @map("created_by") @db.Uuid // Người tạo nhóm
   updatedById String?   @map("updated_by") @db.Uuid
@@ -331,6 +361,7 @@ model Conversation {
 
   members  ConversationMember[]
   messages Message[]
+  joinRequests GroupJoinRequest[]
 
   @@index([lastMessageAt(sort: Desc)])
   @@map("conversations")
@@ -341,19 +372,52 @@ model ConversationMember {
   userId         String @map("user_id") @db.Uuid
   role           MemberRole @default(MEMBER)
   
+  status         MemberStatus @default(ACTIVE) @map("status")
+
   lastReadMessageId String?   @map("last_read_message_id") @db.Uuid
   lastReadAt        DateTime? @map("last_read_at") @db.Timestamptz
   unreadCount       Int       @default(0) @map("unread_count")
   
   joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamptz
-  isActive Boolean  @default(true) @map("is_active")
+ 
+  //  Track leave/kick
+  leftAt   DateTime? @map("left_at") @db.Timestamptz
+  kickedBy String?   @map("kicked_by") @db.Uuid // Admin who kicked
+  kickedAt DateTime? @map("kicked_at") @db.Timestamptz
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, userId])
+  @@index([userId, status])
   @@index([userId, unreadCount(sort: Desc)])
+  //create by code @@unique([conversationId, role], name: "unique_admin_per_group", where: { role: ADMIN, status: ACTIVE })
   @@map("conversation_members")
+}
+
+model GroupJoinRequest {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String            @map("conversation_id") @db.Uuid
+  userId         String            @map("user_id") @db.Uuid
+  status         JoinRequestStatus @default(PENDING)
+  
+  // Request metadata
+  requestedAt DateTime  @default(now()) @map("requested_at") @db.Timestamptz
+  message     String?   @db.VarChar(500) // Optional join message
+  
+  // Review tracking
+  reviewedBy String?   @map("reviewed_by") @db.Uuid // Admin who approved/rejected
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz
+  
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer     User?        @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
+
+  @@unique([conversationId, userId]) // One pending request per user per group
+  @@index([conversationId, status])
+  @@index([userId, status])
+  @@map("group_join_requests")
 }
 
 model Message {
@@ -364,6 +428,9 @@ model Message {
   content        String?     @db.Text
   metadata       Json?       @default("{}") @db.JsonB
   replyToId      BigInt?     @map("reply_to_message_id")
+
+  //- Client-side idempotency
+  clientMessageId String?    @unique @map("client_message_id") @db.VarChar(36)
 
   // --- Audit Fields ---
   // Đã xóa createdById vì senderId chính là người tạo
@@ -382,8 +449,27 @@ model Message {
   replies       Message[]   @relation("Reply")
   mediaAttachments MediaAttachment[]
 
+  receipts     MessageReceipt[]
+
   @@index([conversationId, createdAt(sort: Desc)])
+  @@index([senderId, createdAt(sort: Desc)]) // For "my sent messages"
+  @@index([clientMessageId]) // For deduplication lookup
   @@map("messages")
+}
+
+model MessageReceipt {
+  messageId BigInt        @map("message_id")
+  userId    String        @map("user_id") @db.Uuid
+  status    ReceiptStatus
+  timestamp DateTime      @default(now()) @db.Timestamptz
+  
+  // Relations
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  @@id([messageId, userId])
+  @@index([userId, status, timestamp])
+  @@index([messageId, status]) // For checking "who has seen this message"
+  @@map("message_receipts")
 }
 
 model MediaAttachment {

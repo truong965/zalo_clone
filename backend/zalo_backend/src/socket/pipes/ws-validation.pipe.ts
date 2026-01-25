@@ -20,17 +20,6 @@ export class WsValidationPipe implements PipeTransform<any> {
   private readonly logger = new Logger(WsValidationPipe.name);
 
   async transform(value: any, { metatype }: ArgumentMetadata) {
-    // 0. Check payload size BEFORE any processing
-    const payloadSize = JSON.stringify(value).length;
-    if (payloadSize > this.config.maxHttpBufferSize) {
-      this.logger.warn(
-        `Payload too large: ${payloadSize} bytes (max: ${this.config.maxHttpBufferSize})`,
-      );
-      throw new WsException({
-        code: 'PAYLOAD_TOO_LARGE',
-        message: `Payload size ${payloadSize} bytes exceeds maximum ${this.config.maxHttpBufferSize} bytes`,
-      });
-    }
     // 1. Nếu không có DTO (metatype) hoặc là kiểu dữ liệu nguyên thủy -> Bỏ qua
     if (!metatype || !this.toValidate(metatype)) {
       return value;

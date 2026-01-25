@@ -30,6 +30,7 @@
     "test:memory": "node --expose-gc test/load-tests/scripts/memory-profiler.js",
     "test:redis-failure": "node test/load-tests/scripts/redis-failure-sim.js",
     "test:graceful-shutdown": "node test/load-tests/scripts/graceful-shutdown-test.js"
+    
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

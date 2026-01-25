@@ -14,6 +14,7 @@ import { FriendshipsModule } from './modules/friendships/friendships.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './socket/socket.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import socketConfig from './config/socket.config';
@@ -54,6 +55,7 @@ import socketConfig from './config/socket.config';
     FriendshipsModule,
     HealthModule,
     SocketModule,
+    MessagingModule,
     // public file
     // ServeStaticModule.forRoot({
     //   rootPath: join(__dirname, '..', 'public'), // Trỏ đến thư mục public ở root dự án

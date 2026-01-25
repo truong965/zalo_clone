@@ -23,7 +23,17 @@ export const RedisKeys = {
     presenceOnline: 'socket:presence:online',
     presenceOffline: 'socket:presence:offline',
     broadcast: 'socket:broadcast',
-    typing: 'socket:typing',
+    // typing: 'socket:typing',
+    newMessage: (conversationId: string) => `chat:msg:${conversationId}`,
+    receipt: (userId: string) => `chat:receipt:${userId}`,
+    typing: (conversationId: string) => `chat:typing:${conversationId}`,
+  },
+  cache: {
+    //  Message idempotency (TTL: 5min)
+    messageIdempotency: (clientMsgId: string) => `msg:dedup:${clientMsgId}`,
+
+    // Offline message queue (sorted set)
+    offlineMessages: (userId: string) => `user:${userId}:offline_msgs`,
   },
 } as const;
 

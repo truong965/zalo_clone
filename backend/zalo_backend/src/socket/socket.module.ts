@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { SocketGateway } from './socket.gateway';
@@ -12,6 +12,7 @@ import { DatabaseModule } from 'src/database/prisma.module';
 import { SocketConnectionLoggerService } from './services/socket-connection-logger.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SocketCleanupJob } from './jobs/socket-cleanup.job';
+import { MessagingModule } from 'src/modules/messaging/messaging.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SocketCleanupJob } from './jobs/socket-cleanup.job';
     AuthModule, // For DeviceFingerprintService
     DatabaseModule,
     ScheduleModule.forRoot(),
+    forwardRef(() => MessagingModule),
   ],
   providers: [
     SocketGateway,

@@ -30,6 +30,23 @@ export const SocketEvents = {
   // Heartbeat (handled by Socket.IO internally)
   PING: 'ping',
   PONG: 'pong',
+
+  //Client → Server
+  MESSAGE_SEND: 'message:send',
+  MESSAGE_DELIVERED_ACK: 'message:delivered', // Client confirms delivery
+  MESSAGE_SEEN: 'message:seen',
+  TYPING_START: 'typing:start',
+  TYPING_STOP: 'typing:stop',
+
+  // Server → Client
+  MESSAGE_NEW: 'message:new', // New incoming message
+  MESSAGE_SENT_ACK: 'message:sent', // Server confirms send
+  MESSAGE_RECEIPT_UPDATE: 'message:receipt', // Delivery/seen status change
+  TYPING_STATUS: 'typing:status', // Someone is typing
+
+  // Sync events
+  MESSAGES_SYNC: 'messages:sync', // Offline message batch
+  CONVERSATION_UPDATED: 'conversation:updated', // Last message changed
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

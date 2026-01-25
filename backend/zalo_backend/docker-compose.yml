@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # 1. Database PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: zalo_postgres_test
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: zalo_clone_db_test
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data
+
+  # 2. Redis (Cache & Pub/Sub)
+  redis:
+    image: redis:7-alpine
+    container_name: zalo_redis_test
+    restart: always
+    ports:
+      - "6379:6379"
+    # Lệnh này để bật Redis mà không cần file config, có password
+    command: redis-server --requirepass password123
+
+volumes:
+  postgres_data_test:
