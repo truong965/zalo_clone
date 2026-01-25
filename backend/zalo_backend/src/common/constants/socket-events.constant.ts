@@ -47,6 +47,42 @@ export const SocketEvents = {
   // Sync events
   MESSAGES_SYNC: 'messages:sync', // Offline message batch
   CONVERSATION_UPDATED: 'conversation:updated', // Last message changed
+
+  // === GROUP EVENTS ===
+
+  // Client → Server
+  GROUP_CREATE: 'group:create',
+  GROUP_UPDATE: 'group:update',
+  GROUP_ADD_MEMBERS: 'group:addMembers',
+  GROUP_REMOVE_MEMBER: 'group:removeMember',
+  GROUP_LEAVE: 'group:leave',
+  GROUP_TRANSFER_ADMIN: 'group:transferAdmin',
+  GROUP_DISSOLVE: 'group:dissolve',
+  GROUP_PIN_MESSAGE: 'group:pinMessage',
+  GROUP_UNPIN_MESSAGE: 'group:unpinMessage',
+
+  // Join Requests
+  GROUP_REQUEST_JOIN: 'group:requestJoin',
+  GROUP_REVIEW_JOIN: 'group:reviewJoinRequest',
+  GROUP_GET_PENDING: 'group:getPendingRequests',
+  GROUP_CANCEL_REQUEST: 'group:cancelJoinRequest',
+
+  // Server → Client
+  GROUP_CREATED: 'group:created',
+  GROUP_UPDATED: 'group:updated',
+  GROUP_MEMBERS_ADDED: 'group:membersAdded',
+  GROUP_MEMBER_REMOVED: 'group:memberRemoved',
+  GROUP_MEMBER_LEFT: 'group:memberLeft',
+  GROUP_YOU_WERE_REMOVED: 'group:youWereRemoved',
+  GROUP_ADMIN_TRANSFERRED: 'group:adminTransferred',
+  GROUP_DISSOLVED: 'group:dissolved',
+  GROUP_MESSAGE_PINNED: 'group:messagePinned',
+  GROUP_MESSAGE_UNPINNED: 'group:messageUnpinned',
+
+  // Join Request Notifications
+  GROUP_JOIN_REQUEST_RECEIVED: 'group:joinRequestReceived',
+  GROUP_JOIN_REQUEST_REVIEWED: 'group:joinRequestReviewed',
+  GROUP_MEMBER_JOINED: 'group:memberJoined',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

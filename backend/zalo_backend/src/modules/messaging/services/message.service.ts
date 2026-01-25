@@ -67,7 +67,14 @@ export class MessageService {
     if (!isMember) {
       throw new ForbiddenException('You are not a member of this conversation');
     }
-
+    //- Check if conversation is deleted
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: dto.conversationId },
+      select: { deletedAt: true, type: true },
+    });
+    if (conversation?.deletedAt) {
+      throw new BadRequestException('Conversation has been deleted');
+    }
     // ========================================
     // STEP 3: Validation
     // ========================================

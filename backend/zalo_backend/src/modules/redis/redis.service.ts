@@ -131,7 +131,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`Redis ${name}: Ready`);
     });
 
-    client.on('error', (error) => {
+    client.on('error', (error: any) => {
+      // FIX: Chặn spam log khi lỗi là ECONNREFUSED (mất kết nối)
+      if (error.code === 'ECONNREFUSED') {
+        this.logger.warn(
+          `Redis ${name}: Connection refused at ${error.address}:${error.port}. Retrying...`,
+        );
+        // Không log full stack trace để tránh spam console
+        return;
+      }
       this.logger.error(`Redis ${name} Error:`, error);
     });
 

@@ -136,3 +136,5 @@ System Behavior: Lỗi hiện tại – TypeError khi serialize BigInt
 Required Fix: Sử dụng helper safeJSON để handle BigInt
 
 Handled By: messaging.gateway.ts
+
+

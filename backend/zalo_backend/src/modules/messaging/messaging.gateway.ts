@@ -9,7 +9,15 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import { Logger, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+  Logger,
+  NotFoundException,
+  UseFilters,
+  UseGuards,
+  UseInterceptors,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
@@ -27,8 +35,25 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { MarkAsReadDto } from './dto/mark-as-read.dto';
 import { TypingIndicatorDto } from './dto/typing-indicator.dto';
 
-import { Message } from '@prisma/client';
+import {
+  MemberRole,
+  MemberStatus,
+  Message,
+  ReceiptStatus,
+} from '@prisma/client';
 import { safeJSON } from 'src/common/utils/json.util';
+import { GroupService } from './services/group.service';
+import { GroupJoinService } from './services/group-join.service';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
+import { AddMembersDto } from './dto/add-members.dto';
+import { RemoveMemberDto } from './dto/remove-member.dto';
+import { TransferAdminDto } from './dto/transfer-admin.dto';
+import { CreateJoinRequestDto } from './dto/join-request.dto';
+import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
+import { PrismaService } from 'src/database/prisma.service';
+import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
+import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
 
 @WebSocketGateway({
   namespace: '/socket.io',
@@ -36,6 +61,8 @@ import { safeJSON } from 'src/common/utils/json.util';
 })
 @UseGuards(WsThrottleGuard)
 @UsePipes(new ValidationPipe({ transform: true }))
+@UseInterceptors(WsTransformInterceptor)
+@UseFilters(WsExceptionFilter)
 export class MessagingGateway implements OnGatewayInit {
   @WebSocketServer()
   server: Server;
@@ -55,6 +82,9 @@ export class MessagingGateway implements OnGatewayInit {
     private readonly messageQueue: MessageQueueService,
     private readonly broadcaster: MessageBroadcasterService,
     private readonly socketState: SocketStateService,
+    private readonly groupService: GroupService,
+    private readonly groupJoinService: GroupJoinService,
+    private readonly prisma: PrismaService,
   ) {}
 
   afterInit() {
@@ -165,7 +195,7 @@ export class MessagingGateway implements OnGatewayInit {
           await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
             messageId: message.id,
             userId,
-            status: 'DELIVERED',
+            status: ReceiptStatus.DELIVERED,
             timestamp: new Date(),
           });
         }
@@ -243,7 +273,7 @@ export class MessagingGateway implements OnGatewayInit {
       // ========================================
       // STEP 4: Broadcast to Other Gateway Instances
       // ========================================
-      const safeMsg = safeJSON(message);
+      const safeMsg = safeJSON(message) as Message;
       await this.broadcaster.broadcastNewMessage(dto.conversationId, {
         message: safeMsg,
         recipientIds,
@@ -259,7 +289,7 @@ export class MessagingGateway implements OnGatewayInit {
         `✅ Message ${message.id} sent and broadcasted to ${recipientIds.length} recipients`,
       );
 
-      return { success: true, messageId: message.id };
+      return { messageId: message.id.toString() };
     } catch (error) {
       this.logger.error('Error sending message', (error as Error).stack);
 
@@ -299,7 +329,7 @@ export class MessagingGateway implements OnGatewayInit {
         await this.broadcaster.broadcastReceiptUpdate(senderId, {
           messageId: message.id,
           userId: recipientId,
-          status: 'DELIVERED',
+          status: ReceiptStatus.DELIVERED,
           timestamp: new Date(),
         });
 
@@ -346,7 +376,7 @@ export class MessagingGateway implements OnGatewayInit {
         await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
           messageId: data.messageId,
           userId,
-          status: 'DELIVERED',
+          status: ReceiptStatus.DELIVERED,
           timestamp: new Date(),
         });
       }
@@ -399,7 +429,7 @@ export class MessagingGateway implements OnGatewayInit {
           await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
             messageId,
             userId,
-            status: 'SEEN',
+            status: ReceiptStatus.SEEN,
             timestamp: new Date(),
           });
         }
@@ -409,12 +439,16 @@ export class MessagingGateway implements OnGatewayInit {
         `User ${userId} marked ${dto.messageIds.length} messages as seen`,
       );
 
-      return { success: true };
+      return true;
     } catch (error) {
       this.logger.error(
         'Error marking messages as seen',
         (error as Error).stack,
       );
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.MESSAGE_SEEN,
+        error: (error as Error).message,
+      });
       throw error;
     }
   }
@@ -573,6 +607,546 @@ export class MessagingGateway implements OnGatewayInit {
   }
 
   // ============================================================
+  // GROUP MANAGEMENT HANDLERS
+  // ============================================================
+
+  @SubscribeMessage(SocketEvents.GROUP_CREATE)
+  async handleCreateGroup(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: CreateGroupDto,
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      const group = await this.groupService.createGroup(dto, client.userId);
+
+      // Notify all initial members
+      const members = await this.groupService.getGroupMembers(
+        group.id,
+        client.userId,
+      );
+
+      // Gửi song song, không chờ đợi lẫn nhau
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_CREATED, {
+            group,
+            role: member.role,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return { group };
+    } catch (error) {
+      this.logger.error('Error creating group', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_CREATE,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_UPDATE)
+  async handleUpdateGroup(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: { conversationId: string; updates: UpdateGroupDto },
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      const updated = await this.groupService.updateGroup(
+        dto.conversationId,
+        dto.updates,
+        client.userId,
+      );
+
+      // Broadcast to all members
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_UPDATED, {
+            conversationId: dto.conversationId,
+            updates: dto.updates,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return { updated };
+    } catch (error) {
+      this.logger.error('Error updating group', (error as Error).stack);
+      //Gửi event lỗi về cho client để Test bắt được
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_UPDATE,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_ADD_MEMBERS)
+  async handleAddMembers(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: AddMembersDto,
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      const result = await this.groupService.addMembers(dto, client.userId);
+
+      // Notify existing members
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      // Gửi song song, không chờ đợi lẫn nhau
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_MEMBERS_ADDED, {
+            conversationId: dto.conversationId,
+            addedUserIds: dto.userIds,
+            addedBy: client.userId,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return { result };
+    } catch (error) {
+      this.logger.error('Error adding members', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_ADD_MEMBERS,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_REMOVE_MEMBER)
+  async handleRemoveMember(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: RemoveMemberDto,
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      // 1. Thực hiện xóa trong DB
+      await this.groupService.removeMember(dto, client.userId);
+
+      // 2. Lấy danh sách thành viên CÒN LẠI (đang Active)
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      // 3. Notify remaining members (Thông báo cho người ở lại: "A đã bị xóa")
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_MEMBER_REMOVED, {
+            conversationId: dto.conversationId,
+            removedUserId: dto.userId,
+            removedBy: client.userId,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      // 4. FIX: Notify removed user DIRECTLY (Gửi thẳng cho người bị xóa dựa trên dto.userId)
+      // KHÔNG dùng list 'members' ở trên vì họ không còn trong đó nữa
+      await this.emitToUser(dto.userId, SocketEvents.GROUP_YOU_WERE_REMOVED, {
+        conversationId: dto.conversationId,
+        removedBy: client.userId,
+      }).catch((err) =>
+        this.logger.error(`Failed to emit to removed user ${dto.userId}`, err),
+      );
+
+      return true;
+    } catch (error) {
+      this.logger.error('Error removing member', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_REMOVE_MEMBER,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_TRANSFER_ADMIN)
+  async handleTransferAdmin(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: TransferAdminDto,
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      const result = await this.groupService.transferAdmin(dto, client.userId);
+
+      // Notify all members
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_ADMIN_TRANSFERRED, {
+            conversationId: dto.conversationId,
+            fromUserId: client.userId,
+            toUserId: dto.newAdminId,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return { result };
+    } catch (error) {
+      this.logger.error('Error transferring admin', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_TRANSFER_ADMIN,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_LEAVE)
+  async handleLeaveGroup(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: { conversationId: string },
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      await this.groupService.removeMember(
+        {
+          conversationId: dto.conversationId,
+          userId: client.userId,
+        },
+        client.userId,
+      );
+
+      // Notify remaining members
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_MEMBER_LEFT, {
+            conversationId: dto.conversationId,
+            userId: client.userId,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return true;
+    } catch (error) {
+      this.logger.error('Error leaving group', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_LEAVE,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_DISSOLVE)
+  async handleDissolveGroup(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: { conversationId: string },
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      // Get members before dissolving
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      await this.groupService.dissolveGroup(dto.conversationId, client.userId);
+
+      // Notify all members
+      // Gửi song song, không chờ đợi lẫn nhau
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_DISSOLVED, {
+            conversationId: dto.conversationId,
+            dissolvedBy: client.userId,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return true;
+    } catch (error) {
+      this.logger.error('Error dissolving group', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_DISSOLVE,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // JOIN REQUEST HANDLERS
+  // ============================================================
+
+  @SubscribeMessage(SocketEvents.GROUP_REQUEST_JOIN)
+  async handleRequestJoin(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: CreateJoinRequestDto,
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      const result = await this.groupJoinService.requestJoin(
+        dto,
+        client.userId,
+      );
+
+      // If pending, notify admin
+      if (result.status === MemberStatus.PENDING) {
+        const members = await this.conversationService.getActiveMembers(
+          dto.conversationId,
+        );
+
+        const admin = members.find((m) => m.role === MemberRole.ADMIN);
+        if (admin) {
+          await this.emitToUser(
+            admin.userId,
+            SocketEvents.GROUP_JOIN_REQUEST_RECEIVED,
+            {
+              conversationId: dto.conversationId,
+              requesterId: client.userId,
+              message: dto.message,
+            },
+          );
+        }
+      }
+
+      return { result };
+    } catch (error) {
+      this.logger.error('Error requesting join', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_REQUEST_JOIN,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_REVIEW_JOIN)
+  async handleReviewJoinRequest(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: ReviewJoinRequestDto,
+  ) {
+    try {
+      // Get request details before review
+      const request = await this.prisma.groupJoinRequest.findUnique({
+        where: { id: dto.requestId },
+        select: { userId: true, conversationId: true },
+      });
+
+      if (!request) {
+        throw new NotFoundException('Request not found');
+      }
+      if (!client.userId) {
+        throw new Error('Unauthenticated');
+      }
+
+      const result = await this.groupJoinService.reviewJoinRequest(
+        dto,
+        client.userId,
+      );
+
+      // Notify requester
+      await this.emitToUser(
+        request.userId,
+        SocketEvents.GROUP_JOIN_REQUEST_REVIEWED,
+        {
+          conversationId: request.conversationId,
+          approved: dto.approve,
+          reviewedBy: client.userId,
+        },
+      );
+
+      // If approved, notify other members
+      if (dto.approve) {
+        const members = await this.conversationService.getActiveMembers(
+          request.conversationId,
+        );
+        const notificationPromises = members
+          .filter((member) => member.userId !== request.userId)
+          .map((member) =>
+            // .catch() ngay tại đây
+            this.emitToUser(member.userId, SocketEvents.GROUP_MEMBER_JOINED, {
+              conversationId: request.conversationId,
+              userId: request.userId,
+            }).catch((err) => {
+              // Log lỗi nhưng KHÔNG throw tiếp để Promise.all vẫn chạy tiếp
+              this.logger.error(
+                `Failed to notify user ${member.userId} about join request`,
+                (err as Error).stack,
+              );
+            }),
+          );
+
+        // Lúc này Promise.all sẽ luôn thành công (vì lỗi đã được catch hết rồi)
+        await Promise.all(notificationPromises);
+      }
+
+      return { result };
+    } catch (error) {
+      this.logger.error('Error reviewing join request', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_REVIEW_JOIN,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_GET_PENDING)
+  async handleGetPendingRequests(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: { conversationId: string },
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+
+    try {
+      return await this.groupJoinService.getPendingRequests(
+        dto.conversationId,
+        client.userId,
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error getting pending requests',
+        (error as Error).stack,
+      );
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_GET_PENDING,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // PIN MESSAGE HANDLERS
+  // ============================================================
+
+  @SubscribeMessage(SocketEvents.GROUP_PIN_MESSAGE)
+  async handlePinMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: { conversationId: string; messageId: bigint },
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+
+    try {
+      await this.groupService.pinMessage(
+        dto.conversationId,
+        dto.messageId,
+        client.userId,
+      );
+
+      // Notify all members
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      // Gửi song song, không chờ đợi lẫn nhau
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_MESSAGE_PINNED, {
+            conversationId: dto.conversationId,
+            messageId: dto.messageId,
+            pinnedBy: client.userId,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return true;
+    } catch (error) {
+      this.logger.error('Error pinning message', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_PIN_MESSAGE,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  @SubscribeMessage(SocketEvents.GROUP_UNPIN_MESSAGE)
+  async handleUnpinMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: { conversationId: string; messageId: bigint },
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+
+    try {
+      await this.groupService.unpinMessage(
+        dto.conversationId,
+        dto.messageId,
+        client.userId,
+      );
+
+      // Notify all members
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+
+      await Promise.all(
+        members.map((member) =>
+          this.emitToUser(member.userId, SocketEvents.GROUP_MESSAGE_UNPINNED, {
+            conversationId: dto.conversationId,
+            messageId: dto.messageId,
+            unpinnedBy: client.userId,
+          }).catch((err) =>
+            this.logger.error(`Failed to emit to ${member.userId}`, err),
+          ),
+        ),
+      );
+
+      return true;
+    } catch (error) {
+      this.logger.error('Error unpinning message', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_UNPIN_MESSAGE,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  // ============================================================
   // HELPER METHODS
   // ============================================================
 
@@ -617,6 +1191,16 @@ export class MessagingGateway implements OnGatewayInit {
           // Xử lý linh hoạt cả hàm đồng bộ và bất đồng bộ
           await unsub();
         } catch (error) {
+          //Bỏ qua lỗi nếu kết nối đã đóng
+          const msg = (error as Error).message;
+          if (
+            msg &&
+            (msg.includes('Connection is closed') ||
+              msg.includes('ECONNABORTED'))
+          ) {
+            // Server đang tắt hoặc Redis sập, không cần log error làm rác console
+            return;
+          }
           // Log lỗi cụ thể cho từng subscription để dễ debug
           this.logger.error(
             `Error unsubscribing for socket ${socketId}`,

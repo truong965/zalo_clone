@@ -9,6 +9,8 @@ import { ReceiptService } from './services/receipt.service';
 import { MessageQueueService } from './services/message-queue.service';
 import { MessageBroadcasterService } from './services/message-broadcaster.service';
 import { MessagingGateway } from './messaging.gateway';
+import { GroupService } from './services/group.service';
+import { GroupJoinService } from './services/group-join.service';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { MessagingGateway } from './messaging.gateway';
     ReceiptService,
     MessageQueueService,
     MessageBroadcasterService,
+    GroupService,
+    GroupJoinService,
 
     // Gateway
     MessagingGateway,
@@ -33,6 +37,8 @@ import { MessagingGateway } from './messaging.gateway';
     ConversationService,
     ReceiptService,
     MessagingGateway, // Export for integration with SocketGateway
+    GroupService,
+    GroupJoinService,
   ],
 })
 export class MessagingModule {}

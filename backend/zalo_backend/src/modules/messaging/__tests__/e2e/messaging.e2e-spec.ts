@@ -1,3 +1,4 @@
+/* eslint-disable */
 // how to test
 // docker-compose up -d
 // npx dotenv -e .env.test -- npx prisma db push

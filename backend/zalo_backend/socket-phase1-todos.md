@@ -360,7 +360,3 @@ Lưu ý: Cần chạy Redis bằng Docker.
 [ ] Redis và Database đang chạy.
 
 [ ] Đã cài đủ dependencies (npm install).
-
-Bạn đã sẵn sàng. Hãy bắt đầu với Giai đoạn 1 và báo cho tôi biết kết quả! Good luck!
-D:\HKII-2025-2026\zalo_clone\backend\zalo_backend\test\load-tests\processors\auth-processor.js
-D:\HKII-2025-2026\zalo_clone\backend\zalo_backend\test\load-tests\scenarios\processors\auth-processor.js
