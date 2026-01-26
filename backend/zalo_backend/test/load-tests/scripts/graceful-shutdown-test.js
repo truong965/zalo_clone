@@ -7,9 +7,9 @@ const io = require('socket.io-client');
 const { spawn } = require('child_process');
 const jwt = require('jsonwebtoken');
 
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:8000';
+const SERVER_URL ='http://localhost:8000';
 const JWT_SECRET = process.env.JWT_ACCESS_SECRET || 'your-super-secret-access-token-key-min-32-chars';
-const TEST_USER_ID = process.env.TEST_USER_ID || 'test-user-uuid-here';
+const TEST_USER_ID = 'cb3cdcab-ae68-44a2-8001-6806146e9bb1';
 const CLIENT_COUNT = 50; // Number of clients to simulate
 
 class GracefulShutdownTester {

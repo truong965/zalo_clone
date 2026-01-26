@@ -15,9 +15,13 @@ import { RedisModule } from './modules/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './socket/socket.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { MediaModule } from './modules/media/media.module';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import socketConfig from './config/socket.config';
+import s3Config from './config/s3.config.ts';
+import bullConfig from './config/bull.config';
+import uploadConfig from './config/upload.config';
 @Module({
   imports: [
     // config schedule and cron jobs
@@ -34,7 +38,14 @@ import socketConfig from './config/socket.config';
     ConfigModule.forRoot({
       isGlobal: true,
       // CHỈ ĐỊNH FILE ENV TẠI ĐÂY
-      load: [jwtConfig, redisConfig, socketConfig],
+      load: [
+        jwtConfig,
+        redisConfig,
+        socketConfig,
+        s3Config,
+        bullConfig,
+        uploadConfig,
+      ],
       envFilePath: '.env.development.local',
     }),
 
@@ -56,6 +67,7 @@ import socketConfig from './config/socket.config';
     HealthModule,
     SocketModule,
     MessagingModule,
+    MediaModule,
     // public file
     // ServeStaticModule.forRoot({
     //   rootPath: join(__dirname, '..', 'public'), // Trỏ đến thư mục public ở root dự án

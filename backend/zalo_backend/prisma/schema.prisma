@@ -1,18 +1,22 @@
-// 
+// ============================================================================
+// 1. CONFIGURATION
+// ============================================================================
+
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
   extensions = [pgcrypto, uuidOssp(map: "uuid-ossp")]
 }
 
-// =======================
-// 1. ENUMS 
-// =======================
+// ============================================================================
+// 2. ENUMS (TYPE DEFINITIONS)
+// ============================================================================
 
+// --- User & Identity ---
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -28,6 +32,7 @@ enum Gender {
   @@map("gender_type")
 }
 
+// --- Privacy & Social ---
 enum PrivacyLevel {
   EVERYONE
   CONTACTS
@@ -42,6 +47,7 @@ enum FriendshipStatus {
   @@map("friendship_status")
 }
 
+// --- Messaging & Group ---
 enum ConversationType {
   DIRECT
   GROUP
@@ -54,21 +60,30 @@ enum MemberRole {
   @@map("member_role")
 }
 
-// ADD - Member status in group
 enum MemberStatus {
-  PENDING   // Chờ duyệt
-  ACTIVE    // Đã là thành viên
-  KICKED    // Bị kick
-  LEFT      // Tự rời
+  PENDING // Chờ duyệt
+  ACTIVE  // Đã là thành viên
+  KICKED  // Bị kick bởi Admin
+  LEFT    // Tự rời nhóm
   @@map("member_status")
 }
 
-//  ADD - Join request status
 enum JoinRequestStatus {
   PENDING
   APPROVED
   REJECTED
   @@map("join_request_status")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE    // document
+  STICKER // = image (media type)
+  SYSTEM // notification
+  AUDIO
+  @@map("message_type")
 }
 
 enum ReceiptStatus {
@@ -77,20 +92,28 @@ enum ReceiptStatus {
   SEEN      // User viewed the message
   @@map("receipt_status")
 }
-enum MessageType {
-  TEXT
+
+// --- Media ---
+enum MediaType {
   IMAGE
   VIDEO
-  FILE
-  STICKER
-  SYSTEM
-  @@map("message_type")
+  DOCUMENT
+  AUDIO
+  @@map("media_type")
 }
 
-// =======================
-// AUTH-RELATED ENUMS
-// =======================
+enum MediaProcessingStatus {
+  PENDING       // Presigned URL issued, awaiting upload
+  UPLOADED      // File in S3 temp/, not confirmed
+  CONFIRMED     // Confirmed by client, awaiting processing
+  PROCESSING    // Worker picked up job
+  READY         // Processing complete, ready to use
+  FAILED        // Processing failed after retries
+  EXPIRED       // Upload never completed (cleanup)
+  @@map("media_processing_status")
+}
 
+// --- Device & Security ---
 enum DeviceType {
   WEB
   MOBILE
@@ -117,380 +140,129 @@ enum TokenRevocationReason {
   @@map("token_revocation_reason")
 }
 
-// =======================
-// 2. MODELS (TABLES)
-// =======================
-model Role {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String   @unique @db.VarChar(50) // VD: 'ADMIN', 'USER'
-  description String?  @db.VarChar(255)
-  
-  
-  // --- Audit Fields ---
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-  
-  createdById String?   @map("created_by") @db.Uuid
-  updatedById String?   @map("updated_by") @db.Uuid
-  deletedById String?   @map("deleted_by") @db.Uuid
-  
-  // Relations
-  users           User[]
-  rolePermissions RolePermission[]
+// ============================================================================
+// 3. IAM MODULE (USER, AUTH, RBAC)
+// ============================================================================
 
-  @@map("roles")
-}
-
-model Permission {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String   @unique @db.VarChar(100) // VD: 'Create User', 'Delete Message'
-  apiPath     String   @map("api_path") // VD: '/api/v1/users' (Optional - dùng để map route)
-  method      String   @db.VarChar(10)  // VD: 'POST', 'GET'
-  module      String   @db.VarChar(50)  // VD: 'USERS', 'CHAT' (Gom nhóm quyền)
-  
-  // --- Audit Fields ---
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-  
-  createdById String?   @map("created_by") @db.Uuid
-  updatedById String?   @map("updated_by") @db.Uuid
-  deletedById String?   @map("deleted_by") @db.Uuid
-  
-  // Relations
-  roles RolePermission[]
-  @@unique([apiPath, method, module])
-  @@map("permissions")
-}
-
-model RolePermission {
-  roleId       String @map("role_id") @db.Uuid
-  permissionId String @map("permission_id") @db.Uuid
-  
-  // Relations
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  @@id([roleId, permissionId])
-  @@map("role_permissions")
-}
-
+/**
+ * Model: User
+ * Central entity of the system.
+ */
 model User {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  phoneNumber String   @unique @map("phone_number") @db.VarChar(20)
-  phoneCode   String   @default("+84") @map("phone_country_code") @db.VarChar(5)
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phoneNumber     String     @unique @map("phone_number") @db.VarChar(20)
+  phoneCode       String     @default("+84") @map("phone_country_code") @db.VarChar(5)
   
-  displayName String   @map("display_name") @db.VarChar(100)
-  avatarUrl   String?  @map("avatar_url")
-  bio         String?  @db.Text
-  dateOfBirth DateTime? @map("date_of_birth") @db.Date
-  gender      Gender?
-  
-  status      UserStatus @default(ACTIVE)
+  // Profile Info
+  displayName     String     @map("display_name") @db.VarChar(100)
+  avatarUrl       String?    @map("avatar_url")
+  bio             String?    @db.Text
+  dateOfBirth     DateTime?  @map("date_of_birth") @db.Date
+  gender          Gender?
+  status          UserStatus @default(ACTIVE)
 
-  roleId      String?  @map("role_id") @db.Uuid // Để null lúc đầu để dễ migrate, sau này set required
-  role        Role?    @relation(fields: [roleId], references: [id])
+  // Security & Activity
+  passwordHash    String     @map("password_hash")
+  passwordVersion Int        @default(1) @map("password_version") // For instant token invalidation
+  lastSeenAt      DateTime?  @map("last_seen_at") @db.Timestamptz
 
-  lastSeenAt  DateTime?  @map("last_seen_at") @db.Timestamptz
-  passwordHash String    @map("password_hash")
-  passwordVersion Int    @default(1) @map("password_version") // For instant token invalidation
+  // RBAC (Role Based Access Control)
+  roleId          String?    @map("role_id") @db.Uuid 
+  role            Role?      @relation(fields: [roleId], references: [id])
 
   // --- Audit Fields ---
-  // Vẫn giữ createdById vì có thể Admin tạo User, hoặc System import
-  createdById String?   @map("created_by") @db.Uuid
-  updatedById String?   @map("updated_by") @db.Uuid
-  deletedById String?   @map("deleted_by") @db.Uuid
+  createdById     String?    @map("created_by") @db.Uuid
+  updatedById     String?    @map("updated_by") @db.Uuid
+  deletedById     String?    @map("deleted_by") @db.Uuid
   
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime?  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime?  @map("deleted_at") @db.Timestamptz
   
   // --- Relationships ---
-  privacySettings PrivacySettings?
-  devices         UserDevice[]
-  tokens          UserToken[]
+  // Auth & Settings
+  privacySettings      PrivacySettings?
+  devices              UserDevice[]
+  tokens               UserToken[]
 
-  // Friends
-  sentFriendRequests     Friendship[] @relation("User1")
+  // Social Graph
+  sentFriendRequests   Friendship[] @relation("User1")
   receivedFriendRequests Friendship[] @relation("User2")
-  friendshipInitiator    Friendship[] @relation("Requester")
+  friendshipInitiator  Friendship[] @relation("Requester")
   
-  // Blocks
-  blocksBlocked    Block[] @relation("Blocker")
-  blocksWasBlocked Block[] @relation("Blocked")
+  blocksBlocked        Block[]      @relation("Blocker")
+  blocksWasBlocked     Block[]      @relation("Blocked")
 
-  // Chat
-  conversations    ConversationMember[]
-  messagesSent     Message[]
-  messagesDeleted  Message[] @relation("DeletedBy")
-
-  joinRequests        GroupJoinRequest[]
+  // Messaging & Groups
+  conversations        ConversationMember[]
+  joinRequests         GroupJoinRequest[]
   reviewedJoinRequests GroupJoinRequest[] @relation("ReviewedRequests")
   
-  //Socket Infrastructure
-  socketConnections SocketConnection[]
-  presenceLogs      PresenceLog[]
+  messagesSent         Message[]
+  messagesDeleted      Message[]    @relation("DeletedBy")
+
+  // Media
+  uploadedMedia        MediaAttachment[] @relation("UploadedMedia")
+
+  // System Logs
+  socketConnections    SocketConnection[]
+  presenceLogs         PresenceLog[]
+
   @@index([phoneNumber])
   @@index([roleId])
   @@map("users")
 }
 
-// =======================
-//  AUTH TABLES 
-// =======================
-
+/**
+ * Model: UserToken
+ * Handles Refresh Tokens for authentication & session management.
+ */
 model UserToken {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
   
-  // TOKEN STORAGE (HASH ONLY - NEVER PLAIN TEXT)
-  refreshTokenHash String  @unique @map("refresh_token_hash") @db.VarChar(64)
+  // Token Storage (Hashed for security)
+  refreshTokenHash String    @unique @map("refresh_token_hash") @db.VarChar(64)
   
-  //  DEVICE IDENTIFICATION
-  deviceId      String    @map("device_id") @db.VarChar(255) // Unique device fingerprint
-  deviceName    String?   @map("device_name") @db.VarChar(100) // "iPhone 14 Pro", "Chrome on Windows"
-  deviceType    DeviceType? @map("device_type")
-  platform      Platform?
+  // Device Fingerprint
+  deviceId         String    @map("device_id") @db.VarChar(255) 
+  deviceName       String?   @map("device_name") @db.VarChar(100) 
+  deviceType       DeviceType? @map("device_type")
+  platform         Platform?
   
-  //  SECURITY TRACKING
-  ipAddress     String?   @map("ip_address") @db.VarChar(45) // IPv6 support
-  userAgent     String?   @map("user_agent") @db.Text
+  // Security Tracking
+  ipAddress        String?   @map("ip_address") @db.VarChar(45) 
+  userAgent        String?   @map("user_agent") @db.Text
   
-  //  TOKEN LIFECYCLE
-  issuedAt      DateTime  @default(now()) @map("issued_at") @db.Timestamptz
-  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
-  lastUsedAt    DateTime  @default(now()) @map("last_used_at") @db.Timestamptz
+  // Token Lifecycle
+  issuedAt         DateTime  @default(now()) @map("issued_at") @db.Timestamptz
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  lastUsedAt       DateTime  @default(now()) @map("last_used_at") @db.Timestamptz
   
-  //  REVOCATION (CRITICAL FOR SECURITY)
-  isRevoked     Boolean   @default(false) @map("is_revoked")
-  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
-  revokedReason TokenRevocationReason? @map("revoked_reason")
+  // Revocation Logic
+  isRevoked        Boolean   @default(false) @map("is_revoked")
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
+  revokedReason    TokenRevocationReason? @map("revoked_reason")
   
-  //  TOKEN FAMILY CHAIN (Detect token reuse attack)
-  parentTokenId String?   @map("parent_token_id") @db.Uuid
-  parentToken   UserToken? @relation("TokenFamily", fields: [parentTokenId], references: [id], onDelete: SetNull)
-  childTokens   UserToken[] @relation("TokenFamily")
+  // Token Family (Rotation Chain)
+  parentTokenId    String?   @map("parent_token_id") @db.Uuid
+  parentToken      UserToken? @relation("TokenFamily", fields: [parentTokenId], references: [id], onDelete: SetNull)
+  childTokens      UserToken[] @relation("TokenFamily")
   
-  // Relations
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  //  INDEXES FOR PERFORMANCE
-  @@index([userId, deviceId]) // One active token per device
+  @@index([userId, deviceId]) 
   @@index([userId, isRevoked])
   @@index([refreshTokenHash])
   @@index([expiresAt])
   @@index([lastUsedAt])
   @@map("user_tokens")
 }
-model PrivacySettings {
-  userId String @id @map("user_id") @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  showOnlineStatus PrivacyLevel @default(CONTACTS) @map("show_online_status")
-  showPhoneNumber  PrivacyLevel @default(CONTACTS) @map("show_phone_number")
-  whoCanMessageMe  PrivacyLevel @default(EVERYONE) @map("who_can_message_me")
-  whoCanCallMe     PrivacyLevel @default(CONTACTS) @map("who_can_call_me")
-
-  // --- Audit Fields ---
-  updatedById String?   @map("updated_by") @db.Uuid
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  @@map("privacy_settings")
-}
-
-model Friendship {
-  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user1Id     String           @map("user1_id") @db.Uuid
-  user2Id     String           @map("user2_id") @db.Uuid
-  requesterId String           @map("requester_id") @db.Uuid
-  status      FriendshipStatus @default(PENDING)
-  
-  // --- Audit Fields ---
-  // Đã xóa createdById vì requesterId chính là người tạo
-  updatedById String?   @map("updated_by") @db.Uuid
-  deletedById String?   @map("deleted_by") @db.Uuid
-
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-  
-  // Relations
-  user1     User @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2     User @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
-  requester User @relation("Requester", fields: [requesterId], references: [id])
-
-  @@unique([user1Id, user2Id])
-  @@index([user1Id, status])
-  @@index([user2Id, status])
-  @@map("friendships")
-}
-
-model Block {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  blockerId String   @map("blocker_id") @db.Uuid
-  blockedId String   @map("blocked_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-
-  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
-
-  @@unique([blockerId, blockedId])
-  @@map("blocks")
-}
-
-model Conversation {
-  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type          ConversationType
-  name          String?          @db.VarChar(255)
-  avatarUrl     String?          @map("avatar_url")
-  lastMessageAt DateTime?        @map("last_message_at") @db.Timestamptz
-
-
-  requireApproval Boolean @default(false) @map("require_approval") // Chế độ duyệt thành viên
-  settings        Json    @default("{}") @db.JsonB // Pin messages, QR code, etc.
-  
-  // --- Audit Fields ---
-  createdById String?   @map("created_by") @db.Uuid // Người tạo nhóm
-  updatedById String?   @map("updated_by") @db.Uuid
-  deletedById String?   @map("deleted_by") @db.Uuid
-  
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-
-  members  ConversationMember[]
-  messages Message[]
-  joinRequests GroupJoinRequest[]
-
-  @@index([lastMessageAt(sort: Desc)])
-  @@map("conversations")
-}
-
-model ConversationMember {
-  conversationId String @map("conversation_id") @db.Uuid
-  userId         String @map("user_id") @db.Uuid
-  role           MemberRole @default(MEMBER)
-  
-  status         MemberStatus @default(ACTIVE) @map("status")
-
-  lastReadMessageId String?   @map("last_read_message_id") @db.Uuid
-  lastReadAt        DateTime? @map("last_read_at") @db.Timestamptz
-  unreadCount       Int       @default(0) @map("unread_count")
-  
-  joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamptz
- 
-  //  Track leave/kick
-  leftAt   DateTime? @map("left_at") @db.Timestamptz
-  kickedBy String?   @map("kicked_by") @db.Uuid // Admin who kicked
-  kickedAt DateTime? @map("kicked_at") @db.Timestamptz
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([conversationId, userId])
-  @@index([userId, status])
-  @@index([userId, unreadCount(sort: Desc)])
-  //create by code @@unique([conversationId, role], name: "unique_admin_per_group", where: { role: ADMIN, status: ACTIVE })
-  @@map("conversation_members")
-}
-
-model GroupJoinRequest {
-  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversationId String            @map("conversation_id") @db.Uuid
-  userId         String            @map("user_id") @db.Uuid
-  status         JoinRequestStatus @default(PENDING)
-  
-  // Request metadata
-  requestedAt DateTime  @default(now()) @map("requested_at") @db.Timestamptz
-  message     String?   @db.VarChar(500) // Optional join message
-  
-  // Review tracking
-  reviewedBy String?   @map("reviewed_by") @db.Uuid // Admin who approved/rejected
-  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz
-  
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reviewer     User?        @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
-
-  @@unique([conversationId, userId]) // One pending request per user per group
-  @@index([conversationId, status])
-  @@index([userId, status])
-  @@map("group_join_requests")
-}
-
-model Message {
-  id             BigInt      @id @default(autoincrement())
-  conversationId String      @map("conversation_id") @db.Uuid
-  senderId       String?     @map("sender_id") @db.Uuid
-  type           MessageType @default(TEXT)
-  content        String?     @db.Text
-  metadata       Json?       @default("{}") @db.JsonB
-  replyToId      BigInt?     @map("reply_to_message_id")
-
-  //- Client-side idempotency
-  clientMessageId String?    @unique @map("client_message_id") @db.VarChar(36)
-
-  // --- Audit Fields ---
-  // Đã xóa createdById vì senderId chính là người tạo
-  updatedById String?   @map("updated_by") @db.Uuid // Có thể edit tin nhắn
-  deletedById String?   @map("deleted_by") @db.Uuid // Có thể thu hồi (soft delete)
-  
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User?        @relation(fields: [senderId], references: [id])
-  deletedBy    User?        @relation("DeletedBy", fields: [deletedById], references: [id])
-  parentMessage Message?    @relation("Reply", fields: [replyToId], references: [id])
-  replies       Message[]   @relation("Reply")
-  mediaAttachments MediaAttachment[]
-
-  receipts     MessageReceipt[]
-
-  @@index([conversationId, createdAt(sort: Desc)])
-  @@index([senderId, createdAt(sort: Desc)]) // For "my sent messages"
-  @@index([clientMessageId]) // For deduplication lookup
-  @@map("messages")
-}
-
-model MessageReceipt {
-  messageId BigInt        @map("message_id")
-  userId    String        @map("user_id") @db.Uuid
-  status    ReceiptStatus
-  timestamp DateTime      @default(now()) @db.Timestamptz
-  
-  // Relations
-  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  
-  @@id([messageId, userId])
-  @@index([userId, status, timestamp])
-  @@index([messageId, status]) // For checking "who has seen this message"
-  @@map("message_receipts")
-}
-
-model MediaAttachment {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  messageId BigInt   @map("message_id")
-  url       String
-  type      String   @db.VarChar(50)
-  size      BigInt?
-  
-  // --- Audit Fields ---
-  // Đã xóa createdById vì ăn theo Message
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
-  deletedById String?   @map("deleted_by") @db.Uuid // Có thể thu hồi (soft delete)
-  
-  // Relations
-  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@map("media_attachments")
-}
-
+/**
+ * Model: UserDevice
+ * Tracks physical devices for Push Notifications (FCM).
+ */
 model UserDevice {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId       String   @map("user_id") @db.Uuid
@@ -499,57 +271,417 @@ model UserDevice {
   platform     String?  @db.VarChar(20)
   lastActiveAt DateTime @default(now()) @map("last_active_at") @db.Timestamptz
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@map("user_devices")
 }
 
-
-// Socket Connection Logs (for debugging & analytics)
-model SocketConnection {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  socketId     String   @map("socket_id") @db.VarChar(100)
+/**
+ * Model: Role
+ * Defines system-level roles (e.g., ADMIN, USER).
+ */
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(50) 
+  description String?  @db.VarChar(255)
   
-  // Connection Details
-  deviceId     String   @map("device_id") @db.VarChar(255)
-  serverInstance String? @map("server_instance") @db.VarChar(50) // server-1, server-2, etc.
-  ipAddress    String   @map("ip_address") @db.VarChar(45)
-  userAgent    String?  @map("user_agent") @db.Text
+  // Audit
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  
+  createdById String?  @map("created_by") @db.Uuid
+  updatedById String?  @map("updated_by") @db.Uuid
+  deletedById String?  @map("deleted_by") @db.Uuid
+  
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+/**
+ * Model: Permission
+ * Granular permissions mapped to API paths or modules.
+ */
+model Permission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(100) 
+  apiPath     String   @map("api_path") 
+  method      String   @db.VarChar(10)  
+  module      String   @db.VarChar(50)  
+  
+  // Audit
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  
+  createdById String?  @map("created_by") @db.Uuid
+  updatedById String?  @map("updated_by") @db.Uuid
+  deletedById String?  @map("deleted_by") @db.Uuid
+  
+  roles       RolePermission[]
+
+  @@unique([apiPath, method, module])
+  @@map("permissions")
+}
+
+/**
+ * Model: RolePermission
+ * Pivot table for Many-to-Many relation between Roles and Permissions.
+ */
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+  
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+/**
+ * Model: PrivacySettings
+ * User preferences for privacy.
+ */
+model PrivacySettings {
+  userId           String       @id @map("user_id") @db.Uuid
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  showOnlineStatus PrivacyLevel @default(CONTACTS) @map("show_online_status")
+  showPhoneNumber  PrivacyLevel @default(CONTACTS) @map("show_phone_number")
+  whoCanMessageMe  PrivacyLevel @default(EVERYONE) @map("who_can_message_me")
+  whoCanCallMe     PrivacyLevel @default(CONTACTS) @map("who_can_call_me")
+
+  updatedById      String?      @map("updated_by") @db.Uuid
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("privacy_settings")
+}
+
+// ============================================================================
+// 4. SOCIAL GRAPH MODULE
+// ============================================================================
+
+/**
+ * Model: Friendship
+ * Manages friend requests and relationships.
+ */
+model Friendship {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user1Id     String           @map("user1_id") @db.Uuid
+  user2Id     String           @map("user2_id") @db.Uuid
+  requesterId String           @map("requester_id") @db.Uuid
+  status      FriendshipStatus @default(PENDING)
+  
+  // Audit
+  updatedById String?          @map("updated_by") @db.Uuid
+  deletedById String?          @map("deleted_by") @db.Uuid
+
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?        @map("deleted_at") @db.Timestamptz
+  
+  user1       User             @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2       User             @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
+  requester   User             @relation("Requester", fields: [requesterId], references: [id])
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id, status])
+  @@index([user2Id, status])
+  @@map("friendships")
+}
+
+/**
+ * Model: Block
+ * Users blocking other users.
+ */
+model Block {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@map("blocks")
+}
+
+// ============================================================================
+// 5. MESSAGING MODULE
+// ============================================================================
+
+/**
+ * Model: Conversation
+ * Represents a chat room (Direct or Group).
+ */
+model Conversation {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type            ConversationType
+  name            String?           @db.VarChar(255)
+  avatarUrl       String?           @map("avatar_url")
+  lastMessageAt   DateTime?         @map("last_message_at") @db.Timestamptz
+
+  // Group specific settings
+  requireApproval Boolean           @default(false) @map("require_approval")
+  settings        Json              @default("{}") @db.JsonB
+  
+  // Audit
+  createdById     String?           @map("created_by") @db.Uuid
+  updatedById     String?           @map("updated_by") @db.Uuid
+  deletedById     String?           @map("deleted_by") @db.Uuid
+  
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz
+
+  members         ConversationMember[]
+  messages        Message[]
+  joinRequests    GroupJoinRequest[]
+
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+/**
+ * Model: ConversationMember
+ * Link user to a conversation with roles and status.
+ */
+model ConversationMember {
+  conversationId    String       @map("conversation_id") @db.Uuid
+  userId            String       @map("user_id") @db.Uuid
+  role              MemberRole   @default(MEMBER)
+  status            MemberStatus @default(ACTIVE) @map("status")
+
+  // Read status tracking
+  lastReadMessageId String?      @map("last_read_message_id") @db.Uuid
+  lastReadAt        DateTime?    @map("last_read_at") @db.Timestamptz
+  unreadCount       Int          @default(0) @map("unread_count")
   
   // Lifecycle
-  connectedAt  DateTime @default(now()) @map("connected_at") @db.Timestamptz
-  disconnectedAt DateTime? @map("disconnected_at") @db.Timestamptz
-  disconnectReason String? @map("disconnect_reason") @db.VarChar(100)
-  // Reasons: 'client_disconnect', 'server_shutdown', 'timeout', 'auth_failed', 'transport_error', 'ping_timeout'
+  joinedAt          DateTime     @default(now()) @map("joined_at") @db.Timestamptz
+  leftAt            DateTime?    @map("left_at") @db.Timestamptz
+  kickedBy          String?      @map("kicked_by") @db.Uuid
+  kickedAt          DateTime?    @map("kicked_at") @db.Timestamptz
+
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId, status])
+  @@index([userId, unreadCount(sort: Desc)])
+  // @@unique([conversationId, role], name: "unique_admin_per_group", where: { role: ADMIN, status: ACTIVE })
+  @@map("conversation_members")
+}
+
+/**
+ * Model: GroupJoinRequest
+ * Request flow for joining APPROVAL_REQUIRED groups.
+ */
+model GroupJoinRequest {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String            @map("conversation_id") @db.Uuid
+  userId         String            @map("user_id") @db.Uuid
+  status         JoinRequestStatus @default(PENDING)
   
-  // Metrics
-  messagesSent     Int @default(0) @map("messages_sent")
-  messagesReceived Int @default(0) @map("messages_received")
-  duration         Int? @map("duration_seconds") // Calculate on disconnect
+  // Metadata
+  requestedAt    DateTime          @default(now()) @map("requested_at") @db.Timestamptz
+  message        String?           @db.VarChar(500)
   
+  // Review tracking
+  reviewedBy     String?           @map("reviewed_by") @db.Uuid
+  reviewedAt     DateTime?         @map("reviewed_at") @db.Timestamptz
+  
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer       User?             @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
+
+  @@unique([conversationId, userId])
+  @@index([conversationId, status])
+  @@index([userId, status])
+  @@map("group_join_requests")
+}
+
+/**
+ * Model: Message
+ * Stores individual messages (Core entity).
+ */
+model Message {
+  id              BigInt           @id @default(autoincrement())
+  conversationId  String           @map("conversation_id") @db.Uuid
+  senderId        String?          @map("sender_id") @db.Uuid
+  type            MessageType      @default(TEXT)
+  content         String?          @db.Text
+  metadata        Json?            @default("{}") @db.JsonB
+  
+  // Threading / Reply
+  replyToId       BigInt?          @map("reply_to_message_id")
+
+  // Idempotency
+  clientMessageId String?          @unique @map("client_message_id") @db.VarChar(36)
+
+  // Audit
+  updatedById     String?          @map("updated_by") @db.Uuid
+  deletedById     String?          @map("deleted_by") @db.Uuid
+  
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime?        @map("deleted_at") @db.Timestamptz
+
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User?            @relation(fields: [senderId], references: [id])
+  deletedBy       User?            @relation("DeletedBy", fields: [deletedById], references: [id])
+  
+  parentMessage   Message?         @relation("Reply", fields: [replyToId], references: [id])
+  replies         Message[]        @relation("Reply")
+  
+  mediaAttachments MediaAttachment[]
+  receipts         MessageReceipt[]
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([senderId, createdAt(sort: Desc)])
+  @@index([clientMessageId])
+  @@map("messages")
+}
+
+/**
+ * Model: MessageReceipt
+ * Tracks Sent/Delivered/Seen status per user per message.
+ */
+model MessageReceipt {
+  messageId BigInt        @map("message_id")
+  userId    String        @map("user_id") @db.Uuid
+  status    ReceiptStatus
+  timestamp DateTime      @default(now()) @db.Timestamptz
+  
+  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  @@id([messageId, userId])
+  @@index([userId, status, timestamp])
+  @@index([messageId, status])
+  @@map("message_receipts")
+}
+
+// ============================================================================
+// 6. MEDIA MODULE
+// ============================================================================
+
+/**
+ * Model: MediaAttachment
+ * Handles file uploads, S3 storage references, and processing status.
+ */
+model MediaAttachment {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId        BigInt?               @map("message_id") // Nullable before message is sent
+  
+  // File Metadata
+  originalName     String                @map("original_name") @db.VarChar(255)
+  mimeType         String                @map("mime_type") @db.VarChar(100)
+  mediaType        MediaType             @map("media_type")
+  size             BigInt
+  
+  // S3 Storage
+  s3Key            String?                @unique @map("s3_key") @db.VarChar(500)
+  s3Bucket         String                @map("s3_bucket") @db.VarChar(100)
+  cdnUrl           String?               @map("cdn_url") @db.VarChar(1000)
+
+  // Processed Variants (Thumbnails, etc.)
+  thumbnailUrl     String?               @map("thumbnail_url") @db.VarChar(1000)
+  thumbnailS3Key   String?               @map("thumbnail_s3_key") @db.VarChar(500)
+  duration         Int?                  // Seconds
+  width            Int?                  // Pixels
+  height           Int?                  // Pixels
+
+  // Processing Workflow
+  processingStatus MediaProcessingStatus @default(PENDING) @map("processing_status")
+  processingError  String?               @map("processing_error") @db.Text
+  processedAt      DateTime?             @map("processed_at") @db.Timestamptz
+
+  //Để hỗ trợ Presigned URL flow
+  uploadId         String?               @unique @map("upload_id") @db.VarChar(36)
+  s3KeyTemp        String?               @map("s3_key_temp") @db.VarChar(500)
+  retryCount       Int                   @default(0) @map("retry_count")
+
+  // Upload Context
+  uploadedBy       String                @map("uploaded_by") @db.Uuid
+  uploadedFrom     String?               @map("uploaded_from") @db.VarChar(50)
+  
+  // Audit
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?             @map("deleted_at") @db.Timestamptz
+  deletedById      String?               @map("deleted_by") @db.Uuid
+  
+
+  message          Message?              @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader         User                  @relation("UploadedMedia", fields: [uploadedBy], references: [id])
+
+  @@index([uploadedBy, createdAt(sort: Desc)])
+  @@index([processingStatus])
+  @@index([s3Key])
+  @@index([messageId])
+  @@index([createdAt])
+  @@index([uploadId])
+  @@map("media_attachments")
+}
+
+// ============================================================================
+// 7. SYSTEM & LOGGING MODULE
+// ============================================================================
+
+/**
+ * Model: SocketConnection
+ * Logs historical socket connections for analytics and debugging.
+ */
+model SocketConnection {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  socketId         String    @map("socket_id") @db.VarChar(100)
+  
+  // Device Context
+  deviceId         String    @map("device_id") @db.VarChar(255)
+  serverInstance   String?   @map("server_instance") @db.VarChar(50)
+  ipAddress        String    @map("ip_address") @db.VarChar(45)
+  userAgent        String?   @map("user_agent") @db.Text
+  
+  // Lifecycle
+  connectedAt      DateTime  @default(now()) @map("connected_at") @db.Timestamptz
+  disconnectedAt   DateTime? @map("disconnected_at") @db.Timestamptz
+  disconnectReason String?   @map("disconnect_reason") @db.VarChar(100)
+  
+  // Usage Metrics
+  messagesSent     Int       @default(0) @map("messages_sent")
+  messagesReceived Int       @default(0) @map("messages_received")
+  duration         Int?      @map("duration_seconds")
+  
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([userId, connectedAt(sort: Desc)])
   @@index([socketId])
   @@index([serverInstance])
-  @@index([connectedAt]) // For cleanup queries
+  @@index([connectedAt])
   @@map("socket_connections")
 }
 
-//Presence History (analytics & debugging)
+/**
+ * Model: PresenceLog
+ * Logs user status changes (Online/Offline/Away).
+ */
 model PresenceLog {
   id        BigInt   @id @default(autoincrement())
   userId    String   @map("user_id") @db.Uuid
-  status    String   @db.VarChar(20) // online, offline, away
+  status    String   @db.VarChar(20)
   deviceId  String?  @map("device_id") @db.VarChar(255)
   timestamp DateTime @default(now()) @db.Timestamptz
   
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([userId, timestamp(sort: Desc)])
-  @@index([timestamp]) // For cleanup
+  @@index([timestamp])
   @@map("presence_logs")
 }

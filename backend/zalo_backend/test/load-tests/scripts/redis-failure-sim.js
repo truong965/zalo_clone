@@ -8,7 +8,7 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 
 const REDIS_CONTAINER_NAME = process.env.REDIS_CONTAINER || 'redis-zalo';
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:8000';
+const SERVER_URL = 'http://localhost:8000';
 
 class RedisFailureSimulator {
   constructor() {
