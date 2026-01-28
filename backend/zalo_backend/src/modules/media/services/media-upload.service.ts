@@ -1,6 +1,4 @@
 // src/modules/media/services/media-upload.service.ts
-// FIXED: Production-ready with proper retry, error context, and race condition handling
-
 import {
   Injectable,
   Logger,
@@ -27,12 +25,12 @@ import {
 } from '../dto/initiate-upload.dto';
 import { MediaResponseDto } from '../dto/media-response.dto';
 import { MediaQueueService } from '../queues/media-queue.service';
+import { RETRY_CONFIG } from 'src/common/constants/media.constant';
 
 export interface AwsError extends Error {
-  $metadata?: {
-    httpStatusCode?: number;
-  };
+  $metadata?: { httpStatusCode?: number };
 }
+
 @Injectable()
 export class MediaUploadService {
   private readonly logger = new Logger(MediaUploadService.name);
@@ -46,32 +44,19 @@ export class MediaUploadService {
     private readonly config: ConfigType<typeof uploadConfig>,
   ) {}
 
-  /**
-   * Initiate upload - Generate presigned URL
-   */
   async initiateUpload(
     userId: string,
     dto: InitiateUploadDto,
   ): Promise<InitiateUploadResponse> {
     const mediaType = this.inferMediaType(dto.mimeType);
-
-    // Validate size based on media type
-    let limitMB = this.config.limits.maxDocumentSizeMB;
-    if (mediaType === MediaType.IMAGE)
-      limitMB = this.config.limits.maxImageSizeMB;
-    else if (mediaType === MediaType.VIDEO)
-      limitMB = this.config.limits.maxVideoSizeMB;
-    else if (mediaType === MediaType.AUDIO)
-      limitMB = this.config.limits.maxAudioSizeMB;
+    const limitMB = this.getLimitForType(mediaType);
 
     const sizeValidation = this.fileValidation.validateFileSize(
       dto.fileSize,
       limitMB,
     );
-
-    if (!sizeValidation.isValid) {
+    if (!sizeValidation.isValid)
       throw new BadRequestException(sizeValidation.reason);
-    }
 
     const uploadId = createId();
     const s3KeyTemp = `temp/${userId}/${uploadId}`;
@@ -79,19 +64,17 @@ export class MediaUploadService {
     this.logger.debug('Initiating upload', {
       userId,
       uploadId,
-      fileName: dto.fileName,
       mediaType,
       size: dto.fileSize,
     });
 
-    // Create DB record
     await this.prisma.mediaAttachment.create({
       data: {
         uploadId,
         uploadedBy: userId,
         originalName: dto.fileName,
         mimeType: dto.mimeType,
-        mediaType: mediaType,
+        mediaType,
         size: BigInt(dto.fileSize),
         s3KeyTemp,
         s3Bucket: this.s3Service.getBucketName(),
@@ -100,17 +83,10 @@ export class MediaUploadService {
       },
     });
 
-    // Generate presigned URL
     const presignedUrl = await this.s3Service.generatePresignedUrl({
       key: s3KeyTemp,
       expiresIn: this.config.presignedUrlExpiry,
-      contentType: dto.mimeType, // Generic to prevent client MIME spoofing
-    });
-
-    this.logger.log('Upload initiated', {
-      uploadId,
-      s3KeyTemp,
-      expiresIn: this.config.presignedUrlExpiry,
+      contentType: dto.mimeType,
     });
 
     return {
@@ -121,38 +97,20 @@ export class MediaUploadService {
     };
   }
 
-  /**
-   * ✅ FIXED: Confirm upload with proper retry and error handling
-   * No longer does validation inline - delegates to worker
-   */
   async confirmUpload(
     userId: string,
     uploadId: string,
   ): Promise<MediaResponseDto> {
-    // 1. Validate ownership & state
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { uploadId },
     });
-
-    if (!media) {
-      throw new NotFoundException(`Upload not found: ${uploadId}`);
-    }
-
-    if (media.uploadedBy !== userId) {
-      throw new ForbiddenException('Access denied to this upload');
-    }
-
-    // Idempotency check
-    if (media.processingStatus !== MediaProcessingStatus.PENDING) {
-      this.logger.warn('Duplicate confirm attempt', {
-        uploadId,
-        currentStatus: media.processingStatus,
-      });
+    if (!media) throw new NotFoundException(`Upload not found: ${uploadId}`);
+    if (media.uploadedBy !== userId)
+      throw new ForbiddenException('Access denied');
+    if (media.processingStatus !== MediaProcessingStatus.PENDING)
       return this.formatMediaResponse(media);
-    }
 
     try {
-      // 2. ✅ CRITICAL FIX: Verify file exists with retry logic
       this.logger.debug('Verifying S3 upload', {
         uploadId,
         s3KeyTemp: media.s3KeyTemp,
@@ -161,212 +119,195 @@ export class MediaUploadService {
       const fileCheck = await this.s3Service.verifyFileExists(
         media.s3KeyTemp!,
         {
-          maxRetries: 5, // More retries for eventual consistency
-          retryDelay: 300, // 300ms, 600ms, 1200ms, 2400ms, 4800ms
-          checkMultipart: true, // Check for incomplete multipart uploads
+          maxRetries: RETRY_CONFIG.S3_CHECK.MAX_ATTEMPTS,
+          retryDelay: RETRY_CONFIG.S3_CHECK.RETRY_DELAY_MS,
+          checkMultipart: true,
         },
       );
 
       if (!fileCheck.exists) {
-        this.logger.error('S3 upload verification failed', {
-          uploadId,
-          s3KeyTemp: media.s3KeyTemp,
-          error: fileCheck.error,
-        });
-
         await this.markAsFailed(
           media.id,
-          `File not found on S3: ${fileCheck.error}`,
+          `File missing on S3: ${fileCheck.error}`,
         );
-
         throw new BadRequestException(
-          'File has not been uploaded to S3 successfully. Please retry upload.',
+          'File has not been uploaded to S3 successfully.',
         );
       }
 
       const actualSize = fileCheck.metadata?.size || 0;
 
-      this.logger.log('S3 upload verified', {
-        uploadId,
-        s3KeyTemp: media.s3KeyTemp,
-        size: actualSize,
-        contentType: fileCheck.metadata?.contentType,
-      });
-
-      // ✅ FIXED: For AUDIO/DOCUMENT - validate & move inline
-      // These types don't need worker processing (no thumbnail/transcode)
-      if (
-        media.mediaType === MediaType.AUDIO ||
-        media.mediaType === MediaType.DOCUMENT
-      ) {
-        this.logger.debug(
-          `Inline processing for ${media.mediaType}: ${uploadId}`,
-        );
-
-        let tempFilePath: string | null = null;
-        try {
-          // Download temp file
-          tempFilePath = await this.s3Service.downloadToLocalTemp(
-            media.s3KeyTemp!,
-          );
-
-          // Validate
-          const validation =
-            await this.fileValidation.validateFileOnDisk(tempFilePath);
-
-          if (!validation.isValid) {
-            throw new Error(`Validation failed: ${validation.reason}`);
-          }
-
-          // Move to permanent
-          const realExt = validation.extension || 'bin';
-          const realMime = validation.mimeType || 'application/octet-stream';
-          const permanentKey = this.generatePermanentKey(uploadId, realExt);
-
-          await this.s3Service.moveObjectAtomic(media.s3KeyTemp!, permanentKey);
-
-          // Update DB with permanent key + mark READY
-          const updated = await this.prisma.mediaAttachment.update({
-            where: { id: media.id },
-            data: {
-              s3Key: permanentKey,
-              s3KeyTemp: null,
-              mimeType: realMime,
-              cdnUrl: this.s3Service.getCloudFrontUrl(permanentKey),
-              processingStatus: MediaProcessingStatus.READY,
-              size: BigInt(actualSize),
-            },
-          });
-
-          this.logger.log(`${media.mediaType} processed inline: ${uploadId}`);
-          return this.formatMediaResponse(updated);
-        } catch (error) {
-          // Cleanup on failure
-          await this.s3Service.deleteFile(media.s3KeyTemp!).catch(() => {});
-          const msg = error instanceof Error ? error.message : 'Unknown error';
-          await this.markAsFailed(media.id, msg);
-          throw new BadRequestException(
-            `${media.mediaType} processing failed: ${msg}`,
-          );
-        } finally {
-          if (tempFilePath) {
-            await import('fs')
-              .then((fs) => fs.promises.unlink(tempFilePath!))
-              .catch(() => {});
-          }
-        }
+      // Inline Processing for Audio/Doc
+      if (this.isInlineProcessing(media.mediaType)) {
+        return await this.processInline(media, actualSize);
       }
 
-      // For IMAGE/VIDEO - update to PROCESSING and enqueue worker
+      // Worker Processing for Image/Video
       const updated = await this.prisma.mediaAttachment.update({
         where: { id: media.id },
         data: {
           processingStatus: MediaProcessingStatus.PROCESSING,
           size: BigInt(actualSize),
-          // s3Key remains null - worker will set it after validation & move
         },
       });
 
-      // 4. Enqueue job (worker validates → moves → processes)
       await this.enqueueProcessing(updated);
-
-      this.logger.log('Upload confirmed and queued', {
-        uploadId,
-        mediaId: media.id,
-        size: actualSize,
-      });
-
       return this.formatMediaResponse(updated);
     } catch (error) {
-      // ✅ FIXED: Better error context
       const awsError = error as AwsError;
-
       const errorMessage = awsError.message || 'Unknown error';
-      const errorName = awsError.name || 'Error';
-      const errorCode = awsError.$metadata?.httpStatusCode;
+
       this.logger.error('Confirm upload failed', {
         uploadId,
-        s3KeyTemp: media.s3KeyTemp,
-        errorName,
-        errorCode,
-        errorMessage,
+        error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined,
       });
 
-      // Only mark as failed if NOT already thrown BadRequestException
       if (!(error instanceof BadRequestException)) {
         await this.markAsFailed(media.id, errorMessage);
       }
-
       throw error;
     }
   }
 
-  /**
-   * Enqueue processing job based on media type
-   * ✅ FIXED: Only IMAGE & VIDEO need job processing
-   *           AUDIO & DOCUMENT only need validation & move (no thumbnail/transcode)
-   */
-  private async enqueueProcessing(media: MediaAttachment): Promise<void> {
-    const mediaType = media.mediaType;
+  // --- PRIVATE HELPERS ---
 
-    if (mediaType === MediaType.IMAGE) {
-      await this.mediaQueue.enqueueImageProcessing({
-        mediaId: media.id,
-        s3Key: media.s3Key || media.s3KeyTemp!,
-        originalWidth: media.width || 0,
-        originalHeight: media.height || 0,
-      });
-
-      this.logger.log(`Image processing job enqueued: ${media.id}`);
-      return;
-    } else if (mediaType === MediaType.VIDEO) {
-      await this.mediaQueue.enqueueVideoProcessing({
-        mediaId: media.id,
-        s3Key: media.s3Key || media.s3KeyTemp!,
-        duration: media.duration || 0,
-        width: media.width || 0,
-        height: media.height || 0,
-      });
-
-      this.logger.log(`Video processing job enqueued: ${media.id}`);
-      return;
-    } else if (
-      mediaType === MediaType.AUDIO ||
-      mediaType === MediaType.DOCUMENT
-    ) {
-      await this.mediaQueue.enqueueFileProcessing(
-        {
-          mediaId: media.id,
-          s3Key: media.s3Key || media.s3KeyTemp!, // S3 Key Temp
-          fileSize: Number(media.size), // Cần size để validate
-          mimeType: media.mimeType, // Cần mime để validate magic bytes
-        },
-        mediaType,
-      ); // Truyền đúng type để Consumer nhận diện
-
-      this.logger.log(`${mediaType} validation job enqueued: ${media.id}`);
-      return;
+  private getLimitForType(type: MediaType): number {
+    switch (type) {
+      case MediaType.IMAGE:
+        return this.config.limits.maxImageSizeMB;
+      case MediaType.VIDEO:
+        return this.config.limits.maxVideoSizeMB;
+      case MediaType.AUDIO:
+        return this.config.limits.maxAudioSizeMB;
+      default:
+        return this.config.limits.maxDocumentSizeMB;
     }
-    throw new Error(
-      `Unsupported media type for processing: ${mediaType as any}`,
-    );
+  }
+
+  private isInlineProcessing(type: MediaType): boolean {
+    return type === MediaType.AUDIO || type === MediaType.DOCUMENT;
   }
 
   /**
-   * Infer MediaType from MIME type
+   * Logic xử lý Inline cho Audio và Document
+   * 1. Download file tạm về Local
+   * 2. Validate nội dung (Deep Scan)
+   * 3. Move sang S3 Permanent (Atomic)
+   * 4. Update DB
+   * 5. Cleanup file tạm
    */
-  private inferMediaType(mimeType: string): MediaType {
-    if (mimeType.startsWith('image/')) return MediaType.IMAGE;
-    if (mimeType.startsWith('video/')) return MediaType.VIDEO;
-    if (mimeType.startsWith('audio/')) return MediaType.AUDIO;
+  private async processInline(
+    media: MediaAttachment,
+    size: number,
+  ): Promise<MediaResponseDto> {
+    this.logger.debug(
+      `Inline processing started for ${media.mediaType}: ${media.uploadId}`,
+    );
+
+    let tempFilePath: string | null = null;
+    try {
+      // 1. Download temp file
+      tempFilePath = await this.s3Service.downloadToLocalTemp(media.s3KeyTemp!);
+
+      // 2. Deep Validation
+      const validation =
+        await this.fileValidation.validateFileOnDisk(tempFilePath);
+      if (!validation.isValid) {
+        throw new Error(`Validation failed: ${validation.reason}`);
+      }
+
+      // 3. Generate Permanent Key
+      const realExt = validation.extension || 'bin';
+      const realMime = validation.mimeType || 'application/octet-stream';
+      const permanentKey = this.generatePermanentKey(media.uploadId!, realExt);
+
+      // 4. Move to Permanent S3
+      await this.s3Service.moveObjectAtomic(media.s3KeyTemp!, permanentKey);
+
+      // 5. Update DB (Finalize)
+      const updated = await this.prisma.mediaAttachment.update({
+        where: { id: media.id },
+        data: {
+          s3Key: permanentKey,
+          s3KeyTemp: null,
+          mimeType: realMime,
+          cdnUrl: this.s3Service.getCloudFrontUrl(permanentKey),
+          processingStatus: MediaProcessingStatus.READY,
+          size: BigInt(size),
+        },
+      });
+
+      this.logger.log(
+        `${media.mediaType} processed inline successfully: ${media.uploadId}`,
+      );
+      return this.formatMediaResponse(updated);
+    } catch (error) {
+      // Cleanup S3 temp file on failure
+      await this.s3Service.deleteFile(media.s3KeyTemp!).catch(() => {});
+
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await this.markAsFailed(media.id, msg);
+      throw new BadRequestException(
+        `${media.mediaType} processing failed: ${msg}`,
+      );
+    } finally {
+      // Cleanup local temp file
+      if (tempFilePath) {
+        await import('fs')
+          .then((fs) => fs.promises.unlink(tempFilePath!))
+          .catch(() => {});
+      }
+    }
+  }
+
+  private async enqueueProcessing(media: MediaAttachment): Promise<void> {
+    const jobPayload = {
+      mediaId: media.id,
+      s3Key: media.s3Key || media.s3KeyTemp!,
+    };
+
+    switch (media.mediaType) {
+      case MediaType.IMAGE:
+        await this.mediaQueue.enqueueImageProcessing({
+          ...jobPayload,
+          originalWidth: 0,
+          originalHeight: 0,
+        });
+        break;
+      case MediaType.VIDEO:
+        await this.mediaQueue.enqueueVideoProcessing({
+          ...jobPayload,
+          duration: 0,
+          width: 0,
+          height: 0,
+        });
+        break;
+      case MediaType.AUDIO:
+      case MediaType.DOCUMENT:
+        // Logic inline ở trên đã xử lý rồi, nhưng giữ lại case này cho fallback hoặc manual re-queue
+        await this.mediaQueue.enqueueFileProcessing(
+          {
+            ...jobPayload,
+            fileSize: Number(media.size),
+            mimeType: media.mimeType,
+          },
+          media.mediaType,
+        );
+        break;
+      default:
+        throw new Error(`Unsupported type: ${media.mediaType as any}`);
+    }
+  }
+
+  private inferMediaType(mime: string): MediaType {
+    if (mime.startsWith('image/')) return MediaType.IMAGE;
+    if (mime.startsWith('video/')) return MediaType.VIDEO;
+    if (mime.startsWith('audio/')) return MediaType.AUDIO;
     return MediaType.DOCUMENT;
   }
 
-  /**
-   * Mark media as failed
-   */
-  private async markAsFailed(mediaId: string, reason: string): Promise<void> {
+  private async markAsFailed(mediaId: string, reason: string) {
     await this.prisma.mediaAttachment.update({
       where: { id: mediaId },
       data: {
@@ -374,13 +315,9 @@ export class MediaUploadService {
         processingError: reason,
       },
     });
-
     this.logger.warn('Media marked as failed', { mediaId, reason });
   }
 
-  /**
-   * Format media response with strict typing
-   */
   private formatMediaResponse(media: MediaAttachment): MediaResponseDto {
     return new MediaResponseDto({
       id: media.id,
@@ -397,9 +334,6 @@ export class MediaUploadService {
     });
   }
 
-  /**
-   * Generate S3 permanent key based on upload ID
-   */
   private generatePermanentKey(uploadId: string, extension: string): string {
     const now = new Date();
     const year = now.getFullYear();

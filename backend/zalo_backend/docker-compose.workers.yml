@@ -37,8 +37,8 @@ services:
       # Worker Config
       IMAGE_WORKER_CONCURRENCY: 4
       VIDEO_WORKER_CONCURRENCY: 2
-    volumes:
-      - /tmp/media-worker:/tmp  # Temp file storage
+    tmpfs:
+      - /tmp
     deploy:
       resources:
         limits:

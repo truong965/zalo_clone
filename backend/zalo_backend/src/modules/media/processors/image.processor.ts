@@ -39,7 +39,10 @@ export class ImageProcessorService {
   // Max dimension for optimized version
   private readonly MAX_OPTIMIZED_DIMENSION = 2048;
 
-  constructor(private readonly s3Service: S3Service) {}
+  constructor(private readonly s3Service: S3Service) {
+    sharp.cache(false); // ✅ Tắt cache để tránh leak RAM trong container
+    sharp.simd(true); // ✅ Bật SIMD để xử lý nhanh hơn
+  }
 
   /**
    * Main processing function - generates thumbnails + optimized version
