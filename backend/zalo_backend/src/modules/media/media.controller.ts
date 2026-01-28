@@ -8,14 +8,12 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from 'src/common/decorator/customize';
 import { MediaUploadService } from './services/media-upload.service';
 import { InitiateUploadDto } from './dto/initiate-upload.dto';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto.ts';
 
 @Controller('media/upload')
-// @UseGuards(JwtAuthGuard)
 export class MediaUploadController {
   constructor(private readonly mediaUploadService: MediaUploadService) {}
 

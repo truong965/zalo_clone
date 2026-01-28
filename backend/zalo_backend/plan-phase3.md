@@ -1669,7 +1669,7 @@ resource "aws_cloudwatch_metric_alarm" "queue_backup" {
 
 ---
 
-### **Week 8: Processing Workers (Feb 3 - 9)**
+### **Week 8: Processing Workers**
 
 **Day 1-2: Worker Setup**
 - [ ] Implement ImageProcessorService

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClsModule } from 'nestjs-cls';
 import { RolesModule } from './modules/roles/roles.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
@@ -20,8 +20,10 @@ import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import socketConfig from './config/socket.config';
 import s3Config from './config/s3.config.ts';
-import bullConfig from './config/bull.config';
 import uploadConfig from './config/upload.config';
+import queueConfig from './config/queue.config';
+import { BullModule } from '@nestjs/bull';
+import { ScheduleModule } from '@nestjs/schedule';
 @Module({
   imports: [
     // config schedule and cron jobs
@@ -43,11 +45,26 @@ import uploadConfig from './config/upload.config';
         redisConfig,
         socketConfig,
         s3Config,
-        bullConfig,
+        queueConfig,
         uploadConfig,
       ],
       envFilePath: '.env.development.local',
     }),
+
+    // Bull (Global)
+    BullModule.forRootAsync({
+      useFactory: (configService: ConfigService) => ({
+        redis: {
+          host: configService.get('queue.redis.host'),
+          port: configService.get('queue.redis.port'),
+          password: configService.get('queue.redis.password'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+
+    // Scheduler (for metrics collection)
+    ScheduleModule.forRoot(),
 
     // cls to share context data (like userId) across the request lifecycle
     ClsModule.forRoot({

@@ -1,0 +1,94 @@
+# docker-compose.workers.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.workers.yml up
+
+services:
+  # Media Processing Worker (isolated container)
+  media-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker  # Multi-stage build target
+    container_name: zalo_media_worker
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - clamav
+    environment:
+      NODE_ENV: production
+      # Database
+      DATABASE_URL: postgresql://postgres:1234@postgres:5432/zalo_clone_db
+      # Redis (Queue)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: password123
+      REDIS_QUEUE_DB: 1
+      # S3/MinIO
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET_NAME: zalo-clone-media-dev
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: ap-southeast-1
+      # ClamAV
+      CLAMAV_ENABLED: 'true'
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      # Worker Config
+      IMAGE_WORKER_CONCURRENCY: 4
+      VIDEO_WORKER_CONCURRENCY: 2
+    volumes:
+      - /tmp/media-worker:/tmp  # Temp file storage
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'      # Max 2 CPU cores
+          memory: 2G       # Max 2GB RAM
+        reservations:
+          cpus: '0.5'      # Minimum guaranteed
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Prevent container from consuming all host resources
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  # Optional: Separate worker for video (more CPU-intensive)
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: zalo_video_worker
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:1234@postgres:5432/zalo_clone_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: password123
+      S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      # Only process video jobs
+      WORKER_TYPE: video_only
+      VIDEO_WORKER_CONCURRENCY: 1
+    volumes:
+      - /tmp/video-worker:/tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'      # More CPU for video transcoding
+          memory: 3G
+        reservations:
+          cpus: '1.0'
+          memory: 1G

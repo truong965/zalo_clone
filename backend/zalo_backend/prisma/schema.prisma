@@ -593,6 +593,8 @@ model MediaAttachment {
   // Processed Variants (Thumbnails, etc.)
   thumbnailUrl     String?               @map("thumbnail_url") @db.VarChar(1000)
   thumbnailS3Key   String?               @map("thumbnail_s3_key") @db.VarChar(500)
+  optimizedUrl     String?   // URL to optimized/resized version (images only)
+  hlsPlaylistUrl   String?   // URL to HLS master.m3u8 (videos only)
   duration         Int?                  // Seconds
   width            Int?                  // Pixels
   height           Int?                  // Pixels

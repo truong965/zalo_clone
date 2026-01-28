@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # 1. Database PostgreSQL
@@ -12,7 +11,7 @@ services:
       POSTGRES_DB: zalo_clone_db
       POSTGRES_EXTENSIONS: pgcrypto,uuid-ossp
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -48,6 +47,7 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+      - ./mc-config:/root/.mc
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -69,6 +69,25 @@ services:
       mc ilm add --expiry-days 1 myminio/zalo-clone-media-dev --prefix 'temp/';
       echo 'MinIO bucket initialized with lifecycle rule';
       "
+
+  # Thêm service ClamAV
+  clamav:
+    image: clamav/clamav:latest
+    container_name: zalo_clamav
+    restart: unless-stopped
+    ports:
+      - "3310:3310"
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Tốn RAM, nên limit nếu máy yếu
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+          
 volumes:
   postgres_data:
   redis_data:

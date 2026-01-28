@@ -15,12 +15,24 @@ export default registerAs('upload', () => ({
       process.env.MAX_AUDIO_DURATION_SECONDS || '600',
       10,
     ), // 10 minutes
+    // Stream threshold: 100MB
+    streamThresholdBytes: 100 * 1024 * 1024,
+    // Deep validation limits (Pixel)
+    maxImageDimension: 8192,
+    maxVideoDimension: 4096, // 4K
   },
   rateLimit: {
     uploadsPerMinute: parseInt(
       process.env.UPLOAD_RATE_LIMIT_PER_MINUTE || '10',
       10,
     ),
+  },
+  // Cấu hình ClamAV
+  clamav: {
+    enabled: process.env.CLAMAV_ENABLED === 'true',
+    host: process.env.CLAMAV_HOST || 'clamav', // Tên service trong docker-compose
+    port: parseInt(process.env.CLAMAV_PORT || '3310', 10),
+    timeout: 60000,
   },
   allowedMimeTypes: {
     image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
