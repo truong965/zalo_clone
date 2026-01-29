@@ -16,6 +16,12 @@ import { SendMessageDto } from '../dto/send-message.dto';
  * 4. Multiple images (album) → type = IMAGE, content = null (or caption), mediaIds = [img1, img2, img3]
  * 5. Mixed file types → split into separate messages
  */
+export const MESSAGE_LIMITS = {
+  IMAGE_MAX: 10,
+  FILE_MAX: 5,
+  VIDEO_MAX: 1,
+  VOICE_MAX: 1,
+};
 export class MessageValidator {
   /**
    * Validate message type consistency
@@ -51,9 +57,9 @@ export class MessageValidator {
           );
         }
         // Rule: IMAGE supports album (up to 10)
-        if (mediaCount > 10) {
+        if (mediaCount > MESSAGE_LIMITS.IMAGE_MAX) {
           throw new BadRequestException(
-            'IMAGE message can have max 10 photos (album limit)',
+            `IMAGE message can have max ${MESSAGE_LIMITS.IMAGE_MAX} photos (album limit)`,
           );
         }
         // Content is optional (caption)
@@ -61,9 +67,9 @@ export class MessageValidator {
 
       case MessageType.VIDEO:
         // Rule: Must have exactly 1 video
-        if (!hasMedia || mediaCount !== 1) {
+        if (!hasMedia || mediaCount !== MESSAGE_LIMITS.VIDEO_MAX) {
           throw new BadRequestException(
-            'VIDEO message must have exactly 1 video file',
+            `VIDEO message must have exactly ${MESSAGE_LIMITS.VIDEO_MAX} video file`,
           );
         }
         // Content is optional (caption)
@@ -77,9 +83,9 @@ export class MessageValidator {
           );
         }
         // Rule: Limit to 5 documents
-        if (mediaCount > 5) {
+        if (mediaCount > MESSAGE_LIMITS.FILE_MAX) {
           throw new BadRequestException(
-            'FILE message can have max 5 documents',
+            `FILE message can have max  ${MESSAGE_LIMITS.FILE_MAX}  documents`,
           );
         }
         // Content is optional (caption)
@@ -97,9 +103,9 @@ export class MessageValidator {
 
       case MessageType.VOICE:
         // Rule: Must have exactly 1 audio, no content
-        if (!hasMedia || mediaCount !== 1) {
+        if (!hasMedia || mediaCount !== MESSAGE_LIMITS.VOICE_MAX) {
           throw new BadRequestException(
-            'VOICE message must have exactly 1 audio file',
+            `VOICE message must have exactly ${MESSAGE_LIMITS.VOICE_MAX} audio file`,
           );
         }
         if (hasContent) {
@@ -115,7 +121,9 @@ export class MessageValidator {
         );
 
       default:
-        throw new BadRequestException(`Unknown message type: ${dto.type}`);
+        throw new BadRequestException(
+          `Unknown message type: ${dto.type as string}`,
+        );
     }
   }
 
