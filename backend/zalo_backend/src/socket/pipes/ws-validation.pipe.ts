@@ -10,6 +10,7 @@ import { plainToInstance } from 'class-transformer';
 import { WsException } from '@nestjs/websockets';
 import type { ConfigType } from '@nestjs/config';
 import socketConfig from 'src/config/socket.config';
+import { safeStringify } from 'src/common/utils/json.util';
 
 @Injectable()
 export class WsValidationPipe implements PipeTransform<any> {
@@ -43,7 +44,7 @@ export class WsValidationPipe implements PipeTransform<any> {
         };
       });
 
-      this.logger.warn(`Validation failed: ${JSON.stringify(messages)}`);
+      this.logger.warn(`Validation failed: ${safeStringify(messages)}`);
 
       // 5. Ném WsException (Filter của bạn sẽ bắt và gửi về client)
       throw new WsException({

@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RedisService } from '../redis.service';
+import { safeStringify } from 'src/common/utils/json.util';
 
 export type MessageHandler = (
   channel: string,
@@ -106,7 +107,7 @@ export class RedisPubSubService implements OnModuleInit {
   async publish(channel: string, message: any): Promise<number> {
     const publisher = this.redisService.getPublisher();
     const payload =
-      typeof message === 'string' ? message : JSON.stringify(message);
+      typeof message === 'string' ? message : safeStringify(message);
 
     const subscriberCount = await publisher.publish(channel, payload);
 

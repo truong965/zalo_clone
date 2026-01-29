@@ -273,7 +273,7 @@ export class MessagingGateway implements OnGatewayInit {
       // ========================================
       // STEP 4: Broadcast to Other Gateway Instances
       // ========================================
-      const safeMsg = safeJSON(message) as Message;
+      const safeMsg = safeJSON(message);
       await this.broadcaster.broadcastNewMessage(dto.conversationId, {
         message: safeMsg,
         recipientIds,

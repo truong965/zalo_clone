@@ -7,14 +7,41 @@ import {
   MaxLength,
   IsObject,
   ValidateNested,
+  IsArray,
+  ArrayMaxSize,
+  ValidationOptions,
+  registerDecorator,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { MessageType } from '@prisma/client';
+import { safeStringify } from 'src/common/utils/json.util';
+import { Type } from 'class-transformer';
 
-class ReplyToDto {
-  @IsNotEmpty()
-  messageId: bigint;
+function MaxJSONSize(maxSizeKB: number, validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'maxJSONSize',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: any) {
+          if (!value) return true;
+          const size = safeStringify(value).length;
+          return size <= maxSizeKB * 1024;
+        },
+        defaultMessage() {
+          return `${propertyName} exceeds ${maxSizeKB}KB limit`;
+        },
+      },
+    });
+  };
 }
+export class ReplyToDto {
+  @IsString()
+  @IsNotEmpty()
+  messageId: string; // Nhận string từ client (VD: "227")
+}
+
 export class SendMessageDto {
   @IsUUID()
   @IsNotEmpty()
@@ -35,10 +62,17 @@ export class SendMessageDto {
 
   @IsObject()
   @IsOptional()
+  @MaxJSONSize(10)
   metadata?: Record<string, any>; // For file info, location, etc.
 
   @IsOptional()
   @ValidateNested()
   @Type(() => ReplyToDto)
   replyTo?: ReplyToDto;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true, message: 'mediaIds must contain valid UUIDs' })
+  @ArrayMaxSize(10)
+  mediaIds?: string[];
 }

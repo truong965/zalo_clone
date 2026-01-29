@@ -83,6 +83,7 @@ enum MessageType {
   STICKER // = image (media type)
   SYSTEM // notification
   AUDIO
+  VOICE
   @@map("message_type")
 }
 

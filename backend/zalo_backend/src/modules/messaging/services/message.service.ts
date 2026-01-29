@@ -5,146 +5,317 @@ import {
   ForbiddenException,
   Logger,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisKeys } from 'src/common/constants/redis-keys.constant';
 import { SendMessageDto } from '../dto/send-message.dto';
 import { GetMessagesDto } from '../dto/get-messages.dto';
 import { ConversationService } from './conversation.service';
-import { Message, MessageType } from '@prisma/client';
+import {
+  MediaProcessingStatus,
+  Message,
+  MessageType,
+  Prisma,
+} from '@prisma/client';
 import { RedisService } from 'src/modules/redis/redis.service';
+import { MessageValidator } from '../helpers/message-validation.helper';
+import redisConfig from 'src/config/redis.config';
+import type { ConfigType } from '@nestjs/config';
+import { safeJSON, safeStringify } from 'src/common/utils/json.util';
 
 @Injectable()
 export class MessageService {
   private readonly logger = new Logger(MessageService.name);
 
-  // Idempotency cache TTL: 5 minutes
-  private readonly IDEMPOTENCY_TTL = 300;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly conversationService: ConversationService,
+    @Inject(redisConfig.KEY)
+    private readonly config: ConfigType<typeof redisConfig>,
   ) {}
 
   /**
    * CORE: Send a message
    * Handles idempotency, permissions, persistence
    */
+  /**
+   * CORE: Send a message with Media Support
+   */
   async sendMessage(dto: SendMessageDto, senderId: string): Promise<Message> {
-    // ========================================
-    // STEP 1: Idempotency Check
-    // ========================================
+    MessageValidator.validateMessageTypeConsistency(dto);
+    // 1. Idempotency Check
     const idempotencyKey = RedisKeys.cache.messageIdempotency(
       dto.clientMessageId,
     );
     const cachedMessage = await this.redis.getClient().get(idempotencyKey);
 
     if (cachedMessage) {
-      this.logger.debug(
-        `Duplicate send detected for clientMessageId: ${dto.clientMessageId}`,
-      );
-      const msg = JSON.parse(cachedMessage);
-      return {
-        ...msg,
-        // Convert String -> BigInt
-        id: BigInt(msg.id),
-        // Convert String -> Date
-        createdAt: new Date(msg.createdAt),
-        updatedAt: new Date(msg.updatedAt),
-        deletedAt: msg.deletedAt ? new Date(msg.deletedAt) : null,
-      } as Message;
+      this.logger.debug(`Duplicate send detected: ${dto.clientMessageId}`);
+      const cached = JSON.parse(cachedMessage) as Message;
+      const existingMessage = await this.prisma.message.findUniqueOrThrow({
+        where: { id: cached.id },
+        include: {
+          sender: {
+            select: { id: true, displayName: true, avatarUrl: true },
+          },
+          mediaAttachments: {
+            select: {
+              id: true,
+              mediaType: true,
+              cdnUrl: true,
+              thumbnailUrl: true,
+              width: true,
+              height: true,
+              duration: true,
+              processingStatus: true,
+            },
+            where: { deletedAt: null },
+          },
+        },
+      });
+      return safeJSON(existingMessage);
     }
 
-    // ========================================
-    // STEP 2: Permission Check
-    // ========================================
+    // 2. Permission Check
     const isMember = await this.conversationService.isMember(
       dto.conversationId,
       senderId,
     );
+    if (!isMember) throw new ForbiddenException('Not a member of conversation');
 
-    if (!isMember) {
-      throw new ForbiddenException('You are not a member of this conversation');
+    // Validate media OUTSIDE transaction
+    if (dto.mediaIds && dto.mediaIds.length > 0) {
+      await this.validateMediaAttachments(dto.mediaIds, senderId, dto.type);
     }
-    //- Check if conversation is deleted
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: dto.conversationId },
-      select: { deletedAt: true, type: true },
-    });
-    if (conversation?.deletedAt) {
-      throw new BadRequestException('Conversation has been deleted');
-    }
-    // ========================================
-    // STEP 3: Validation
-    // ========================================
-    if (dto.type === MessageType.TEXT && !dto.content?.trim()) {
-      throw new BadRequestException('Text message cannot be empty');
+    let replyToId: bigint | null = null;
+
+    if (dto.replyTo?.messageId) {
+      try {
+        // 1. Convert String -> BigInt (Vì JSON client gửi lên là string)
+        replyToId = BigInt(dto.replyTo.messageId);
+      } catch (e) {
+        throw new BadRequestException('Invalid replyTo message ID format');
+      }
+
+      // 2. Validate Logic (Bắt buộc chạy nếu có replyToId)
+      await this.validateReplyToMessage(replyToId, dto.conversationId);
     }
 
-    // ========================================
-    // STEP 4: Persist Message (Transaction)
-    // ========================================
-    const message = await this.prisma.$transaction(async (tx) => {
-      // 4a. Create message
-      const msg = await tx.message.create({
-        data: {
-          conversationId: dto.conversationId,
-          senderId,
-          type: dto.type,
-          content: dto.content?.trim(),
-          metadata: dto.metadata || {},
-          clientMessageId: dto.clientMessageId,
-          replyToId: dto.replyTo?.messageId,
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              displayName: true,
-              avatarUrl: true,
-            },
+    let message: Message;
+    //Transaction - only writes
+    try {
+      message = await this.prisma.$transaction(async (tx) => {
+        // A. Create Message
+        const msg = await tx.message.create({
+          data: {
+            conversationId: dto.conversationId,
+            senderId,
+            type: dto.type,
+            content: dto.content?.trim() || null,
+            metadata: dto.metadata || {},
+            clientMessageId: dto.clientMessageId,
+            replyToId: replyToId,
           },
-          parentMessage: {
-            select: {
-              id: true,
-              content: true,
-              senderId: true,
+        });
+
+        // B. Link Media to Message
+        if (dto.mediaIds && dto.mediaIds.length > 0) {
+          await tx.mediaAttachment.updateMany({
+            where: { id: { in: dto.mediaIds } },
+            data: { messageId: msg.id },
+          });
+        }
+
+        // C. Update Conversation
+        await tx.conversation.update({
+          where: { id: dto.conversationId },
+          data: { lastMessageAt: msg.createdAt },
+        });
+
+        return msg;
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        // ✅ FIXED: Handle unique constraint violation (Issue #2 - race condition)
+        if (error.code === 'P2002') {
+          const target = error.meta?.target as string[] | undefined;
+          if (target?.includes('clientMessageId')) {
+            this.logger.warn(
+              `Duplicate clientMessageId detected: ${dto.clientMessageId}`,
+            );
+          }
+          // Return existing message
+          const existing = await this.prisma.message.findUniqueOrThrow({
+            where: { clientMessageId: dto.clientMessageId },
+            include: {
+              sender: {
+                select: { id: true, displayName: true, avatarUrl: true },
+              },
+              mediaAttachments: {
+                select: {
+                  id: true,
+                  mediaType: true,
+                  cdnUrl: true,
+                  thumbnailUrl: true,
+                  width: true,
+                  height: true,
+                  duration: true,
+                  processingStatus: true,
+                },
+                where: { deletedAt: null },
+              },
             },
-          },
+          });
+
+          return safeJSON(existing);
+        }
+
+        if (error.code === 'P2003') {
+          this.logger.error(
+            'Foreign key constraint failed - media may have been deleted',
+            {
+              clientMessageId: dto.clientMessageId,
+              error: error.message,
+            },
+          );
+          throw new BadRequestException(
+            'One or more media files are no longer available. Please retry upload.',
+          );
+        }
+      }
+      throw error;
+    }
+    // 7. Fetch full message with includes (after transaction)
+    const fullMessage = await this.prisma.message.findUniqueOrThrow({
+      where: { id: message.id },
+      include: {
+        sender: {
+          select: { id: true, displayName: true, avatarUrl: true },
         },
-      });
-
-      // 4b. Update conversation's lastMessageAt
-      await tx.conversation.update({
-        where: { id: dto.conversationId },
-        data: { lastMessageAt: msg.createdAt },
-      });
-
-      return msg;
+        mediaAttachments: {
+          select: {
+            id: true,
+            mediaType: true,
+            cdnUrl: true,
+            thumbnailUrl: true,
+            width: true,
+            height: true,
+            duration: true,
+            processingStatus: true,
+          },
+          where: { deletedAt: null },
+        },
+      },
     });
-
-    // ========================================
-    // STEP 5: Cache Result (Idempotency)
-    // ========================================
+    // Cache minimal data for idempotency
     await this.redis.getClient().setex(
       idempotencyKey,
-      this.IDEMPOTENCY_TTL,
-      JSON.stringify(
-        message,
-        (key, value) => (typeof value === 'bigint' ? value.toString() : value), // Serialize BigInt thành String để không crash
-      ),
+      this.config.ttl.messageIdempotency,
+      safeStringify({
+        id: fullMessage.id,
+        createdAt: fullMessage.createdAt,
+        conversationId: fullMessage.conversationId,
+      }),
     );
-
-    this.logger.log(
-      `Message ${message.id} created by ${senderId} in conversation ${dto.conversationId}`,
-    );
-
-    return message;
+    this.logger.log(`Message ${message.id} sent (Type: ${dto.type})`);
+    return safeJSON(fullMessage);
   }
 
   /**
-   * Get messages with cursor-based pagination
+   * ✅ NEW: Validate media attachments (Issue #9 - moved out of transaction)
+   * Checks ownership, status, and type consistency
+   */
+  private async validateMediaAttachments(
+    mediaIds: string[],
+    senderId: string,
+    messageType: MessageType,
+  ): Promise<void> {
+    const mediaList = await this.prisma.mediaAttachment.findMany({
+      where: { id: { in: mediaIds } },
+      select: {
+        id: true,
+        uploadedBy: true,
+        messageId: true,
+        processingStatus: true,
+        deletedAt: true,
+        mediaType: true,
+      },
+    });
+
+    // Rule 1: Count must match (prevent garbage IDs)
+    if (mediaList.length !== mediaIds.length) {
+      throw new BadRequestException('One or more media files not found');
+    }
+
+    for (const media of mediaList) {
+      // Rule 2: Security (IDOR) - Only send your own files
+      if (media.uploadedBy !== senderId) {
+        throw new ForbiddenException(`You do not own media ${media.id}`);
+      }
+
+      // Rule 3: Consistency - File not already attached
+      if (media.messageId !== null) {
+        throw new BadRequestException(
+          `Media ${media.id} is already attached to another message`,
+        );
+      }
+
+      // Rule 4: Not deleted
+      if (media.deletedAt) {
+        throw new BadRequestException(`Media ${media.id} has been deleted`);
+      }
+
+      // Rule 5: ✅ Accept PROCESSING status (Issue #6 - user wants loading UX)
+      const allowedStatuses: MediaProcessingStatus[] = [
+        MediaProcessingStatus.READY,
+        MediaProcessingStatus.PROCESSING, // User sees loading indicator
+      ];
+
+      if (!allowedStatuses.includes(media.processingStatus)) {
+        throw new BadRequestException(
+          `Media ${media.id} is not ready (status: ${media.processingStatus})`,
+        );
+      }
+    }
+
+    // Rule 6: ✅ NEW: Validate media type consistency (Issue #4)
+    MessageValidator.validateMediaTypeConsistency(messageType, mediaList);
+  }
+
+  /**
+   * ✅ EXISTING: Validate reply-to message (Issue #5 - already implemented)
+   */
+  private async validateReplyToMessage(
+    replyToId: bigint | null,
+    conversationId: string,
+  ): Promise<void> {
+    if (!replyToId) {
+      throw new BadRequestException('Reply-to message not found');
+    }
+    const parentMessage = await this.prisma.message.findUnique({
+      where: { id: replyToId },
+      select: { conversationId: true, deletedAt: true },
+    });
+
+    if (!parentMessage) {
+      throw new BadRequestException('Reply-to message not found');
+    }
+
+    if (parentMessage.conversationId !== conversationId) {
+      throw new BadRequestException(
+        'Cannot reply to message from different conversation',
+      );
+    }
+
+    if (parentMessage.deletedAt) {
+      throw new BadRequestException('Cannot reply to deleted message');
+    }
+  }
+
+  /**
+   * Get messages with cursor-based pagination  with optimized query
    * Efficient for infinite scroll
    */
   async getMessages(dto: GetMessagesDto, userId: string) {
@@ -194,6 +365,24 @@ export class MessageService {
             userId: true,
             status: true,
             timestamp: true,
+          },
+        },
+        mediaAttachments: {
+          select: {
+            id: true,
+            mediaType: true,
+            cdnUrl: true,
+            thumbnailUrl: true,
+            width: true,
+            height: true,
+            duration: true,
+            processingStatus: true,
+            originalName: true,
+            size: true,
+          },
+          where: {
+            processingStatus: MediaProcessingStatus.READY, // Only READY media
+            deletedAt: null,
           },
         },
       },

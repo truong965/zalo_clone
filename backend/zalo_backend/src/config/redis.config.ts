@@ -34,7 +34,10 @@ export default registerAs('redis', () => ({
     socketMetadata: 3600, // 1 hour
     userStatus: 300, // 5 minutes
     rateLimitWindow: 60, // 1 minute
-    rateLimitEventWindow: 10, // 10 seconds
+    rateLimitEventWindow: 10, // 10 seconds,
+    // Messaging specific
+    messageIdempotency: 300, // 5 minutes (Was hardcoded in MessageService)
+    offlineQueue: 7 * 24 * 60 * 60, // 7 days (Was hardcoded in MessageQueueService)
   },
 
   // Rate limit thresholds

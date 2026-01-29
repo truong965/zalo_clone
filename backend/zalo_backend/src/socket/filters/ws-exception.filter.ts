@@ -2,6 +2,7 @@ import { Catch, ArgumentsHost, Logger, HttpException } from '@nestjs/common';
 import { BaseWsExceptionFilter, WsException } from '@nestjs/websockets';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
+import { safeStringify } from 'src/common/utils/json.util';
 
 /**
  * Interface định nghĩa cấu trúc lỗi trả về từ WsException
@@ -58,7 +59,7 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
     const logMessage =
       typeof errorResponse.message === 'string'
         ? errorResponse.message
-        : JSON.stringify(errorResponse.message);
+        : safeStringify(errorResponse.message);
 
     // 4. Intelligent Logging
     if (errorResponse.code === 'INTERNAL_ERROR') {
@@ -91,7 +92,7 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
    */
   private sanitizePayload(data: unknown): Record<string, unknown> | null {
     if (!data) return null;
-    if (typeof data !== 'object') return { data: JSON.stringify(data) };
+    if (typeof data !== 'object') return { data: safeStringify(data) };
 
     // Ép kiểu an toàn sang Record để xử lý
     const sanitized = { ...(data as Record<string, unknown>) };

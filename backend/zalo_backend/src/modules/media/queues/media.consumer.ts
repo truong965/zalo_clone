@@ -38,6 +38,8 @@ import {
   RETRY_CONFIG,
 } from 'src/common/constants/media.constant';
 
+import * as os from 'os';
+import * as path from 'path';
 @Processor(MEDIA_QUEUE_NAME)
 export class MediaConsumer {
   private readonly logger = new Logger(MediaConsumer.name);
@@ -66,7 +68,10 @@ export class MediaConsumer {
     // Đảm bảo file nằm đúng chỗ (temp hoặc permanent) trước khi xử lý
     await this.ensureMediaConsistency(media, payload);
 
-    const tempFilePath = `/tmp/${payload.mediaId}_${Date.now()}`;
+    const tempFilePath = path.join(
+      os.tmpdir(),
+      `${payload.mediaId}_${Date.now()}`,
+    );
 
     try {
       this.logger.log(`📥 Downloading for validation: ${payload.s3Key}`);

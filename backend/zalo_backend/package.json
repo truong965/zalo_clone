@@ -15,6 +15,8 @@
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.config.e2e.ts",
+    "test:e2e:ui": "vitest --ui --config vitest.config.e2e.ts",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -25,10 +27,7 @@
     "test:load:connection-churn": "artillery run test/load-tests/scenarios/connection-churn.yml",
     "test:load:message-flood": "artillery run test/load-tests/scenarios/message-flood.yml",
     "test:load:slow-client": "artillery run test/load-tests/scenarios/slow-client.yml",
-    "test:load:all": "npm run test:load && npm run test:load:connection-churn && npm run test:load:message-flood",
-    "test:memory": "node --expose-gc test/load-tests/scripts/memory-profiler.js",
-    "test:redis-failure": "node test/load-tests/scripts/redis-failure-sim.js",
-    "test:graceful-shutdown": "node test/load-tests/scripts/graceful-shutdown-test.js"
+    "test:load:all": "npm run test:load && npm run test:load:connection-churn && npm run test:load:message-flood"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",
@@ -104,6 +103,7 @@
     "@types/pg": "^8.16.0",
     "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
     "artillery-plugin-expect": "^2.22.0",
     "artillery-plugin-metrics-by-endpoint": "^1.22.0",
     "dotenv-cli": "^11.0.0",

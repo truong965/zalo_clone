@@ -1,9 +1,12 @@
 // src/modules/messaging/services/message-queue.service.ts
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RedisKeys } from 'src/common/constants/redis-keys.constant';
 import { Message } from '@prisma/client';
 import { RedisService } from 'src/modules/redis/redis.service';
+import redisConfig from 'src/config/redis.config';
+import type { ConfigType } from '@nestjs/config';
+import { safeStringify } from 'src/common/utils/json.util';
 
 interface QueuedMessage {
   messageId: bigint;
@@ -20,9 +23,12 @@ export class MessageQueueService {
   private readonly MAX_QUEUE_SIZE = 1000;
 
   // TTL for offline queue: 7 days
-  private readonly QUEUE_TTL = 7 * 24 * 60 * 60;
 
-  constructor(private readonly redis: RedisService) {}
+  constructor(
+    private readonly redis: RedisService,
+    @Inject(redisConfig.KEY)
+    private readonly config: ConfigType<typeof redisConfig>,
+  ) {}
 
   /**
    * Enqueue message for offline user
@@ -42,7 +48,7 @@ export class MessageQueueService {
 
       const client = this.redis.getClient();
       // Add to sorted set
-      await client.zadd(queueKey, score, JSON.stringify(queuedMsg));
+      await client.zadd(queueKey, score, safeStringify(queuedMsg));
 
       // Trim to max size (keep newest messages)
       const currentSize = await client.zcard(queueKey);
@@ -56,7 +62,7 @@ export class MessageQueueService {
       }
 
       // Set TTL on queue
-      await client.expire(queueKey, this.QUEUE_TTL);
+      await client.expire(queueKey, this.config.ttl.offlineQueue);
 
       this.logger.debug(
         `Enqueued message ${message.id} for offline user ${userId}`,

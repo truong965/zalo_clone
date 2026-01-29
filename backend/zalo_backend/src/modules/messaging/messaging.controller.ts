@@ -20,7 +20,7 @@ import { ConversationService } from './services/conversation.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 
-@Controller('api/v1/messages')
+@Controller('messages')
 @UseGuards(JwtAuthGuard)
 export class MessagingController {
   constructor(
