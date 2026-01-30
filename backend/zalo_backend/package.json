@@ -23,6 +23,8 @@
     "prisma:generate": "dotenv -e .env.development.local -- npx prisma generate",
     "prisma:migrate": "dotenv -e .env.development.local -- npx prisma migrate dev",
     "prisma:studio": "dotenv -e .env.development.local -- npx prisma studio",
+    "prisma:reset": "dotenv -e .env.development.local -- npx prisma migrate reset",
+    
     "test:load": "artillery run test/load-tests/scenarios/basic-connection.yml",
     "test:load:connection-churn": "artillery run test/load-tests/scenarios/connection-churn.yml",
     "test:load:message-flood": "artillery run test/load-tests/scenarios/message-flood.yml",

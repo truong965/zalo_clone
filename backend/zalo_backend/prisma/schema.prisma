@@ -36,7 +36,6 @@ enum Gender {
 enum PrivacyLevel {
   EVERYONE
   CONTACTS
-  NOBODY
   @@map("privacy_level")
 }
 
@@ -114,6 +113,15 @@ enum MediaProcessingStatus {
   @@map("media_processing_status")
 }
 
+// --- Call ---
+enum CallStatus {
+  COMPLETED   // Call connected and ended normally
+  MISSED      // Callee didn't answer
+  REJECTED    // Callee explicitly rejected
+  CANCELLED   // Caller cancelled before answer
+  @@map("call_status")
+}
+
 // --- Device & Security ---
 enum DeviceType {
   WEB
@@ -153,7 +161,9 @@ model User {
   id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   phoneNumber     String     @unique @map("phone_number") @db.VarChar(20)
   phoneCode       String     @default("+84") @map("phone_country_code") @db.VarChar(5)
-  
+  // Secure contact sync matching
+  phoneNumberHash String?    @map("phone_number_hash") @db.VarChar(64)
+
   // Profile Info
   displayName     String     @map("display_name") @db.VarChar(100)
   avatarUrl       String?    @map("avatar_url")
@@ -190,20 +200,30 @@ model User {
   sentFriendRequests   Friendship[] @relation("User1")
   receivedFriendRequests Friendship[] @relation("User2")
   friendshipInitiator  Friendship[] @relation("Requester")
+  friendshipActions    Friendship[] @relation("LastActionBy")
   
   blocksBlocked        Block[]      @relation("Blocker")
   blocksWasBlocked     Block[]      @relation("Blocked")
 
   // Messaging & Groups
   conversations        ConversationMember[]
-  joinRequests         GroupJoinRequest[]
+  joinRequests         GroupJoinRequest[] @relation("MemberRequesting") // tự xin vào group
+  groupInvitesSent     GroupJoinRequest[] @relation("RequestInviter") // Lời mời vào nhóm tôi gửi
   reviewedJoinRequests GroupJoinRequest[] @relation("ReviewedRequests")
   
   messagesSent         Message[]
   messagesDeleted      Message[]    @relation("DeletedBy")
 
+  // Contacts (Shadow Graph)
+  myContacts           UserContact[] @relation("MyContacts") // Danh bạ tôi lưu
+  inContactsOf         UserContact[] @relation("InContacts") // Tôi nằm trong danh bạ ai
+
   // Media
   uploadedMedia        MediaAttachment[] @relation("UploadedMedia")
+
+  // Calls [NEW]
+  callsMade            CallHistory[] @relation("CallsMade")
+  callsReceived        CallHistory[] @relation("CallsReceived")
 
   // System Logs
   socketConnections    SocketConnection[]
@@ -211,6 +231,7 @@ model User {
 
   @@index([phoneNumber])
   @@index([roleId])
+  @@index([phoneNumberHash])
   @@map("users")
 }
 
@@ -351,11 +372,15 @@ model PrivacySettings {
   userId           String       @id @map("user_id") @db.Uuid
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  showOnlineStatus PrivacyLevel @default(CONTACTS) @map("show_online_status")
-  showPhoneNumber  PrivacyLevel @default(CONTACTS) @map("show_phone_number")
+  showProfile  PrivacyLevel @default(CONTACTS) @map("show_profile")
   whoCanMessageMe  PrivacyLevel @default(EVERYONE) @map("who_can_message_me")
   whoCanCallMe     PrivacyLevel @default(CONTACTS) @map("who_can_call_me")
 
+  // [NEW] Online Status
+  showOnlineStatus Boolean      @default(true) @map("show_online_status")
+  showLastSeen     Boolean      @default(true) @map("show_last_seen")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedById      String?      @map("updated_by") @db.Uuid
   updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -369,6 +394,8 @@ model PrivacySettings {
 /**
  * Model: Friendship
  * Manages friend requests and relationships.
+ * QUY TẮC BẮT BUỘC: user1Id luôn nhỏ hơn user2Id (user1Id < user2Id) để tránh duplicate.
+ * Status: PENDING (Chờ duyệt), ACCEPTED (Bạn bè).
  */
 model Friendship {
   id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -377,10 +404,18 @@ model Friendship {
   requesterId String           @map("requester_id") @db.Uuid
   status      FriendshipStatus @default(PENDING)
   
-  // Audit
-  updatedById String?          @map("updated_by") @db.Uuid
-  deletedById String?          @map("deleted_by") @db.Uuid
 
+  // [NEW] Timestamps defined in Plan
+
+  acceptedAt  DateTime?        @map("accepted_at") @db.Timestamptz
+  declinedAt  DateTime?        @map("declined_at") @db.Timestamptz
+  expiresAt   DateTime?        @map("expires_at") @db.Timestamptz
+
+  // [NEW] Anti-spam tracking
+  lastActionAt DateTime?       @map("last_action_at") @db.Timestamptz
+  lastActionBy String?         @map("last_action_by") @db.Uuid
+
+  // Audit
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime?        @map("deleted_at") @db.Timestamptz
@@ -388,28 +423,62 @@ model Friendship {
   user1       User             @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
   user2       User             @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
   requester   User             @relation("Requester", fields: [requesterId], references: [id])
-
-  @@unique([user1Id, user2Id])
-  @@index([user1Id, status])
-  @@index([user2Id, status])
+  actionUser  User?            @relation("LastActionBy", fields: [lastActionBy], references: [id])
+  
+  @@unique([user1Id, user2Id]) // Composite Key: Đảm bảo chỉ 1 record duy nhất giữa 2 người
+  @@index([user1Id, status])   // Index để User 1 load danh sách bạn
+  @@index([user2Id, status])   // Index để User 2 load danh sách bạn
+  @@index([requesterId, status]) // Pending requests (where status='PENDING')
+  @@index([status, expiresAt]) // Cleanup expired requests
   @@map("friendships")
 }
 
 /**
  * Model: Block
  * Users blocking other users.
+ * Quan hệ chặn 1 chiều. (Blocker chặn Blocked).
+ * Quyền lực cao nhất (Override mọi quan hệ khác).
  */
 model Block {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   blockerId String   @map("blocker_id") @db.Uuid
   blockedId String   @map("blocked_id") @db.Uuid
+  reason    String?  @db.VarChar(500) // [NEW] Optional reason
+  
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
   blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
+  @@index([blockedId]) // [NEW] Reverse lookup
+  @@index([createdAt]) // [NEW] Audit
   @@map("blocks")
+}
+
+/**
+ * Model: UserContact (Shadow Graph)
+ * Lưu trữ danh bạ điện thoại & Tên gợi nhớ (Alias).
+ * Tồn tại độc lập với Friendship.
+ */
+model UserContact {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId       String   @map("owner_id") @db.Uuid         // Người sở hữu danh bạ (A)
+  contactUserId String   @map("contact_user_id") @db.Uuid  // Người được lưu (B)
+  
+  // Quan trọng: Tên gợi nhớ đè lên DisplayName gốc khi hiển thị cho Owner
+  aliasName     String?  @map("alias_name") @db.VarChar(100) 
+  
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  
+  owner         User     @relation("MyContacts", fields: [ownerId], references: [id], onDelete: Cascade)
+  contactUser   User     @relation("InContacts", fields: [contactUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, contactUserId]) // Một người chỉ lưu người kia 1 lần
+  @@index([ownerId, aliasName])      // Search nhanh theo tên gợi nhớ
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@map("user_contacts")
 }
 
 // ============================================================================
@@ -458,6 +527,12 @@ model ConversationMember {
   role              MemberRole   @default(MEMBER)
   status            MemberStatus @default(ACTIVE) @map("status")
 
+  // [NEW] Audit for Promoted/Demoted
+  promotedBy        String?      @map("promoted_by") @db.Uuid
+  promotedAt        DateTime?    @map("promoted_at") @db.Timestamptz
+  demotedBy         String?      @map("demoted_by") @db.Uuid
+  demotedAt         DateTime?    @map("demoted_at") @db.Timestamptz
+
   // Read status tracking
   lastReadMessageId String?      @map("last_read_message_id") @db.Uuid
   lastReadAt        DateTime?    @map("last_read_at") @db.Timestamptz
@@ -475,7 +550,7 @@ model ConversationMember {
   @@id([conversationId, userId])
   @@index([userId, status])
   @@index([userId, unreadCount(sort: Desc)])
-  // @@unique([conversationId, role], name: "unique_admin_per_group", where: { role: ADMIN, status: ACTIVE })
+  //@@unique([conversationId, role], name: "unique_admin_per_group", where: { role: ADMIN, status: ACTIVE })
   @@map("conversation_members")
 }
 
@@ -486,11 +561,15 @@ model ConversationMember {
 model GroupJoinRequest {
   id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   conversationId String            @map("conversation_id") @db.Uuid
-  userId         String            @map("user_id") @db.Uuid
+  userId         String            @map("user_id") @db.Uuid // Người muốn vào/được mời
   status         JoinRequestStatus @default(PENDING)
   
+  // MỚI: Người mời (NULL nếu user tự xin vào)
+  inviterId      String?           @map("inviter_id") @db.Uuid
+
   // Metadata
   requestedAt    DateTime          @default(now()) @map("requested_at") @db.Timestamptz
+  expiresAt      DateTime?         @map("expires_at") @db.Timestamptz
   message        String?           @db.VarChar(500)
   
   // Review tracking
@@ -498,12 +577,14 @@ model GroupJoinRequest {
   reviewedAt     DateTime?         @map("reviewed_at") @db.Timestamptz
   
   conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User              @relation("MemberRequesting", fields: [userId], references: [id], onDelete: Cascade)
   reviewer       User?             @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
+  inviter        User?             @relation("RequestInviter", fields: [inviterId], references: [id])
 
   @@unique([conversationId, userId])
   @@index([conversationId, status])
   @@index([userId, status])
+  @@index([status, expiresAt])
   @@map("group_join_requests")
 }
 
@@ -636,6 +717,30 @@ model MediaAttachment {
 // ============================================================================
 // 7. SYSTEM & LOGGING MODULE
 // ============================================================================
+
+/**
+ * Model: CallHistory [NEW]
+ * Lưu lịch sử cuộc gọi (write on CALL_ENDED only).
+ */
+model CallHistory {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  callerId    String     @map("caller_id") @db.Uuid
+  calleeId    String     @map("callee_id") @db.Uuid
+  duration    Int?       // seconds (nullable if missed)
+  status      CallStatus 
+  
+  startedAt   DateTime   @map("started_at") @db.Timestamptz
+  endedAt     DateTime?  @map("ended_at") @db.Timestamptz
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  
+  caller      User       @relation("CallsMade", fields: [callerId], references: [id])
+  callee      User       @relation("CallsReceived", fields: [calleeId], references: [id])
+
+  @@index([callerId, startedAt(sort: Desc)]) // Caller's call history
+  @@index([calleeId, startedAt(sort: Desc)]) // Callee's call history
+  @@index([startedAt]) // Time-range queries
+  @@map("call_history")
+}
 
 /**
  * Model: SocketConnection
