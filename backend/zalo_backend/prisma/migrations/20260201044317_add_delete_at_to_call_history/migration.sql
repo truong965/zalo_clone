@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "call_history" ADD COLUMN     "deleted_at" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;

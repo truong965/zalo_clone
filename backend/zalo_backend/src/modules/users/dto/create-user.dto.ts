@@ -2,8 +2,8 @@ import {
   IsEnum,
   IsNotEmpty,
   IsOptional,
+  IsPhoneNumber,
   IsString,
-  Matches,
   MinLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -18,8 +18,8 @@ export class CreateUserDto {
 
   @ApiProperty({ example: '0987654321', description: 'Số điện thoại (VN)' })
   @IsNotEmpty()
-  @Matches(/(84|0[3|5|7|8|9])+([0-9]{8})\b/g, {
-    message: 'Số điện thoại không đúng định dạng Việt Nam',
+  @IsPhoneNumber('VN', {
+    message: 'phoneNumber must be a valid phone number (e.g. 09xxx or +849xxx)',
   })
   phoneNumber: string;
 

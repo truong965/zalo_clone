@@ -244,4 +244,69 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       db: this.config.db,
     });
   }
+  async get(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
+  async setex(key: string, ttl: number, value: string): Promise<void> {
+    await this.client.setex(key, ttl, value);
+  }
+
+  async del(...keys: string[]): Promise<void> {
+    await this.client.del(...keys);
+  }
+
+  async incr(key: string): Promise<number> {
+    return this.client.incr(key);
+  }
+
+  async expire(key: string, ttl: number): Promise<void> {
+    await this.client.expire(key, ttl);
+  }
+
+  async keys(pattern: string): Promise<string[]> {
+    return this.client.keys(pattern);
+  }
+  /**
+   * Delete keys by pattern (for cache invalidation)
+   *  Thay thế KEYS bằng SCAN để không block Redis
+   */
+  async deletePattern(pattern: string): Promise<number> {
+    const stream = this.client.scanStream({
+      match: pattern,
+      count: 100, // Xử lý từng batch 100 keys
+    });
+
+    let deletedCount = 0;
+    const deletePromises: Promise<number>[] = [];
+
+    return new Promise((resolve, reject) => {
+      stream.on('data', (keys: string[]) => {
+        if (keys.length > 0) {
+          // Xóa batch hiện tại và lưu promise lại
+          deletePromises.push(this.client.del(...keys));
+          deletedCount += keys.length;
+        }
+      });
+
+      stream.on('end', () => {
+        Promise.all(deletePromises)
+          .then(() => {
+            resolve(deletedCount);
+          })
+          .catch((err) => {
+            // Kiểm tra kiểu dữ liệu trước khi reject
+            if (err instanceof Error) {
+              reject(err);
+            } else {
+              reject(new Error(String(err))); // Bọc lỗi lạ vào Error object
+            }
+          });
+      });
+
+      stream.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
 }

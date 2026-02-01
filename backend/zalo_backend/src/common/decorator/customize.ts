@@ -45,3 +45,39 @@ export const IS_PUBLIC_PERMISSION = 'isPublicPermission';
 // Decorator này dùng để bypass việc check quyền trong DB
 export const SkipCheckPermission = () =>
   SetMetadata(IS_PUBLIC_PERMISSION, true);
+/**
+ * Get current user ID only (lighter than full user object)
+ *
+ * Usage:
+ * @Get('friends')
+ * async getFriends(@CurrentUserId() userId: string) {...}
+ */
+export const CurrentUserId = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user?.id;
+  },
+);
+
+/**
+ * Extract target user ID from various sources
+ *
+ * Usage:
+ * @Post('message')
+ * async sendMessage(
+ *   @CurrentUserId() senderId: string,
+ *   @TargetUserId() recipientId: string,
+ * ) {...}
+ */
+export const TargetUserId = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return (
+      request.params?.userId ||
+      request.params?.targetUserId ||
+      request.body?.targetUserId ||
+      request.body?.userId ||
+      request.query?.userId
+    );
+  },
+);

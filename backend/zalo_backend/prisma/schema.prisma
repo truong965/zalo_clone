@@ -425,11 +425,20 @@ model Friendship {
   requester   User             @relation("Requester", fields: [requesterId], references: [id])
   actionUser  User?            @relation("LastActionBy", fields: [lastActionBy], references: [id])
   
-  @@unique([user1Id, user2Id]) // Composite Key: Đảm bảo chỉ 1 record duy nhất giữa 2 người
-  @@index([user1Id, status])   // Index để User 1 load danh sách bạn
-  @@index([user2Id, status])   // Index để User 2 load danh sách bạn
-  @@index([requesterId, status]) // Pending requests (where status='PENDING')
-  @@index([status, expiresAt]) // Cleanup expired requests
+  // 1. Core Integrity (GIỮ NGUYÊN)
+  @@unique([user1Id, user2Id]) 
+  
+  // 2. User 1 Friend List (Cursor Pagination) -> THAY THẾ index cũ [user1Id, status]
+  @@index([user1Id, status, createdAt(sort: Desc), id], name: "idx_friendship_user1_list")
+  
+  // 3. User 2 Friend List (Cursor Pagination) -> THAY THẾ index cũ [user2Id, status]
+  @@index([user2Id, status, createdAt(sort: Desc), id], name: "idx_friendship_user2_list")
+  
+  // 4. Sent Requests (kèm expires check) -> THAY THẾ index cũ [requesterId, status]
+  @@index([requesterId, status, expiresAt], name: "idx_friendship_sent_requests")
+  
+  // 5. Cleanup Job (GIỮ NGUYÊN - phục vụ cron job xóa request hết hạn)
+  @@index([status, expiresAt], name: "idx_friendship_cleanup")
   @@map("friendships")
 }
 
@@ -452,7 +461,7 @@ model Block {
 
   @@unique([blockerId, blockedId])
   @@index([blockedId]) // [NEW] Reverse lookup
-  @@index([createdAt]) // [NEW] Audit
+  @@index([blockerId, createdAt, id], name: "idx_block_cursor")
   @@map("blocks")
 }
 
@@ -732,13 +741,22 @@ model CallHistory {
   startedAt   DateTime   @map("started_at") @db.Timestamptz
   endedAt     DateTime?  @map("ended_at") @db.Timestamptz
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt   DateTime?   @default(now()) @map("deleted_at") @db.Timestamptz
   
   caller      User       @relation("CallsMade", fields: [callerId], references: [id])
   callee      User       @relation("CallsReceived", fields: [calleeId], references: [id])
 
-  @@index([callerId, startedAt(sort: Desc)]) // Caller's call history
-  @@index([calleeId, startedAt(sort: Desc)]) // Callee's call history
-  @@index([startedAt]) // Time-range queries
+  // 1. Caller Feed: Lấy lịch sử gọi đi, loại bỏ bản ghi đã xóa, sort theo thời gian thực
+  @@index([callerId, deletedAt, startedAt(sort: Desc), id], name: "idx_call_history_caller_feed")
+  
+  // 2. Callee Feed: Lấy lịch sử gọi đến
+  @@index([calleeId, deletedAt, startedAt(sort: Desc), id], name: "idx_call_history_callee_feed")
+  
+  // 3. Missed Calls: Lấy danh sách gọi nhỡ nhanh
+  @@index([calleeId, status, startedAt(sort: Desc)], name: "idx_call_history_missed")
+  
+  // 4. Analytics: Thống kê theo thời gian (giữ lại cái cũ nếu cần report)
+  @@index([startedAt], name: "idx_call_history_time_range")
   @@map("call_history")
 }
 

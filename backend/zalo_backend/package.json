@@ -24,7 +24,6 @@
     "prisma:migrate": "dotenv -e .env.development.local -- npx prisma migrate dev",
     "prisma:studio": "dotenv -e .env.development.local -- npx prisma studio",
     "prisma:reset": "dotenv -e .env.development.local -- npx prisma migrate reset",
-    
     "test:load": "artillery run test/load-tests/scenarios/basic-connection.yml",
     "test:load:connection-churn": "artillery run test/load-tests/scenarios/connection-churn.yml",
     "test:load:message-flood": "artillery run test/load-tests/scenarios/message-flood.yml",
@@ -39,6 +38,7 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/event-emitter": "^3.0.1",
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/mapped-types": "*",
     "@nestjs/passport": "^11.0.5",
@@ -82,7 +82,8 @@
     "socket.io": "^4.8.3",
     "socket.io-redis": "^5.4.0",
     "stream": "^0.0.3",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

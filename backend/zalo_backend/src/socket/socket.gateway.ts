@@ -32,6 +32,7 @@ import { WsValidationPipe } from './pipes/ws-validation.pipe';
 import { SendMessageDto } from './dto/socket-event.dto';
 import { sleep } from '@nestjs/terminus/dist/utils';
 import { MessagingGateway } from 'src/modules/messaging/messaging.gateway';
+import { CallHistoryService } from 'src/modules/social/service/call-history.service';
 // import { createAdapter } from '@socket.io/redis-adapter';
 // import { RedisService } from 'src/modules/redis/redis.service';
 
@@ -93,6 +94,7 @@ export class SocketGateway
     private readonly messagingGateway: MessagingGateway,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
+    // private readonly callHistoryService: CallHistoryService,
   ) {}
 
   /**
@@ -313,6 +315,14 @@ export class SocketGateway
       if (!client.userId) {
         return;
       }
+
+      // Check if user has other active sockets
+      // const otherSockets = await this.getOtherUserSockets(userId, client.id);
+
+      // if (otherSockets.length === 0) {
+      //   // Last socket disconnected - cleanup calls
+      //   await this.callHistoryService.cleanupUserActiveCalls(userId);
+      // }
 
       // Update state and presence
       const isOffline = await this.socketState.handleDisconnection(

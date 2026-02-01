@@ -7,6 +7,7 @@ import { DeviceInfo } from './interfaces/device-info.interface';
 import jwtConfig from '../../config/jwt.config';
 import { UserEntity } from '../users/entities/user.entity';
 import { UserStatus } from '@prisma/client';
+import { CallHistoryService } from '../social/service/call-history.service';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +16,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
+    // private readonly callHistoryService: CallHistoryService,
   ) {}
 
   /**
@@ -89,6 +91,8 @@ export class AuthService {
    */
   async logout(userId: string, deviceId: string): Promise<void> {
     await this.tokenService.revokeDeviceSession(userId, deviceId);
+    // Cleanup active calls
+    // await this.callHistoryService.cleanupUserActiveCalls(userId);
   }
 
   /**

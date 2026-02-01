@@ -10,7 +10,6 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
-import { FriendshipsModule } from './modules/friendships/friendships.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './socket/socket.module';
@@ -24,6 +23,8 @@ import uploadConfig from './config/upload.config';
 import queueConfig from './config/queue.config';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
+import { SocialModule } from './modules/social/social.module';
+import socialConfig from './config/social.config';
 @Module({
   imports: [
     // config schedule and cron jobs
@@ -47,6 +48,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         s3Config,
         queueConfig,
         uploadConfig,
+        socialConfig,
       ],
       envFilePath: '.env.development.local',
     }),
@@ -80,11 +82,11 @@ import { ScheduleModule } from '@nestjs/schedule';
     PermissionsModule,
     UsersModule,
     AuthModule,
-    FriendshipsModule,
     HealthModule,
     SocketModule,
     MessagingModule,
     MediaModule,
+    SocialModule,
     // public file
     // ServeStaticModule.forRoot({
     //   rootPath: join(__dirname, '..', 'public'), // Trỏ đến thư mục public ở root dự án

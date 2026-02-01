@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import aqp from 'api-query-params';
+import { PagePaginatedResult } from '../interfaces/paginated-result.interface';
 
 // Định nghĩa Interface chung cho Prisma Delegate (các hàm cơ bản)
 export interface PrismaDelegate<T> {
@@ -27,7 +28,11 @@ export abstract class BaseService<T> {
   }
 
   // 2. FIND ALL (Tích hợp api-query-params)
-  async findAll(currentPage: number, limit: number, qs: string) {
+  async findAll(
+    currentPage: number,
+    limit: number,
+    qs: string,
+  ): Promise<PagePaginatedResult<T>> {
     const { filter, sort = {} } = aqp(qs);
 
     // Xử lý Pagination
@@ -48,7 +53,7 @@ export abstract class BaseService<T> {
     delete filter.current;
     delete filter.pageSize;
 
-    const [items, totalItems] = await Promise.all([
+    const [items, totalItems] = (await Promise.all([
       this.model.findMany({
         where: filter, // Prisma tự map các field trùng tên
         skip,
@@ -56,16 +61,16 @@ export abstract class BaseService<T> {
         orderBy: orderBy.length > 0 ? orderBy : undefined,
       }),
       this.model.count({ where: filter }),
-    ]);
+    ])) as [T[], number];
 
     return {
       meta: {
         current: page,
         pageSize: pageSize,
-        pages: Math.ceil(totalItems / pageSize),
         total: totalItems,
+        totalPages: Math.ceil(totalItems / pageSize),
       },
-      result: items,
+      data: items,
     };
   }
 
