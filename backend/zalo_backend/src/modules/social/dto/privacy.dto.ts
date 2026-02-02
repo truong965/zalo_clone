@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'; // Nếu bạn dùng Swagger
 import { PrivacyLevel } from '@prisma/client';
 
@@ -78,41 +78,5 @@ export class PermissionCheckDto {
   allowed: boolean;
 
   @ApiPropertyOptional({ description: 'Lý do bị từ chối (nếu có)' })
-  reason?: string;
-}
-
-/**
- * DTO for blocking a user (Nếu bạn cần dùng chung trong file này)
- */
-export class BlockUserDto {
-  @ApiProperty({ description: 'ID của user muốn chặn' })
-  @IsUUID()
-  blockedUserId: string;
-
-  @ApiPropertyOptional({ description: 'Lý do chặn' })
-  @IsOptional()
-  reason?: string;
-}
-
-export class BlockResponseDto {
-  id: string;
-  blockerId: string;
-  blockedId: string;
-  reason?: string;
-  createdAt: Date;
-}
-
-export class BlockedUserDto {
-  @ApiProperty()
-  blockId: string;
-  @ApiProperty()
-  userId: string;
-  @ApiProperty()
-  displayName: string;
-  @ApiPropertyOptional()
-  avatarUrl?: string; // string | undefined
-  @ApiProperty()
-  blockedAt: Date;
-  @ApiPropertyOptional()
   reason?: string;
 }

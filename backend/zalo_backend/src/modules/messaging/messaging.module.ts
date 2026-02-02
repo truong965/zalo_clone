@@ -11,12 +11,14 @@ import { MessageBroadcasterService } from './services/message-broadcaster.servic
 import { MessagingGateway } from './messaging.gateway';
 import { GroupService } from './services/group.service';
 import { GroupJoinService } from './services/group-join.service';
+import { SocialModule } from '../social/social.module';
 
 @Module({
   imports: [
     DatabaseModule,
     RedisModule,
     forwardRef(() => SocketModule), // For SocketStateService
+    forwardRef(() => SocialModule),
   ],
   providers: [
     // Services

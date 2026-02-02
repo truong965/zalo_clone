@@ -7,6 +7,8 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import {
@@ -20,6 +22,7 @@ import { UpdateGroupDto } from '../dto/update-group.dto';
 import { AddMembersDto } from '../dto/add-members.dto';
 import { RemoveMemberDto } from '../dto/remove-member.dto';
 import { TransferAdminDto } from '../dto/transfer-admin.dto';
+import { SocialFacade } from 'src/modules/social/social.facade';
 export interface GroupSettings {
   description?: string;
   pinnedMessages?: string[]; // Lưu ý: MessageId là BigInt nên cần lưu dạng string trong JSON
@@ -31,7 +34,11 @@ export class GroupService {
   private readonly logger = new Logger(GroupService.name);
   private readonly MAX_GROUP_SIZE = 256;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => SocialFacade))
+    private readonly socialFacade: SocialFacade,
+  ) {}
 
   /**
    * Create a new group
@@ -225,6 +232,20 @@ export class GroupService {
 
     if (newUserIds.length === 0) {
       throw new BadRequestException('All users are already members');
+    }
+
+    // [NEW] Validate Block Relationship for EACH new member
+    // Người thêm (requester) không được phép thêm người mình chặn hoặc người chặn mình
+    for (const newMemberId of dto.userIds) {
+      const isBlocked = await this.socialFacade.isBlocked(
+        requesterId,
+        newMemberId,
+      );
+      if (isBlocked) {
+        throw new ForbiddenException(
+          `Cannot add user ${newMemberId} due to block relationship`,
+        );
+      }
     }
 
     // Add new members

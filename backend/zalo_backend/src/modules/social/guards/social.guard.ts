@@ -19,7 +19,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { BlockService } from '../service/block.service';
+import { SocialFacade } from '../social.facade';
+import { extractTargetUserId } from './guard.helper';
 
 /**
  * Metadata key for skipping block check
@@ -29,44 +30,36 @@ export const SKIP_BLOCK_CHECK = 'skipBlockCheck';
 @Injectable()
 export class NotBlockedGuard implements CanActivate {
   constructor(
-    private readonly blockService: BlockService,
+    private readonly socialFacade: SocialFacade,
     private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check if block check should be skipped (for specific endpoints)
     const skipBlockCheck = this.reflector.getAllAndOverride<boolean>(
       SKIP_BLOCK_CHECK,
       [context.getHandler(), context.getClass()],
     );
 
-    if (skipBlockCheck) {
-      return true;
-    }
+    if (skipBlockCheck) return true;
 
     const request = context.switchToHttp().getRequest();
     const currentUser = request.user;
 
-    if (!currentUser) {
-      throw new ForbiddenException('Authentication required');
-    }
+    if (!currentUser) throw new ForbiddenException('Authentication required');
 
-    // Extract target user ID from request
-    // Try multiple sources: params, body, query
-    const targetUserId =
-      request.params?.userId ||
-      request.params?.targetUserId ||
-      request.body?.targetUserId ||
-      request.body?.userId ||
-      request.query?.userId;
+    // [REFACTORED Action 3.2] Chuẩn hóa input, không đoán mò
+    let targetUserId: string;
 
-    if (!targetUserId) {
-      // No target user specified - allow (might be bulk operation)
+    try {
+      targetUserId = extractTargetUserId(context);
+    } catch (e) {
+      // Nếu endpoint không có targetUserId thì Guard này coi như pass (không check block)
+      // Ví dụ: Get danh sách bạn bè của chính mình
       return true;
     }
 
-    // Check if users are blocked
-    const isBlocked = await this.blockService.isBlocked(
+    // [UPDATED] Use Facade
+    const isBlocked = await this.socialFacade.isBlocked(
       currentUser.id,
       targetUserId,
     );

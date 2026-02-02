@@ -15,32 +15,31 @@ import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './socket/socket.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { MediaModule } from './modules/media/media.module';
+import { BullModule } from '@nestjs/bull';
+import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter'; // [CRITICAL IMPORT]
+
+// Feature Modules (Refactored)
+import { SocialModule } from './modules/social/social.module';
+import { BlockModule } from './modules/block/block.module';
+import { CallModule } from './modules/call/call.module';
+
+// Configs
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import socketConfig from './config/socket.config';
 import s3Config from './config/s3.config.ts';
 import uploadConfig from './config/upload.config';
 import queueConfig from './config/queue.config';
-import { BullModule } from '@nestjs/bull';
-import { ScheduleModule } from '@nestjs/schedule';
-import { SocialModule } from './modules/social/social.module';
 import socialConfig from './config/social.config';
+
 @Module({
   imports: [
-    // config schedule and cron jobs
-    // ScheduleModule.forRoot(),
-    // ThrottlerModule.forRoot({
-    //   throttlers: [
-    //     {
-    //       ttl: 60000,
-    //       limit: 10,
-    //     },
-    //   ],
-    // }),
-
+    // ========================================================================
+    // 1. INFRASTRUCTURE & CONFIGURATION
+    // ========================================================================
     ConfigModule.forRoot({
       isGlobal: true,
-      // CHỈ ĐỊNH FILE ENV TẠI ĐÂY
       load: [
         jwtConfig,
         redisConfig,
@@ -48,12 +47,22 @@ import socialConfig from './config/social.config';
         s3Config,
         queueConfig,
         uploadConfig,
-        socialConfig,
+        socialConfig, // [CHECKED] Đã load config social
       ],
       envFilePath: '.env.development.local',
     }),
 
-    // Bull (Global)
+    // [CRITICAL FIX] Khởi tạo Event Emitter Global
+    // Nếu thiếu cái này, @OnEvent trong SocialListener sẽ không chạy
+    EventEmitterModule.forRoot({
+      global: true,
+      wildcard: true, // Cho phép lắng nghe event pattern (vd: 'user.*')
+      delimiter: '.',
+      maxListeners: 20,
+      verboseMemoryLeak: true,
+    }),
+
+    // Async Queue (Redis-based)
     BullModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
         redis: {
@@ -65,36 +74,43 @@ import socialConfig from './config/social.config';
       inject: [ConfigService],
     }),
 
-    // Scheduler (for metrics collection)
+    // Cron Jobs
     ScheduleModule.forRoot(),
 
-    // cls to share context data (like userId) across the request lifecycle
+    // Context Local Storage (User Session tracking)
     ClsModule.forRoot({
       global: true,
-      middleware: { mount: true }, // Tự động gắn middleware
+      middleware: { mount: true },
     }),
-    // Core modules
+
+    // ========================================================================
+    // 2. CORE MODULES
+    // ========================================================================
     DatabaseModule,
     RedisModule,
+    SocketModule, // Socket Gateway
 
-    // Feature modules
+    // ========================================================================
+    // 3. FEATURE MODULES
+    // ========================================================================
+    // IAM (Identity & Access Management)
+    AuthModule,
+    UsersModule,
     RolesModule,
     PermissionsModule,
-    UsersModule,
-    AuthModule,
-    HealthModule,
-    SocketModule,
+
+    // Communication Core
     MessagingModule,
     MediaModule,
-    SocialModule,
-    // public file
-    // ServeStaticModule.forRoot({
-    //   rootPath: join(__dirname, '..', 'public'), // Trỏ đến thư mục public ở root dự án
-    //   exclude: ['/api/(.*)'], // Quan trọng: Đảm bảo nó không chặn các route API của bạn
-    // }),
-    // AuthModule,
-    // UsersModule,
-    // ChatModule,
+
+    // [REFACTORED] Social Graph Components
+    // Thứ tự import ở đây không quan trọng vì đã xử lý forwardRef bên trong
+    BlockModule, // Độc lập
+    CallModule, // Phụ thuộc Social
+    SocialModule, // Trung tâm (Phụ thuộc Block & Call)
+
+    // Utilities
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
@@ -103,14 +119,6 @@ import socialConfig from './config/social.config';
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: PermissionsGuard,
-    // },
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: ThrottlerGuard,
-    // },
   ],
 })
 export class AppModule {}

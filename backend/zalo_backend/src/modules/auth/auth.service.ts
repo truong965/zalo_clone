@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { TokenService } from './services/token.service';
@@ -7,7 +12,7 @@ import { DeviceInfo } from './interfaces/device-info.interface';
 import jwtConfig from '../../config/jwt.config';
 import { UserEntity } from '../users/entities/user.entity';
 import { UserStatus } from '@prisma/client';
-import { CallHistoryService } from '../social/service/call-history.service';
+import { CallHistoryService } from '../call/call-history.service';
 
 @Injectable()
 export class AuthService {
@@ -16,7 +21,8 @@ export class AuthService {
     private readonly tokenService: TokenService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-    // private readonly callHistoryService: CallHistoryService,
+    @Inject(forwardRef(() => CallHistoryService))
+    private readonly callHistoryService: CallHistoryService,
   ) {}
 
   /**
@@ -92,7 +98,7 @@ export class AuthService {
   async logout(userId: string, deviceId: string): Promise<void> {
     await this.tokenService.revokeDeviceSession(userId, deviceId);
     // Cleanup active calls
-    // await this.callHistoryService.cleanupUserActiveCalls(userId);
+    await this.callHistoryService.cleanupUserActiveCalls(userId);
   }
 
   /**

@@ -9,7 +9,7 @@
  * - Manage cache invalidation
  */
 
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from 'src/modules/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -29,13 +29,13 @@ import {
   DeclineCooldownException,
   FriendRequestLimitException,
 } from '../errors/social.errors';
-import { BlockService } from './block.service';
+import { BlockService } from '../../block/block.service';
 import { PrivacyService } from './privacy.service';
 import { RedisKeyBuilder } from 'src/common/constants/redis-keys.constant';
 import socialConfig from 'src/config/social.config';
 import type { ConfigType } from '@nestjs/config';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
-
+import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class FriendshipService {
   private readonly logger = new Logger(FriendshipService.name);
@@ -97,8 +97,26 @@ export class FriendshipService {
     // Validation 6: Check cooldown periods
     await this.validateCooldowns(requesterId, targetUserId);
 
-    // All validations passed - create friendship
-    const friendship = await this.createFriendship(requesterId, targetUserId);
+    let friendship: Friendship;
+    if (existingFriendship) {
+      // Restore logic: Reset về PENDING, xóa deletedAt
+      // Lưu ý: Cần đảm bảo user1Id/user2Id đúng thứ tự sort, nhưng record cũ đã sort rồi.
+      friendship = await this.prisma.friendship.update({
+        where: { id: existingFriendship.id },
+        data: {
+          status: FriendshipStatus.PENDING,
+          requesterId: requesterId, // Người gửi mới có thể khác người gửi cũ
+          deletedAt: null,
+          acceptedAt: null,
+          declinedAt: null,
+          lastActionAt: new Date(),
+          lastActionBy: requesterId,
+        },
+      });
+    } else {
+      // All validations passed - create friendship
+      friendship = await this.createFriendship(requesterId, targetUserId);
+    }
 
     // Increment rate limit counters
     await this.incrementRateLimitCounters(requesterId);
@@ -122,68 +140,105 @@ export class FriendshipService {
    * 1. Friendship exists and is PENDING
    * 2. Current user is the recipient (not requester)
    * 3. Not blocked
+   * Uses Redis Distributed Lock to prevent race conditions
+   * Implements Idempotency check
    */
   async acceptRequest(
     userId: string,
     friendshipId: string,
   ): Promise<FriendshipResponseDto> {
-    // Find friendship
-    const friendship = await this.prisma.friendship.findUnique({
-      where: { id: friendshipId },
-    });
+    const lockKey = RedisKeyBuilder.lockFriendAction(friendshipId);
+    const lockValue = uuidv4(); // Unique ID cho request này
+    const lockTTL = 5000;
+    // 1. ACQUIRE LOCK (Distributed Lock)
+    // SET key value PX milliseconds NX (Only set if Not Exists)
+    const isLocked = await this.redis
+      .getClient()
+      .set(lockKey, lockValue, 'PX', lockTTL, 'NX');
 
-    if (!friendship) {
-      throw new FriendshipNotFoundException();
-    }
-
-    // Validation 1: Must be PENDING
-    if (friendship.status !== FriendshipStatus.PENDING) {
-      throw new InvalidFriendshipStateException(
-        `Cannot accept friendship with status: ${friendship.status}`,
+    if (!isLocked) {
+      // Fail fast: Nếu đang có request khác xử lý, từ chối ngay lập tức
+      // Client nhận lỗi này có thể hiển thị "Đang xử lý..." hoặc tự retry nhẹ
+      throw new ConflictException(
+        'This request is already being processed. Please wait.',
       );
     }
+    try {
+      // 2. IDEMPOTENCY CHECK (Kiểm tra lại trạng thái sau khi có Lock)
+      // Đây là bước quan trọng nhất để chống "The Double Tap"
+      const friendship = await this.prisma.friendship.findUnique({
+        where: { id: friendshipId },
+      });
 
-    // Validation 2: Current user must be the recipient (not requester)
-    const isRecipient =
-      (friendship.user1Id === userId && friendship.requesterId !== userId) ||
-      (friendship.user2Id === userId && friendship.requesterId !== userId);
+      if (!friendship) {
+        throw new FriendshipNotFoundException();
+      }
 
-    if (!isRecipient) {
-      throw new InvalidFriendshipStateException(
-        'Only the recipient can accept friend request',
+      // Nếu trạng thái đã là ACCEPTED rồi (do request trước đó chạy xong),
+      // ta trả về kết quả thành công luôn (Idempotent) thay vì báo lỗi.
+      if (friendship.status === FriendshipStatus.ACCEPTED) {
+        this.logger.warn(
+          `[Idempotency] Request ${friendshipId} already accepted.`,
+        );
+        return this.mapToResponseDto(friendship);
+      }
+
+      // Validation 1: Nếu trạng thái không phải PENDING và cũng không phải ACCEPTED
+      if (friendship.status !== FriendshipStatus.PENDING) {
+        throw new InvalidFriendshipStateException(
+          `Cannot accept friendship with status: ${friendship.status}`,
+        );
+      }
+
+      // Validation 2: Current user must be the recipient (not requester)
+      const isRecipient =
+        (friendship.user1Id === userId && friendship.requesterId !== userId) ||
+        (friendship.user2Id === userId && friendship.requesterId !== userId);
+
+      if (!isRecipient) {
+        throw new InvalidFriendshipStateException(
+          'Only the recipient can accept friend request',
+        );
+      }
+
+      // Validation 3: Check not blocked
+      await this.validateNotBlocked(friendship.user1Id, friendship.user2Id);
+
+      // Update friendship to ACCEPTED
+      const updatedFriendship = await this.prisma.friendship.update({
+        where: { id: friendshipId },
+        data: {
+          status: FriendshipStatus.ACCEPTED,
+          acceptedAt: new Date(),
+          lastActionAt: new Date(),
+          lastActionBy: userId,
+        },
+      });
+
+      // Invalidate cache
+      await this.invalidateFriendshipCache(
+        friendship.user1Id,
+        friendship.user2Id,
       );
+
+      // Publish event
+      this.eventEmitter.emit('friendship.accepted', {
+        friendshipId,
+        acceptedBy: userId,
+        requesterId: friendship.requesterId,
+      });
+
+      this.logger.log(`Friend request accepted: ${friendshipId} by ${userId}`);
+
+      return this.mapToResponseDto(updatedFriendship);
+    } finally {
+      // 6. RELEASE LOCK (Safety Release)
+      // Chỉ owner của lock mới được xóa lock (check value khớp)
+      const currentLockValue = await this.redis.getClient().get(lockKey);
+      if (currentLockValue === lockValue) {
+        await this.redis.getClient().del(lockKey);
+      }
     }
-
-    // Validation 3: Check not blocked
-    await this.validateNotBlocked(friendship.user1Id, friendship.user2Id);
-
-    // Update friendship to ACCEPTED
-    const updatedFriendship = await this.prisma.friendship.update({
-      where: { id: friendshipId },
-      data: {
-        status: FriendshipStatus.ACCEPTED,
-        acceptedAt: new Date(),
-        lastActionAt: new Date(),
-        lastActionBy: userId,
-      },
-    });
-
-    // Invalidate cache
-    await this.invalidateFriendshipCache(
-      friendship.user1Id,
-      friendship.user2Id,
-    );
-
-    // Publish event
-    this.eventEmitter.emit('friendship.accepted', {
-      friendshipId,
-      acceptedBy: userId,
-      requesterId: friendship.requesterId,
-    });
-
-    this.logger.log(`Friend request accepted: ${friendshipId} by ${userId}`);
-
-    return this.mapToResponseDto(updatedFriendship);
   }
 
   /**
@@ -314,9 +369,14 @@ export class FriendshipService {
       );
     }
 
-    // Delete friendship
-    await this.prisma.friendship.delete({
+    // soft Delete friendship
+    await this.prisma.friendship.update({
       where: { id: friendship.id },
+      data: {
+        lastActionAt: new Date(),
+        lastActionBy: userId, // Audit ai là người unfriend
+        deletedAt: new Date(),
+      },
     });
 
     // Invalidate cache
@@ -347,6 +407,7 @@ export class FriendshipService {
 
     // Query database
     const friendship = await this.findFriendship(userId1, userId2);
+
     const areFriends = friendship?.status === FriendshipStatus.ACCEPTED;
 
     // Cache result
@@ -566,7 +627,7 @@ export class FriendshipService {
   /**
    * Find friendship between two users (canonical ordering)
    */
-  private async findFriendship(
+  async findFriendship(
     userId1: string,
     userId2: string,
   ): Promise<Friendship | null> {
@@ -589,7 +650,6 @@ export class FriendshipService {
     targetId: string,
   ): Promise<Friendship> {
     const [user1Id, user2Id] = this.sortUserIds(requesterId, targetId);
-
     return this.prisma.friendship.create({
       data: {
         user1Id,

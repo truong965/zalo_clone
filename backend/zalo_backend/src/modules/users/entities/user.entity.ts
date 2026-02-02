@@ -6,31 +6,71 @@ export class UserEntity implements User {
     Object.assign(this, partial);
   }
 
+  // ==============================
+  // 1. Identity & Contact Info
+  // ==============================
   id: string;
+
   phoneNumber: string;
-  phoneCode: string; // Schema có field này
+
+  phoneCode: string; // Mặc định +84 từ DB, nhưng entity nhận value thực tế
+
+  // 🔒 BẢO MẬT: Hash này dùng để sync danh bạ phía server.
+  // Không nên trả về client để tránh lộ vector tấn công brute-force số điện thoại.
+  @Exclude()
+  phoneNumberHash: string | null;
+
+  // ==============================
+  // 2. Public Profile
+  // ==============================
   displayName: string;
+
   avatarUrl: string | null;
+
   bio: string | null;
+
   dateOfBirth: Date | null;
+
   gender: Gender | null;
+
   status: UserStatus;
 
-  roleId: string | null; // Schema cho phép null (lúc init)
+  // ==============================
+  // 3. Security & Activity
+  // ==============================
+
+  // 🔒 BẢO MẬT: Luôn ẩn Password Hash
+  @Exclude()
+  passwordHash: string;
+
+  // 🔒 BẢO MẬT: Ẩn version, field này dùng để revoke token khi user đổi pass/logout all
+  @Exclude()
+  passwordVersion: number;
 
   lastSeenAt: Date | null;
 
-  // 🔒 BẢO MẬT: Luôn ẩn Password khi trả về
-  @Exclude()
-  passwordHash: string;
-  @Exclude() // Ẩn đi, không trả về cho client
-  passwordVersion: number;
+  // ==============================
+  // 4. Authorization (RBAC)
+  // ==============================
+  roleId: string | null;
 
-  // Các trường Audit
+  // ==============================
+  // 5. Audit Trails
+  // ==============================
   createdById: string | null;
   updatedById: string | null;
   deletedById: string | null;
+
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null;
+
+  /**
+   * ⚠️ LƯU Ý VỀ RELATIONSHIPS:
+   * Class này `implements User` (Prisma Scalar Interface), nghĩa là nó chỉ chứa các cột trong bảng.
+   * Các quan hệ (Relations) như `devices`, `tokens`, `messages` KHÔNG nên khai báo ở đây
+   * để tránh vòng lặp vô tận (Circular Dependency) khi serialize JSON.
+   * * Nếu cần trả về User kèm Relations, hãy tạo các class kế thừa hoặc DTO riêng, ví dụ:
+   * export class UserWithRoleEntity extends UserEntity { role: RoleEntity }
+   */
 }

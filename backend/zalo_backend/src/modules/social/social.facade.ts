@@ -1,20 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { FriendshipService } from './service/friendship.service';
-import { BlockService } from './service/block.service';
+import { BlockService } from '../block/block.service';
 import { PrivacyService } from './service/privacy.service';
-import { PermissionCheckDto } from './dto/block-privacy.dto';
+import { PermissionCheckDto } from './dto/privacy.dto';
 import { ContactService } from './service/contact.service';
-import { CallHistoryService } from './service/call-history.service';
+import { CallHistoryService } from '../call/call-history.service';
+import { RedisService } from '../redis/redis.service';
+import { RedisKeyBuilder } from 'src/common/constants/redis-keys.constant';
+import { PrismaService } from 'src/database/prisma.service';
 @Injectable()
 export class SocialFacade {
   constructor(
-    // Sử dụng forwardRef ở đây nếu sau này Facade bị inject ngược lại vào Service (đề phòng)
-    // Nhưng chủ yếu Facade là lớp trên cùng.
     private readonly friendshipService: FriendshipService,
-    private readonly blockService: BlockService,
     private readonly privacyService: PrivacyService,
-    private readonly contactService: ContactService, // ← ADD
+    private readonly contactService: ContactService,
+
+    // BlockService nằm trong BlockModule (đã import thẳng), không cần forwardRef
+    private readonly blockService: BlockService,
+
+    // CallHistoryService nằm trong CallModule (circular), CẦN forwardRef
+    @Inject(forwardRef(() => CallHistoryService))
     private readonly callHistoryService: CallHistoryService,
+
+    private readonly redisService: RedisService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -93,5 +102,81 @@ export class SocialFacade {
     const isBlocked = await this.blockService.isBlocked(requesterId, targetId);
     if (isBlocked) return false;
     return this.privacyService.canUserCallMe(requesterId, targetId);
+  }
+  /**
+   * Validate if requester can send message to target
+   * Used by: CanMessageGuard
+   */
+  async validateMessageAccess(
+    requesterId: string,
+    targetId: string,
+  ): Promise<boolean> {
+    // 1. Check Block (High Priority)
+    const isBlocked = await this.blockService.isBlocked(requesterId, targetId);
+    if (isBlocked) return false;
+
+    // 2. Check Privacy
+    return this.privacyService.canUserMessageMe(requesterId, targetId);
+  }
+
+  /**
+   * Validate if requester can call target
+   * Used by: CanCallGuard
+   */
+  async validateCallAccess(
+    requesterId: string,
+    targetId: string,
+  ): Promise<boolean> {
+    // 1. Check Block
+    const isBlocked = await this.blockService.isBlocked(requesterId, targetId);
+    if (isBlocked) return false;
+
+    // 2. Check Privacy
+    return this.privacyService.canUserCallMe(requesterId, targetId);
+  }
+
+  /**
+   * Validate if requester can see target's profile
+   * Used by: CanSeeProfileGuard (Future) or ContactSync
+   */
+  async validateProfileAccess(
+    requesterId: string,
+    targetId: string,
+  ): Promise<boolean> {
+    const isBlocked = await this.blockService.isBlocked(requesterId, targetId);
+    if (isBlocked) return false;
+
+    // Logic mở rộng: Check privacy 'showProfile' nếu cần strict hơn
+    return true;
+  }
+
+  /**
+   * [NEW] Lấy trạng thái Block và Online hàng loạt cho danh sách user
+   * Dùng để map vào danh sách hội thoại
+   */
+  async getSocialStatusBatch(requesterId: string, targetUserIds: string[]) {
+    if (targetUserIds.length === 0) {
+      return { blockMap: new Map(), onlineMap: new Map() };
+    }
+
+    // 1. Get Block Status (Delegated to Service)
+    // Facade không còn gọi trực tiếp Prisma nữa -> Clean hơn
+    const blockMap = await this.blockService.getBatchBlockStatus(
+      requesterId,
+      targetUserIds,
+    );
+    // 2. Get Online Status (Redis MGET)
+    const onlineKeys = targetUserIds.map((id) =>
+      RedisKeyBuilder.userStatus(id),
+    );
+    // Lưu ý: RedisService wrapper nên có hàm mget, nếu chưa thì dùng getClient() như cũ
+    const onlineResults = await this.redisService.mget(onlineKeys);
+
+    const onlineMap = new Map<string, boolean>();
+    targetUserIds.forEach((id, index) => {
+      onlineMap.set(id, !!onlineResults[index]);
+    });
+
+    return { blockMap, onlineMap };
   }
 }

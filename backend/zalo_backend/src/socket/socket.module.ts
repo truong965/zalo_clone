@@ -19,7 +19,7 @@ import { MessagingModule } from 'src/modules/messaging/messaging.module';
     ConfigModule.forFeature(socketConfig),
     JwtModule.register({}), // Config handled by strategies
     RedisModule,
-    AuthModule, // For DeviceFingerprintService
+    forwardRef(() => AuthModule), // For DeviceFingerprintService
     DatabaseModule,
     ScheduleModule.forRoot(),
     forwardRef(() => MessagingModule),

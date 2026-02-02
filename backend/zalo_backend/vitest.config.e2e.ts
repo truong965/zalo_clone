@@ -25,19 +25,14 @@ export default defineConfig({
       ],
     },
     // Run tests sequentially to avoid conflicts
-    pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true, // Run in single process
-      },
-    },
     // threads: false,
     // isolate: false,
     // Retry failed tests
     retry: 0, // Don't retry by default (for debugging)
     // Show full diffs
     diff: {
-      compact: 0,
+      truncateThreshold: 0, // 0 = Không bao giờ cắt bớt output
+      printBasicPrototype: false, // (Tuỳ chọn) Giúp output gọn hơn bằng cách ẩn prototype
     },
   },
   plugins: [

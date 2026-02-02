@@ -8,12 +8,15 @@ import {
   Param,
   ForbiddenException,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { CallHistoryService } from '../service/call-history.service';
-import { GetCallHistoryQueryDto, LogCallDto } from '../dto/call-history.dto';
+import { CallHistoryService } from './call-history.service';
+
 import { CurrentUser } from 'src/common/decorator/customize';
 import type { User } from '@prisma/client';
+import { NotBlockedGuard } from '../social/guards/social.guard';
+import { GetCallHistoryQueryDto, LogCallDto } from './dto/call-history.dto';
 
 @ApiTags('Social - Calls')
 @Controller('social/calls')
@@ -55,6 +58,7 @@ export class CallHistoryController {
   // Nếu client gọi, cần validate kỹ để tránh user fake log
   @Post('log')
   @ApiOperation({ summary: 'Log ended call' })
+  @UseGuards(NotBlockedGuard) // Đảm bảo nếu bị chặn trong lúc gọi (hoặc hack), user không thể spam log vào DB đối phương
   async logCall(@CurrentUser() user: User, @Body() dto: LogCallDto) {
     // Force senderId là user hiện tại để tránh giả mạo
     //Validate user is part of this call

@@ -72,6 +72,7 @@ export class ContactService {
     ownerId: string,
     dto: SyncContactsDto,
   ): Promise<ContactResponseDto[]> {
+    const startTime = Date.now();
     // Validation 1: Rate limiting
     // Thực hiện tăng counter trước, nếu vượt quá thì chặn ngay lập tức.
     // Điều này ngăn chặn race condition khi nhiều request đến cùng lúc
@@ -94,11 +95,8 @@ export class ContactService {
     // Filter by privacy settings (who can find me)
     const visibleUsers = await this.filterByPrivacy(ownerId, matchedUsers);
 
-    // Save/update contacts in database
-    await this.prisma.$transaction(async (tx) => {
-      await this.saveContacts(tx, ownerId, visibleUsers, aliasMap);
-    });
-
+    // [ACTION 5.1] Thay thế Transaction lớn bằng Bulk Insert + Batch Update
+    await this.bulkSaveContacts(ownerId, visibleUsers, aliasMap);
     // Build response with friendship status
     const response = await this.buildContactResponse(
       ownerId,
@@ -111,6 +109,7 @@ export class ContactService {
       ownerId,
       totalContacts: dto.contacts.length,
       matchedUsers: response.length,
+      duration: Date.now() - startTime,
     });
 
     this.logger.log(
@@ -118,6 +117,114 @@ export class ContactService {
     );
 
     return response;
+  }
+
+  /**
+   * [ACTION 5.1 Implementation]
+   * Bulk Save Strategy: Diff -> CreateMany -> Batch Update
+   */
+  private async bulkSaveContacts(
+    ownerId: string,
+    visibleUsers: MatchedUser[],
+    aliasMap: Map<string, string>,
+  ): Promise<void> {
+    if (visibleUsers.length === 0) return;
+
+    const visibleUserIds = visibleUsers.map((u) => u.id);
+
+    // STEP 1: Fetch Existing Contacts (Để phân loại Insert vs Update)
+    const existingContacts = await this.prisma.userContact.findMany({
+      where: {
+        ownerId,
+        contactUserId: { in: visibleUserIds },
+      },
+      select: {
+        contactUserId: true,
+        aliasName: true,
+      },
+    });
+
+    // Tạo Map để tra cứu nhanh: ContactUserID -> Alias hiện tại
+    const existingMap = new Map<string, string | null>();
+    existingContacts.forEach((c) =>
+      existingMap.set(c.contactUserId, c.aliasName),
+    );
+
+    // STEP 2: Phân loại Data
+    const toCreate: Prisma.UserContactCreateManyInput[] = [];
+    const toUpdate: { contactUserId: string; newAlias: string }[] = [];
+
+    for (const user of visibleUsers) {
+      // Lấy alias mới từ danh bạ (client gửi lên)
+      const hash = user.phoneNumberHash || '';
+      const newAlias = aliasMap.get(hash);
+
+      // Nếu user này chưa có trong UserContact -> Thêm vào list Create
+      if (!existingMap.has(user.id)) {
+        toCreate.push({
+          ownerId,
+          contactUserId: user.id,
+          aliasName: newAlias,
+        });
+      } else {
+        // Nếu đã có -> Check xem alias có thay đổi không
+        // Logic: Chỉ update nếu newAlias khác currentAlias
+        // (Lưu ý: Nếu client gửi alias rỗng, có thể ta muốn giữ alias cũ hoặc xóa tùy nghiệp vụ.
+        // Ở đây giả định danh bạ điện thoại là "Single Source of Truth", đè alias mới lên).
+        const currentAlias = existingMap.get(user.id);
+        if (newAlias !== undefined && newAlias !== currentAlias) {
+          toUpdate.push({
+            contactUserId: user.id,
+            newAlias: newAlias,
+          });
+        }
+      }
+    }
+
+    // STEP 3: Execute CREATE MANY (1 Query - High Performance)
+    if (toCreate.length > 0) {
+      await this.prisma.userContact.createMany({
+        data: toCreate,
+        skipDuplicates: true, // Safety net
+      });
+      this.logger.debug(`[Sync] Created ${toCreate.length} new contacts`);
+    }
+
+    // STEP 4: Execute UPDATE (Batching)
+    // Prisma chưa hỗ trợ bulk update khác giá trị (CASE WHEN), nên ta update theo lô
+    if (toUpdate.length > 0) {
+      const BATCH_SIZE = 50; // Giới hạn số update đồng thời để tránh lock
+
+      // Chia mảng toUpdate thành các chunk
+      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+        const batch = toUpdate.slice(i, i + BATCH_SIZE);
+
+        // Chạy song song trong batch nhưng bọc Transaction nhỏ để đảm bảo consistency
+        await this.prisma.$transaction(
+          batch.map((item) =>
+            this.prisma.userContact.update({
+              where: {
+                ownerId_contactUserId: {
+                  ownerId,
+                  contactUserId: item.contactUserId,
+                },
+              },
+              data: {
+                aliasName: item.newAlias,
+              },
+            }),
+          ),
+        );
+      }
+      this.logger.debug(`[Sync] Updated ${toUpdate.length} aliases`);
+
+      // Invalidate cache cho những user bị đổi tên
+      // Ta làm việc này Async (không await) để response nhanh hơn nếu muốn
+      const invalidatePromises = toUpdate.map((u) =>
+        this.invalidateNameCache(ownerId, u.contactUserId),
+      );
+      await Promise.all(invalidatePromises);
+    }
   }
 
   private processInputContacts(contacts: ContactItemDto[]) {
@@ -476,6 +583,13 @@ export class ContactService {
    * Helper: Filter users based on Privacy Settings
    * [OPTIMIZED] Use Batch Queries instead of N+1 Loop
    */
+  /**
+   * Helper: Filter users based on Privacy Settings
+   * Logic:
+   * 1. Check Block (2 chiều)
+   * 2. Check Privacy Setting (Ai tìm được tôi?)
+   * 3. Check Friendship (Nếu setting là CONTACTS)
+   */
   private async filterByPrivacy(
     requesterId: string,
     users: MatchedUser[],
@@ -485,7 +599,7 @@ export class ContactService {
     const userIds = users.map((u) => u.id);
 
     // 1. Batch Check Block (Direct Prisma for performance)
-    // Check if requester blocked them OR they blocked requester
+    // Check xem requester có chặn họ HOẶC họ có chặn requester không
     const blocks = await this.prisma.block.findMany({
       where: {
         OR: [
@@ -496,27 +610,47 @@ export class ContactService {
       select: { blockerId: true, blockedId: true },
     });
 
+    // Tạo Set chứa ID những người bị chặn hoặc chặn mình
     const blockedUserIds = new Set<string>();
     blocks.forEach((b) => {
-      // Add the 'other' person to the blocked set
       blockedUserIds.add(
         b.blockerId === requesterId ? b.blockedId : b.blockerId,
       );
     });
 
     // 2. Batch Get Privacy Settings
+    // Gọi PrivacyService để lấy settings của danh sách user này
     const privacyMap = await this.privacyService.getManySettings(userIds);
 
-    // 3. Batch Check Friendships (Only for those who require it)
-    // Identify users who have 'CONTACTS' privacy setting
-    const usersRequiringFriendship = userIds.filter((id) => {
-      const settings = privacyMap.get(id);
-      // Nếu không tìm thấy setting (lỗi), mặc định an toàn là CONTACTS
-      return settings?.showProfile === 'CONTACTS';
+    // 3. Phân loại: Ai yêu cầu phải là bạn bè mới tìm thấy?
+    // Mặc định Zalo: Tìm bằng SĐT thì ai cũng tìm được (EVERYONE),
+    // trừ khi user chỉnh "Nguồn tìm kiếm" (Feature này scope lớn, ở đây ta giả định dùng field showProfile hoặc showPhoneNumber)
+    const usersRequiringFriendship: string[] = [];
+
+    // Lọc sơ bộ
+    const candidates = users.filter((user) => {
+      // Loại bỏ user bị block
+      if (blockedUserIds.has(user.id)) return false;
+      return true;
     });
 
+    for (const user of candidates) {
+      const settings = privacyMap.get(user.id);
+
+      // Logic Zalo: "Ai có thể tìm thấy tôi qua số điện thoại?"
+      // Nếu ta map nó vào field `showPhoneNumber` hoặc `showProfile`
+      // Giả sử dùng showProfile cho đơn giản:
+      const privacyLevel = settings?.showProfile || 'EVERYONE';
+
+      if (privacyLevel === 'CONTACTS') {
+        usersRequiringFriendship.push(user.id);
+      }
+    }
+
+    // 4. Batch Check Friendships (Chỉ check cho những người yêu cầu)
     const friendIds = new Set<string>();
     if (usersRequiringFriendship.length > 0) {
+      // Query bảng Friendship: Chỉ lấy những mối quan hệ ACCEPTED
       const friendships = await this.prisma.friendship.findMany({
         where: {
           status: 'ACCEPTED',
@@ -530,7 +664,6 @@ export class ContactService {
               user2Id: requesterId,
             },
           ],
-          deletedAt: null,
         },
         select: { user1Id: true, user2Id: true },
       });
@@ -540,19 +673,20 @@ export class ContactService {
       });
     }
 
-    // 4. Final In-Memory Filter
-    return users.filter((user) => {
-      // Rule 1: Not Blocked
+    // 5. Final Filter
+    return candidates.filter((user) => {
+      // Check lại block/nobody lần cuối
       if (blockedUserIds.has(user.id)) return false;
 
-      // Rule 2: Check Privacy
       const settings = privacyMap.get(user.id);
-      if (!settings) return true; // Fallback: Allow if no settings found (shouldn't happen)
+      const privacyLevel = settings?.showProfile || 'EVERYONE';
 
-      if (settings.showProfile === 'EVERYONE') return true;
-      if (settings.showProfile === 'CONTACTS') return friendIds.has(user.id);
+      // Nếu yêu cầu bạn bè -> Check trong set friendIds
+      if (privacyLevel === 'CONTACTS') {
+        return friendIds.has(user.id);
+      }
 
-      return true; // Default allow
+      return true; // Default allow (EVERYONE)
     });
   }
   /**
@@ -629,7 +763,7 @@ export class ContactService {
    * Get cache key for name resolution
    */
   private getNameCacheKey(ownerId: string, targetUserId: string): string {
-    return `contact:name:${ownerId}:${targetUserId}`;
+    return RedisKeyBuilder.contactName(ownerId, targetUserId);
   }
 
   async updateAlias(

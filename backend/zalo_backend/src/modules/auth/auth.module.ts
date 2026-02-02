@@ -34,7 +34,7 @@
 //   exports: [AuthService, JwtStrategy],
 // })
 // export class AuthModule {}
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@nestjs/config';
@@ -46,6 +46,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { UsersModule } from '../users/users.module';
 import jwtConfig from '../../config/jwt.config';
+import { SocialModule } from '../social/social.module';
+import { CallModule } from '../call/call.module';
 
 @Module({
   imports: [
@@ -53,6 +55,8 @@ import jwtConfig from '../../config/jwt.config';
     JwtModule.register({}), // Configuration handled in strategies
     ConfigModule.forFeature(jwtConfig),
     UsersModule,
+    forwardRef(() => SocialModule),
+    forwardRef(() => CallModule),
   ],
   controllers: [AuthController],
   providers: [

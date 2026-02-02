@@ -1,14 +1,66 @@
 // src/modules/messaging/services/conversation.service.ts
 
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Logger,
+  ForbiddenException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { ConversationType, MemberRole, MemberStatus } from '@prisma/client';
+import {
+  ConversationType,
+  MemberRole,
+  MemberStatus,
+  Prisma,
+} from '@prisma/client';
+import { SocialFacade } from 'src/modules/social/social.facade';
 
+const conversationWithRelations =
+  Prisma.validator<Prisma.ConversationDefaultArgs>()({
+    include: {
+      messages: {
+        take: 1,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          content: true,
+          type: true,
+          senderId: true,
+          createdAt: true,
+          deletedById: true,
+        },
+      },
+      members: {
+        take: 4,
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+              lastSeenAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+// Type an toàn để thay thế cho 'any'
+type ConversationWithRelations = Prisma.ConversationGetPayload<
+  typeof conversationWithRelations
+>;
 @Injectable()
 export class ConversationService {
   private readonly logger = new Logger(ConversationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => SocialFacade))
+    private readonly socialFacade: SocialFacade,
+  ) {}
 
   /**
    * Check if user is member of conversation
@@ -54,7 +106,7 @@ export class ConversationService {
 
   /**
    * Get or create 1-on-1 conversation
-   * Idempotent operation
+   * Idempotent operation / Check Block status before creating
    */
   async getOrCreateDirectConversation(
     userId1: string,
@@ -64,6 +116,15 @@ export class ConversationService {
       throw new BadRequestException('Cannot create conversation with yourself');
     }
 
+    // [NEW] Check Block Status (Consistency Check)
+    // Dù Guard đã chặn ở Controller, Service vẫn nên check để đảm bảo logic nghiệp vụ chặt chẽ
+    // đặc biệt khi hàm này được gọi từ các service nội bộ khác (vd: FriendshipAccepted)
+    const isBlocked = await this.socialFacade.isBlocked(userId1, userId2);
+    if (isBlocked) {
+      throw new ForbiddenException(
+        'Cannot create conversation with a blocked user',
+      );
+    }
     // Sort user IDs to ensure consistent lookup
     const [user1, user2] = [userId1, userId2].sort();
 
@@ -177,5 +238,111 @@ export class ConversationService {
         lastReadAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Get user's conversations list (Full implementation)
+   */
+  async getUserConversations(
+    userId: string,
+    cursor?: string,
+    limit: number = 20,
+  ) {
+    const conversations = await this.prisma.conversation.findMany({
+      where: {
+        members: { some: { userId, status: MemberStatus.ACTIVE } },
+        lastMessageAt: { not: null },
+      },
+      take: limit + 1,
+      cursor: cursor ? { id: cursor } : undefined,
+      orderBy: { lastMessageAt: 'desc' },
+      // [QUAN TRỌNG] Sử dụng đúng cấu trúc đã định nghĩa ở trên
+      include: conversationWithRelations.include,
+    });
+
+    const hasMore = conversations.length > limit;
+    const items = hasMore ? conversations.slice(0, -1) : conversations;
+    const nextCursor = hasMore ? items[items.length - 1].id : undefined;
+
+    // Lấy Partner IDs
+    const partnerIds = new Set<string>();
+    items.forEach((conv) => {
+      if (conv.type === ConversationType.DIRECT) {
+        const otherMember = conv.members.find((m) => m.userId !== userId);
+        if (otherMember) partnerIds.add(otherMember.userId);
+      }
+    });
+
+    // Lấy status từ Facade
+    const { blockMap, onlineMap } =
+      await this.socialFacade.getSocialStatusBatch(
+        userId,
+        Array.from(partnerIds),
+      );
+
+    // Map Response
+    const data = items.map((c) =>
+      this.mapConversationResponse(c, userId, blockMap, onlineMap),
+    );
+
+    return { items: data, nextCursor };
+  }
+
+  // 2. [FIX] Thay 'any' bằng Type chuẩn
+  private mapConversationResponse(
+    conversation: ConversationWithRelations, // Strict Type
+    currentUserId: string,
+    blockMap: Map<string, boolean>,
+    onlineMap: Map<string, boolean>,
+  ) {
+    let name = conversation.name;
+    let avatar = conversation.avatarUrl;
+    let isOnline = false;
+    let isBlocked = false;
+    let otherUserId: string | null = null; // Định nghĩa rõ kiểu
+
+    if (conversation.type === ConversationType.DIRECT) {
+      const otherMember = conversation.members.find(
+        (m) => m.userId !== currentUserId,
+      );
+
+      if (otherMember?.user) {
+        name = otherMember.user.displayName;
+        avatar = otherMember.user.avatarUrl;
+        otherUserId = otherMember.user.id;
+
+        // Lookup status
+        isOnline = onlineMap.get(otherUserId) || false;
+        isBlocked = blockMap.get(otherUserId) || false;
+      }
+    }
+
+    // Xử lý message safely
+    const lastMsg = conversation.messages[0];
+
+    return {
+      id: conversation.id,
+      type: conversation.type,
+      name,
+      avatar,
+      isOnline,
+      isBlocked,
+      lastSeenAt: otherUserId
+        ? conversation.members.find((m) => m.userId === otherUserId)?.user
+            .lastSeenAt
+        : null,
+      lastMessage: lastMsg
+        ? {
+            id: lastMsg.id.toString(), // Convert BigInt
+            content: lastMsg.deletedById
+              ? 'Tin nhắn đã bị thu hồi'
+              : lastMsg.content,
+            type: lastMsg.type,
+            senderId: lastMsg.senderId,
+            createdAt: lastMsg.createdAt,
+          }
+        : null,
+      updatedAt: conversation.lastMessageAt || conversation.createdAt,
+    };
   }
 }

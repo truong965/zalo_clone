@@ -17,6 +17,8 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -25,16 +27,18 @@ import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from 'src/modules/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CallStatus, Prisma } from '@prisma/client';
-import {
-  LogCallDto,
-  GetCallHistoryQueryDto,
-  CallHistoryResponseDto,
-  MissedCallsCountDto,
-  ActiveCallSession,
-} from '../dto/call-history.dto';
+
 import { v4 as uuidv4 } from 'uuid';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
-import { SelfActionException } from '../errors/social.errors';
+import { SelfActionException } from '../social/errors/social.errors';
+import { ContactService } from '../social/service/contact.service';
+import {
+  ActiveCallSession,
+  CallHistoryResponseDto,
+  GetCallHistoryQueryDto,
+  LogCallDto,
+  MissedCallsCountDto,
+} from './dto/call-history.dto';
 
 // 1. Định nghĩa Type cho kết quả query từ Prisma (bao gồm cả Relations)
 const callHistoryWithRelations =
@@ -69,6 +73,8 @@ export class CallHistoryService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(forwardRef(() => ContactService))
+    private readonly contactService: ContactService,
   ) {}
 
   /**
@@ -293,7 +299,7 @@ export class CallHistoryService {
       `Call logged: ${callHistory.id} (${status}, ${finalDuration}s)`,
     );
 
-    return this.mapToResponseDto(callHistory);
+    return this.mapToResponseDto(callHistory, '', new Map());
   }
 
   /**
@@ -336,7 +342,7 @@ export class CallHistoryService {
 
     this.logger.warn(`Call logged without active session: ${callHistory.id}`);
 
-    return this.mapToResponseDto(callHistory);
+    return this.mapToResponseDto(callHistory, '', new Map());
   }
 
   /**
@@ -380,6 +386,21 @@ export class CallHistoryService {
       ...callHistoryWithRelations,
     });
 
+    // 2. [OPTIMIZATION] Batch Resolve Display Names
+    // Gom tất cả ID của người KHÁC (không phải mình) để lấy tên trong danh bạ
+    const otherUserIds = new Set<string>();
+    calls.forEach((call) => {
+      if (call.callerId !== userId) otherUserIds.add(call.callerId);
+      if (call.calleeId !== userId) otherUserIds.add(call.calleeId);
+    });
+
+    // Gọi hàm batch resolve từ ContactService (đã có cache Redis bên trong)
+    // Map<userId, resolvedName>
+    const nameMap = await this.contactService.batchResolveDisplayNames(
+      userId,
+      Array.from(otherUserIds),
+    );
+
     // 4. Pagination Calculation
     const hasNextPage = calls.length > limit;
     // Cắt bỏ item thừa (item thứ limit + 1)
@@ -391,9 +412,8 @@ export class CallHistoryService {
     if (includeTotal === true || cursor === undefined) {
       total = await this.prisma.callHistory.count({ where });
     }
-
     const mappedData = data.map((call) =>
-      this.mapToResponseDto(call, viewedAt),
+      this.mapToResponseDto(call, userId, nameMap, viewedAt),
     );
 
     // 5. Return Result
@@ -518,8 +538,18 @@ export class CallHistoryService {
       take: limit,
       ...callHistoryWithRelations,
     });
+    // [NEW] Cũng cần resolve name cho API này
+    const otherUserIds = new Set<string>();
+    calls.forEach((call) => otherUserIds.add(call.callerId)); // Missed call thì người kia luôn là caller
 
-    return calls.map((call) => this.mapToResponseDto(call, viewedAt));
+    const nameMap = await this.contactService.batchResolveDisplayNames(
+      userId,
+      Array.from(otherUserIds),
+    );
+
+    return calls.map((call) =>
+      this.mapToResponseDto(call, userId, nameMap, viewedAt),
+    );
   }
 
   /**
@@ -699,8 +729,18 @@ export class CallHistoryService {
    */
   private mapToResponseDto(
     call: CallHistoryWithRelations,
+    currentUserId: string, // [NEW] Cần biết ai đang xem để lấy đúng tên
+    nameMap: Map<string, string>, // [NEW] Map tên đã resolve
     viewedAt?: Date,
   ): CallHistoryResponseDto {
+    // Helper function để lấy tên hiển thị chuẩn
+    const resolveName = (user: { id: string; displayName: string } | null) => {
+      if (!user) return 'Unknown';
+      // Nếu user này là chính mình -> Dùng tên thật (Hoặc "Me")
+      if (user.id === currentUserId) return user.displayName;
+      // Nếu là người khác -> Ưu tiên Alias trong danh bạ, fallback về tên thật
+      return nameMap.get(user.id) || user.displayName;
+    };
     return {
       id: call.id.toString(), // id trong schema là BigInt hoặc String? Nếu String thì bỏ .toString()
       callerId: call.callerId, // Prisma: String? -> DTO: String. Cần handle null nếu schema allow null
@@ -716,14 +756,14 @@ export class CallHistoryService {
       caller: call.caller
         ? {
             id: call.caller.id,
-            displayName: call.caller.displayName,
+            displayName: resolveName(call.caller),
             avatarUrl: call.caller.avatarUrl ?? undefined,
           }
         : undefined,
       callee: call.callee
         ? {
             id: call.callee.id,
-            displayName: call.callee.displayName,
+            displayName: resolveName(call.callee),
             avatarUrl: call.callee.avatarUrl ?? undefined,
           }
         : undefined,
@@ -783,10 +823,11 @@ export class CallHistoryService {
     this.logger.log(
       `Cleaning up ${callIds.length} active calls for user ${userId}`,
     );
-
-    for (const callId of callIds) {
-      await this.endCallGracefully(callId, 'user_disconnected');
-    }
+    await Promise.all(
+      callIds.map((callId) =>
+        this.endCallGracefully(callId, 'user_disconnected'),
+      ),
+    );
   }
 
   /**

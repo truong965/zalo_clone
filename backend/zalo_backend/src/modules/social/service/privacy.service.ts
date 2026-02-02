@@ -8,15 +8,15 @@ import {
   PrivacyLevel,
   FriendshipStatus,
 } from '@prisma/client';
-import {
-  UpdatePrivacySettingsDto,
-  PrivacySettingsResponseDto,
-  PermissionCheckDto,
-} from '../dto/block-privacy.dto';
 import { RedisKeyBuilder } from '../../../common/constants/redis-keys.constant';
-import { BlockService } from './block.service'; // [IMPORTANT] Inject Service tầng dưới
+import { BlockService } from '../../block/block.service'; // [IMPORTANT] Inject Service tầng dưới
 import socialConfig from 'src/config/social.config';
 import type { ConfigType } from '@nestjs/config';
+import {
+  PrivacySettingsResponseDto,
+  UpdatePrivacySettingsDto,
+  PermissionCheckDto,
+} from '../dto/privacy.dto';
 
 @Injectable()
 export class PrivacyService {

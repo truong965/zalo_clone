@@ -7,15 +7,20 @@
  * - Privacy events → Invalidate permission cache
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { CallHistoryService } from '../service/call-history.service';
+import { CallHistoryService } from 'src/modules/call/call-history.service';
 import {
   CallStatus,
   ConversationType,
   Gender,
+  JoinRequestStatus,
   PrivacyLevel,
 } from '@prisma/client';
+import { SocketGateway } from 'src/socket/socket.gateway';
+import { RedisKeyBuilder } from 'src/common/constants/redis-keys.constant';
+import { RedisService } from 'src/modules/redis/redis.service';
+import { PrismaService } from 'src/database/prisma.service';
 
 /**
  * ==============================================================================
@@ -129,14 +134,24 @@ export interface AuthSecurityRevokedEvent {
     | 'TOKEN_ROTATION'; //
   excludeDeviceId?: string;
 }
+interface RelationshipUpdateEvent {
+  type: 'BLOCK' | 'UNBLOCK' | 'FRIEND' | 'UNFRIEND';
+  targetUserId: string;
+  affectedConversationIds: string[]; // ← CRITICAL: Which convos to update
+  clientAction: 'DISABLE_INPUT' | 'ENABLE_INPUT' | 'REFRESH_FRIEND_LIST';
+}
 @Injectable()
 export class SocialGraphEventListener {
   private readonly logger = new Logger(SocialGraphEventListener.name);
 
   constructor(
+    @Inject(forwardRef(() => CallHistoryService))
     private readonly callHistoryService: CallHistoryService,
     // NOTE: SocketGateway will be injected when available
-    // private readonly socketGateway: SocketGateway,
+    @Inject(forwardRef(() => SocketGateway))
+    private readonly socketGateway: SocketGateway,
+    private readonly redisService: RedisService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -161,23 +176,86 @@ export class SocialGraphEventListener {
       // Logic: Gửi signal "CALL_ENDED" với reason "BLOCKED".
       await this.callHistoryService.terminateActiveCall(blockerId, blockedId);
 
-      // STEP 2: Invalidate Privacy Cache (Redis)
-      // Hệ thống chat thường cache quyền "CanMessage". Cần xóa key này ngay.
-      // Key format gợi ý: `privacy:can_message:${blockerId}:${blockedId}`
-      // await this.cacheManager.del(`privacy:can_message:${blockerId}:${blockedId}`);
-      // await this.cacheManager.del(`privacy:can_message:${blockedId}:${blockerId}`);
+      // 2. [MOVED FROM SERVICE] Async Data Cleanup
+      // Thực hiện song song để tiết kiệm thời gian
+      const [user1, user2] =
+        blockerId < blockedId ? [blockerId, blockedId] : [blockedId, blockerId];
 
-      // STEP 3: Socket Room Management (Presence)
-      // Người bị chặn không được phép nhìn thấy trạng thái Online/Typing của người chặn.
-      // Action: Force user B leave room `presence:user:${blockerId}`
-      // await this.socketGateway.removeUserFromRoom(blockedId, `presence:user:${blockerId}`);
+      await Promise.all([
+        // 2.1 Delete Friendship (If exists)
+        this.prisma.friendship.deleteMany({
+          where: {
+            user1Id: user1,
+            user2Id: user2,
+          },
+        }),
 
-      // STEP 4: Realtime UI Update
-      // Gửi event xuống client của cả 2 user để disable input chat, ẩn avatar/bio (tùy privacy).
-      // Event: 'chat.blocked_update'
-      // await this.socketGateway.emitToUser(blockedId, 'chat.blocked_update', { byUser: blockerId, type: 'BLOCKED' });
-      // await this.socketGateway.emitToUser(blockerId, 'chat.blocked_update', { targetUser: blockedId, type: 'BLOCKING' });
+        // 2.2 Delete Pending Group Requests
+        this.prisma.groupJoinRequest.deleteMany({
+          where: {
+            OR: [
+              // Blocker invited Blocked
+              {
+                userId: blockedId,
+                inviterId: blockerId,
+                status: JoinRequestStatus.PENDING,
+              },
+              // Blocked invited Blocker
+              {
+                userId: blockerId,
+                inviterId: blockedId,
+                status: JoinRequestStatus.PENDING,
+              },
+            ],
+          },
+        }),
+      ]);
+      this.logger.debug(`[BLOCK-ASYNC] Friendship & GroupRequests cleaned up`);
+      // 3. Cache Invalidation & Socket Updates (Logic cũ giữ nguyên)
+      const keys = [
+        RedisKeyBuilder.socialPermission('message', blockerId, blockedId),
+        RedisKeyBuilder.socialPermission('message', blockedId, blockerId),
+        RedisKeyBuilder.socialPermission('call', blockerId, blockedId),
+        RedisKeyBuilder.socialPermission('call', blockedId, blockerId),
+      ];
 
+      // Sử dụng hàm mDel
+      await this.redisService.mDel(keys);
+
+      // STEP 4: Presence & Room Management
+      // Kick user khỏi phòng Presence của nhau để không thấy Online/Typing nữa
+      const blockerPresenceRoom = `presence:user:${blockerId}`;
+      const blockedPresenceRoom = `presence:user:${blockedId}`;
+
+      await Promise.all([
+        this.socketGateway.removeUserFromRoom(blockedId, blockerPresenceRoom),
+        this.socketGateway.removeUserFromRoom(blockerId, blockedPresenceRoom),
+      ]);
+
+      // STEP 5: Secure UI Emission (Final Step)
+      // Chỉ gửi event khi toàn bộ data đã sạch sẽ.
+      // Client nhận event này sẽ disable input chat ngay lập tức.
+      await this.socketGateway.emitToUser(
+        blockedId,
+        'social.relationship_update',
+        {
+          type: 'BLOCK_RECEIVED', // Client sẽ hiện: "Bạn không thể nhắn tin..."
+          targetUserId: blockerId,
+          // affectedConversationIds,
+          timestamp: new Date(),
+        },
+      );
+
+      // 4.2 Gửi cho người Chặn (Blocker)
+      await this.socketGateway.emitToUser(
+        blockerId,
+        'social.relationship_update',
+        {
+          type: 'BLOCK_SENT', // Client cập nhật list Block
+          targetUserId: blockedId,
+          timestamp: new Date(),
+        },
+      );
       this.logger.log(
         `[BLOCK] Complete actions for ${blockerId} -> ${blockedId}`,
       );
@@ -201,11 +279,27 @@ export class SocialGraphEventListener {
       // STEP 1: Invalidate Privacy Cache (Redis)
       // Xóa cache cũ (trạng thái chặn) để request chat tiếp theo được phép đi qua.
       // await this.cacheManager.del(`privacy:can_message:${blockerId}:${blockedId}`);
+      const keys = [
+        RedisKeyBuilder.socialPermission('message', blockerId, blockedId),
+        RedisKeyBuilder.socialPermission('message', blockedId, blockerId),
+        RedisKeyBuilder.socialPermission('call', blockerId, blockedId),
+        RedisKeyBuilder.socialPermission('call', blockedId, blockerId),
+      ];
+      await this.redisService.mDel(keys);
       // STEP 2: Realtime UI Update
       // Bắn event để client enable lại ô input chat.
       // Event: 'chat.blocked_update' -> status: 'NORMAL'
       // await this.socketGateway.emitToUser(blockedId, 'chat.blocked_update', { byUser: blockerId, type: 'NORMAL' });
       // Note: Không auto-add lại vào room Presence. Client sẽ tự subscribe lại khi user F5 hoặc mở lại app.
+      await this.socketGateway.emitToUsers(
+        [blockerId, blockedId],
+        'social.relationship_update',
+        {
+          type: 'UNBLOCK',
+          actorId: blockerId,
+          timestamp: new Date(),
+        },
+      );
     } catch (error) {
       this.logger.error(`[UNBLOCK] Failed to handle event:`, error);
     }
@@ -230,6 +324,15 @@ export class SocialGraphEventListener {
     this.logger.log(`[UNFRIEND] Processing: ${user1Id} <-> ${user2Id}`);
 
     try {
+      // 1. Leave Presence Room (Hết bạn = Hết thấy Online)
+      await this.socketGateway.removeUserFromRoom(
+        user1Id,
+        `presence:user:${user2Id}`,
+      );
+      await this.socketGateway.removeUserFromRoom(
+        user2Id,
+        `presence:user:${user1Id}`,
+      );
       // STEP 1: Update Contact List Cache
       // Invalidate cache danh sách bạn bè của cả 2 user.
       // await this.cacheManager.del(`user:friends:${user1Id}`);
@@ -244,6 +347,14 @@ export class SocialGraphEventListener {
       // await this.socketGateway.emitToUser(user1Id, 'friendship.update', { userId: user2Id, status: 'NONE' });
       // await this.socketGateway.emitToUser(user2Id, 'friendship.update', { userId: user1Id, status: 'NONE' });
       // Note: Không terminate call. Unfriend vẫn có thể call (tùy setting Privacy 'WhoCanCallMe').
+      await this.socketGateway.emitToUsers(
+        [user1Id, user2Id],
+        'social.relationship_update',
+        {
+          type: 'UNFRIEND',
+          timestamp: new Date(),
+        },
+      );
     } catch (error) {
       this.logger.error(`[UNFRIEND] Failed to handle event:`, error);
     }
@@ -261,6 +372,17 @@ export class SocialGraphEventListener {
     this.logger.log(`[FRIEND_ACCEPTED] ${acceptedBy} & ${requesterId}`);
 
     try {
+      // 1. Join Presence Room (Để 2 bên thấy nhau Online)
+      // User A join room User B
+      await this.socketGateway.joinUserToRoom(
+        requesterId,
+        `presence:user:${acceptedBy}`,
+      );
+      // User B join room User A
+      await this.socketGateway.joinUserToRoom(
+        acceptedBy,
+        `presence:user:${requesterId}`,
+      );
       // STEP 1: Auto-Create or Retrieve Conversation
       // Khi thành bạn bè, user thường muốn chat ngay.
       // Check DB: Nếu chưa có DIRECT conversation -> Tạo mới ngay lập tức.
@@ -273,6 +395,14 @@ export class SocialGraphEventListener {
       // - Client A & B: Update UI box chat (Enable các tính năng chỉ dành cho bạn bè như gửi tiền, HD photo...).
       // await this.socketGateway.emitToUser(acceptedBy, 'friendship.new', { friend: requesterId });
       // await this.socketGateway.emitToUser(requesterId, 'friendship.new', { friend: acceptedBy });
+      await this.socketGateway.emitToUsers(
+        [requesterId, acceptedBy],
+        'social.friend_accepted',
+        {
+          friendshipId: payload.friendshipId,
+          timestamp: new Date(),
+        },
+      );
     } catch (error) {
       this.logger.error(`[FRIEND_ACCEPTED] Failed to handle event:`, error);
     }
@@ -294,7 +424,7 @@ export class SocialGraphEventListener {
     this.logger.debug(`[PRIVACY] Updated for ${userId}`, settings);
 
     // STEP 1: Update Presence Logic
-    if (settings.showOnlineStatus === 'NOBODY') {
+    if (!settings.showOnlineStatus) {
       // Nếu tắt trạng thái online -> Gửi fake event "Offline" cho toàn bộ bạn bè đang subscribe.
       // await this.socketGateway.broadcastPresence(userId, 'OFFLINE');
     }
@@ -349,10 +479,21 @@ export class SocialGraphEventListener {
   async handleFriendRequestSent(
     payload: FriendRequestSentEvent,
   ): Promise<void> {
-    const { fromUserId, toUserId } = payload;
-    this.logger.log(`Friend request sent: ${fromUserId} -> ${toUserId}`);
+    // const { requesterId, targetUserId, friendshipId } = payload;
+    // this.logger.log(`Friend request sent: ${fromUserId} -> ${toUserId}`);
 
     try {
+      // Gửi noti tới người nhận: "Có lời mời kết bạn mới"
+      // Payload nên kèm thông tin cơ bản để client hiển thị Badge đỏ
+      // await this.socketGateway.emitToUser(
+      //   targetUserId,
+      //   'social.friend_request_received',
+      //   {
+      //     friendshipId,
+      //     fromUserId: requesterId,
+      //     timestamp: new Date(),
+      //   },
+      // );
       // 1. Socket Notification (Real-time):
       // Gửi event "notification.new" tới user nhận (toUserId).
       // Client sẽ hiện chấm đỏ (badge) ở tab Danh bạ.

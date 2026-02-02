@@ -14,18 +14,19 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from 'src/modules/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Block, JoinRequestStatus } from '@prisma/client';
+import { Block } from '@prisma/client';
 import {
   BlockUserDto,
   BlockResponseDto,
   BlockedUserDto,
-} from '../dto/block-privacy.dto';
+  BlockRelation,
+} from './dto/block-privacy.dto';
 import {
   DuplicateBlockException,
   BlockNotFoundException,
   SelfActionException,
-} from '../errors/social.errors';
-import { RedisKeyBuilder } from '../../../common/constants/redis-keys.constant'; // [UPDATED]
+} from '../social/errors/social.errors';
+import { RedisKeyBuilder } from '../../common/constants/redis-keys.constant'; // [UPDATED]
 import socialConfig from 'src/config/social.config';
 import type { ConfigType } from '@nestjs/config';
 import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
@@ -52,41 +53,46 @@ export class BlockService {
    * 4. Invalidate all related cache
    * 5. Publish block event
    */
+  //update * - Removed Cascade Delete logic (Moved to Event Listener)
+  //* - Reduced Transaction scope (Atomic operation)
   async blockUser(
     blockerId: string,
     dto: BlockUserDto,
   ): Promise<BlockResponseDto> {
-    const { blockedUserId, reason } = dto;
+    const { targetUserId, reason } = dto;
 
     // Validation 1: Cannot block self
-    if (blockerId === blockedUserId) {
+    if (blockerId === targetUserId) {
       throw new SelfActionException('Cannot block yourself');
     }
 
     // Validation 2: Check if already blocked
-    const existingBlock = await this.findBlock(blockerId, blockedUserId);
+    const existingBlock = await this.findBlock(blockerId, targetUserId);
     if (existingBlock) {
       throw new DuplicateBlockException('User is already blocked');
     }
 
-    // Execute block transaction with cascade operations
-    const block = await this.executeBlockTransaction(
-      blockerId,
-      blockedUserId,
-      reason,
-    );
+    // Không cần $transaction bọc ngoài vì chỉ có 1 lệnh create
+    const block = await this.prisma.block.create({
+      data: {
+        blockerId,
+        blockedId: targetUserId,
+        reason,
+      },
+    });
 
     // Invalidate cache
-    await this.invalidateBlockCache(blockerId, blockedUserId);
+    await this.invalidateBlockCache(blockerId, targetUserId);
 
     // Publish event for real-time updates
+    // Listener sẽ lo việc xóa bạn bè, xóa request nhóm, ngắt cuộc gọi...
     this.eventEmitter.emit('user.blocked', {
       blockerId,
-      blockedId: blockedUserId,
+      blockedId: targetUserId,
       blockId: block.id,
     });
 
-    this.logger.log(`User blocked: ${blockerId} blocked ${blockedUserId}`);
+    this.logger.log(`User blocked: ${blockerId} blocked ${targetUserId}`);
 
     return this.mapToResponseDto(block);
   }
@@ -94,14 +100,14 @@ export class BlockService {
   /**
    * Unblock a user
    */
-  async unblockUser(blockerId: string, blockedUserId: string): Promise<void> {
+  async unblockUser(blockerId: string, targetUserId: string): Promise<void> {
     // Validation: Cannot unblock self
-    if (blockerId === blockedUserId) {
+    if (blockerId === targetUserId) {
       throw new SelfActionException('Cannot unblock yourself');
     }
 
     // Find block record
-    const block = await this.findBlock(blockerId, blockedUserId);
+    const block = await this.findBlock(blockerId, targetUserId);
     if (!block) {
       throw new BlockNotFoundException('Block record not found');
     }
@@ -112,18 +118,70 @@ export class BlockService {
     });
 
     // Invalidate cache
-    await this.invalidateBlockCache(blockerId, blockedUserId);
+    await this.invalidateBlockCache(blockerId, targetUserId);
 
     // Publish event
     this.eventEmitter.emit('user.unblocked', {
       blockerId,
-      blockedId: blockedUserId,
+      blockedId: targetUserId,
       blockId: block.id,
     });
 
-    this.logger.log(`User unblocked: ${blockerId} unblocked ${blockedUserId}`);
+    this.logger.log(`User unblocked: ${blockerId} unblocked ${targetUserId}`);
   }
 
+  /**
+   * [NEW - Action 1.2]
+   * Batch get block status for multiple users
+   * Moved from SocialFacade to keep query logic in Service layer
+   */
+  async getBatchBlockStatus(
+    requesterId: string,
+    targetUserIds: string[],
+  ): Promise<Map<string, BlockRelation>> {
+    const resultMap = new Map<string, BlockRelation>();
+
+    // Initialize default NONE
+    targetUserIds.forEach((id) => resultMap.set(id, BlockRelation.NONE));
+
+    if (targetUserIds.length === 0) return resultMap;
+
+    // Optimized Query: Fetch all relevant blocks in one go
+    const blocks = await this.prisma.block.findMany({
+      where: {
+        OR: [
+          { blockerId: requesterId, blockedId: { in: targetUserIds } }, // I blocked them
+          { blockerId: { in: targetUserIds }, blockedId: requesterId }, // They blocked me
+        ],
+      },
+      select: {
+        blockerId: true,
+        blockedId: true,
+      },
+    });
+
+    // Process logic in memory
+    for (const block of blocks) {
+      const isMyBlock = block.blockerId === requesterId;
+      const otherUserId = isMyBlock ? block.blockedId : block.blockerId;
+
+      const currentStatus = resultMap.get(otherUserId) || BlockRelation.NONE;
+
+      if (currentStatus === BlockRelation.NONE) {
+        resultMap.set(
+          otherUserId,
+          isMyBlock
+            ? BlockRelation.BLOCKED_BY_ME
+            : BlockRelation.BLOCKED_BY_THEM,
+        );
+      } else {
+        // Nếu đã có status (VD: BLOCKED_BY_ME) mà gặp thêm record ngược lại -> BOTH
+        resultMap.set(otherUserId, BlockRelation.BOTH);
+      }
+    }
+
+    return resultMap;
+  }
   /**
    * Check if user1 has blocked user2 (or vice versa)
    *
@@ -250,62 +308,62 @@ export class BlockService {
    *
    * CRITICAL: All operations must succeed or all must fail (ACID)
    */
-  private async executeBlockTransaction(
-    blockerId: string,
-    blockedId: string,
-    reason?: string,
-  ): Promise<Block> {
-    return this.prisma.$transaction(
-      async (tx) => {
-        // 1. Insert block record
-        const block = await tx.block.create({
-          data: {
-            blockerId,
-            blockedId,
-            reason,
-          },
-        });
+  // private async executeBlockTransaction(
+  //   blockerId: string,
+  //   blockedId: string,
+  //   reason?: string,
+  // ): Promise<Block> {
+  //   return this.prisma.$transaction(
+  //     async (tx) => {
+  //       // 1. Insert block record
+  //       const block = await tx.block.create({
+  //         data: {
+  //           blockerId,
+  //           blockedId,
+  //           reason,
+  //         },
+  //       });
 
-        // 2. Delete ALL friendship records (any status)
-        const [user1Id, user2Id] = this.sortUserIds(blockerId, blockedId);
-        await tx.friendship.deleteMany({
-          where: {
-            user1Id,
-            user2Id,
-          },
-        });
+  //       // 2. Delete ALL friendship records (any status)
+  //       const [user1Id, user2Id] = this.sortUserIds(blockerId, blockedId);
+  //       await tx.friendship.deleteMany({
+  //         where: {
+  //           user1Id,
+  //           user2Id,
+  //         },
+  //       });
 
-        // 3. Delete PENDING GroupJoinRequest records
-        await tx.groupJoinRequest.deleteMany({
-          where: {
-            OR: [
-              // Blocker invited Blocked
-              {
-                userId: blockedId,
-                inviterId: blockerId,
-                status: JoinRequestStatus.PENDING,
-              },
-              // Blocked invited Blocker
-              {
-                userId: blockerId,
-                inviterId: blockedId,
-                status: JoinRequestStatus.PENDING,
-              },
-            ],
-          },
-        });
+  //       // 3. Delete PENDING GroupJoinRequest records
+  //       await tx.groupJoinRequest.deleteMany({
+  //         where: {
+  //           OR: [
+  //             // Blocker invited Blocked
+  //             {
+  //               userId: blockedId,
+  //               inviterId: blockerId,
+  //               status: JoinRequestStatus.PENDING,
+  //             },
+  //             // Blocked invited Blocker
+  //             {
+  //               userId: blockerId,
+  //               inviterId: blockedId,
+  //               status: JoinRequestStatus.PENDING,
+  //             },
+  //           ],
+  //         },
+  //       });
 
-        this.logger.debug(
-          `Block transaction completed for ${blockerId} → ${blockedId}`,
-        );
+  //       this.logger.debug(
+  //         `Block transaction completed for ${blockerId} → ${blockedId}`,
+  //       );
 
-        return block;
-      },
-      {
-        timeout: 10000, // ← Add timeout for safety
-      },
-    );
-  }
+  //       return block;
+  //     },
+  //     {
+  //       timeout: 10000, // ← Add timeout for safety
+  //     },
+  //   );
+  // }
 
   /**
    * Invalidate all cache related to block

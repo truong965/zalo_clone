@@ -133,10 +133,16 @@ export class UsersService extends BaseService<User> {
     return new UserEntity(newUser);
   }
   async findAll(page: number, limit: number, qs: string) {
-    const data = await super.findAll(page, limit, qs);
+    // 1. Lấy kết quả thô từ BaseService
+    const { meta, data } = await super.findAll(page, limit, qs);
+
+    // 2. Map dữ liệu sang UserEntity (để áp dụng @Exclude)
+    const entities = data.map((item) => new UserEntity(item));
+
+    // 3. Trả về đúng cấu trúc PagePaginatedResult
     return {
-      ...data,
-      result: data.result.map((item) => new UserEntity(item)),
+      meta,
+      data: entities, // Key phải là 'data', không phải 'result'
     };
   }
   async findOne(id: string) {

@@ -156,4 +156,8 @@ export class RedisKeyBuilder {
   static rateLimitContactSync(userId: string): string {
     return RedisKeys.rateLimit.contactSync(userId);
   }
+  // Trong class RedisKeyBuilder
+  static lockFriendAction(friendshipId: string): string {
+    return `lock:friend_action:${friendshipId}`;
+  }
 }

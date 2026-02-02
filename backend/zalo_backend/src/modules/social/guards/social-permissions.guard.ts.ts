@@ -4,9 +4,9 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrivacyService } from '../service/privacy.service';
-import { BlockService } from '../service/block.service';
 import { FriendshipService } from '../service/friendship.service';
+import { SocialFacade } from '../social.facade';
+import { extractTargetUserId } from './guard.helper';
 
 /**
  * CanMessageGuard - Check if user can send messages
@@ -18,40 +18,24 @@ import { FriendshipService } from '../service/friendship.service';
  */
 @Injectable()
 export class CanMessageGuard implements CanActivate {
-  constructor(
-    private readonly blockService: BlockService,
-    private readonly privacyService: PrivacyService,
-  ) {}
+  constructor(private readonly socialFacade: SocialFacade) {} // Inject Facade
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const currentUser = request.user;
-    const targetUserId =
-      request.params?.userId ||
-      request.params?.targetUserId ||
-      request.body?.targetUserId ||
-      request.body?.recipientId || // ← ADD for message endpoints
-      request.body?.calleeId || // ← ADD for call endpoints
-      request.query?.userId;
 
-    // Check if blocked
-    const isBlocked = await this.blockService.isBlocked(
-      currentUser.id,
-      targetUserId,
-    );
-    if (isBlocked) {
-      throw new ForbiddenException('Cannot message blocked user');
-    }
+    // Normalize targetId extraction
+    const targetUserId = extractTargetUserId(context);
 
-    // Check privacy settings
-    const canMessage = await this.privacyService.canUserMessageMe(
+    // [UPDATED] Use Facade
+    const canMessage = await this.socialFacade.validateMessageAccess(
       currentUser.id,
       targetUserId,
     );
 
     if (!canMessage) {
       throw new ForbiddenException(
-        'User privacy settings do not allow messaging',
+        'You cannot message this user (Blocked or Privacy restricted)',
       );
     }
 
@@ -69,46 +53,21 @@ export class CanMessageGuard implements CanActivate {
  */
 @Injectable()
 export class CanCallGuard implements CanActivate {
-  constructor(
-    private readonly privacyService: PrivacyService,
-    private readonly blockService: BlockService,
-  ) {}
+  constructor(private readonly socialFacade: SocialFacade) {} // Inject Facade
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const currentUser = request.user;
 
-    if (!currentUser) {
-      throw new ForbiddenException('Authentication required');
-    }
+    if (!currentUser) throw new ForbiddenException('Authentication required');
 
-    // Extract target user ID
-    const targetUserId =
-      request.params?.userId ||
-      request.body?.calleeId ||
-      request.body?.targetUserId;
+    const targetUserId = extractTargetUserId(context);
 
-    if (!targetUserId) {
-      throw new ForbiddenException('Target user ID required');
-    }
-
-    // Cannot call yourself
     if (currentUser.id === targetUserId) {
       throw new ForbiddenException('Cannot call yourself');
     }
-
-    // Check if blocked
-    const isBlocked = await this.blockService.isBlocked(
-      currentUser.id,
-      targetUserId,
-    );
-
-    if (isBlocked) {
-      throw new ForbiddenException('Cannot call blocked user');
-    }
-
-    // Check privacy settings
-    const canCall = await this.privacyService.canUserCallMe(
+    // [UPDATED] Use Facade
+    const canCall = await this.socialFacade.validateCallAccess(
       currentUser.id,
       targetUserId,
     );
@@ -144,14 +103,7 @@ export class FriendsOnlyGuard implements CanActivate {
     }
 
     // Extract target user ID
-    const targetUserId =
-      request.params?.userId ||
-      request.params?.targetUserId ||
-      request.body?.userId;
-
-    if (!targetUserId) {
-      throw new ForbiddenException('Target user ID required');
-    }
+    const targetUserId = extractTargetUserId(context);
 
     // Allow if accessing own resource
     if (currentUser.id === targetUserId) {

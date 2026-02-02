@@ -309,4 +309,25 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       });
     });
   }
+  /**
+   * Safe Multi-Delete (Wrapper for DEL)
+   * Giúp ẩn implementation của ioredis và xử lý trường hợp mảng rỗng
+   */
+  async mDel(keys: string[]): Promise<number> {
+    if (!keys || keys.length === 0) {
+      return 0;
+    }
+    // Gọi lệnh DEL của Redis (chấp nhận variadic arguments)
+    return this.client.del(...keys);
+  }
+  async mget(keys: string[]): Promise<(string | null)[]> {
+    // Fail-fast: Nếu danh sách key rỗng, trả về mảng rỗng ngay lập tức
+    // giúp tránh lỗi lệnh MGET không tham số của Redis
+    if (!keys || keys.length === 0) {
+      return [];
+    }
+
+    // ioredis mget trả về mảng string hoặc null (nếu key không tồn tại)
+    return this.client.mget(...keys);
+  }
 }

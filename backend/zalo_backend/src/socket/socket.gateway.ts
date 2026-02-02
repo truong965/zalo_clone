@@ -29,15 +29,7 @@ import { RedisKeys } from 'src/common/constants/redis-keys.constant';
 import socketConfig from 'src/config/socket.config';
 import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { WsValidationPipe } from './pipes/ws-validation.pipe';
-import { SendMessageDto } from './dto/socket-event.dto';
-import { sleep } from '@nestjs/terminus/dist/utils';
 import { MessagingGateway } from 'src/modules/messaging/messaging.gateway';
-import { CallHistoryService } from 'src/modules/social/service/call-history.service';
-// import { createAdapter } from '@socket.io/redis-adapter';
-// import { RedisService } from 'src/modules/redis/redis.service';
-
-// Helper Interface để quản lý subscription
-
 @WebSocketGateway({
   cors: {
     origin: (requestOrigin, callback) => {
@@ -453,12 +445,23 @@ export class SocketGateway
 
   /**
    * Emit event to specific user (all their sockets)
+   * Target: Single User
    */
   async emitToUser(userId: string, event: string, data: any): Promise<void> {
-    const socketIds = await this.socketState.getUserSockets(userId);
+    try {
+      // 1. Lấy danh sách socket ID của user từ Redis/State
+      const socketIds = await this.socketState.getUserSockets(userId);
 
-    for (const socketId of socketIds) {
-      this.server.to(socketId).emit(event, data);
+      if (!socketIds || socketIds.length === 0) {
+        // User offline, bỏ qua (hoặc có thể push noti qua FCM/APNS ở đây)
+        return;
+      }
+
+      // 2. Gửi event tới từng socket
+      // Dùng this.server.to(socketId).emit(...) là cách chuẩn của Socket.io
+      this.server.to(socketIds).emit(event, data);
+    } catch (error) {
+      this.logger.error(`Failed to emit to user ${userId}`, error);
     }
   }
 
@@ -495,5 +498,58 @@ export class SocketGateway
       connectedSockets: sockets.length,
       serverInstance: this.config.serverInstance,
     };
+  }
+  /**
+   * Force disconnect a user (e.g. Banned, Security check)
+   */
+  async forceDisconnectUser(
+    userId: string,
+    reason: string = 'Forced logout',
+  ): Promise<void> {
+    const socketIds = await this.socketState.getUserSockets(userId);
+    socketIds.forEach((socketId) => {
+      // Tìm socket object thực tế trên node này
+      const socket = this.server.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('auth.force_logout', { reason });
+        socket.disconnect(true);
+      }
+    });
+  }
+  /**
+   * [NEW] Force remove a user from a specific room
+   * Used when: Block user, Unfriend, Privacy change
+   */
+  async removeUserFromRoom(userId: string, roomName: string): Promise<void> {
+    try {
+      // 1. Lấy danh sách socket ID của user
+      const socketIds = await this.socketState.getUserSockets(userId);
+
+      if (socketIds.length === 0) return;
+
+      // 2. Duyệt qua từng socket và leave room
+      // Lưu ý: Với Adapter Redis, việc leave room cần thực hiện cẩn thận
+      // Cách đơn giản nhất trong kiến trúc Socket.io cluster:
+      for (const socketId of socketIds) {
+        this.server.in(socketId).socketsLeave(roomName);
+      }
+      this.logger.debug(`Removed user ${userId} from room ${roomName}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove user ${userId} from room ${roomName}`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * [NEW] Join a user to a specific room
+   * Used when: Accept friend request (subscribe to presence)
+   */
+  async joinUserToRoom(userId: string, roomName: string): Promise<void> {
+    const socketIds = await this.socketState.getUserSockets(userId);
+    socketIds.forEach((socketId) => {
+      this.server.in(socketId).socketsJoin(roomName);
+    });
   }
 }

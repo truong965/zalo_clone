@@ -1,8 +1,6 @@
 import {
   Controller,
   Get,
-  Post,
-  Put,
   Delete,
   Patch,
   Body,
@@ -13,15 +11,11 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from 'src/common/decorator/customize';
 import { FriendshipService } from '../service/friendship.service';
-import { BlockService } from '../service/block.service';
+import { BlockService } from '../../block/block.service';
 import { PrivacyService } from '../service/privacy.service';
 import type { User } from '@prisma/client';
 import { GetFriendsQueryDto } from '../dto/friendship.dto';
-import {
-  BlockUserDto,
-  UpdatePrivacySettingsDto,
-} from '../dto/block-privacy.dto';
-import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
+import { UpdatePrivacySettingsDto } from '../dto/privacy.dto';
 
 @ApiTags('Social - Friendships')
 @Controller('friendships')
@@ -31,59 +25,6 @@ export class FriendshipsController {
     private readonly blockService: BlockService,
     private readonly privacyService: PrivacyService,
   ) {}
-
-  // ==============================
-  // 1. FRIEND REQUESTS
-  // ==============================
-
-  @Post('requests')
-  @ApiOperation({ summary: 'Send a friend request' })
-  async sendFriendRequest(
-    @CurrentUser() user: User,
-    @Body('targetUserId') targetUserId: string,
-  ) {
-    return this.friendshipService.sendFriendRequest(user.id, targetUserId);
-  }
-
-  @Get('requests/received')
-  @ApiOperation({ summary: 'Get received friend requests (Pending)' })
-  async getReceivedRequests(@CurrentUser() user: User) {
-    return await this.friendshipService.getReceivedRequests(user.id);
-  }
-
-  @Get('requests/sent')
-  @ApiOperation({ summary: 'Get sent friend requests (Pending)' })
-  async getSentRequests(@CurrentUser() user: User) {
-    return this.friendshipService.getSentRequests(user.id);
-  }
-
-  @Put('requests/:requestId/accept')
-  @ApiOperation({ summary: 'Accept a friend request' })
-  async acceptRequest(
-    @CurrentUser() user: User,
-    @Param('requestId', ParseUUIDPipe) requestId: string,
-  ) {
-    return await this.friendshipService.acceptRequest(user.id, requestId);
-  }
-
-  @Put('requests/:requestId/decline')
-  @ApiOperation({ summary: 'Decline a friend request' })
-  async declineRequest(
-    @CurrentUser() user: User,
-    @Param('requestId', ParseUUIDPipe) requestId: string,
-  ) {
-    return await this.friendshipService.declineRequest(user.id, requestId);
-  }
-
-  @Delete('requests/:requestId')
-  @ApiOperation({ summary: 'Cancel a sent friend request' })
-  async cancelRequest(
-    @CurrentUser() user: User,
-    @Param('requestId', ParseUUIDPipe) requestId: string,
-  ) {
-    await this.friendshipService.cancelRequest(user.id, requestId);
-  }
-
   // ==============================
   // 2. FRIEND LIST & MANAGEMENT
   // ==============================
@@ -97,41 +38,34 @@ export class FriendshipsController {
     return this.friendshipService.getFriendsList(user.id, query);
   }
 
-  @Delete(':friendId')
+  @Delete(':targetUserId')
   @ApiOperation({ summary: 'Unfriend a user' })
   async unfriend(
     @CurrentUser() user: User,
-    @Param('friendId', ParseUUIDPipe) friendId: string,
+    @Param('targetUserId', ParseUUIDPipe) targetUserId: string,
   ) {
-    return await this.friendshipService.removeFriendship(user.id, friendId);
+    return await this.friendshipService.removeFriendship(user.id, targetUserId);
   }
 
-  // ==============================
-  // 3. BLOCKING
-  // ==============================
-
-  @Post('block')
-  @ApiOperation({ summary: 'Block a user' })
-  async blockUser(@CurrentUser() user: User, @Body() dto: BlockUserDto) {
-    return this.blockService.blockUser(user.id, dto);
-  }
-
-  @Delete('block/:targetId')
-  @ApiOperation({ summary: 'Unblock a user' })
-  async unblockUser(
+  @Get('mutual/:targetUserId')
+  @ApiOperation({ summary: 'Get mutual friends with another user' })
+  async getMutualFriends(
     @CurrentUser() user: User,
-    @Param('targetId', ParseUUIDPipe) targetId: string,
+    @Param('targetUserId', ParseUUIDPipe) targetUserId: string,
   ) {
-    return this.blockService.unblockUser(user.id, targetId);
+    return this.friendshipService.getMutualFriends(user.id, targetUserId);
   }
-
-  @Get('blocked')
-  @ApiOperation({ summary: 'Get list of blocked users' })
-  async getBlockedUsers(
+  @Get('check/:targetUserId')
+  @ApiOperation({ summary: 'check status friends with another user' })
+  async checkStatus(
     @CurrentUser() user: User,
-    @Query() query: CursorPaginationDto,
+    @Param('targetUserId', ParseUUIDPipe) targetUserId: string,
   ) {
-    return await this.blockService.getBlockedList(user.id, query);
+    const friendShips = await this.friendshipService.findFriendship(
+      user.id,
+      targetUserId,
+    );
+    return friendShips?.status;
   }
 
   // ==============================

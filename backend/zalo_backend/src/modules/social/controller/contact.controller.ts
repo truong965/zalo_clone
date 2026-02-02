@@ -17,7 +17,7 @@ import type { User } from '@prisma/client';
 import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
 
 @ApiTags('Social - Contacts')
-@Controller('social/contacts')
+@Controller('contacts')
 export class ContactController {
   constructor(private readonly contactService: ContactService) {}
 
