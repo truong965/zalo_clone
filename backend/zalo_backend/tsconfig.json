@@ -17,7 +17,14 @@
     "paths": {
       "src/*": [
         "src/*"
-      ]
+      ],
+      "@modules/*": ["src/modules/*"],
+      "@shared/*": ["src/shared/*"],
+      "@common/*": ["src/common/*"],
+      "@config/*": ["src/config/*"],
+      "@events/*": ["src/events/*"],
+      "@database/*": ["src/database/*"],
+      "@socket/*": ["src/socket/*"],
     },
     "incremental": true,
     "skipLibCheck": true,

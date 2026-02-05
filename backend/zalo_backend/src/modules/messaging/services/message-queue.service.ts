@@ -1,7 +1,7 @@
 // src/modules/messaging/services/message-queue.service.ts
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { RedisKeys } from 'src/common/constants/redis-keys.constant';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { Message } from '@prisma/client';
 import { RedisService } from 'src/modules/redis/redis.service';
 import redisConfig from 'src/config/redis.config';
@@ -36,7 +36,7 @@ export class MessageQueueService {
    */
   async enqueueMessage(userId: string, message: Message): Promise<void> {
     try {
-      const queueKey = RedisKeys.cache.offlineMessages(userId);
+      const queueKey = RedisKeyBuilder.offlineMessages(userId);
       const score = new Date(message.createdAt).getTime();
 
       const queuedMsg: QueuedMessage = {
@@ -82,7 +82,7 @@ export class MessageQueueService {
    */
   async getOfflineMessages(userId: string): Promise<QueuedMessage[]> {
     try {
-      const queueKey = RedisKeys.cache.offlineMessages(userId);
+      const queueKey = RedisKeyBuilder.offlineMessages(userId);
 
       const client = this.redis.getClient();
       // Get all messages (ordered by score)
@@ -115,7 +115,7 @@ export class MessageQueueService {
    */
   async clearQueue(userId: string): Promise<void> {
     try {
-      const queueKey = RedisKeys.cache.offlineMessages(userId);
+      const queueKey = RedisKeyBuilder.offlineMessages(userId);
       const client = this.redis.getClient();
       await client.del(queueKey);
 
@@ -133,7 +133,7 @@ export class MessageQueueService {
    */
   async getQueueSize(userId: string): Promise<number> {
     try {
-      const queueKey = RedisKeys.cache.offlineMessages(userId);
+      const queueKey = RedisKeyBuilder.offlineMessages(userId);
       const client = this.redis.getClient();
       return await client.zcard(queueKey);
     } catch (error) {

@@ -149,6 +149,58 @@ enum TokenRevocationReason {
   @@map("token_revocation_reason")
 }
 
+// --- Events & Domain Events ---
+enum EventType {
+  // Block Domain
+  USER_BLOCKED
+  USER_UNBLOCKED
+  
+  // Social Domain
+  FRIEND_REQUEST_SENT
+  FRIEND_REQUEST_ACCEPTED
+  FRIEND_REQUEST_REJECTED
+  FRIEND_REQUEST_CANCELLED // Requester withdraws request
+  UNFRIENDED
+  
+  // Messaging Domain
+  MESSAGE_SENT
+  CONVERSATION_CREATED
+  GROUP_CREATED
+  MESSAGE_DELIVERED
+  MESSAGE_SEEN
+  
+  // Call Domain
+  CALL_INITIATED
+  CALL_ANSWERED
+  CALL_ENDED
+  CALL_REJECTED
+  
+  // Auth Domain
+  USER_REGISTERED
+  USER_PROFILE_UPDATED
+  
+  // Presence Domain
+  USER_WENT_ONLINE
+  USER_WENT_OFFLINE
+  
+  // Privacy Domain
+  PRIVACY_SETTINGS_UPDATED
+  
+  // Contact Domain
+  CONTACT_SYNCED
+  CONTACT_ADDED
+  CONTACT_REMOVED
+  
+  // Notifications Domain
+  NOTIFICATION_SENT
+  
+  // Media Domain
+  MEDIA_UPLOADED
+  MEDIA_DELETED
+  
+  @@map("event_type")
+}
+
 // ============================================================================
 // 3. IAM MODULE (USER, AUTH, RBAC)
 // ============================================================================
@@ -227,7 +279,6 @@ model User {
 
   // System Logs
   socketConnections    SocketConnection[]
-  presenceLogs         PresenceLog[]
 
   @@index([phoneNumber])
   @@index([roleId])
@@ -506,6 +557,7 @@ model Conversation {
   lastMessageAt   DateTime?         @map("last_message_at") @db.Timestamptz
 
   // Group specific settings
+  participants    String[]          @default([]) 
   requireApproval Boolean           @default(false) @map("require_approval")
   settings        Json              @default("{}") @db.JsonB
   
@@ -794,20 +846,85 @@ model SocketConnection {
   @@map("socket_connections")
 }
 
+
+// ============================================================================
+// 15. EVENT SOURCING & IDEMPOTENCY (PHASE 1: Event-Driven Architecture)
+// ============================================================================
+
 /**
- * Model: PresenceLog
- * Logs user status changes (Online/Offline/Away).
+ * Model: DomainEvent
+ * Stores all business-critical events for audit trail, event sourcing, and replay capability.
+ * 
+ * Critical events (stored): USER_BLOCKED, MESSAGE_SENT, CALL_INITIATED, etc.
+ * Transient events (emit only): MESSAGE_DELIVERED, USER_WENT_ONLINE, etc.
  */
-model PresenceLog {
-  id        BigInt   @id @default(autoincrement())
-  userId    String   @map("user_id") @db.Uuid
-  status    String   @db.VarChar(20)
-  deviceId  String?  @map("device_id") @db.VarChar(255)
-  timestamp DateTime @default(now()) @db.Timestamptz
+model DomainEvent {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Event Identity
+  eventId           String     @unique @map("event_id") @db.Uuid  // Idempotency key
+  eventType         EventType  @map("event_type")
   
-  @@index([userId, timestamp(sort: Desc)])
-  @@index([timestamp])
-  @@map("presence_logs")
+  // Aggregate Identity (what changed)
+  aggregateId       String     @map("aggregate_id") @db.Uuid      // userId, conversationId, etc.
+  aggregateType     String     @map("aggregate_type") @db.VarChar(50)  // User, Conversation, Call
+  
+  // Event Versioning & Metadata
+  version           Int        @default(1)                         // Event contract version
+  source            String     @db.VarChar(50)                     // Module that emitted: BlockModule, SocialModule
+  correlationId     String?    @map("correlation_id") @db.Uuid     // Trace across events
+  causationId       String?    @map("causation_id") @db.Uuid       // What event caused this
+  
+  // Event Content
+  payload           Json       @db.JsonB            // Event data (blockerId, blockedId, etc.)
+  metadata          Json?      @db.JsonB            // Extra context (userId, timestamp, etc.)
+  
+  // Timestamp Tracking
+  occurredAt        DateTime   @map("occurred_at") @db.Timestamptz  // When event happened
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  
+  // Audit Trail
+  issuedBy          String?    @map("issued_by") @db.Uuid         // Which service published
+  
+  @@index([eventType, occurredAt(sort: Desc)])
+  @@index([aggregateId, aggregateType])
+  @@index([correlationId])
+  @@index([occurredAt(sort: Desc)])
+  @@index([source])
+  @@map("domain_events")
+}
+
+/**
+ * Model: ProcessedEvent
+ * Tracks processed events per listener to ensure idempotency.
+ * 
+ * If an event is retried from message broker, this table prevents duplicate processing.
+ * Example: MessageSent event processed by CacheInvalidator, SocketNotifier, AnalyticsLogger
+ */
+model ProcessedEvent {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  
+  // Event Reference
+  eventId           String     @map("event_id") @db.Uuid           // Which event was processed
+  eventType         EventType  @map("event_type")                   // For debugging
+  eventVersion      Int        @default(1) @map("event_version")    // PHASE 3.4: Event version for compatibility
+  
+  // Handler Reference
+  handlerId         String     @map("handler_id") @db.VarChar(100) // e.g. BlockCacheListener, SocketNotifier
+  
+  // Processing Result
+  processedAt       DateTime   @default(now()) @map("processed_at") @db.Timestamptz
+  status            String     @default("SUCCESS") @db.VarChar(20) // SUCCESS, FAILED, RETRYING
+  errorMessage      String?    @map("error_message") @db.Text       // If failed
+  retryCount        Int        @default(0) @map("retry_count")
+  
+  // Tracking
+  correlationId     String?    @map("correlation_id") @db.Uuid
+  
+  @@unique([eventId, handlerId])  // Only process event once per handler
+  @@index([eventId])
+  @@index([handlerId])
+  @@index([processedAt(sort: Desc)])
+  @@index([status])
+  @@map("processed_events")
 }

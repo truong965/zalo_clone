@@ -15,7 +15,7 @@ import { CallHistoryService } from './call-history.service';
 
 import { CurrentUser } from 'src/common/decorator/customize';
 import type { User } from '@prisma/client';
-import { NotBlockedGuard } from '../social/guards/social.guard';
+import { NotBlockedGuard } from 'src/shared/guards/not-blocked.guard';
 import { GetCallHistoryQueryDto, LogCallDto } from './dto/call-history.dto';
 
 @ApiTags('Social - Calls')

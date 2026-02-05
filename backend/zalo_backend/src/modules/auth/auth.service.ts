@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { TokenService } from './services/token.service';
@@ -12,17 +7,16 @@ import { DeviceInfo } from './interfaces/device-info.interface';
 import jwtConfig from '../../config/jwt.config';
 import { UserEntity } from '../users/entities/user.entity';
 import { UserStatus } from '@prisma/client';
-import { CallHistoryService } from '../call/call-history.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly tokenService: TokenService,
+    private readonly eventEmitter: EventEmitter2,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-    @Inject(forwardRef(() => CallHistoryService))
-    private readonly callHistoryService: CallHistoryService,
   ) {}
 
   /**
@@ -97,8 +91,14 @@ export class AuthService {
    */
   async logout(userId: string, deviceId: string): Promise<void> {
     await this.tokenService.revokeDeviceSession(userId, deviceId);
-    // Cleanup active calls
-    await this.callHistoryService.cleanupUserActiveCalls(userId);
+
+    // PHASE 2: Emit event instead of direct call
+    // CallModule listener (CallLogoutHandler) will handle active call cleanup
+    this.eventEmitter.emit('user.logged_out', {
+      userId,
+      deviceId,
+      timestamp: new Date(),
+    });
   }
 
   /**

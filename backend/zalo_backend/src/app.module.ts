@@ -19,10 +19,17 @@ import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter'; // [CRITICAL IMPORT]
 
+// Shared Services & Guards (Cross-Module)
+import { SharedModule } from './shared/shared.module';
+
 // Feature Modules (Refactored)
-import { SocialModule } from './modules/social/social.module';
 import { BlockModule } from './modules/block/block.module';
+import { AuthorizationModule } from './modules/authorization/authorization.module';
 import { CallModule } from './modules/call/call.module';
+import { PrivacyModule } from './modules/privacy/privacy.module';
+import { FriendshipModule } from './modules/friendship/friendship.module';
+import { ContactModule } from './modules/contact/contact.module';
+import { EventPersistenceModule } from './common/events/event-persistence.module';
 
 // Configs
 import jwtConfig from './config/jwt.config';
@@ -91,7 +98,12 @@ import socialConfig from './config/social.config';
     SocketModule, // Socket Gateway
 
     // ========================================================================
-    // 3. FEATURE MODULES
+    // 3. SHARED SERVICES & GUARDS (Cross-Module Usage)
+    // ========================================================================
+    SharedModule, // Authorization & Guards (InteractionAuthorizationService, NotBlockedGuard)
+
+    // ========================================================================
+    // 4. FEATURE MODULES
     // ========================================================================
     // IAM (Identity & Access Management)
     AuthModule,
@@ -103,14 +115,19 @@ import socialConfig from './config/social.config';
     MessagingModule,
     MediaModule,
 
+    // PHASE 6: Domain Event Persistence (audit trail)
+    EventPersistenceModule,
+
     // [REFACTORED] Social Graph Components
-    // Thứ tự import ở đây không quan trọng vì đã xử lý forwardRef bên trong
-    BlockModule, // Độc lập
+    BlockModule,
+    AuthorizationModule, // PHASE 2: canInteract, InteractionGuard
     CallModule, // Phụ thuộc Social
-    SocialModule, // Trung tâm (Phụ thuộc Block & Call)
+    FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
+    PrivacyModule, // Privacy settings & permissions (Independent)
 
     // Utilities
     HealthModule,
+    ContactModule,
   ],
   controllers: [AppController],
   providers: [

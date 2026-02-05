@@ -33,11 +33,15 @@ export default registerAs('social', () => ({
   },
   ttl: {
     // Redis TTL (seconds)
+    // According to ARCHITECTURE.md Part 8:
+    // - Permission cache: 5 minutes (frequently checked)
+    // - Presence: 30 seconds
+    // - Block status: 1 minute
     friendship: 60,
     friendList: 300,
     nameResolution: 1800, // 30 phút
     block: 60,
     privacy: 3600,
-    permission: 60,
+    permission: 300, // P2.4: 5 minutes (was 60 seconds) - FIX for cache strategy
   },
 }));

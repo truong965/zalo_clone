@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { RedisService } from '../redis.service';
-import { RedisKeyBuilder } from '../../../common/constants/redis-keys.constant';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { PresenceStatus } from '../../../common/interfaces/presence-data.interface';
 import redisConfig from '../../../config/redis.config';
 
@@ -25,7 +25,11 @@ export class RedisPresenceService {
     const pipeline = client.pipeline();
 
     // Add to online users sorted set
-    pipeline.zadd('presence:online_users', timestamp, userId);
+    pipeline.zadd(
+      RedisKeyBuilder.presenceOnlineUsers(),
+      timestamp,
+      userId,
+    );
 
     // Set user status
     pipeline.set(
@@ -74,7 +78,7 @@ export class RedisPresenceService {
     const pipeline = client.pipeline();
 
     // Remove from online users sorted set
-    pipeline.zrem('presence:online_users', userId);
+    pipeline.zrem(RedisKeyBuilder.presenceOnlineUsers(), userId);
 
     // Delete user status
     pipeline.del(RedisKeyBuilder.userStatus(userId));
@@ -109,7 +113,7 @@ export class RedisPresenceService {
    */
   async getOnlineUsers(): Promise<string[]> {
     const client = this.redisService.getClient();
-    return client.zrange('presence:online_users', 0, -1);
+    return client.zrange(RedisKeyBuilder.presenceOnlineUsers(), 0, -1);
   }
 
   /**
@@ -117,7 +121,7 @@ export class RedisPresenceService {
    */
   async getOnlineUserCount(): Promise<number> {
     const client = this.redisService.getClient();
-    return client.zcard('presence:online_users');
+    return client.zcard(RedisKeyBuilder.presenceOnlineUsers());
   }
 
   /**
@@ -138,7 +142,11 @@ export class RedisPresenceService {
     const pipeline = client.pipeline();
 
     // Update score in sorted set
-    pipeline.zadd('presence:online_users', timestamp, userId);
+    pipeline.zadd(
+      RedisKeyBuilder.presenceOnlineUsers(),
+      timestamp,
+      userId,
+    );
 
     // Refresh status TTL
     pipeline.expire(
@@ -159,7 +167,7 @@ export class RedisPresenceService {
 
     // Remove users who haven't refreshed in 5 minutes
     const removed = await client.zremrangebyscore(
-      'presence:online_users',
+      RedisKeyBuilder.presenceOnlineUsers(),
       '-inf',
       fiveMinutesAgo,
     );
@@ -178,6 +186,10 @@ export class RedisPresenceService {
     const client = this.redisService.getClient();
     const cutoff = Date.now() - seconds * 1000;
 
-    return client.zrangebyscore('presence:online_users', cutoff, '+inf');
+    return client.zrangebyscore(
+      RedisKeyBuilder.presenceOnlineUsers(),
+      cutoff,
+      '+inf',
+    );
   }
 }

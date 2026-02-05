@@ -19,8 +19,11 @@ import { MessageService } from './services/message.service';
 import { ConversationService } from './services/conversation.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
-import { NotBlockedGuard } from '../social/guards/social.guard';
-import { CanMessageGuard } from '../social/guards/social-permissions.guard.ts';
+import {
+  InteractionGuard,
+  RequireInteraction,
+} from '@modules/authorization/guards/interaction.guard';
+import { PermissionAction } from '@common/constants/permission-actions.constant';
 import { CurrentUser } from 'src/common/decorator/customize';
 import { ApiOperation } from '@nestjs/swagger';
 
@@ -34,9 +37,9 @@ export class MessagingController {
 
   /**
    * Send message via HTTP (fallback if WebSocket unavailable)
+   * Note: Permission for 1:1 is enforced at getOrCreateDirectConversation; service checks isMember.
    */
   @Post()
-  @UseGuards(NotBlockedGuard, CanMessageGuard)
   async sendMessage(@CurrentUser() user, @Body() dto: SendMessageDto) {
     return this.messageService.sendMessage(dto, user.id);
   }
@@ -71,7 +74,8 @@ export class MessagingController {
    * Get or create direct conversation
    */
   @Post('conversations/direct')
-  @UseGuards(NotBlockedGuard, CanMessageGuard)
+  @UseGuards(InteractionGuard)
+  @RequireInteraction(PermissionAction.MESSAGE)
   async getOrCreateDirectConversation(
     @CurrentUser() user,
     @Body() body: { recipientId: string },

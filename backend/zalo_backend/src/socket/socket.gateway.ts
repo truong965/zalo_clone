@@ -15,7 +15,6 @@ import {
   Inject,
   UseGuards,
   UsePipes,
-  forwardRef,
 } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
@@ -25,11 +24,12 @@ import { WsExceptionFilter } from './filters/ws-exception.filter';
 import { SocketAuthService } from './services/socket-auth.service';
 import { SocketStateService } from './services/socket-state.service';
 import { RedisPubSubService } from 'src/modules/redis/services/redis-pub-sub.service';
-import { RedisKeys } from 'src/common/constants/redis-keys.constant';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socketConfig from 'src/config/socket.config';
 import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { WsValidationPipe } from './pipes/ws-validation.pipe';
-import { MessagingGateway } from 'src/modules/messaging/messaging.gateway';
+import { EventPublisher } from 'src/shared/events/event-publisher.service';
+
 @WebSocketGateway({
   cors: {
     origin: (requestOrigin, callback) => {
@@ -81,12 +81,9 @@ export class SocketGateway
     private readonly socketAuth: SocketAuthService,
     private readonly socketState: SocketStateService,
     private readonly redisPubSub: RedisPubSubService,
-    // private readonly redisService: RedisService,
-    @Inject(forwardRef(() => MessagingGateway))
-    private readonly messagingGateway: MessagingGateway,
+    private readonly eventPublisher: EventPublisher,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
-    // private readonly callHistoryService: CallHistoryService,
   ) {}
 
   /**
@@ -202,12 +199,12 @@ export class SocketGateway
   private async subscribeToCrossServerEvents(): Promise<void> {
     // Subscribe to presence updates
     await this.redisPubSub.subscribe(
-      RedisKeys.channels.presenceOnline,
+      RedisKeyBuilder.channels.presenceOnline,
       this.handlePresenceOnline.bind(this),
     );
 
     await this.redisPubSub.subscribe(
-      RedisKeys.channels.presenceOffline,
+      RedisKeyBuilder.channels.presenceOffline,
       this.handlePresenceOffline.bind(this),
     );
 
@@ -259,7 +256,7 @@ export class SocketGateway
       });
 
       // Publish presence update (cross-server)
-      await this.redisPubSub.publish(RedisKeys.channels.presenceOnline, {
+      await this.redisPubSub.publish(RedisKeyBuilder.channels.presenceOnline, {
         userId: user.id,
         timestamp: new Date().toISOString(),
       });
@@ -277,7 +274,11 @@ export class SocketGateway
         30_000,
       );
 
-      await this.messagingGateway.handleUserConnected(client);
+      // PHASE 2: Emit event for presence tracking
+      // MessagingUserPresenceListener will react to this
+      this.logger.debug(
+        `[Socket] User ${client.userId} connected on socket ${client.id}`,
+      );
 
       this.logger.log(
         `✅ Socket authenticated: ${client.id} | User: ${user.id} | ${user.displayName}`,
@@ -324,13 +325,17 @@ export class SocketGateway
 
       // If user is now completely offline, publish presence update
       if (isOffline) {
-        await this.redisPubSub.publish(RedisKeys.channels.presenceOffline, {
+        await this.redisPubSub.publish(RedisKeyBuilder.channels.presenceOffline, {
           userId: client.userId,
           timestamp: new Date().toISOString(),
         });
       }
-      // Logic nghiệp vụ (có thể gây lỗi)
-      await this.messagingGateway.handleUserDisconnected(client);
+
+      // PHASE 2: Emit event for presence cleanup
+      // MessagingUserPresenceListener will react to this
+      this.logger.debug(
+        `[Socket] User ${client.userId} disconnected from socket ${client.id}`,
+      );
     } catch (error) {
       this.logger.error('Error handling disconnect:', error);
     } finally {

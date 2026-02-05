@@ -2,7 +2,7 @@
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RedisPubSubService } from 'src/modules/redis/services/redis-pub-sub.service';
-import { RedisKeys } from 'src/common/constants/redis-keys.constant';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { Message } from '@prisma/client';
 
 export interface NewMessagePayload {
@@ -43,7 +43,7 @@ export class MessageBroadcasterService implements OnModuleInit {
     payload: NewMessagePayload,
   ): Promise<void> {
     try {
-      const channel = RedisKeys.channels.newMessage(conversationId);
+      const channel = RedisKeyBuilder.channels.newMessage(conversationId);
 
       await this.redisPubSub.publish(channel, payload);
 
@@ -67,7 +67,7 @@ export class MessageBroadcasterService implements OnModuleInit {
     payload: ReceiptUpdatePayload,
   ): Promise<void> {
     try {
-      const channel = RedisKeys.channels.receipt(senderId);
+      const channel = RedisKeyBuilder.channels.receipt(senderId);
 
       await this.redisPubSub.publish(channel, payload);
 
@@ -91,7 +91,7 @@ export class MessageBroadcasterService implements OnModuleInit {
     payload: TypingStatusPayload,
   ): Promise<void> {
     try {
-      const channel = RedisKeys.channels.typing(conversationId);
+      const channel = RedisKeyBuilder.channels.typing(conversationId);
 
       await this.redisPubSub.publish(channel, payload);
 
@@ -115,7 +115,7 @@ export class MessageBroadcasterService implements OnModuleInit {
     conversationId: string,
     handler: (payload: NewMessagePayload) => void,
   ): Promise<() => Promise<void>> {
-    const channel = RedisKeys.channels.newMessage(conversationId);
+    const channel = RedisKeyBuilder.channels.newMessage(conversationId);
 
     await this.redisPubSub.subscribe(channel, (ch, message) => {
       try {
@@ -142,7 +142,7 @@ export class MessageBroadcasterService implements OnModuleInit {
     userId: string,
     handler: (payload: ReceiptUpdatePayload) => void | Promise<void>,
   ): Promise<() => Promise<void>> {
-    const channel = RedisKeys.channels.receipt(userId);
+    const channel = RedisKeyBuilder.channels.receipt(userId);
 
     await this.redisPubSub.subscribe(channel, (ch, message) => {
       try {
@@ -173,7 +173,7 @@ export class MessageBroadcasterService implements OnModuleInit {
     conversationId: string,
     handler: (payload: TypingStatusPayload) => void,
   ): Promise<() => Promise<void>> {
-    const channel = RedisKeys.channels.typing(conversationId);
+    const channel = RedisKeyBuilder.channels.typing(conversationId);
 
     await this.redisPubSub.subscribe(channel, (ch, message) => {
       try {

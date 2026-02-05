@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { RedisService } from '../redis.service';
-import { RedisKeyBuilder } from '../../../common/constants/redis-keys.constant';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import redisConfig from '../../../config/redis.config';
 
 export interface RateLimitResult {

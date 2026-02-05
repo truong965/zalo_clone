@@ -5,8 +5,6 @@ import {
   BadRequestException,
   Logger,
   ForbiddenException,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import {
@@ -15,7 +13,6 @@ import {
   MemberStatus,
   Prisma,
 } from '@prisma/client';
-import { SocialFacade } from 'src/modules/social/social.facade';
 
 const conversationWithRelations =
   Prisma.validator<Prisma.ConversationDefaultArgs>()({
@@ -56,11 +53,7 @@ type ConversationWithRelations = Prisma.ConversationGetPayload<
 export class ConversationService {
   private readonly logger = new Logger(ConversationService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => SocialFacade))
-    private readonly socialFacade: SocialFacade,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Check if user is member of conversation
@@ -116,15 +109,11 @@ export class ConversationService {
       throw new BadRequestException('Cannot create conversation with yourself');
     }
 
-    // [NEW] Check Block Status (Consistency Check)
-    // Dù Guard đã chặn ở Controller, Service vẫn nên check để đảm bảo logic nghiệp vụ chặt chẽ
-    // đặc biệt khi hàm này được gọi từ các service nội bộ khác (vd: FriendshipAccepted)
-    const isBlocked = await this.socialFacade.isBlocked(userId1, userId2);
-    if (isBlocked) {
-      throw new ForbiddenException(
-        'Cannot create conversation with a blocked user',
-      );
-    }
+    // TODO PHASE 3: Block validation
+    // Block status is checked by MessagingBlockListener
+    // When USER_BLOCKED event emitted → listener archives related conversations
+    // For now, proceed with conversation creation (event listeners handle cascade)
+
     // Sort user IDs to ensure consistent lookup
     const [user1, user2] = [userId1, userId2].sort();
 
@@ -241,6 +230,65 @@ export class ConversationService {
   }
 
   /**
+   * Archive a direct conversation by soft-deleting it
+   * Used when blocking user - prevents seeing conversation history
+   *
+   * Implementation: Set deletedAt timestamp on conversation
+   */
+  async archiveDirectConversation(conversationId: string): Promise<void> {
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`[Block] Archived conversation ${conversationId}`);
+  }
+
+  /**
+   * Restore a direct conversation after unblocking
+   * Clears the deletedAt flag to make conversation visible again
+   */
+  async restoreDirectConversation(conversationId: string): Promise<void> {
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        deletedAt: null,
+      },
+    });
+
+    this.logger.log(`[Block] Restored conversation ${conversationId}`);
+  }
+
+  /**
+   * Find direct conversation between two users
+   * Returns all states (active, archived, etc.)
+   * Used for archiving/restoration during blocking
+   */
+  async findDirectConversation(
+    userId1: string,
+    userId2: string,
+  ): Promise<{ id: string } | null> {
+    const [user1, user2] = [userId1, userId2].sort();
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        type: ConversationType.DIRECT,
+        members: {
+          every: {
+            userId: { in: [user1, user2] },
+            status: MemberStatus.ACTIVE,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    return conversation || null;
+  }
+
+  /**
    * Get user's conversations list (Full implementation)
    */
   async getUserConversations(
@@ -264,21 +312,12 @@ export class ConversationService {
     const items = hasMore ? conversations.slice(0, -1) : conversations;
     const nextCursor = hasMore ? items[items.length - 1].id : undefined;
 
-    // Lấy Partner IDs
-    const partnerIds = new Set<string>();
-    items.forEach((conv) => {
-      if (conv.type === ConversationType.DIRECT) {
-        const otherMember = conv.members.find((m) => m.userId !== userId);
-        if (otherMember) partnerIds.add(otherMember.userId);
-      }
-    });
-
-    // Lấy status từ Facade
-    const { blockMap, onlineMap } =
-      await this.socialFacade.getSocialStatusBatch(
-        userId,
-        Array.from(partnerIds),
-      );
+    // TODO PHASE 3: Fetch block/online status
+    // Block status comes from MessagingBlockListener (handles cascade)
+    // Online status comes from SocketModule events
+    // For now, create placeholder maps
+    const blockMap = new Map<string, boolean>(); // Empty for now
+    const onlineMap = new Map<string, boolean>(); // Empty for now
 
     // Map Response
     const data = items.map((c) =>

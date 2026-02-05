@@ -17,8 +17,6 @@
 import {
   BadRequestException,
   ForbiddenException,
-  forwardRef,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -30,8 +28,7 @@ import { CallStatus, Prisma } from '@prisma/client';
 
 import { v4 as uuidv4 } from 'uuid';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
-import { SelfActionException } from '../social/errors/social.errors';
-import { ContactService } from '../social/service/contact.service';
+import { SelfActionException } from 'src/shared/errors';
 import {
   ActiveCallSession,
   CallHistoryResponseDto,
@@ -73,8 +70,6 @@ export class CallHistoryService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly eventEmitter: EventEmitter2,
-    @Inject(forwardRef(() => ContactService))
-    private readonly contactService: ContactService,
   ) {}
 
   /**
@@ -387,19 +382,12 @@ export class CallHistoryService {
     });
 
     // 2. [OPTIMIZATION] Batch Resolve Display Names
-    // Gom tất cả ID của người KHÁC (không phải mình) để lấy tên trong danh bạ
-    const otherUserIds = new Set<string>();
-    calls.forEach((call) => {
-      if (call.callerId !== userId) otherUserIds.add(call.callerId);
-      if (call.calleeId !== userId) otherUserIds.add(call.calleeId);
-    });
-
-    // Gọi hàm batch resolve từ ContactService (đã có cache Redis bên trong)
-    // Map<userId, resolvedName>
-    const nameMap = await this.contactService.batchResolveDisplayNames(
-      userId,
-      Array.from(otherUserIds),
-    );
+    // TODO PHASE 3: Resolve display names from contact service
+    // Current approach: contactService.batchResolveDisplayNames() resolved custom aliases
+    // Event-driven approach: Cache user info + contact aliases separately
+    // For now, use user displayName from DB relations (already loaded)
+    const nameMap = new Map<string, string>();
+    // TODO: Populate from caller/callee user data instead of ContactService
 
     // 4. Pagination Calculation
     const hasNextPage = calls.length > limit;
@@ -539,13 +527,13 @@ export class CallHistoryService {
       ...callHistoryWithRelations,
     });
     // [NEW] Cũng cần resolve name cho API này
+    // TODO PHASE 3: Resolve display names from contact service
+    // Event-driven approach: Use user displayName from DB relations
     const otherUserIds = new Set<string>();
     calls.forEach((call) => otherUserIds.add(call.callerId)); // Missed call thì người kia luôn là caller
 
-    const nameMap = await this.contactService.batchResolveDisplayNames(
-      userId,
-      Array.from(otherUserIds),
-    );
+    const nameMap = new Map<string, string>();
+    // TODO: Populate from caller user data
 
     return calls.map((call) =>
       this.mapToResponseDto(call, userId, nameMap, viewedAt),
@@ -722,6 +710,42 @@ export class CallHistoryService {
 
     // Remove session
     await this.redis.del(key);
+  }
+
+  /**
+   * Terminate all active calls between two users
+   * Used when blocking a user - immediately ends ongoing calls
+   *
+   * PHASE 3.5: Called by CallBlockListener on user.blocked event
+   */
+  async terminateCallsBetweenUsers(
+    user1Id: string,
+    user2Id: string,
+  ): Promise<number> {
+    const callerCalls = await this.redis
+      .getClient()
+      .smembers(this.getUserCallsKey(user1Id));
+    const calleeCalls = await this.redis
+      .getClient()
+      .smembers(this.getUserCallsKey(user2Id));
+
+    // Find calls between these two users
+    const callIds = callerCalls.filter((id) => calleeCalls.includes(id));
+
+    this.logger.log(
+      `Terminating ${callIds.length} call(s) between ${user1Id} and ${user2Id}`,
+    );
+
+    for (const callId of callIds) {
+      await this.removeActiveCallById(callId);
+      // Publish event to notify clients
+      this.eventEmitter.emit('call.terminated', {
+        callId,
+        reason: 'USER_BLOCKED',
+      });
+    }
+
+    return callIds.length;
   }
 
   /**

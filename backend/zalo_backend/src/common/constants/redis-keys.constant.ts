@@ -1,6 +1,16 @@
 /**
+ * @deprecated Since 2026-02-04. Migration complete 2026-02-04.
+ * Use RedisKeyBuilder from @shared/redis/redis-key-builder instead.
+ *
+ * All modules have been migrated. This file is kept for reference only.
+ * Safe to delete - no remaining imports.
+ */
+
+/**
  * Redis Key Patterns
  * Follow naming convention: {prefix}:{entity}:{id}:{attribute}
+ *
+ * @deprecated Use RedisKeyBuilder from src/shared/redis/redis-key-builder.ts instead
  */
 
 export const RedisKeys = {
@@ -31,30 +41,50 @@ export const RedisKeys = {
     offlineMessages: (userId: string) => `user:${userId}:offline_msgs`,
   },
   // [NEW] SOCIAL GRAPH MODULE KEYS
+  // OWNERSHIP:
+  //   - friendship → FriendshipModule
+  //   - block → BlockModule
+  //   - privacySettings, permission → PrivacyModule
+  //   - contactName → ContactModule
+  //   - activeCall, userActiveCalls, callEndLock, callResult, missedCalls* → CallModule
   social: {
-    // Friendship
+    // ========================================================================
+    // FriendshipModule: Manages friend requests and friendship relationships
+    // ========================================================================
     friendship: (user1: string, user2: string) =>
       `social:friendship:${user1}:${user2}`,
     friendCount: (userId: string, status: string) =>
       `social:friend_count:${userId}:${status}`,
 
-    // Block
+    // ========================================================================
+    // BlockModule: Manages user blocks
+    // ========================================================================
     block: (user1: string, user2: string) => `social:block:${user1}:${user2}`,
 
-    // Privacy
+    // ========================================================================
+    // PrivacyModule: Manages privacy settings & permission checks
+    // ========================================================================
     privacySettings: (userId: string) => `social:privacy:${userId}`,
 
     // Permission Checks (Cached Results)
+    // - Populated by: PrivacyService after checking block + privacy settings
+    // - Invalidated by: PrivacyBlockListener (when block status changes)
+    // - Invalidated by: PrivacyEventHandler (when privacy settings change)
     permission: (
       action: 'message' | 'call' | 'profile',
       requester: string,
       target: string,
     ) => `social:perm:${action}:${requester}:${target}`,
-    // Contact
+
+    // ========================================================================
+    // ContactModule: Manages contact aliases and names
+    // ========================================================================
     contactName: (ownerId: string, contactId: string) =>
       `contact:name:${ownerId}:${contactId}`,
 
-    // Call
+    // ========================================================================
+    // CallModule: Manages active calls and call history
+    // ========================================================================
     activeCall: (callId: string) => `call:session:${callId}`,
     userActiveCalls: (userId: string) => `call:user:${userId}:active`,
     callEndLock: (callId: string) => `call:end_lock:${callId}`,

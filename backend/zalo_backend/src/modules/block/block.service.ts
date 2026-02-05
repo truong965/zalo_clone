@@ -1,36 +1,53 @@
 /**
- * BlockService - Core service for managing user blocks
+ * BlockService - REFACTORED (Event-Driven Architecture)
  *
- * Responsibilities:
- * - Block/unblock users
- * - Check block status
- * - Query blocked users list
- * - Handle cascade operations (delete friendships, group requests)
- * - Manage cache invalidation
- * - Publish block events
+ * CHANGES FROM ORIGINAL:
+ * ✅ Removed cache invalidation (moved to BlockEventHandler)
+ * ✅ Removed friendship deletion (moved to FriendshipBlockListener)
+ * ✅ Removed group request deletion (not needed per requirements)
+ * ✅ Service ONLY: Create/Delete block record + Emit event
+ * ✅ All cascade operations handled by independent listeners
+ *
+ * Responsibilities (Single Responsibility Principle):
+ * 1. Block/unblock users (database operations)
+ * 2. Check block status (read queries with cache)
+ * 3. Emit domain events (user.blocked, user.unblocked)
+ * 4. Query blocked users list (pagination)
+ *
+ * What this service does NOT do (moved to listeners):
+ * ❌ Cache invalidation → BlockEventHandler
+ * ❌ Delete friendships → FriendshipBlockListener
+ * ❌ Delete group requests → Removed (per requirements)
+ * ❌ Archive conversations → Not needed (per requirements)
+ * ❌ Socket disconnect → SocketBlockListener (other module)
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from 'src/database/prisma.service';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { PrismaService } from '@database/prisma.service';
+import type { IBlockRepository } from './repositories/block.repository.interface';
+import { BLOCK_REPOSITORY } from './repositories/block.repository.interface';
+import { RedisService } from '@modules/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Block } from '@prisma/client';
+import { Block, Prisma } from '@prisma/client';
 import {
   BlockUserDto,
   BlockResponseDto,
   BlockedUserDto,
   BlockRelation,
-} from './dto/block-privacy.dto';
+} from './dto/block.dto';
+import { SelfActionException } from '@shared/errors';
 import {
-  DuplicateBlockException,
-  BlockNotFoundException,
-  SelfActionException,
-} from '../social/errors/social.errors';
-import { RedisKeyBuilder } from '../../common/constants/redis-keys.constant'; // [UPDATED]
-import socialConfig from 'src/config/social.config';
+  UserBlockedEvent,
+  UserUnblockedEvent,
+} from './events/versioned-events';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
+import socialConfig from '@config/social.config';
 import type { ConfigType } from '@nestjs/config';
-import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
-import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
+import { CursorPaginationDto } from '@common/dto/cursor-pagination.dto';
+import { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
+import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
+import { PermissionActionType } from '@common/constants/permission-actions.constant';
+
 @Injectable()
 export class BlockService {
   private readonly logger = new Logger(BlockService.name);
@@ -39,99 +56,144 @@ export class BlockService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(BLOCK_REPOSITORY)
+    private readonly blockRepository: IBlockRepository,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
   ) {}
 
   /**
-   * Block a user
+   * Block a user (Idempotent)
    *
-   * Cascade operations:
-   * 1. Delete all Friendship records (any status)
-   * 2. Delete PENDING GroupJoinRequest records
-   * 3. Keep APPROVED/REJECTED GroupJoinRequest (audit log)
-   * 4. Invalidate all related cache
-   * 5. Publish block event
+   * REFACTORED: Simplified to single responsibility
+   *
+   * Before:
+   * - Create block ✓
+   * - Invalidate cache ✗ (moved to listener)
+   * - Delete friendships ✗ (moved to listener)
+   * - Delete group requests ✗ (removed)
+   * - Emit event ✓
+   *
+   * After:
+   * - Create block ✓
+   * - Emit event ✓
+   *
+   * Cascade operations handled by listeners:
+   * - BlockEventHandler: Cache invalidation
+   * - FriendshipBlockListener: Soft delete friendship
+   *
+   * P1.1 CHANGE: Idempotent - handles concurrent duplicate attempts gracefully
+   * - Database unique constraint prevents duplicates
+   * - Returns existing block if already blocked
    */
-  //update * - Removed Cascade Delete logic (Moved to Event Listener)
-  //* - Reduced Transaction scope (Atomic operation)
   async blockUser(
     blockerId: string,
     dto: BlockUserDto,
   ): Promise<BlockResponseDto> {
     const { targetUserId, reason } = dto;
 
-    // Validation 1: Cannot block self
+    // Validation: Cannot block self
     if (blockerId === targetUserId) {
       throw new SelfActionException('Cannot block yourself');
     }
 
-    // Validation 2: Check if already blocked
-    const existingBlock = await this.findBlock(blockerId, targetUserId);
-    if (existingBlock) {
-      throw new DuplicateBlockException('User is already blocked');
+    try {
+      // STEP 1: Create block record (atomic operation)
+      const block = await this.prisma.block.create({
+        data: {
+          blockerId,
+          blockedId: targetUserId,
+          reason,
+        },
+      });
+
+      this.logger.log(`✅ Block created: ${blockerId} → ${targetUserId}`);
+
+      // STEP 2: Emit event (listeners will handle cascade operations)
+      // Event listeners (independent, parallel):
+      // - BlockEventHandler: Cache invalidation
+      // - FriendshipBlockListener: Soft delete friendship
+      // - SocketBlockListener: Disconnect sockets (if needed)
+      this.eventEmitter.emit(
+        'user.blocked',
+        new UserBlockedEvent(blockerId, targetUserId, block.id, reason),
+      );
+
+      this.logger.debug(`📢 Event emitted: user.blocked (${block.id})`);
+
+      return this.mapToResponseDto(block);
+    } catch (error) {
+      // Handle unique constraint violation (P2002 = duplicate block)
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        error.meta?.target &&
+        Array.isArray(error.meta.target) &&
+        error.meta.target.includes('blockerId')
+      ) {
+        // Already blocked - idempotent behavior: return existing block
+        this.logger.log(
+          `⚠️  Already blocked (idempotent): ${blockerId} → ${targetUserId}`,
+        );
+
+        const existingBlock = await this.blockRepository.findByPair(
+          blockerId,
+          targetUserId,
+        );
+        if (existingBlock) {
+          return this.mapToResponseDto(existingBlock);
+        }
+      }
+
+      // Re-throw all other errors
+      throw error;
     }
-
-    // Không cần $transaction bọc ngoài vì chỉ có 1 lệnh create
-    const block = await this.prisma.block.create({
-      data: {
-        blockerId,
-        blockedId: targetUserId,
-        reason,
-      },
-    });
-
-    // Invalidate cache
-    await this.invalidateBlockCache(blockerId, targetUserId);
-
-    // Publish event for real-time updates
-    // Listener sẽ lo việc xóa bạn bè, xóa request nhóm, ngắt cuộc gọi...
-    this.eventEmitter.emit('user.blocked', {
-      blockerId,
-      blockedId: targetUserId,
-      blockId: block.id,
-    });
-
-    this.logger.log(`User blocked: ${blockerId} blocked ${targetUserId}`);
-
-    return this.mapToResponseDto(block);
   }
 
   /**
-   * Unblock a user
+   * Unblock a user (Idempotent)
+   *
+   * PHASE 3: Get blockId BEFORE delete, pass to UserUnblockedEvent (per plan).
+   * Listeners (e.g. FriendshipBlockListener) need blockId for restore logic.
    */
   async unblockUser(blockerId: string, targetUserId: string): Promise<void> {
-    // Validation: Cannot unblock self
     if (blockerId === targetUserId) {
       throw new SelfActionException('Cannot unblock yourself');
     }
 
-    // Find block record
-    const block = await this.findBlock(blockerId, targetUserId);
+    // STEP 1: Get block record BEFORE delete (plan: truyền blockId vào UserUnblockedEvent)
+    const block = await this.blockRepository.findByPair(blockerId, targetUserId);
+
     if (!block) {
-      throw new BlockNotFoundException('Block record not found');
+      this.logger.log(
+        `⚠️  Already unblocked (idempotent): ${blockerId} → ${targetUserId}`,
+      );
+      return;
     }
 
-    // Delete block record
+    const blockId = block.id;
+
+    // STEP 2: Delete block record
     await this.prisma.block.delete({
-      where: { id: block.id },
+      where: { id: blockId },
     });
 
-    // Invalidate cache
-    await this.invalidateBlockCache(blockerId, targetUserId);
+    this.logger.log(`✅ Unblocked: ${blockerId} → ${targetUserId}`);
 
-    // Publish event
-    this.eventEmitter.emit('user.unblocked', {
-      blockerId,
-      blockedId: targetUserId,
-      blockId: block.id,
-    });
+    // STEP 3: Emit event with blockId (listeners handle cache invalidation, friendship restore)
+    this.eventEmitter.emit(
+      'user.unblocked',
+      new UserUnblockedEvent(blockerId, targetUserId, blockId),
+    );
 
-    this.logger.log(`User unblocked: ${blockerId} unblocked ${targetUserId}`);
+    this.logger.debug(`📢 Event emitted: user.unblocked (blockId: ${blockId})`);
   }
 
+  // ============================================================================
+  // QUERY METHODS (Read operations with cache-aside pattern)
+  // ============================================================================
+
   /**
-   * [NEW - Action 1.2]
    * Batch get block status for multiple users
    * Moved from SocialFacade to keep query logic in Service layer
    */
@@ -175,17 +237,19 @@ export class BlockService {
             : BlockRelation.BLOCKED_BY_THEM,
         );
       } else {
-        // Nếu đã có status (VD: BLOCKED_BY_ME) mà gặp thêm record ngược lại -> BOTH
+        // If already has status (e.g. BLOCKED_BY_ME) and finds opposite → BOTH
         resultMap.set(otherUserId, BlockRelation.BOTH);
       }
     }
 
     return resultMap;
   }
+
   /**
    * Check if user1 has blocked user2 (or vice versa)
-   *
    * Uses cache-aside pattern with short TTL
+   *
+   * DEPRECATED: Use isBlockedByMe() or isBlockedByThem() for directionality
    */
   async isBlocked(userId1: string, userId2: string): Promise<boolean> {
     // Try cache first
@@ -219,21 +283,65 @@ export class BlockService {
     return isBlocked;
   }
 
+  /**
+   * Check if I have blocked someone
+   * Uses cache-aside pattern with short TTL
+   */
+  async isBlockedByMe(myId: string, themId: string): Promise<boolean> {
+    const cacheKey = RedisKeyBuilder.socialBlock(myId, themId);
+    const cached = await this.redis.get(cacheKey);
+
+    if (cached !== null) {
+      return cached === '1';
+    }
+
+    const block = await this.prisma.block.findFirst({
+      where: {
+        blockerId: myId,
+        blockedId: themId,
+      },
+      select: { id: true },
+    });
+
+    const isBlocked = !!block;
+
+    await this.redis.setex(
+      cacheKey,
+      this.config.ttl.block,
+      isBlocked ? '1' : '0',
+    );
+
+    return isBlocked;
+  }
+
+  /**
+   * Check if someone has blocked me
+   * Uses cache-aside pattern with short TTL
+   */
+  async isBlockedByThem(themId: string, myId: string): Promise<boolean> {
+    return this.isBlockedByMe(themId, myId);
+  }
+
+  /**
+   * Get list of users I blocked (with cursor pagination)
+   *
+   * Infinity scroll implementation:
+   * - Cursor = last block ID from previous page
+   * - Efficient for large datasets (no OFFSET)
+   */
   async getBlockedList(
-    blockerId: string,
+    userId: string,
     query: CursorPaginationDto,
   ): Promise<CursorPaginatedResult<BlockedUserDto>> {
-    const { cursor, limit = 20 } = query;
+    const { limit = 20, cursor } = query;
 
-    // 1. Query Database
     const blocks = await this.prisma.block.findMany({
-      where: { blockerId },
-      // Lấy thừa 1 bản ghi để xác định hasNextPage
-      take: limit + 1,
-      // Logic Cursor chuẩn
-      cursor: cursor ? { id: cursor } : undefined,
-      // skip: cursor ? 1 : 0,
-      orderBy: { createdAt: 'desc' }, //  Bảng Block có createdAt
+      where: {
+        blockerId: userId,
+        ...(cursor && { id: { lt: cursor } }), // Cursor pagination
+      },
+      take: limit + 1, // Fetch one extra to check hasNextPage
+      orderBy: { createdAt: 'desc' },
       include: {
         blocked: {
           select: {
@@ -245,174 +353,149 @@ export class BlockService {
       },
     });
 
-    // 2. Tính toán Cursor
-    const hasNextPage = blocks.length > limit;
-    const data = hasNextPage ? blocks.slice(0, -1) : blocks;
-    const nextCursor = hasNextPage ? data[data.length - 1].id : undefined;
-
-    // 3. Map to DTO
-    const mappedData: BlockedUserDto[] = data.map((block) => ({
-      blockId: block.id,
-      userId: block.blocked.id,
-      displayName: block.blocked.displayName,
-      avatarUrl: block.blocked.avatarUrl ?? undefined,
-      blockedAt: block.createdAt,
-      reason: block.reason ?? undefined,
-    }));
-
-    // 4. Return Result
-    return {
-      data: mappedData,
-      meta: {
-        limit,
-        hasNextPage,
-        nextCursor,
-        // total: undefined, // Không count(*) để tối ưu hiệu năng cho list này
-      },
-    };
+    return CursorPaginationHelper.buildResult({
+      items: blocks,
+      limit,
+      getCursor: (block) => block.id,
+      mapToDto: (block) =>
+        ({
+          blockId: block.id,
+          userId: block.blocked.id,
+          displayName: block.blocked.displayName,
+          avatarUrl: block.blocked.avatarUrl ?? undefined,
+          blockedAt: block.createdAt,
+          reason: block.reason ?? undefined,
+        }) as BlockedUserDto,
+    });
   }
 
   /**
-   * Get list of users who blocked current user (reverse lookup)
+   * Get list of users who blocked me
+   *
+   * Reverse lookup - useful for:
+   * - Privacy checks
+   * - Deciding visibility of content
+   * - Preventing interactions with users who blocked you
+   *
+   * Note: Returns only user IDs (no pagination - assumed small list)
    */
   async getBlockedByUsers(userId: string): Promise<string[]> {
     const blocks = await this.prisma.block.findMany({
-      where: { blockedId: userId },
-      select: { blockerId: true },
+      where: {
+        blockedId: userId,
+      },
+      select: {
+        blockerId: true,
+      },
     });
 
     return blocks.map((block) => block.blockerId);
   }
 
-  // ============================================================================
-  // PRIVATE HELPER METHODS
-  // ============================================================================
-
   /**
-   * Find block record between two users
+   * Batch check if I have blocked multiple users
+   * Optimized query to avoid N+1 problem
    */
-  private async findBlock(
-    blockerId: string,
-    blockedId: string,
-  ): Promise<Block | null> {
-    return this.prisma.block.findFirst({
-      where: {
-        blockerId,
-        blockedId,
-      },
-    });
+  async batchIsBlockedByMe(
+    requesterId: string,
+    targetUserIds: string[],
+  ): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+
+    if (targetUserIds.length === 0) return result;
+
+    // 1. Try cache first (batch get)
+    const cacheKeys = targetUserIds.map((id) =>
+      RedisKeyBuilder.socialBlock(requesterId, id),
+    );
+
+    const cachedValues = await this.redis.mget(cacheKeys);
+    const missingUserIds: string[] = [];
+
+    for (let i = 0; i < targetUserIds.length; i++) {
+      const userId = targetUserIds[i];
+      const cachedValue = cachedValues[i];
+
+      if (cachedValue !== null) {
+        result.set(userId, cachedValue === '1');
+      } else {
+        missingUserIds.push(userId);
+      }
+    }
+
+    // 2. Query database for cache misses
+    if (missingUserIds.length > 0) {
+      const blocks = await this.prisma.block.findMany({
+        where: {
+          blockerId: requesterId,
+          blockedId: { in: missingUserIds },
+        },
+        select: {
+          blockerId: true,
+          blockedId: true,
+        },
+      });
+
+      // Process results into map
+      const blockedSet = new Set<string>();
+      for (const block of blocks) {
+        if (block.blockerId === requesterId) {
+          blockedSet.add(block.blockedId);
+        }
+      }
+
+      // 3. Cache results and populate result map
+      const pipeline = this.redis.getClient().pipeline();
+      for (const userId of missingUserIds) {
+        const isBlocked = blockedSet.has(userId);
+        const cacheKey = RedisKeyBuilder.socialBlock(requesterId, userId);
+        pipeline.setex(cacheKey, this.config.ttl.block, isBlocked ? '1' : '0');
+        result.set(userId, isBlocked);
+      }
+      await pipeline.exec();
+    }
+
+    return result;
   }
 
   /**
-   * Execute block transaction with cascade operations
-   *
-   * CRITICAL: All operations must succeed or all must fail (ACID)
+   * Cache block status (called by PrivacyService after check)
+   * Ensures single source of truth for permission results
    */
-  // private async executeBlockTransaction(
-  //   blockerId: string,
-  //   blockedId: string,
-  //   reason?: string,
-  // ): Promise<Block> {
-  //   return this.prisma.$transaction(
-  //     async (tx) => {
-  //       // 1. Insert block record
-  //       const block = await tx.block.create({
-  //         data: {
-  //           blockerId,
-  //           blockedId,
-  //           reason,
-  //         },
-  //       });
-
-  //       // 2. Delete ALL friendship records (any status)
-  //       const [user1Id, user2Id] = this.sortUserIds(blockerId, blockedId);
-  //       await tx.friendship.deleteMany({
-  //         where: {
-  //           user1Id,
-  //           user2Id,
-  //         },
-  //       });
-
-  //       // 3. Delete PENDING GroupJoinRequest records
-  //       await tx.groupJoinRequest.deleteMany({
-  //         where: {
-  //           OR: [
-  //             // Blocker invited Blocked
-  //             {
-  //               userId: blockedId,
-  //               inviterId: blockerId,
-  //               status: JoinRequestStatus.PENDING,
-  //             },
-  //             // Blocked invited Blocker
-  //             {
-  //               userId: blockerId,
-  //               inviterId: blockedId,
-  //               status: JoinRequestStatus.PENDING,
-  //             },
-  //           ],
-  //         },
-  //       });
-
-  //       this.logger.debug(
-  //         `Block transaction completed for ${blockerId} → ${blockedId}`,
-  //       );
-
-  //       return block;
-  //     },
-  //     {
-  //       timeout: 10000, // ← Add timeout for safety
-  //     },
-  //   );
-  // }
-
-  /**
-   * Invalidate all cache related to block
-   */
-  private async invalidateBlockCache(
+  async cacheBlockStatus(
     userId1: string,
     userId2: string,
+    isBlocked: boolean,
   ): Promise<void> {
-    const keys = [
-      RedisKeyBuilder.socialBlock(userId1, userId2),
-      // Also invalidate permission caches
-      RedisKeyBuilder.socialPermission('message', userId1, userId2),
-      RedisKeyBuilder.socialPermission('message', userId2, userId1),
-      RedisKeyBuilder.socialPermission('call', userId1, userId2),
-      RedisKeyBuilder.socialPermission('call', userId2, userId1),
-      // Invalidate friendship cache
-      RedisKeyBuilder.socialFriendship(userId1, userId2),
-      RedisKeyBuilder.socialFriendCount(userId1, 'ACCEPTED'),
-      RedisKeyBuilder.socialFriendCount(userId2, 'ACCEPTED'),
-    ];
-
-    await this.redis.del(...keys);
-
-    // Publish cache invalidation event for multi-node sync
-    this.eventEmitter.emit('cache.invalidate', {
-      keys,
-      reason: 'block_changed',
-    });
-
-    this.logger.debug(
-      `Block cache invalidated for users: ${userId1}, ${userId2}`,
+    const cacheKey = RedisKeyBuilder.socialBlock(userId1, userId2);
+    await this.redis.setex(
+      cacheKey,
+      this.config.ttl.block,
+      isBlocked ? '1' : '0',
     );
   }
 
   /**
-   * Get cache key for block check
+   * Cache permission result with TTL
+   * Called by: PrivacyService after computing permission result
    */
-  private getBlockCacheKey(userId1: string, userId2: string): string {
-    // Order doesn't matter for block (it's bidirectional in effect)
-    const [user1, user2] = this.sortUserIds(userId1, userId2);
-    return `block:${user1}:${user2}`;
+  async cachePermissionResult(
+    type: PermissionActionType,
+    userId1: string,
+    userId2: string,
+    result: boolean,
+  ): Promise<void> {
+    const cacheKey = RedisKeyBuilder.socialPermission(type, userId1, userId2);
+    await this.redis.setex(
+      cacheKey,
+      this.config.ttl.permission, // 5 minutes (300 seconds)
+      result ? '1' : '0',
+    );
   }
 
-  /**
-   * Sort user IDs for consistent cache keys
-   */
-  private sortUserIds(userId1: string, userId2: string): [string, string] {
-    return userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
-  }
+  // ============================================================================
+  // PRIVATE HELPER METHODS
+  // ============================================================================
 
   /**
    * Map Block entity to response DTO

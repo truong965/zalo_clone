@@ -8,7 +8,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { RedisKeys } from 'src/common/constants/redis-keys.constant';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { SendMessageDto } from '../dto/send-message.dto';
 import { GetMessagesDto } from '../dto/get-messages.dto';
 import { ConversationService } from './conversation.service';
@@ -46,9 +46,7 @@ export class MessageService {
   async sendMessage(dto: SendMessageDto, senderId: string): Promise<Message> {
     MessageValidator.validateMessageTypeConsistency(dto);
     // 1. Idempotency Check
-    const idempotencyKey = RedisKeys.cache.messageIdempotency(
-      dto.clientMessageId,
-    );
+    const idempotencyKey = RedisKeyBuilder.messageIdempotency(dto.clientMessageId);
     const cachedMessage = await this.redis.getClient().get(idempotencyKey);
 
     if (cachedMessage) {
