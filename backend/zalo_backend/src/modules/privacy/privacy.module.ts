@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RedisModule } from '@modules/redis/redis.module';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
+import { EventsModule } from '@shared/events';
 
 // Services
 import { PrivacyService } from './services/privacy.service';
@@ -44,7 +44,7 @@ import { PrivacyBlockListener } from './listeners/privacy-block.listener';
 @Module({
   imports: [
     RedisModule,
-    EventEmitterModule,
+    EventsModule,
     IdempotencyModule,
     // REMOVED: BlockModule - Breaks RULE 9 (no direct service calls across modules)
     // Events provide decoupled communication instead

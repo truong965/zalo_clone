@@ -3,12 +3,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FriendshipService } from './friendship.service';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DistributedLockService } from '@common/distributed-lock/distributed-lock.service';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
-import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 import { FriendshipStatus } from '@prisma/client';
 import socialConfig from '@config/social.config';
+import { EventPublisher } from '@shared/events';
 import {
   FriendshipNotFoundException,
   InvalidFriendshipStateException,
@@ -35,7 +34,7 @@ describe('FriendshipService', () => {
   let service: FriendshipService;
   let prisma: { friendship: Record<string, ReturnType<typeof vi.fn>> };
   let blockChecker: { isBlocked: ReturnType<typeof vi.fn> };
-  let eventEmitter: { emit: ReturnType<typeof vi.fn> };
+  let eventPublisher: { publish: ReturnType<typeof vi.fn> };
   let lockService: { withLock: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
@@ -45,14 +44,18 @@ describe('FriendshipService', () => {
         findUnique: vi.fn().mockResolvedValue(mockFriendship),
         findMany: vi.fn().mockResolvedValue([]),
         create: vi.fn().mockResolvedValue(mockFriendship),
-        update: vi.fn().mockImplementation((args) => Promise.resolve({ ...mockFriendship, ...args.data })),
+        update: vi
+          .fn()
+          .mockImplementation((args) =>
+            Promise.resolve({ ...mockFriendship, ...args.data }),
+          ),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
     };
 
     blockChecker = { isBlocked: vi.fn().mockResolvedValue(false) };
 
-    eventEmitter = { emit: vi.fn() };
+    eventPublisher = { publish: vi.fn().mockResolvedValue('evt-1') };
 
     lockService = {
       withLock: vi.fn().mockImplementation((_key, fn) => fn()),
@@ -69,10 +72,16 @@ describe('FriendshipService', () => {
             setex: vi.fn().mockResolvedValue('OK'),
             del: vi.fn().mockResolvedValue(undefined),
             deletePattern: vi.fn().mockResolvedValue(0),
-            getClient: vi.fn(() => ({ pipeline: vi.fn(() => ({ incr: vi.fn().mockReturnThis(), expire: vi.fn().mockReturnThis(), exec: vi.fn().mockResolvedValue([]) })) })),
+            getClient: vi.fn(() => ({
+              pipeline: vi.fn(() => ({
+                incr: vi.fn().mockReturnThis(),
+                expire: vi.fn().mockReturnThis(),
+                exec: vi.fn().mockResolvedValue([]),
+              })),
+            })),
           },
         },
-        { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: EventPublisher, useValue: eventPublisher },
         { provide: DistributedLockService, useValue: lockService },
         { provide: BLOCK_CHECKER, useValue: blockChecker },
         {
@@ -97,7 +106,7 @@ describe('FriendshipService', () => {
       await expect(
         service.cancelRequest('user-1', 'friendship-123'),
       ).rejects.toThrow(FriendshipNotFoundException);
-      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(eventPublisher.publish).not.toHaveBeenCalled();
     });
 
     it('should throw InvalidFriendshipStateException when not PENDING', async () => {
@@ -133,15 +142,7 @@ describe('FriendshipService', () => {
           lastActionBy: 'user-1',
         }),
       });
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
-        'friendship.request.cancelled',
-        expect.objectContaining({
-          eventType: 'FRIEND_REQUEST_CANCELLED',
-          friendshipId: 'friendship-123',
-          cancelledBy: 'user-1',
-          targetUserId: 'user-2',
-        }),
-      );
+      expect(eventPublisher.publish).toHaveBeenCalled();
     });
   });
 

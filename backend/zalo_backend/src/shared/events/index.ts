@@ -39,23 +39,12 @@ export { DomainEvent, IdempotentListener } from './base';
 // Service
 export { EventPublisher } from './event-publisher.service';
 
+// Module
+export { EventsModule } from './events.module';
+
 // Event Types (Imported from respective modules)
-export type {
-  UserBlockedEvent,
-  UserUnblockedEvent,
-} from '@modules/block/events';
-export type {
-  FriendRequestSentEvent,
-  FriendshipAcceptedEvent,
-  FriendRequestRejectedEvent,
-  UnfriendedEvent,
-} from '@modules/friendship/events/versioned-friendship-events';
-export type {
-  MessageSentEvent,
-  ConversationCreatedEvent,
-} from '@modules/messaging/events';
-export type {
-  CallInitiatedEvent,
-  CallEndedEvent,
-} from '@modules/call/events';
+export { UserBlockedEvent, UserUnblockedEvent } from '@modules/block/events';
+export type { MessageSentEvent } from '@modules/message/events';
+export type { ConversationCreatedEvent } from '@modules/conversation/events';
+export type { CallInitiatedEvent, CallEndedEvent } from '@modules/call/events';
 export type { UserRegisteredEvent } from '@modules/auth/events';

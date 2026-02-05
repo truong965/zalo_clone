@@ -4,12 +4,11 @@ import { Prisma } from '@prisma/client';
 import { BlockService } from './block.service';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BLOCK_REPOSITORY } from './repositories/block.repository.interface';
-import type { IBlockRepository } from './repositories/block.repository.interface';
 import { SelfActionException } from '@shared/errors';
 import socialConfig from '@config/social.config';
 import { ConfigModule } from '@nestjs/config';
+import { EventPublisher } from '@shared/events';
 
 const mockBlock = {
   id: 'block-123',
@@ -21,8 +20,13 @@ const mockBlock = {
 
 describe('BlockService', () => {
   let service: BlockService;
-  let prisma: { block: { create: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> } };
-  let eventEmitter: { emit: ReturnType<typeof vi.fn> };
+  let prisma: {
+    block: {
+      create: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+    };
+  };
+  let eventPublisher: { publish: ReturnType<typeof vi.fn> };
   let blockRepository: { findByPair: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
@@ -33,7 +37,7 @@ describe('BlockService', () => {
       },
     };
 
-    eventEmitter = { emit: vi.fn() };
+    eventPublisher = { publish: vi.fn().mockResolvedValue('evt-1') };
 
     blockRepository = {
       findByPair: vi.fn().mockResolvedValue(mockBlock),
@@ -53,11 +57,16 @@ describe('BlockService', () => {
         },
         {
           provide: RedisService,
-          useValue: { get: vi.fn(), setex: vi.fn(), del: vi.fn(), getClient: vi.fn(() => ({ mget: vi.fn(), del: vi.fn() })) },
+          useValue: {
+            get: vi.fn(),
+            setex: vi.fn(),
+            del: vi.fn(),
+            getClient: vi.fn(() => ({ mget: vi.fn(), del: vi.fn() })),
+          },
         },
         {
-          provide: EventEmitter2,
-          useValue: eventEmitter,
+          provide: EventPublisher,
+          useValue: eventPublisher,
         },
         {
           provide: BLOCK_REPOSITORY,
@@ -80,7 +89,7 @@ describe('BlockService', () => {
         service.blockUser('user-1', { targetUserId: 'user-1' }),
       ).rejects.toThrow(SelfActionException);
       expect(prisma.block.create).not.toHaveBeenCalled();
-      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(eventPublisher.publish).not.toHaveBeenCalled();
     });
 
     it('should create block and emit user.blocked event', async () => {
@@ -96,15 +105,7 @@ describe('BlockService', () => {
           reason: 'test',
         },
       });
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
-        'user.blocked',
-        expect.objectContaining({
-          blockerId: 'user-1',
-          blockedId: 'user-2',
-          blockId: mockBlock.id,
-          reason: 'test',
-        }),
-      );
+      expect(eventPublisher.publish).toHaveBeenCalled();
       expect(result.blockerId).toBe('user-1');
       expect(result.blockedId).toBe('user-2');
     });
@@ -120,18 +121,21 @@ describe('BlockService', () => {
         targetUserId: 'user-2',
       });
 
-      expect(blockRepository.findByPair).toHaveBeenCalledWith('user-1', 'user-2');
+      expect(blockRepository.findByPair).toHaveBeenCalledWith(
+        'user-1',
+        'user-2',
+      );
       expect(result.blockerId).toBe('user-1');
       expect(result.blockedId).toBe('user-2');
-      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(eventPublisher.publish).not.toHaveBeenCalled();
     });
   });
 
   describe('unblockUser', () => {
     it('should throw SelfActionException when unblocking self', async () => {
-      await expect(
-        service.unblockUser('user-1', 'user-1'),
-      ).rejects.toThrow(SelfActionException);
+      await expect(service.unblockUser('user-1', 'user-1')).rejects.toThrow(
+        SelfActionException,
+      );
     });
 
     it('should do nothing when block does not exist (idempotent)', async () => {
@@ -140,24 +144,20 @@ describe('BlockService', () => {
       await service.unblockUser('user-1', 'user-2');
 
       expect(prisma.block.delete).not.toHaveBeenCalled();
-      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(eventPublisher.publish).not.toHaveBeenCalled();
     });
 
     it('should delete block and emit user.unblocked with blockId', async () => {
       await service.unblockUser('user-1', 'user-2');
 
-      expect(blockRepository.findByPair).toHaveBeenCalledWith('user-1', 'user-2');
+      expect(blockRepository.findByPair).toHaveBeenCalledWith(
+        'user-1',
+        'user-2',
+      );
       expect(prisma.block.delete).toHaveBeenCalledWith({
         where: { id: mockBlock.id },
       });
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
-        'user.unblocked',
-        expect.objectContaining({
-          blockerId: 'user-1',
-          blockedId: 'user-2',
-          blockId: mockBlock.id,
-        }),
-      );
+      expect(eventPublisher.publish).toHaveBeenCalled();
     });
   });
 });

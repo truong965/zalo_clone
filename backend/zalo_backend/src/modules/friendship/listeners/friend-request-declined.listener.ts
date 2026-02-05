@@ -4,7 +4,7 @@ import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
-import { FriendRequestRejectedEvent } from '../events/versioned-friendship-events';
+import type { FriendshipRejectedPayload } from '@shared/events/contracts';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
 
 /**
@@ -53,7 +53,7 @@ export class FriendRequestDeclinedListener extends IdempotentListener {
    */
   @OnEvent('friendship.request.declined')
   async handleFriendRequestDeclined(
-    payload: FriendRequestRejectedEvent,
+    payload: FriendshipRejectedPayload,
   ): Promise<void> {
     const eventId = this.extractEventId(payload);
     if (!EventIdGenerator.isValid(eventId)) {

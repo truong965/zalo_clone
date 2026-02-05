@@ -20,10 +20,10 @@ import { BLOCK_REPOSITORY } from '@modules/block/repositories';
 import type { IBlockRepository } from '@modules/block/repositories';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
 import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
-import { UserBlockedEvent, UserUnblockedEvent } from '@modules/block/events/versioned-events';
 import { FriendshipStatus } from '@prisma/client';
 import socialConfig from '@config/social.config';
-
+import { UserBlockedEvent, UserUnblockedEvent } from '@shared/events';
+import { CqrsModule, EventBus, EventPublisher } from '@nestjs/cqrs';
 const userA = 'user-a';
 const userB = 'user-b';
 
@@ -84,7 +84,7 @@ describe('Block-Friendship Flow (Integration)', () => {
 
     const mockBlockRepo: IBlockRepository = {
       exists: vi.fn().mockResolvedValue(false),
-      findByPair: blockRepositoryFindByPair,
+      findByPair: blockRepositoryFindByPair as any,
     };
 
     const mockBlockChecker: IBlockChecker = {
@@ -113,6 +113,7 @@ describe('Block-Friendship Flow (Integration)', () => {
     const module: TestingModule = await Test.createTestingModule({
       imports: [
         EventEmitterModule.forRoot(),
+        CqrsModule,
         ConfigModule.forRoot({
           load: [
             () => ({
@@ -142,6 +143,13 @@ describe('Block-Friendship Flow (Integration)', () => {
             recordError: vi.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: EventBus,
+          useValue: {
+            publish: vi.fn(),
+            publishAll: vi.fn(),
+          },
+        },
         { provide: BLOCK_REPOSITORY, useValue: mockBlockRepo },
         { provide: BLOCK_CHECKER, useValue: mockBlockChecker },
         {
@@ -155,7 +163,9 @@ describe('Block-Friendship Flow (Integration)', () => {
     await app.init();
 
     blockService = module.get<BlockService>(BlockService);
-    friendshipBlockListener = module.get<FriendshipBlockListener>(FriendshipBlockListener);
+    friendshipBlockListener = module.get<FriendshipBlockListener>(
+      FriendshipBlockListener,
+    );
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
     vi.clearAllMocks();

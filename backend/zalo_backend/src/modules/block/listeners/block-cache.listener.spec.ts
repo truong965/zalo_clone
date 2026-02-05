@@ -3,7 +3,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BlockCacheListener } from './block-cache.listener';
 import { RedisService } from '@modules/redis/redis.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
-import { UserBlockedEvent, UserUnblockedEvent } from '../events/versioned-events';
+import type {
+  UserBlockedEventPayload,
+  UserUnblockedEventPayload,
+} from '@shared/events/contracts';
+import { EventIdGenerator } from '@common/utils/event-id-generator';
 
 describe('BlockCacheListener', () => {
   let listener: BlockCacheListener;
@@ -14,11 +18,31 @@ describe('BlockCacheListener', () => {
     recordError: ReturnType<typeof vi.fn>;
   };
 
-  const createBlockedEvent = (): UserBlockedEvent =>
-    new UserBlockedEvent('user-1', 'user-2', 'block-123', undefined);
+  const createBlockedEvent = (): UserBlockedEventPayload => ({
+    eventId: EventIdGenerator.generate(),
+    eventType: 'USER_BLOCKED',
+    version: 1,
+    timestamp: new Date(),
+    source: 'BlockModule',
+    aggregateId: 'user-1',
+    correlationId: 'test-correlation-id',
+    blockerId: 'user-1',
+    blockedId: 'user-2',
+    blockId: 'block-123',
+  });
 
-  const createUnblockedEvent = (): UserUnblockedEvent =>
-    new UserUnblockedEvent('user-1', 'user-2', 'block-123');
+  const createUnblockedEvent = (): UserUnblockedEventPayload => ({
+    eventId: EventIdGenerator.generate(),
+    eventType: 'USER_UNBLOCKED',
+    version: 1,
+    timestamp: new Date(),
+    source: 'BlockModule',
+    aggregateId: 'user-1',
+    correlationId: 'test-correlation-id',
+    blockerId: 'user-1',
+    blockedId: 'user-2',
+    blockId: 'block-123',
+  });
 
   beforeEach(async () => {
     redisService = { mDel: vi.fn().mockResolvedValue(0) };
@@ -70,7 +94,7 @@ describe('BlockCacheListener', () => {
         expect.any(String),
         'BlockCacheListener',
         'USER_BLOCKED',
-        undefined,
+        'test-correlation-id',
         1,
       );
     });
@@ -94,7 +118,7 @@ describe('BlockCacheListener', () => {
         expect.any(String),
         'BlockCacheListener',
         'USER_UNBLOCKED',
-        undefined,
+        'test-correlation-id',
         1,
       );
     });

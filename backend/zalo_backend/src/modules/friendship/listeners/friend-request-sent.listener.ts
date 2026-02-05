@@ -4,7 +4,7 @@ import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
-import { FriendRequestSentEvent } from '../events/versioned-friendship-events';
+import type { FriendshipRequestSentPayload } from '@shared/events/contracts';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
 
 /**
@@ -58,7 +58,7 @@ export class FriendRequestSentListener extends IdempotentListener {
    */
   @OnEvent('friendship.request.sent')
   async handleFriendRequestSent(
-    payload: FriendRequestSentEvent,
+    payload: FriendshipRequestSentPayload,
   ): Promise<void> {
     // Extract eventId with validation
     const eventId = this.extractEventId(payload);

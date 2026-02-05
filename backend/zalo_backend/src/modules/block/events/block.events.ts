@@ -43,6 +43,7 @@ export class UserBlockedEvent extends DomainEvent {
   constructor(
     readonly blockerId: string,
     readonly blockedId: string,
+    readonly blockId: string,
     readonly reason?: string,
   ) {
     super('BlockModule', 'User', blockerId, 1);
@@ -53,6 +54,7 @@ export class UserBlockedEvent extends DomainEvent {
       ...super.toJSON(),
       blockerId: this.blockerId,
       blockedId: this.blockedId,
+      blockId: this.blockId,
       reason: this.reason,
       eventType: this.eventType,
     };
@@ -83,7 +85,8 @@ export class UserUnblockedEvent extends DomainEvent {
 
   constructor(
     readonly blockerId: string,
-    readonly unblockedId: string,
+    readonly blockedId: string,
+    readonly blockId: string,
   ) {
     super('BlockModule', 'User', blockerId, 1);
   }
@@ -92,7 +95,8 @@ export class UserUnblockedEvent extends DomainEvent {
     return {
       ...super.toJSON(),
       blockerId: this.blockerId,
-      unblockedId: this.unblockedId,
+      blockedId: this.blockedId,
+      blockId: this.blockId,
       eventType: this.eventType,
     };
   }

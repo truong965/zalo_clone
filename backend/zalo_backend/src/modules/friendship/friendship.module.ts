@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RedisModule } from '@modules/redis/redis.module';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
+import { EventsModule } from '@shared/events';
 import { BlockModule } from '@modules/block/block.module';
 import { PrivacyModule } from '@modules/privacy/privacy.module';
 
@@ -62,7 +62,7 @@ import { FriendshipBlockListener } from './listeners/friendship-block.listener';
 @Module({
   imports: [
     RedisModule,
-    EventEmitterModule,
+    EventsModule,
     IdempotencyModule,
     BlockModule,
     PrivacyModule,

@@ -3,8 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { BlockService } from './block.service';
 import { BlockController } from './block.controller';
 import { RedisModule } from '@modules/redis/redis.module';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
+import { EventsModule } from '@shared/events';
 import { BlockCacheListener } from './listeners/block-cache.listener';
 import { CacheInvalidationListener } from './listeners/cache-invalidation.listener';
 import { BlockAuthorizationHelper } from './services/block-authorization.helper';
@@ -56,7 +56,7 @@ import { BlockCheckerService } from './services/block-checker.service';
     ConfigModule.forFeature(blockConfig),
     ConfigModule.forFeature(socialConfig), // TTL for BlockCheckerService cache
     RedisModule,
-    EventEmitterModule,
+    EventsModule,
     IdempotencyModule, // For event handler idempotency tracking
   ],
   controllers: [BlockController],

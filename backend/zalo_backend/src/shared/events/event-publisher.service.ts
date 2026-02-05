@@ -29,7 +29,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
+import { EventType } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { DomainEvent } from '../events/base';
+
+type DomainEventWithType = DomainEvent & { eventType: EventType };
+
+function hasEventType(event: DomainEvent): event is DomainEventWithType {
+  return (
+    'eventType' in event &&
+    typeof (event as Record<string, unknown>).eventType === 'string'
+  );
+}
+
+function getEventType(event: DomainEvent): EventType {
+  if (!hasEventType(event)) {
+    throw new Error(`Invalid event: missing eventType`);
+  }
+  return event.eventType;
+}
+
+type DomainEventDbClient =
+  | Pick<PrismaService, 'domainEvent'>
+  | Prisma.TransactionClient;
 
 /**
  * Set of event types that should be persisted for audit trail.
@@ -43,6 +65,10 @@ const CRITICAL_EVENTS = new Set([
   'FRIEND_REQUEST_ACCEPTED',
   'MESSAGE_SENT',
   'CONVERSATION_CREATED',
+  'CONVERSATION_MEMBER_ADDED',
+  'CONVERSATION_MEMBER_LEFT',
+  'CONVERSATION_MEMBER_PROMOTED',
+  'CONVERSATION_MEMBER_DEMOTED',
   'CALL_INITIATED',
   'CALL_ENDED',
   'USER_REGISTERED',
@@ -91,6 +117,16 @@ interface PublishOptions {
    * @default false (wait for all listeners)
    */
   fireAndForget?: boolean;
+
+  /**
+   * If true, publishing will fail when any listener throws.
+   * Intended for critical request paths that require listener success.
+   *
+   * Effective only when fireAndForget is false.
+   *
+   * @default false
+   */
+  throwOnListenerError?: boolean;
 }
 
 /**
@@ -158,10 +194,14 @@ export class EventPublisher {
     }
 
     // Step 4: Emit via EventEmitter2
-    this.emitEvent(event, options?.fireAndForget ?? false);
+    await this.emitEvent(
+      event,
+      options?.fireAndForget ?? false,
+      options?.throwOnListenerError ?? false,
+    );
 
     this.logger.debug(
-      `Event published: ${(event as any).eventType} (${event.eventId})`,
+      `Event published: ${getEventType(event)} (${event.eventId})`,
     );
 
     return event.eventId;
@@ -200,8 +240,7 @@ export class EventPublisher {
 
     // Persist all critical events in single transaction
     const criticalEvents = events.filter(
-      (e) =>
-        !options?.skipPersistence && CRITICAL_EVENTS.has((e as any).eventType),
+      (e) => !options?.skipPersistence && CRITICAL_EVENTS.has(getEventType(e)),
     );
 
     if (criticalEvents.length > 0) {
@@ -224,7 +263,11 @@ export class EventPublisher {
         event.withMetadata(options.metadata);
       }
 
-      this.emitEvent(event, options?.fireAndForget ?? false);
+      await this.emitEvent(
+        event,
+        options?.fireAndForget ?? false,
+        options?.throwOnListenerError ?? false,
+      );
       eventIds.push(event.eventId);
     }
 
@@ -274,7 +317,7 @@ export class EventPublisher {
    * Uses database transaction for consistency.
    */
   private async persistIfCritical(event: DomainEvent): Promise<void> {
-    const eventType = (event as any).eventType;
+    const eventType = getEventType(event);
 
     if (!CRITICAL_EVENTS.has(eventType)) {
       this.logger.debug(
@@ -298,22 +341,22 @@ export class EventPublisher {
    */
   private async persistEventToDb(
     event: DomainEvent,
-    prismaClient: any,
+    prismaClient: DomainEventDbClient,
   ): Promise<void> {
     const payload = event.toJSON();
 
     await prismaClient.domainEvent.create({
       data: {
         eventId: event.eventId,
-        eventType: (event as any).eventType,
+        eventType: getEventType(event),
         aggregateId: event.aggregateId,
         aggregateType: event.aggregateType,
         version: event.version,
         source: event.source,
         correlationId: event.correlationId,
         causationId: event.causationId,
-        payload: payload,
-        metadata: event.metadata,
+        payload: payload as unknown as Prisma.InputJsonValue,
+        metadata: event.metadata as unknown as Prisma.InputJsonValue,
         occurredAt: event.timestamp,
       },
     });
@@ -325,21 +368,40 @@ export class EventPublisher {
    * Event name format: lowercase with dots (e.g., 'user.blocked')
    * Delimiter allows wildcard listeners (e.g., 'user.*')
    */
-  private emitEvent(event: DomainEvent, fireAndForget: boolean): void {
-    const eventType = (event as any).eventType;
-    const eventName = this.eventTypeToEventName(eventType);
+  private async emitEvent(
+    event: DomainEvent,
+    fireAndForget: boolean,
+    throwOnListenerError: boolean,
+  ): Promise<void> {
+    const eventType = getEventType(event);
+    const eventNames = this.eventTypeToEventNames(eventType);
 
     if (fireAndForget) {
       // Don't wait for listeners (faster but less safe)
-      this.eventEmitter.emit(eventName, event);
-      this.logger.debug(`Event emitted (fire-and-forget): ${eventName}`);
+      for (const eventName of eventNames) {
+        this.eventEmitter.emit(eventName, event);
+      }
+      this.logger.debug(
+        `Event emitted (fire-and-forget): ${eventNames.join(', ')}`,
+      );
+      return;
     } else {
       // Wait for all listeners to complete
-      this.eventEmitter.emitAsync(eventName, event).catch((error) => {
-        this.logger.error(`Event listener failed for ${eventName}:`, error);
-        // PHASE 5: Send to DLQ
-      });
-      this.logger.debug(`Event emitted (waited): ${eventName}`);
+      try {
+        await Promise.all(
+          eventNames.map((eventName) =>
+            this.eventEmitter.emitAsync(eventName, event),
+          ),
+        );
+      } catch (error) {
+        this.logger.error(
+          `Event listener failed for ${eventNames.join(', ')}:`,
+          error,
+        );
+        if (throwOnListenerError) {
+          throw error;
+        }
+      }
     }
   }
 
@@ -354,8 +416,28 @@ export class EventPublisher {
    * - Wildcard listeners: @OnEvent('user.*')
    * - All: @OnEvent('*')
    */
-  private eventTypeToEventName(eventType: string): string {
-    return eventType.toLowerCase().split('_').join('.');
+  private eventTypeToEventNames(eventType: string): string[] {
+    const primaryMap: Record<string, string> = {
+      FRIEND_REQUEST_SENT: 'friendship.request.sent',
+      FRIEND_REQUEST_ACCEPTED: 'friendship.accepted',
+      FRIEND_REQUEST_REJECTED: 'friendship.request.declined',
+      FRIEND_REQUEST_CANCELLED: 'friendship.request.cancelled',
+      UNFRIENDED: 'friendship.unfriended',
+      PRIVACY_SETTINGS_UPDATED: 'privacy.updated',
+    };
+
+    const legacyAliases: Record<string, string[]> = {
+      FRIEND_REQUEST_SENT: ['friend_request.sent'],
+      FRIEND_REQUEST_ACCEPTED: ['friend_request.accepted'],
+      FRIEND_REQUEST_REJECTED: ['friend_request.rejected'],
+      FRIEND_REQUEST_CANCELLED: ['friend_request.cancelled'],
+      UNFRIENDED: ['unfriended'],
+    };
+
+    const primary =
+      primaryMap[eventType] ?? eventType.toLowerCase().split('_').join('.');
+
+    return [primary, ...(legacyAliases[eventType] ?? [])];
   }
 
   /**

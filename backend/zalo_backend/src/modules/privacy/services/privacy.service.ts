@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   PrivacySettings,
   PrivacyLevel,
@@ -17,6 +16,8 @@ import {
   PermissionCheckDto,
 } from '../dto/privacy.dto';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
+import { EventPublisher } from '@shared/events';
+import { PrivacySettingsUpdatedEvent } from '../events/privacy.events';
 
 /**
  * PrivacyService (PHASE 7 - REFACTORED EVENT-DRIVEN)
@@ -46,7 +47,7 @@ export class PrivacyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventPublisher: EventPublisher,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
   ) {}
@@ -165,11 +166,12 @@ export class PrivacyService {
     });
 
     await this.invalidatePrivacyCache(userId);
-    this.eventEmitter.emit('privacy.updated', {
-      eventId: EventIdGenerator.generate(),
-      userId,
-      settings: dto as Record<string, unknown>,
-    });
+
+    const correlationId = EventIdGenerator.generate();
+    await this.eventPublisher.publish(
+      new PrivacySettingsUpdatedEvent(userId, dto as Record<string, unknown>),
+      { correlationId },
+    );
     return this.mapToResponseDto(updatedSettings);
   }
 

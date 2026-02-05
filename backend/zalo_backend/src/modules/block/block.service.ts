@@ -27,7 +27,6 @@ import { PrismaService } from '@database/prisma.service';
 import type { IBlockRepository } from './repositories/block.repository.interface';
 import { BLOCK_REPOSITORY } from './repositories/block.repository.interface';
 import { RedisService } from '@modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Block, Prisma } from '@prisma/client';
 import {
   BlockUserDto,
@@ -36,10 +35,10 @@ import {
   BlockRelation,
 } from './dto/block.dto';
 import { SelfActionException } from '@shared/errors';
-import {
-  UserBlockedEvent,
-  UserUnblockedEvent,
-} from './events/versioned-events';
+import type {
+  UserBlockedEventPayload,
+  UserUnblockedEventPayload,
+} from '@shared/events/contracts';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socialConfig from '@config/social.config';
 import type { ConfigType } from '@nestjs/config';
@@ -47,6 +46,10 @@ import { CursorPaginationDto } from '@common/dto/cursor-pagination.dto';
 import { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import { PermissionActionType } from '@common/constants/permission-actions.constant';
+import { EventIdGenerator } from '@common/utils/event-id-generator';
+import { v4 as uuidv4 } from 'uuid';
+import { EventPublisher } from '@shared/events';
+import { UserBlockedEvent, UserUnblockedEvent } from './events/block.events';
 
 @Injectable()
 export class BlockService {
@@ -55,7 +58,7 @@ export class BlockService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventPublisher: EventPublisher,
     @Inject(BLOCK_REPOSITORY)
     private readonly blockRepository: IBlockRepository,
     @Inject(socialConfig.KEY)
@@ -114,12 +117,26 @@ export class BlockService {
       // - BlockEventHandler: Cache invalidation
       // - FriendshipBlockListener: Soft delete friendship
       // - SocketBlockListener: Disconnect sockets (if needed)
-      this.eventEmitter.emit(
-        'user.blocked',
+      const blockedEvent: UserBlockedEventPayload = {
+        eventId: EventIdGenerator.generate(),
+        eventType: 'USER_BLOCKED',
+        version: 1,
+        timestamp: new Date(),
+        source: 'BlockModule',
+        aggregateId: blockerId,
+        correlationId: uuidv4(),
+        blockerId,
+        blockedId: targetUserId,
+        blockId: block.id,
+        reason,
+      };
+
+      await this.eventPublisher.publish(
         new UserBlockedEvent(blockerId, targetUserId, block.id, reason),
+        { correlationId: blockedEvent.correlationId },
       );
 
-      this.logger.debug(`📢 Event emitted: user.blocked (${block.id})`);
+      this.logger.debug(`📢 Event published: user.blocked (${block.id})`);
 
       return this.mapToResponseDto(block);
     } catch (error) {
@@ -162,7 +179,10 @@ export class BlockService {
     }
 
     // STEP 1: Get block record BEFORE delete (plan: truyền blockId vào UserUnblockedEvent)
-    const block = await this.blockRepository.findByPair(blockerId, targetUserId);
+    const block = await this.blockRepository.findByPair(
+      blockerId,
+      targetUserId,
+    );
 
     if (!block) {
       this.logger.log(
@@ -181,12 +201,27 @@ export class BlockService {
     this.logger.log(`✅ Unblocked: ${blockerId} → ${targetUserId}`);
 
     // STEP 3: Emit event with blockId (listeners handle cache invalidation, friendship restore)
-    this.eventEmitter.emit(
-      'user.unblocked',
+    const unblockedEvent: UserUnblockedEventPayload = {
+      eventId: EventIdGenerator.generate(),
+      eventType: 'USER_UNBLOCKED',
+      version: 1,
+      timestamp: new Date(),
+      source: 'BlockModule',
+      aggregateId: blockerId,
+      correlationId: uuidv4(),
+      blockerId,
+      blockedId: targetUserId,
+      blockId,
+    };
+
+    await this.eventPublisher.publish(
       new UserUnblockedEvent(blockerId, targetUserId, blockId),
+      { correlationId: unblockedEvent.correlationId },
     );
 
-    this.logger.debug(`📢 Event emitted: user.unblocked (blockId: ${blockId})`);
+    this.logger.debug(
+      `📢 Event published: user.unblocked (blockId: ${blockId})`,
+    );
   }
 
   // ============================================================================

@@ -35,7 +35,7 @@ Each event is owned by **exactly one module**. That module is responsible for:
 ### Principle 2: No Cross-Module Event Emission
 
 ```typescript
-// ❌ FORBIDDEN: MessagingModule emitting SocialModule event
+// ❌ FORBIDDEN: MessageModule emitting SocialModule event
 @Injectable()
 export class MessagingService {
   async sendMessage(conversationId, content) {
@@ -45,11 +45,11 @@ export class MessagingService {
   }
 }
 
-// ✅ CORRECT: MessagingModule emits its own event
+// ✅ CORRECT: MessageModule emits its own event
 @Injectable()
 export class MessagingService {
   async sendMessage(conversationId, content) {
-    // ✅ MessagingModule owns this event
+    // ✅ MessageModule owns this event
     this.eventEmitter.emit('message.sent', new MessageSentEvent(...));
   }
 }
@@ -108,7 +108,7 @@ export class UserBlockedEvent extends DomainEvent {
 | Module | Listener | Purpose |
 |--------|----------|---------|
 | SocialModule | BlockCacheInvalidator | Invalidate blocked user cache |
-| MessagingModule | BlockedConversationCloser | Archive direct conversation |
+| ConversationModule | BlockedConversationCloser | Archive direct conversation |
 | SocketModule | BlockNotificationSender | Notify user B they're blocked |
 | CallModule | BlockedCallTerminator | End active calls |
 
@@ -189,7 +189,7 @@ export class FriendRequestSentEvent extends DomainEvent {
 
 | Module | Listener | Purpose |
 |--------|----------|---------|
-| MessagingModule | FriendRequestNotifier | Send notification |
+| MessageModule | FriendRequestNotifier | Send notification |
 | SocketModule | FriendRequestBroadcaster | Real-time to target user |
 | RedisModule | FriendRequestCacher | Cache pending requests |
 
@@ -227,7 +227,7 @@ export class FriendRequestAcceptedEvent extends DomainEvent {
 
 | Module | Listener | Purpose |
 |--------|----------|---------|
-| MessagingModule | DirectConversationCreator | Auto-create direct chat |
+| ConversationModule | DirectConversationCreator | Auto-create direct chat |
 | SocketModule | FriendshipBroadcaster | Notify both users |
 | RedisModule | FriendListCacher | Update friend cache |
 
@@ -279,15 +279,17 @@ export class UnfriendedEvent extends DomainEvent {
 
 | Module | Listener | Purpose |
 |--------|----------|---------|
-| MessagingModule | ArchiveConversationCloser | Archive direct chat |
+| ConversationModule | ArchiveConversationCloser | Archive direct chat |
 | SocketModule | UnfriendNotifier | Notify removed friend |
 | RedisModule | FriendListCacher | Clear friend cache |
 
 ---
 
-### MESSAGING DOMAIN (Owner: MessagingModule)
+### MESSAGING DOMAIN (Owner: MessageModule / ConversationModule)
 
-**Module Path**: `src/modules/messaging/events/`
+**Module Paths**:
+- `src/modules/message/events/`
+- `src/modules/conversation/events/`
 
 #### 7. MessageSentEvent
 
@@ -301,7 +303,7 @@ export class MessageSentEvent extends DomainEvent {
   readonly eventId: string;
   readonly version: number;           // 1
   readonly timestamp: Date;
-  readonly source: 'MessagingModule';
+  readonly source: 'MessageModule';
 }
 ```
 
@@ -346,12 +348,12 @@ export class ConversationCreatedEvent extends DomainEvent {
   readonly eventId: string;
   readonly version: number;           // 1
   readonly timestamp: Date;
-  readonly source: 'MessagingModule';
+  readonly source: 'ConversationModule';
 }
 ```
 
 **Emission Trigger**: 
-- `ConversationService.createDirectConversation(userId1, userId2)`
+- `ConversationService.getOrCreateDirectConversation(userId1, userId2)`
 - `GroupService.createGroup(createdBy, memberIds, name)`
 
 **Critical Event**: ✅ YES
@@ -547,8 +549,8 @@ These events are **persisted to database** for audit trail, compliance, debuggin
 ✅ USER_BLOCKED           (BlockModule) - Legal compliance
 ✅ USER_UNBLOCKED         (BlockModule) - Legal compliance
 ✅ FRIEND_REQUEST_ACCEPTED (SocialModule) - Relationship proof
-✅ MESSAGE_SENT           (MessagingModule) - Audit trail
-✅ CONVERSATION_CREATED   (MessagingModule) - Group creation audit
+✅ MESSAGE_SENT           (MessageModule) - Audit trail
+✅ CONVERSATION_CREATED   (ConversationModule) - Group creation audit
 ✅ CALL_INITIATED         (CallModule) - Billing evidence
 ✅ CALL_ENDED             (CallModule) - Billing evidence
 ✅ USER_REGISTERED        (AuthModule) - Compliance
@@ -561,8 +563,8 @@ These events are **emitted to listeners** but NOT stored (high volume, no audit 
 ```typescript
 ❌ FRIEND_REQUEST_SENT (SocialModule) - Transient, not final state
 ❌ FRIEND_REQUEST_REJECTED (SocialModule) - Not final binding
-❌ MESSAGE_DELIVERED (MessagingModule) - Transient status
-❌ MESSAGE_SEEN (MessagingModule) - Transient status (future)
+❌ MESSAGE_DELIVERED (MessageModule) - Transient status
+❌ MESSAGE_SEEN (MessageModule) - Transient status (future)
 ```
 
 ### Storage Mechanism
@@ -586,13 +588,13 @@ These events are **emitted to listeners** but NOT stored (high volume, no audit 
 // USER_BLOCKED → Listeners
 UserBlockedEvent listeners:
   - SocialModule: BlockCacheInvalidator (invalidate contacts cache)
-  - MessagingModule: BlockedConversationCloser (close chat)
+  - ConversationModule: BlockedConversationCloser (close chat)
   - CallModule: BlockedCallTerminator (end calls)
   - SocketModule: BlockNotificationSender (notify user B)
 
 // FRIEND_REQUEST_ACCEPTED → Listeners
 FriendRequestAcceptedEvent listeners:
-  - MessagingModule: DirectConversationCreator (create chat)
+  - ConversationModule: DirectConversationCreator (create chat)
   - RedisModule: FriendListCacher (cache friend list)
   - SocketModule: FriendshipBroadcaster (notify both)
 
@@ -663,11 +665,11 @@ These events are **planned but not implemented** in PHASE 1.
 
 ## ❓ FAQ
 
-### Q1: Can MessagingModule emit UserBlockedEvent?
+### Q1: Can MessageModule emit UserBlockedEvent?
 
 **A**: ❌ NO. Only BlockModule owns and emits UserBlockedEvent.
 
-If MessagingModule needs to react to blocking, it should **listen** to UserBlockedEvent.
+If MessageModule needs to react to blocking, it should **listen** to UserBlockedEvent.
 
 ```typescript
 // ❌ WRONG

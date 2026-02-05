@@ -35,7 +35,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Friendship, FriendshipStatus, Prisma } from '@prisma/client';
 import {
   GetFriendsQueryDto,
@@ -56,18 +55,27 @@ import type { IBlockChecker } from '@modules/block/services/block-checker.interf
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { DistributedLockService } from '@common/distributed-lock/distributed-lock.service';
-import {
-  FriendRequestSentEventPayloadV1,
-  FriendshipAcceptedEventPayloadV1,
-  FriendRequestRejectedEventPayloadV1,
-  UnfriendedEventPayloadV1,
-} from '../events/versioned-friendship-events';
+import type {
+  FriendshipAcceptedPayload,
+  FriendshipRejectedPayload,
+  FriendshipRequestSentPayload,
+  UnfriendedPayload,
+} from '@shared/events/contracts';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
 import { v4 as uuidv4 } from 'uuid';
 import socialConfig from '@config/social.config';
 import type { ConfigType } from '@nestjs/config';
 import { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
+import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
+import { EventPublisher } from '@shared/events';
+import {
+  FriendRequestAcceptedEvent,
+  FriendRequestCancelledEvent,
+  FriendRequestRejectedEvent,
+  FriendRequestSentEvent,
+  UnfriendedEvent,
+} from '../events/friendship.events';
 @Injectable()
 export class FriendshipService {
   private readonly logger = new Logger(FriendshipService.name);
@@ -75,7 +83,7 @@ export class FriendshipService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventPublisher: EventPublisher,
     @Inject(BLOCK_CHECKER)
     private readonly blockChecker: IBlockChecker,
     private readonly lockService: DistributedLockService,
@@ -180,18 +188,27 @@ export class FriendshipService {
         await this.incrementRateLimitCounters(requesterId);
 
         // R14: Type-safe event with proper payload (no "as any")
-        const eventPayload: FriendRequestSentEventPayloadV1 = {
+        const eventPayload: FriendshipRequestSentPayload = {
           eventId: EventIdGenerator.generate(),
-          eventVersion: 1,
           eventType: 'FRIEND_REQUEST_SENT',
-          correlationId: uuidv4(),
+          version: 1,
           timestamp: new Date(),
+          source: 'FriendshipModule',
+          aggregateId: requesterId,
+          correlationId: uuidv4(),
           requestId: friendship.id,
           fromUserId: requesterId,
           toUserId: targetUserId,
         };
 
-        this.eventEmitter.emit('friendship.request.sent', eventPayload);
+        await this.eventPublisher.publish(
+          new FriendRequestSentEvent(
+            eventPayload.requestId,
+            eventPayload.fromUserId,
+            eventPayload.toUserId,
+          ),
+          { correlationId: eventPayload.correlationId },
+        );
 
         await this.invalidatePendingRequestsCache(targetUserId);
 
@@ -288,12 +305,14 @@ export class FriendshipService {
         );
 
         // R14: Type-safe event with proper payload (no "as any")
-        const eventPayload: FriendshipAcceptedEventPayloadV1 = {
+        const eventPayload: FriendshipAcceptedPayload = {
           eventId: EventIdGenerator.generate(),
-          eventVersion: 1,
           eventType: 'FRIEND_REQUEST_ACCEPTED',
-          correlationId: uuidv4(),
+          version: 1,
           timestamp: new Date(),
+          source: 'FriendshipModule',
+          aggregateId: userId,
+          correlationId: uuidv4(),
           friendshipId,
           acceptedBy: userId,
           requesterId: friendship.requesterId,
@@ -301,7 +320,16 @@ export class FriendshipService {
           user2Id: friendship.user2Id,
         };
 
-        this.eventEmitter.emit('friendship.accepted', eventPayload);
+        await this.eventPublisher.publish(
+          new FriendRequestAcceptedEvent(
+            eventPayload.friendshipId,
+            eventPayload.acceptedBy,
+            eventPayload.requesterId,
+            eventPayload.user1Id,
+            eventPayload.user2Id,
+          ),
+          { correlationId: eventPayload.correlationId },
+        );
 
         this.logger.log(
           `Friend request accepted: ${friendshipId} by ${userId}`,
@@ -381,19 +409,27 @@ export class FriendshipService {
         );
 
         // R14: Type-safe event
-        const eventPayload: FriendRequestRejectedEventPayloadV1 = {
+        const eventPayload: FriendshipRejectedPayload = {
           eventId: EventIdGenerator.generate(),
-          eventVersion: 1,
           eventType: 'FRIEND_REQUEST_REJECTED',
-          correlationId: uuidv4(),
+          version: 1,
           timestamp: new Date(),
+          source: 'FriendshipModule',
+          aggregateId: friendship.requesterId,
+          correlationId: uuidv4(),
           requestId: friendship.id,
           fromUserId: friendship.requesterId,
           toUserId: userId,
-          action: 'DECLINED',
         };
 
-        this.eventEmitter.emit('friendship.request.declined', eventPayload);
+        await this.eventPublisher.publish(
+          new FriendRequestRejectedEvent(
+            eventPayload.requestId,
+            eventPayload.fromUserId,
+            eventPayload.toUserId,
+          ),
+          { correlationId: eventPayload.correlationId },
+        );
 
         this.logger.log(
           `Friend request declined: ${friendshipId} by ${userId}`,
@@ -442,7 +478,10 @@ export class FriendshipService {
       },
     });
 
-    await this.invalidateFriendshipCache(friendship.user1Id, friendship.user2Id);
+    await this.invalidateFriendshipCache(
+      friendship.user1Id,
+      friendship.user2Id,
+    );
     await this.invalidatePendingRequestsCache(targetUserId);
 
     const eventPayload = {
@@ -454,7 +493,14 @@ export class FriendshipService {
       targetUserId,
     };
 
-    this.eventEmitter.emit('friendship.request.cancelled', eventPayload);
+    await this.eventPublisher.publish(
+      new FriendRequestCancelledEvent(
+        eventPayload.friendshipId,
+        eventPayload.cancelledBy,
+        eventPayload.targetUserId,
+      ),
+      { correlationId: eventPayload.eventId },
+    );
 
     this.logger.log(`Friend request cancelled: ${friendshipId} by ${userId}`);
   }
@@ -537,19 +583,29 @@ export class FriendshipService {
         );
 
         // R14: Type-safe event emission
-        const eventPayload: UnfriendedEventPayloadV1 = {
+        const eventPayload: UnfriendedPayload = {
           eventId: EventIdGenerator.generate(),
-          eventVersion: 1,
           eventType: 'UNFRIENDED',
-          correlationId: uuidv4(),
+          version: 1,
           timestamp: new Date(),
+          source: 'FriendshipModule',
+          aggregateId: userId,
+          correlationId: uuidv4(),
           friendshipId: friendship.id,
           initiatedBy: userId,
           user1Id: currentFriendship.user1Id,
           user2Id: currentFriendship.user2Id,
         };
 
-        this.eventEmitter.emit('friendship.unfriended', eventPayload);
+        await this.eventPublisher.publish(
+          new UnfriendedEvent(
+            eventPayload.friendshipId,
+            eventPayload.initiatedBy,
+            eventPayload.user1Id,
+            eventPayload.user2Id,
+          ),
+          { correlationId: eventPayload.correlationId },
+        );
 
         this.logger.log(`Unfriend: ${userId} removed ${targetUserId}`);
       },
@@ -674,38 +730,25 @@ export class FriendshipService {
       },
     });
 
-    // 4. Pagination Logic
-    const hasNextPage = friendships.length > limit;
-    const data = hasNextPage ? friendships.slice(0, -1) : friendships;
-    const nextCursor = hasNextPage ? data[data.length - 1].id : undefined;
+    return CursorPaginationHelper.buildResult({
+      items: friendships,
+      limit,
+      getCursor: (f) => f.id,
+      mapToDto: (friendship) => {
+        const friend =
+          friendship.user1Id === userId ? friendship.user2 : friendship.user1;
 
-    // 5. Map Response
-    const mappedFriends: FriendWithUserDto[] = data.map((friendship) => {
-      // Xác định ai là bạn, ai là mình
-      const friend =
-        friendship.user1Id === userId ? friendship.user2 : friendship.user1;
-
-      return {
-        friendshipId: friendship.id,
-        userId: friend.id,
-        displayName: friend.displayName, // Lưu ý: Ở đây chưa xử lý Alias (để MVP đơn giản)
-        avatarUrl: friend.avatarUrl ?? undefined,
-        status: friendship.status,
-        createdAt: friendship.createdAt,
-        acceptedAt: friendship.acceptedAt ?? undefined,
-      };
-    });
-
-    // 6. Return Result
-    return {
-      data: mappedFriends,
-      meta: {
-        limit,
-        hasNextPage,
-        nextCursor,
-        // total: undefined, // Bỏ total count khi search/scroll để tối ưu DB
+        return {
+          friendshipId: friendship.id,
+          userId: friend.id,
+          displayName: friend.displayName,
+          avatarUrl: friend.avatarUrl ?? undefined,
+          status: friendship.status,
+          createdAt: friendship.createdAt,
+          acceptedAt: friendship.acceptedAt ?? undefined,
+        } as FriendWithUserDto;
       },
-    };
+    });
   }
 
   /**

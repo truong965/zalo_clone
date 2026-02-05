@@ -5,10 +5,10 @@ import { RedisService } from '@modules/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { ALL_PERMISSION_ACTIONS } from '@common/constants/permission-actions.constant';
-import {
-  UserBlockedEvent,
-  UserUnblockedEvent,
-} from '@modules/block/events/versioned-events';
+import type {
+  UserBlockedEventPayload,
+  UserUnblockedEventPayload,
+} from '@shared/events/contracts';
 
 /**
  * PrivacyBlockListener (PHASE 7 - EVENT-DRIVEN REFACTORING)
@@ -55,7 +55,7 @@ export class PrivacyBlockListener {
    *   2. Permission caches: social:permission:{message|call|profile}:*
    */
   @OnEvent('user.blocked')
-  async handleUserBlocked(event: UserBlockedEvent): Promise<void> {
+  async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
     const handlerId = this.constructor.name;
@@ -104,7 +104,7 @@ export class PrivacyBlockListener {
    * (Permissions need to be recalculated)
    */
   @OnEvent('user.unblocked')
-  async handleUserUnblocked(event: UserUnblockedEvent): Promise<void> {
+  async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
     const handlerId = this.constructor.name;

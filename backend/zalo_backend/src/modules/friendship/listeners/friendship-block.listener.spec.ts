@@ -4,18 +4,44 @@ import { FriendshipBlockListener } from './friendship-block.listener';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { RedisService } from '@modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { UserBlockedEvent, UserUnblockedEvent } from '@modules/block/events/versioned-events';
+import type {
+  UserBlockedEventPayload,
+  UserUnblockedEventPayload,
+} from '@shared/events/contracts';
+import { EventIdGenerator } from '@common/utils/event-id-generator';
 
 describe('FriendshipBlockListener', () => {
   let listener: FriendshipBlockListener;
-  let prisma: { friendship: { findFirst: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> } };
-  let idempotency: { isProcessed: ReturnType<typeof vi.fn>; recordProcessed: ReturnType<typeof vi.fn> };
+  let prisma: { friendship: any };
+  let idempotency: {
+    isProcessed: ReturnType<typeof vi.fn>;
+    recordProcessed: ReturnType<typeof vi.fn>;
+    recordError?: ReturnType<typeof vi.fn>;
+  };
   let redis: { del: ReturnType<typeof vi.fn> };
-  let eventEmitter: { emit: ReturnType<typeof vi.fn> };
 
-  const blockedEvent = new UserBlockedEvent('user-1', 'user-2', 'block-123');
-  const unblockedEvent = new UserUnblockedEvent('user-1', 'user-2', 'block-123');
+  const blockedEvent: UserBlockedEventPayload = {
+    eventId: EventIdGenerator.generate(),
+    eventType: 'USER_BLOCKED',
+    version: 1,
+    timestamp: new Date(),
+    source: 'BlockModule',
+    aggregateId: 'user-1',
+    blockerId: 'user-1',
+    blockedId: 'user-2',
+    blockId: 'block-123',
+  };
+  const unblockedEvent: UserUnblockedEventPayload = {
+    eventId: EventIdGenerator.generate(),
+    eventType: 'USER_UNBLOCKED',
+    version: 1,
+    timestamp: new Date(),
+    source: 'BlockModule',
+    aggregateId: 'user-1',
+    blockerId: 'user-1',
+    blockedId: 'user-2',
+    blockId: 'block-123',
+  };
 
   const mockFriendship = {
     id: 'friendship-1',
@@ -40,15 +66,12 @@ describe('FriendshipBlockListener', () => {
 
     redis = { del: vi.fn().mockResolvedValue(undefined) };
 
-    eventEmitter = { emit: vi.fn() };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FriendshipBlockListener,
         { provide: PrismaService, useValue: prisma },
         { provide: IdempotencyService, useValue: idempotency },
         { provide: RedisService, useValue: { del: redis.del } },
-        { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
 
@@ -72,25 +95,21 @@ describe('FriendshipBlockListener', () => {
       expect(prisma.friendship.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            user1Id: expect.any(String),
-            user2Id: expect.any(String),
+            user1Id: expect.any(String) as unknown,
+            user2Id: expect.any(String) as unknown,
             deletedAt: null,
-          }),
+          }) as unknown,
         }),
       );
       expect(prisma.friendship.updateMany).toHaveBeenCalledWith({
         where: expect.objectContaining({
-          user1Id: expect.any(String),
-          user2Id: expect.any(String),
+          user1Id: expect.any(String) as unknown,
+          user2Id: expect.any(String) as unknown,
           deletedAt: null,
-        }),
-        data: { deletedAt: expect.any(Date) },
+        }) as unknown,
+        data: { deletedAt: expect.any(Date) as unknown },
       });
       expect(redis.del).toHaveBeenCalled();
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
-        'cache.invalidate',
-        expect.objectContaining({ reason: 'friendship_deleted_by_block' }),
-      );
       expect(idempotency.recordProcessed).toHaveBeenCalled();
     });
 
@@ -110,8 +129,8 @@ describe('FriendshipBlockListener', () => {
 
       expect(prisma.friendship.updateMany).toHaveBeenCalledWith({
         where: expect.objectContaining({
-          deletedAt: { not: null },
-        }),
+          deletedAt: { not: null } as unknown,
+        }) as unknown,
         data: { deletedAt: null },
       });
       expect(redis.del).toHaveBeenCalled();

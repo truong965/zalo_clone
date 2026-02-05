@@ -1,7 +1,7 @@
 /**
  * SOCIAL/FRIENDSHIP DOMAIN EVENTS
  *
- * Owner: SocialModule
+ * Owner: FriendshipModule
  * Description: Events emitted during friendship lifecycle (request, accept, reject, remove)
  *
  * Business Rules:
@@ -35,17 +35,19 @@ export class FriendRequestSentEvent extends DomainEvent {
   readonly version = 1;
 
   constructor(
-    readonly requesterId: string,
-    readonly targetUserId: string,
+    readonly requestId: string,
+    readonly fromUserId: string,
+    readonly toUserId: string,
   ) {
-    super('SocialModule', 'Friendship', requesterId, 1);
+    super('FriendshipModule', 'Friendship', fromUserId, 1);
   }
 
   toJSON() {
     return {
       ...super.toJSON(),
-      requesterId: this.requesterId,
-      targetUserId: this.targetUserId,
+      requestId: this.requestId,
+      fromUserId: this.fromUserId,
+      toUserId: this.toUserId,
       eventType: this.eventType,
     };
   }
@@ -79,17 +81,23 @@ export class FriendRequestAcceptedEvent extends DomainEvent {
   readonly version = 1;
 
   constructor(
+    readonly friendshipId: string,
+    readonly acceptedBy: string,
     readonly requesterId: string,
-    readonly accepterId: string,
+    readonly user1Id: string,
+    readonly user2Id: string,
   ) {
-    super('SocialModule', 'Friendship', requesterId, 1);
+    super('FriendshipModule', 'Friendship', friendshipId, 1);
   }
 
   toJSON() {
     return {
       ...super.toJSON(),
+      friendshipId: this.friendshipId,
+      acceptedBy: this.acceptedBy,
       requesterId: this.requesterId,
-      accepterId: this.accepterId,
+      user1Id: this.user1Id,
+      user2Id: this.user2Id,
       eventType: this.eventType,
     };
   }
@@ -116,17 +124,42 @@ export class FriendRequestRejectedEvent extends DomainEvent {
   readonly version = 1;
 
   constructor(
-    readonly requesterId: string,
-    readonly rejecterId: string,
+    readonly requestId: string,
+    readonly fromUserId: string,
+    readonly toUserId: string,
   ) {
-    super('SocialModule', 'Friendship', rejecterId, 1);
+    super('FriendshipModule', 'Friendship', requestId, 1);
   }
 
   toJSON() {
     return {
       ...super.toJSON(),
-      requesterId: this.requesterId,
-      rejecterId: this.rejecterId,
+      requestId: this.requestId,
+      fromUserId: this.fromUserId,
+      toUserId: this.toUserId,
+      eventType: this.eventType,
+    };
+  }
+}
+
+export class FriendRequestCancelledEvent extends DomainEvent {
+  readonly eventType = 'FRIEND_REQUEST_CANCELLED';
+  readonly version = 1;
+
+  constructor(
+    readonly friendshipId: string,
+    readonly cancelledBy: string,
+    readonly targetUserId: string,
+  ) {
+    super('FriendshipModule', 'Friendship', friendshipId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      friendshipId: this.friendshipId,
+      cancelledBy: this.cancelledBy,
+      targetUserId: this.targetUserId,
       eventType: this.eventType,
     };
   }
@@ -155,17 +188,21 @@ export class UnfriendedEvent extends DomainEvent {
   readonly version = 1;
 
   constructor(
-    readonly initiatorId: string,
-    readonly removedFriendId: string,
+    readonly friendshipId: string,
+    readonly initiatedBy: string,
+    readonly user1Id: string,
+    readonly user2Id: string,
   ) {
-    super('SocialModule', 'Friendship', initiatorId, 1);
+    super('FriendshipModule', 'Friendship', friendshipId, 1);
   }
 
   toJSON() {
     return {
       ...super.toJSON(),
-      initiatorId: this.initiatorId,
-      removedFriendId: this.removedFriendId,
+      friendshipId: this.friendshipId,
+      initiatedBy: this.initiatedBy,
+      user1Id: this.user1Id,
+      user2Id: this.user2Id,
       eventType: this.eventType,
     };
   }

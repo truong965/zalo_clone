@@ -13,7 +13,8 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RedisModule } from './modules/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './socket/socket.module';
-import { MessagingModule } from './modules/messaging/messaging.module';
+import { ConversationModule } from './modules/conversation/conversation.module';
+import { MessageModule } from './modules/message/message.module';
 import { MediaModule } from './modules/media/media.module';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -112,7 +113,8 @@ import socialConfig from './config/social.config';
     PermissionsModule,
 
     // Communication Core
-    MessagingModule,
+    ConversationModule, // NEW: Conversation domain module
+    MessageModule, // NEW: Message domain module
     MediaModule,
 
     // PHASE 6: Domain Event Persistence (audit trail)

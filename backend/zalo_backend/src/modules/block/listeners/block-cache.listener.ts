@@ -4,10 +4,10 @@ import { EventType } from '@prisma/client';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { RedisService } from '@modules/redis/redis.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
-import {
-  UserBlockedEvent,
-  UserUnblockedEvent,
-} from '@modules/block/events/versioned-events';
+import type {
+  UserBlockedEventPayload,
+  UserUnblockedEventPayload,
+} from '@shared/events/contracts';
 
 /**
  * BlockCacheListener - PHASE 3 (renamed from BlockEventHandler)
@@ -28,7 +28,7 @@ export class BlockCacheListener {
   ) {}
 
   @OnEvent('user.blocked')
-  async handleUserBlocked(event: UserBlockedEvent): Promise<void> {
+  async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
     const handlerId = this.constructor.name;
@@ -79,7 +79,7 @@ export class BlockCacheListener {
   }
 
   @OnEvent('user.unblocked')
-  async handleUserUnblocked(event: UserUnblockedEvent): Promise<void> {
+  async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
     const handlerId = this.constructor.name;
@@ -129,7 +129,10 @@ export class BlockCacheListener {
     }
   }
 
-  private getPermissionCacheKeys(blockerId: string, blockedId: string): string[] {
+  private getPermissionCacheKeys(
+    blockerId: string,
+    blockedId: string,
+  ): string[] {
     const actions = ['message', 'call', 'profile'] as const;
     const keys = [RedisKeyBuilder.socialBlock(blockerId, blockedId)];
 

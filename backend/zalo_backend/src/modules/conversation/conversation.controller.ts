@@ -1,0 +1,45 @@
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ConversationService } from './services/conversation.service';
+import {
+  InteractionGuard,
+  RequireInteraction,
+} from '@modules/authorization/guards/interaction.guard';
+import { PermissionAction } from '@common/constants/permission-actions.constant';
+import { CurrentUser } from 'src/common/decorator/customize';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+
+@ApiTags('conversations')
+@Controller('conversations')
+@UseGuards(JwtAuthGuard)
+export class ConversationController {
+  constructor(private readonly conversationService: ConversationService) {}
+
+  @Post('direct')
+  @UseGuards(InteractionGuard)
+  @RequireInteraction(PermissionAction.MESSAGE)
+  @ApiOperation({ summary: 'Get or create direct conversation' })
+  async getOrCreateDirectConversation(
+    @CurrentUser() user,
+    @Body() body: { recipientId: string },
+  ) {
+    return this.conversationService.getOrCreateDirectConversation(
+      user.id,
+      body.recipientId,
+    );
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get list of conversations' })
+  async getConversations(
+    @CurrentUser() user,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.conversationService.getUserConversations(
+      user.id,
+      cursor,
+      limit ? +limit : 20,
+    );
+  }
+}

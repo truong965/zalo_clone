@@ -4,7 +4,7 @@ import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
-import { UnfriendedEvent } from '../events/versioned-friendship-events';
+import type { UnfriendedPayload } from '@shared/events/contracts';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
 
 /**
@@ -67,7 +67,7 @@ export class UnfriendedListener extends IdempotentListener {
    * })
    */
   @OnEvent('friendship.unfriended')
-  async handleUnfriended(payload: UnfriendedEvent): Promise<void> {
+  async handleUnfriended(payload: UnfriendedPayload): Promise<void> {
     const eventId = this.extractEventId(payload);
     if (!EventIdGenerator.isValid(eventId)) {
       this.logger.warn(`[UNFRIENDED] Invalid eventId: ${eventId}`);
@@ -94,10 +94,10 @@ export class UnfriendedListener extends IdempotentListener {
             user1Id,
             user2Id,
           );
-          await FriendshipCacheHelper.invalidateCallHistories(
-            this.redis,
-            [user1Id, user2Id],
-          );
+          await FriendshipCacheHelper.invalidateCallHistories(this.redis, [
+            user1Id,
+            user2Id,
+          ]);
 
           this.logger.debug(
             `[UNFRIENDED] ✅ Cache invalidated for both users (distributed lock protected)`,

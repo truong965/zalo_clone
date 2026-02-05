@@ -17,10 +17,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
 import { EventType, Prisma } from '@prisma/client';
-import {
-  UserBlockedEvent,
-  UserUnblockedEvent,
-} from '@modules/block/events/versioned-events';
+import type {
+  UserBlockedEventPayload,
+  UserUnblockedEventPayload,
+} from '@shared/events/contracts';
 
 interface PersistInput {
   eventId: string;
@@ -41,7 +41,7 @@ export class DomainEventPersistenceListener {
   constructor(private readonly prisma: PrismaService) {}
 
   @OnEvent('user.blocked')
-  async handleUserBlocked(event: UserBlockedEvent): Promise<void> {
+  async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     await this.persist({
       eventId: event.eventId,
       eventType: EventType.USER_BLOCKED,
@@ -50,13 +50,13 @@ export class DomainEventPersistenceListener {
       version: event.version,
       source: event.source,
       correlationId: event.correlationId,
-      payload: event.toJSON(),
+      payload: event as unknown as Record<string, unknown>,
       occurredAt: event.timestamp,
     });
   }
 
   @OnEvent('user.unblocked')
-  async handleUserUnblocked(event: UserUnblockedEvent): Promise<void> {
+  async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     await this.persist({
       eventId: event.eventId,
       eventType: EventType.USER_UNBLOCKED,
@@ -65,7 +65,7 @@ export class DomainEventPersistenceListener {
       version: event.version,
       source: event.source,
       correlationId: event.correlationId,
-      payload: event.toJSON(),
+      payload: event as unknown as Record<string, unknown>,
       occurredAt: event.timestamp,
     });
   }

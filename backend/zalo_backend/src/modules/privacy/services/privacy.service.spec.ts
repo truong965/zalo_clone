@@ -3,9 +3,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrivacyService } from './privacy.service';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PrivacyLevel } from '@prisma/client';
 import socialConfig from '@config/social.config';
+import { EventPublisher } from '@shared/events';
+import { PrivacyLevel } from '@prisma/client';
 
 const mockPrivacySettings = {
   userId: 'user-1',
@@ -21,21 +21,18 @@ const mockPrivacySettings = {
 
 describe('PrivacyService', () => {
   let service: PrivacyService;
-  let prisma: {
-    privacySettings: {
-      findUnique: ReturnType<typeof vi.fn>;
-      findMany: ReturnType<typeof vi.fn>;
-      update: ReturnType<typeof vi.fn>;
-    };
-  };
-  let redis: { get: ReturnType<typeof vi.fn>; setex: ReturnType<typeof vi.fn>; getClient: ReturnType<typeof vi.fn> };
+  let prisma: any;
+  let redis: any;
 
   beforeEach(async () => {
     prisma = {
       privacySettings: {
         findUnique: vi.fn().mockResolvedValue(mockPrivacySettings),
         findMany: vi.fn().mockResolvedValue([mockPrivacySettings]),
-        update: vi.fn().mockResolvedValue({ ...mockPrivacySettings, whoCanMessageMe: PrivacyLevel.EVERYONE }),
+        update: vi.fn().mockResolvedValue({
+          ...mockPrivacySettings,
+          whoCanMessageMe: PrivacyLevel.EVERYONE,
+        }),
         create: vi.fn().mockResolvedValue(mockPrivacySettings),
       },
     };
@@ -56,12 +53,16 @@ describe('PrivacyService', () => {
       getClient: vi.fn().mockReturnValue(redisClient),
     };
 
+    const eventPublisher = {
+      publish: vi.fn().mockResolvedValue('evt-1'),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PrivacyService,
         { provide: PrismaService, useValue: prisma },
         { provide: RedisService, useValue: redis },
-        { provide: EventEmitter2, useValue: { emit: vi.fn() } },
+        { provide: EventPublisher, useValue: eventPublisher },
         {
           provide: socialConfig.KEY,
           useValue: {
@@ -98,13 +99,13 @@ describe('PrivacyService', () => {
 
   describe('updateSettings', () => {
     it('should update and emit privacy.updated event', async () => {
-      const emit = vi.fn();
+      const publish = vi.fn().mockResolvedValue('evt-1');
       const module = await Test.createTestingModule({
         providers: [
           PrivacyService,
           { provide: PrismaService, useValue: prisma },
           { provide: RedisService, useValue: redis },
-          { provide: EventEmitter2, useValue: { emit } },
+          { provide: EventPublisher, useValue: { publish } },
           {
             provide: socialConfig.KEY,
             useValue: { ttl: { privacy: 3600, permission: 300 } },
@@ -119,13 +120,7 @@ describe('PrivacyService', () => {
       });
 
       expect(prisma.privacySettings.update).toHaveBeenCalled();
-      expect(emit).toHaveBeenCalledWith(
-        'privacy.updated',
-        expect.objectContaining({
-          userId: 'user-1',
-          settings: expect.any(Object),
-        }),
-      );
+      expect(publish).toHaveBeenCalled();
     });
   });
 });

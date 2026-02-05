@@ -12,9 +12,10 @@ import { SocketConnectionLoggerService } from './services/socket-connection-logg
 import { ScheduleModule } from '@nestjs/schedule';
 import { SocketCleanupJob } from './jobs/socket-cleanup.job';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EventsModule } from '@shared/events';
 
 // PHASE 2: Event listener (instead of MessagingModule import)
-import { SocketNotificationListener } from 'src/modules/messaging/listeners/message-broadcaster.listener';
+import { SocketNotificationListener } from './listeners/socket-notification.listener';
 
 /**
  * SocketModule (PHASE 2 - REFACTORED)
@@ -44,6 +45,7 @@ import { SocketNotificationListener } from 'src/modules/messaging/listeners/mess
     DatabaseModule,
     ScheduleModule.forRoot(),
     EventEmitterModule, // PHASE 2: For event listeners
+    EventsModule,
   ],
   providers: [
     SocketGateway,

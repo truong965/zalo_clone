@@ -21,12 +21,7 @@ import { InteractionGuard } from './guards/interaction.guard';
  * For friend_request, FriendshipService uses IBlockChecker from BlockModule directly.
  */
 @Module({
-  imports: [
-    ConfigModule,
-    BlockModule,
-    PrivacyModule,
-    FriendshipModule,
-  ],
+  imports: [ConfigModule, BlockModule, PrivacyModule, FriendshipModule],
   providers: [InteractionAuthorizationService, InteractionGuard],
   exports: [InteractionAuthorizationService, InteractionGuard],
 })

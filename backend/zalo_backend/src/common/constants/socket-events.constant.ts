@@ -33,7 +33,8 @@ export const SocketEvents = {
 
   //Client → Server
   MESSAGE_SEND: 'message:send',
-  MESSAGE_DELIVERED_ACK: 'message:delivered', // Client confirms delivery
+  MESSAGE_DELIVERED_ACK: 'message:delivered',
+  MESSAGE_DELIVERED_CLIENT_ACK: 'message:delivered:ack',
   MESSAGE_SEEN: 'message:seen',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',

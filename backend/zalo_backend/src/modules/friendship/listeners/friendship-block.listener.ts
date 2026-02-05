@@ -5,11 +5,10 @@ import { PrismaService } from '@database/prisma.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { RedisService } from '@modules/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import {
-  UserBlockedEvent,
-  UserUnblockedEvent,
-} from '@modules/block/events/versioned-events';
+import type {
+  UserBlockedEventPayload,
+  UserUnblockedEventPayload,
+} from '@shared/events/contracts';
 
 /**
  * FriendshipBlockListener (NEW - Moved from BlockEventHandler)
@@ -51,7 +50,6 @@ export class FriendshipBlockListener {
     private readonly prisma: PrismaService,
     private readonly idempotency: IdempotencyService,
     private readonly redis: RedisService,
-    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -76,7 +74,7 @@ export class FriendshipBlockListener {
    * ```
    */
   @OnEvent('user.blocked')
-  async handleUserBlocked(event: UserBlockedEvent): Promise<void> {
+  async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId, eventId } = event;
     const handlerId = this.constructor.name;
 
@@ -150,12 +148,6 @@ export class FriendshipBlockListener {
         `[FRIENDSHIP] Cache invalidated: ${cacheKeys.length} keys deleted`,
       );
 
-      // STEP 3: Emit cache.invalidate event for multi-node sync
-      this.eventEmitter.emit('cache.invalidate', {
-        keys: cacheKeys,
-        reason: 'friendship_deleted_by_block',
-      });
-
       this.logger.log(
         `[FRIENDSHIP] ✅ Cascade complete: Friendship soft deleted for block ${eventId}`,
       );
@@ -208,7 +200,7 @@ export class FriendshipBlockListener {
    * - Only restore if record was soft-deleted by block (deletedAt not null)
    */
   @OnEvent('user.unblocked')
-  async handleUserUnblocked(event: UserUnblockedEvent): Promise<void> {
+  async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId, eventId } = event;
     const handlerId = this.constructor.name;
 
@@ -255,11 +247,6 @@ export class FriendshipBlockListener {
       ];
 
       await this.redis.del(...cacheKeys);
-
-      this.eventEmitter.emit('cache.invalidate', {
-        keys: cacheKeys,
-        reason: 'friendship_unblock_restore',
-      });
 
       this.logger.debug(
         `[FRIENDSHIP] ✅ Unblock complete: restore + cache invalidation`,
