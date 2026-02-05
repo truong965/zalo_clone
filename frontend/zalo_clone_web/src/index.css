@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Styles */
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  html,
+  body {
+    @apply margin-0 padding-0 h-full;
+  }
+
+  body {
+    @apply bg-white text-gray-900 antialiased;
+  }
+
+  #root {
+    @apply h-full;
+  }
+
+  a {
+    @apply text-blue-600 hover:text-blue-700 transition-colors;
+  }
+}
+
+/* Ant Design Custom Styles */
+.ant-layout {
+  @apply h-full;
+}
+
+.ant-layout-sider-collapsed {
+  @apply transition-all duration-300;
+}
+
+/* Chat specific styles */
+.chat-message-container {
+  @apply flex flex-col gap-2;
+}
+
+.chat-bubble-sent {
+  @apply bg-blue-500 text-white rounded-lg px-3 py-2 max-w-xs;
+}
+
+.chat-bubble-received {
+  @apply bg-gray-200 text-gray-900 rounded-lg px-3 py-2 max-w-xs;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  @apply w-2 h-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-400 rounded hover:bg-gray-500;
+}
