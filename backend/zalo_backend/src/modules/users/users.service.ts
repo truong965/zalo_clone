@@ -13,6 +13,8 @@ import bcrypt from 'bcryptjs';
 import { CreateUserAdminDto } from './dto/create-user-admin.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
+import { UserProfileEntity } from './entities/user-profile.entity';
+import { PermissionEntity } from '../permissions/entity/permission.entity';
 
 @Injectable()
 export class UsersService extends BaseService<User> {
@@ -30,17 +32,17 @@ export class UsersService extends BaseService<User> {
   async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { phoneNumber },
-      include: {
-        role: {
-          include: {
-            rolePermissions: {
-              include: {
-                permission: true,
-              },
-            },
-          },
-        },
-      },
+      // include: {
+      //   role: {
+      //     include: {
+      //       rolePermissions: {
+      //         include: {
+      //           permission: true,
+      //         },
+      //       },
+      //     },
+      //   },
+      // },
     });
   }
 
@@ -72,9 +74,37 @@ export class UsersService extends BaseService<User> {
 
   /**Get user profile without password
    */
-  async getProfile(id: string) {
-    const user = await this.findById(id);
-    return new UserEntity(user);
+  async getProfile(id: string): Promise<UserProfileEntity> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        role: {
+          include: {
+            rolePermissions: {
+              include: {
+                permission: true, // Lấy full object permission [cite: 40]
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // 2. Map Permissions: Chuyển từ RolePermission[] sang PermissionEntity[]
+    const permissions =
+      user.role?.rolePermissions.map(
+        (rp) => new PermissionEntity(rp.permission), // Map toàn bộ object permission
+      ) || [];
+
+    // 3. Trả về Profile Entity
+    return new UserProfileEntity({
+      ...user,
+      role: user.role?.name || 'UNKNOWN', // Tên role
+      permissions: permissions, // Danh sách object permission đầy đủ
+    });
   }
   //helper check pass an toàn
   isValidPassword(password: string, hash: string): boolean {

@@ -11,11 +11,18 @@ import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { RedisIoAdapter } from './socket/adapters/redis-io.adapter';
+import { ConfigService } from '@nestjs/config';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const port = process.env.PORT || 3000;
 
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+  const rawOrigins = configService.get<string>('CORS_ORIGINS') || '';
+
+  // 2. Chuyển đổi thành Array chuẩn để NestJS tự động xử lý logic trả về 1 origin
+  const allowedOrigins = rawOrigins.split(',').map((origin) => origin.trim());
+
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new TransformInterceptor(reflector));
   app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
@@ -43,7 +50,7 @@ async function bootstrap() {
   app.use(cookieParser());
   //CORS configuration
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    origin: allowedOrigins,
     credentials: true, // Allow cookies
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [

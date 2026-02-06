@@ -1,163 +1,155 @@
 /**
  * Register Page
+ * Fix: Cấu trúc cuộn chuyên nghiệp cho Mobile & Desktop
  */
 
-import { Form, Input, Button, Card, Space, Typography, Divider, message } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { Form, Input, Button, Card, Space, Typography, Divider, notification, Select } from 'antd';
+import { UserOutlined, LockOutlined, PhoneOutlined } from '@ant-design/icons';
+import { useNavigate, Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useAuth } from '@/features/auth/hooks/use-auth';
+import type { RegisterRequest } from '@/types';
 
-const { Title, Text, Link } = Typography;
+const { Title, Text } = Typography;
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
+  const [api, contextHolder] = notification.useNotification();
 
-  const onFinish = async (values: Record<string, string>) => {
-    setLoading(true);
+  const { register, isLoading, isAuthenticated, clearError } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/chat');
+    }
+  }, [isAuthenticated, navigate]);
+
+  const onFinish = async (values: RegisterRequest) => {
     try {
-      // TODO: Call auth API
-      console.log('Register:', values);
-      message.success('Registration successful! Please login.');
-      navigate('/login');
-    } finally {
-      setLoading(false);
+      clearError();
+      await register({
+        displayName: values.displayName,
+        phoneNumber: values.phoneNumber,
+        password: values.password,
+        gender: values.gender,
+        dateOfBirth: values.dateOfBirth,
+      });
+      api.success({
+        message: 'Đăng ký thành công!',
+        description: 'Vui lòng đăng nhập với tài khoản mới.',
+        placement: 'bottomRight',
+        duration: 5,
+      });
+      setTimeout(() => navigate('/login'), 1500);
+    } catch (err: any) {
+      api.error({
+        message: 'Đăng ký thất bại',
+        description: err?.response?.data?.message || 'Vui lòng kiểm tra lại thông tin.',
+        placement: 'bottomRight',
+      });
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
-      <Card
-        className="w-full max-w-md shadow-lg"
-        bordered={false}
-      >
-        <Space direction="vertical" className="w-full">
-          <Title level={2} className="text-center mb-2">
-            💬 Zalo Clone
-          </Title>
-          <Text type="secondary" className="block text-center mb-6">
-            Create a new account to get started.
-          </Text>
+    /* FIX: 
+      - overflow-y-auto: Đảm bảo vùng này có thể cuộn.
+      - py-10: Tạo khoảng trống trên/dưới để Card không dính sát mép khi cuộn.
+    */
+    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 to-indigo-50 flex justify-center overflow-y-auto py-10 px-4">
+      {contextHolder}
 
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={onFinish}
-            autoComplete="off"
-          >
-            <Form.Item
-              name="firstName"
-              label="First Name"
-              rules={[{ required: true, message: 'Please enter your first name!' }]}
+      {/* h-fit: Giúp div co giãn theo nội dung thay vì cố gắng lấp đầy chiều cao */}
+      <div className="w-full max-w-md h-fit">
+        <Card className="shadow-lg w-full border-none sm:border-solid">
+          <Space direction="vertical" className="w-full" size="large">
+            <div className="text-center">
+              <Title level={2} className="!mb-2">Đăng Ký</Title>
+              <Text type="secondary">Tạo tài khoản mới cho dự án của bạn</Text>
+            </div>
+
+            <Form
+              form={form}
+              layout="vertical"
+              onFinish={onFinish}
+              requiredMark="optional"
+              size="large"
             >
-              <Input
-                prefix={<UserOutlined />}
-                placeholder="John"
-                size="large"
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="lastName"
-              label="Last Name"
-              rules={[{ required: true, message: 'Please enter your last name!' }]}
-            >
-              <Input
-                prefix={<UserOutlined />}
-                placeholder="Doe"
-                size="large"
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="email"
-              label="Email"
-              rules={[
-                { required: true, message: 'Please enter your email!' },
-                { type: 'email', message: 'Invalid email!' },
-              ]}
-            >
-              <Input
-                prefix={<MailOutlined />}
-                placeholder="your@email.com"
-                size="large"
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="phoneNumber"
-              label="Phone Number (Optional)"
-            >
-              <Input
-                prefix={<PhoneOutlined />}
-                placeholder="+1234567890"
-                size="large"
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="password"
-              label="Password"
-              rules={[
-                { required: true, message: 'Please enter your password!' },
-                { min: 8, message: 'Password must be at least 8 characters!' },
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Enter a strong password"
-                size="large"
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="confirmPassword"
-              label="Confirm Password"
-              rules={[
-                { required: true, message: 'Please confirm your password!' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('password') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Passwords do not match!'));
-                  },
-                }),
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Confirm your password"
-                size="large"
-              />
-            </Form.Item>
-
-            <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={loading}
-                block
-                size="large"
+              <Form.Item
+                label="Tên Hiển Thị"
+                name="displayName"
+                rules={[{ required: true, message: 'Vui lòng nhập tên hiển thị' }]}
               >
-                Register
-              </Button>
-            </Form.Item>
-          </Form>
+                <Input prefix={<UserOutlined />} placeholder="VD: Nguyễn Văn A" />
+              </Form.Item>
 
-          <Divider></Divider>
+              <Form.Item
+                label="Số Điện Thoại"
+                name="phoneNumber"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập số điện thoại' },
+                  { pattern: /(84|0[3|5|7|8|9])+([0-9]{8})\b/g, message: 'SĐT không hợp lệ' },
+                ]}
+              >
+                <Input prefix={<PhoneOutlined />} placeholder="VD: 0987654321" />
+              </Form.Item>
 
-          <Space direction="vertical" className="w-full">
-            <Text className="text-center block">
-              Already have an account?{' '}
-              <Link onClick={() => navigate('/login')}>
-                Login here
+              <Form.Item
+                label="Mật Khẩu"
+                name="password"
+                rules={[{ required: true, message: 'Nhập mật khẩu' }, { min: 6, message: 'Tối thiểu 6 ký tự' }]}
+              >
+                <Input.Password prefix={<LockOutlined />} placeholder="Nhập mật khẩu" />
+              </Form.Item>
+
+              <Form.Item
+                label="Xác Nhận Mật Khẩu"
+                name="confirmPassword"
+                dependencies={['password']}
+                rules={[
+                  { required: true, message: 'Xác nhận mật khẩu' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!value || getFieldValue('password') === value) return Promise.resolve();
+                      return Promise.reject(new Error('Mật khẩu không khớp!'));
+                    },
+                  }),
+                ]}
+              >
+                <Input.Password prefix={<LockOutlined />} placeholder="Xác nhận lại" />
+              </Form.Item>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Form.Item label="Giới Tính" name="gender" className="mb-0">
+                  <Select placeholder="Chọn">
+                    <Select.Option value="MALE">Nam</Select.Option>
+                    <Select.Option value="FEMALE">Nữ</Select.Option>
+                  </Select>
+                </Form.Item>
+
+                <Form.Item label="Ngày Sinh" name="dateOfBirth" className="mb-0">
+                  <Input type="date" />
+                </Form.Item>
+              </div>
+
+              <Form.Item className="mt-8 mb-0">
+                <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
+                  {isLoading ? 'Đang đăng ký...' : 'Đăng Ký'}
+                </Button>
+              </Form.Item>
+            </Form>
+
+            <Divider className="my-2">Hoặc</Divider>
+
+            <div className="text-center pb-2">
+              <Text>Đã có tài khoản? </Text>
+              <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700">
+                Đăng nhập
               </Link>
-            </Text>
+            </div>
           </Space>
-        </Space>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

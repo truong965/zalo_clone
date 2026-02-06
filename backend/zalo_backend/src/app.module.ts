@@ -123,13 +123,13 @@ import socialConfig from './config/social.config';
     // [REFACTORED] Social Graph Components
     BlockModule,
     AuthorizationModule, // PHASE 2: canInteract, InteractionGuard
-    CallModule, // Phụ thuộc Social
+    // CallModule, // Phụ thuộc Social
     FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
     PrivacyModule, // Privacy settings & permissions (Independent)
 
     // Utilities
-    HealthModule,
-    ContactModule,
+    // HealthModule,
+    // ContactModule,
   ],
   controllers: [AppController],
   providers: [

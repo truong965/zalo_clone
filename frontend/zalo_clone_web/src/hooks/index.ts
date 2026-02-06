@@ -2,28 +2,10 @@
  * Custom Hooks
  */
 
-import { useAppStore } from '@/stores/use-app-store';
-import { useCallback, useEffect, useState } from 'react';
+// Re-export useAuth from auth feature for convenience
+export { useAuth } from '@/features/auth/hooks/use-auth';
 
-/**
- * Hook để lấy thông tin user hiện tại
- */
-export function useAuth() {
-  const { user, isAuthenticated, setUser, setIsAuthenticated } = useAppStore();
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    setUser(null);
-    setIsAuthenticated(false);
-  }, [setUser, setIsAuthenticated]);
-
-  return {
-    user,
-    isAuthenticated,
-    logout,
-  };
-}
+import { useEffect, useState } from 'react';
 
 /**
  * Hook để detect mobile view

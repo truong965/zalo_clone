@@ -16,6 +16,7 @@ import { EventsModule } from '@shared/events';
 
 // PHASE 2: Event listener (instead of MessagingModule import)
 import { SocketNotificationListener } from './listeners/socket-notification.listener';
+import { AuthModule } from 'src/modules/auth/auth.module';
 
 /**
  * SocketModule (PHASE 2 - REFACTORED)
@@ -46,6 +47,7 @@ import { SocketNotificationListener } from './listeners/socket-notification.list
     ScheduleModule.forRoot(),
     EventEmitterModule, // PHASE 2: For event listeners
     EventsModule,
+    AuthModule, // For DeviceFingerprintService
   ],
   providers: [
     SocketGateway,

@@ -3,7 +3,8 @@ import { registerAs } from '@nestjs/config';
 export default registerAs('socket', () => ({
   // CORS configuration
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    // origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    origin: '*',
     credentials: true,
     methods: ['GET', 'POST'],
   },

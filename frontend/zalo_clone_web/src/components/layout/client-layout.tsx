@@ -1,27 +1,28 @@
 /**
  * Client Layout Component
- * Main layout cho user app (chat, contacts, etc)
  */
 
 import { Outlet } from 'react-router-dom';
 import { Layout } from 'antd';
-import { ClientHeader } from './client-header';
 import { ClientSidebar } from './client-sidebar';
-import { ClientFooter } from './client-footer';
 
 const { Content } = Layout;
 
 export function ClientLayout() {
       return (
-            <Layout className="h-screen flex flex-col">
-                  <ClientHeader />
-                  <Layout className="flex-1 flex overflow-hidden">
-                        <ClientSidebar />
-                        <Content className="flex-1 overflow-auto bg-white">
+            <Layout className="h-screen w-screen overflow-hidden bg-white">
+                  {/* Sidebar cố định bên trái */}
+                  <ClientSidebar />
+
+                  {/* Phần nội dung chính */}
+                  <Layout className="flex-1 bg-white h-full relative">
+                        <Content className="h-full overflow-hidden flex flex-col">
+                              {/* Outlet ở đây sẽ render các trang con (Chat, Contacts...).
+                                Các trang này nên tự handle việc scroll của riêng nó.
+                              */}
                               <Outlet />
                         </Content>
                   </Layout>
-                  <ClientFooter />
             </Layout>
       );
 }

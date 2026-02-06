@@ -1,81 +1,120 @@
 /**
  * Login Page
+ * Đăng nhập với số điện thoại và mật khẩu
+ * Tích hợp JWT auth flow từ backend
  */
 
-import { Form, Input, Button, Card, Space, Typography, Divider, message } from 'antd';
+// [THAY ĐỔI 1]: Import 'notification' thay vì 'Alert' và 'message'
+import { Form, Input, Button, Card, Space, Typography, Divider, notification } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useAuth } from '@/features/auth/hooks/use-auth';
 
-const { Title, Text, Link } = Typography;
+const { Title, Text } = Typography;
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
+  // [THAY ĐỔI 2]: Khởi tạo hook notification
+  const [api, contextHolder] = notification.useNotification();
 
-  const onFinish = async (values: Record<string, string>) => {
-    setLoading(true);
-    try {
-      // TODO: Call auth API
-      console.log('Login:', values);
-      message.success('Login successful!');
-      // Mock: Save tokens
-      localStorage.setItem('accessToken', 'mock-token-' + Date.now());
-      localStorage.setItem('refreshToken', 'mock-refresh-token-' + Date.now());
+  const {
+    login,
+    isLoading,
+    isAuthenticated,
+    // error, // [THAY ĐỔI 3]: Không cần dùng state error này nữa vì ta sẽ bắn thông báo trực tiếp khi fail
+    clearError,
+  } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
       navigate('/chat');
-    } finally {
-      setLoading(false);
+    }
+  }, [isAuthenticated, navigate]);
+
+  const onFinish = async (values: { phoneNumber: string; password: string }) => {
+    try {
+      clearError();
+      await login({
+        phoneNumber: values.phoneNumber,
+        password: values.password,
+      });
+      // Dùng notification thay cho message để đồng bộ
+      api.success({
+        message: 'Thành công',
+        description: 'Đăng nhập thành công!',
+        placement: 'bottomRight',
+      });
+    } catch (err: any) {
+      // [THAY ĐỔI 4]: Sử dụng notification error ở góc dưới phải
+      api.error({
+        message: 'Đăng nhập thất bại',
+        description: err?.response?.data?.message || 'Vui lòng kiểm tra lại thông tin.',
+        placement: 'bottomRight', // Vị trí hiển thị
+        duration: 4.5, // Thời gian hiển thị (giây)
+      });
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
-      <Card
-        className="w-full max-w-md shadow-lg"
-        bordered={false}
-      >
-        <Space direction="vertical" className="w-full">
-          <Title level={2} className="text-center mb-2">
-            💬 Zalo Clone
-          </Title>
-          <Text type="secondary" className="block text-center mb-6">
-            Welcome back! Login to continue.
-          </Text>
+    // [THAY ĐỔI 5]: Điều chỉnh CSS container để hỗ trợ scroll tốt hơn trên mobile
+    // min-h-[100dvh]: Chiều cao tối thiểu bằng màn hình thiết bị
+    // py-12: Padding trên dưới để khi scroll không bị sát lề
+    <div className="min-h-[100dvh] flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4 py-12 overflow-y-auto">
+      {/* contextHolder cần thiết để notification hoạt động khi dùng hook */}
+      {contextHolder}
+      <Card className="w-full max-w-md shadow-lg">
+        <Space direction="vertical" className="w-full" size="large">
+          <div className="text-center">
+            <Title level={2} className="!mb-2">
+              Đăng Nhập
+            </Title>
+            <Text type="secondary">Zalo Clone - Chat Application</Text>
+          </div>
+
+          {/* [THAY ĐỔI 6]: Đã XÓA đoạn code <Alert /> ở đây */}
 
           <Form
             form={form}
             layout="vertical"
             onFinish={onFinish}
-            autoComplete="off"
+            requiredMark="optional"
+            size="large"
           >
             <Form.Item
-              name="email"
-              label="Email"
+              label="Số Điện Thoại"
+              name="phoneNumber"
               rules={[
-                { required: true, message: 'Please enter your email!' },
-                { type: 'email', message: 'Invalid email!' },
+                { required: true, message: 'Vui lòng nhập số điện thoại' },
+                {
+                  pattern: /(84|0[3|5|7|8|9])+([0-9]{8})\b/g,
+                  message: 'Số điện thoại không đúng định dạng (VD: 0987654321)',
+                },
               ]}
             >
               <Input
                 prefix={<UserOutlined />}
-                placeholder="your@email.com"
-                size="large"
+                placeholder="Nhập số điện thoại (VD: 0987654321)"
+                disabled={isLoading}
               />
             </Form.Item>
 
             <Form.Item
+              label="Mật Khẩu"
               name="password"
-              label="Password"
               rules={[
-                { required: true, message: 'Please enter your password!' },
-                { min: 6, message: 'Password must be at least 6 characters!' },
+                { required: true, message: 'Vui lòng nhập mật khẩu' },
+                {
+                  min: 6,
+                  message: 'Mật khẩu phải có ít nhất 6 ký tự',
+                },
               ]}
             >
               <Input.Password
                 prefix={<LockOutlined />}
-                placeholder="Enter your password"
-                size="large"
+                placeholder="Nhập mật khẩu"
+                disabled={isLoading}
               />
             </Form.Item>
 
@@ -83,25 +122,24 @@ export function LoginPage() {
               <Button
                 type="primary"
                 htmlType="submit"
-                loading={loading}
                 block
                 size="large"
+                loading={isLoading}
+                disabled={isLoading}
               >
-                Login
+                {isLoading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
               </Button>
             </Form.Item>
           </Form>
 
-          <Divider>OR</Divider>
+          <Divider>Hoặc</Divider>
 
-          <Space direction="vertical" className="w-full">
-            <Text className="text-center block">
-              Don't have an account?{' '}
-              <Link onClick={() => navigate('/register')}>
-                Register here
-              </Link>
-            </Text>
-          </Space>
+          <div className="text-center">
+            <Text>Chưa có tài khoản? </Text>
+            <Link to="/register" className="font-semibold text-blue-600 hover:text-blue-700">
+              Đăng ký ngay
+            </Link>
+          </div>
         </Space>
       </Card>
     </div>
