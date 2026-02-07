@@ -8,175 +8,217 @@
 // ============================================================================
 
 // --- User & Identity ---
-export enum UserStatus {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  SUSPENDED = 'SUSPENDED',
-  DELETED = 'DELETED',
-}
+export const UserStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+  SUSPENDED: 'SUSPENDED',
+  DELETED: 'DELETED',
+} as const;
 
-export enum Gender {
-  MALE = 'MALE',
-  FEMALE = 'FEMALE',
-  OTHER = 'OTHER',
-}
+export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
+
+export const Gender = {
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+  OTHER: 'OTHER',
+} as const;
+
+export type Gender = (typeof Gender)[keyof typeof Gender];
 
 // --- Privacy & Social ---
-export enum PrivacyLevel {
-  EVERYONE = 'EVERYONE',
-  CONTACTS = 'CONTACTS',
-}
+export const PrivacyLevel = {
+  EVERYONE: 'EVERYONE',
+  CONTACTS: 'CONTACTS',
+} as const;
 
-export enum FriendshipStatus {
-  PENDING = 'PENDING',
-  ACCEPTED = 'ACCEPTED',
-  DECLINED = 'DECLINED',
-}
+export type PrivacyLevel =
+  (typeof PrivacyLevel)[keyof typeof PrivacyLevel];
+
+export const FriendshipStatus = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+} as const;
+
+export type FriendshipStatus =
+  (typeof FriendshipStatus)[keyof typeof FriendshipStatus];
 
 // --- Messaging & Group ---
-export enum ConversationType {
-  DIRECT = 'DIRECT',
-  GROUP = 'GROUP',
-}
+export const ConversationType = {
+  DIRECT: 'DIRECT',
+  GROUP: 'GROUP',
+} as const;
 
-export enum MemberRole {
-  ADMIN = 'ADMIN',
-  MEMBER = 'MEMBER',
-}
+export type ConversationType =
+  (typeof ConversationType)[keyof typeof ConversationType];
 
-export enum MemberStatus {
-  PENDING = 'PENDING',
-  ACTIVE = 'ACTIVE',
-  KICKED = 'KICKED',
-  LEFT = 'LEFT',
-}
+export const MemberRole = {
+  ADMIN: 'ADMIN',
+  MEMBER: 'MEMBER',
+} as const;
 
-export enum JoinRequestStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-}
+export type MemberRole = (typeof MemberRole)[keyof typeof MemberRole];
 
-export enum MessageType {
-  TEXT = 'TEXT',
-  IMAGE = 'IMAGE',
-  VIDEO = 'VIDEO',
-  FILE = 'FILE',
-  STICKER = 'STICKER',
-  SYSTEM = 'SYSTEM',
-  AUDIO = 'AUDIO',
-  VOICE = 'VOICE',
-}
+export const MemberStatus = {
+  PENDING: 'PENDING',
+  ACTIVE: 'ACTIVE',
+  KICKED: 'KICKED',
+  LEFT: 'LEFT',
+} as const;
 
-export enum ReceiptStatus {
-  SENT = 'SENT',
-  DELIVERED = 'DELIVERED',
-  SEEN = 'SEEN',
-}
+export type MemberStatus =
+  (typeof MemberStatus)[keyof typeof MemberStatus];
+
+export const JoinRequestStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+
+export type JoinRequestStatus =
+  (typeof JoinRequestStatus)[keyof typeof JoinRequestStatus];
+
+export const MessageType = {
+  TEXT: 'TEXT',
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO',
+  FILE: 'FILE',
+  STICKER: 'STICKER',
+  SYSTEM: 'SYSTEM',
+  AUDIO: 'AUDIO',
+  VOICE: 'VOICE',
+} as const;
+
+export type MessageType = (typeof MessageType)[keyof typeof MessageType];
+
+export const ReceiptStatus = {
+  SENT: 'SENT',
+  DELIVERED: 'DELIVERED',
+  SEEN: 'SEEN',
+} as const;
+
+export type ReceiptStatus =
+  (typeof ReceiptStatus)[keyof typeof ReceiptStatus];
 
 // --- Media ---
-export enum MediaType {
-  IMAGE = 'IMAGE',
-  VIDEO = 'VIDEO',
-  DOCUMENT = 'DOCUMENT',
-  AUDIO = 'AUDIO',
-}
+export const MediaType = {
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO',
+  DOCUMENT: 'DOCUMENT',
+  AUDIO: 'AUDIO',
+} as const;
 
-export enum MediaProcessingStatus {
-  PENDING = 'PENDING',
-  UPLOADED = 'UPLOADED',
-  CONFIRMED = 'CONFIRMED',
-  PROCESSING = 'PROCESSING',
-  READY = 'READY',
-  FAILED = 'FAILED',
-  EXPIRED = 'EXPIRED',
-}
+export type MediaType = (typeof MediaType)[keyof typeof MediaType];
+
+export const MediaProcessingStatus = {
+  PENDING: 'PENDING',
+  UPLOADED: 'UPLOADED',
+  CONFIRMED: 'CONFIRMED',
+  PROCESSING: 'PROCESSING',
+  READY: 'READY',
+  FAILED: 'FAILED',
+  EXPIRED: 'EXPIRED',
+} as const;
+
+export type MediaProcessingStatus =
+  (typeof MediaProcessingStatus)[keyof typeof MediaProcessingStatus];
 
 // --- Call ---
-export enum CallStatus {
-  COMPLETED = 'COMPLETED',
-  MISSED = 'MISSED',
-  REJECTED = 'REJECTED',
-  CANCELLED = 'CANCELLED',
-}
+export const CallStatus = {
+  COMPLETED: 'COMPLETED',
+  MISSED: 'MISSED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+} as const;
+
+export type CallStatus = (typeof CallStatus)[keyof typeof CallStatus];
 
 // --- Device & Security ---
-export enum DeviceType {
-  WEB = 'WEB',
-  MOBILE = 'MOBILE',
-  DESKTOP = 'DESKTOP',
-}
+export const DeviceType = {
+  WEB: 'WEB',
+  MOBILE: 'MOBILE',
+  DESKTOP: 'DESKTOP',
+} as const;
 
-export enum Platform {
-  IOS = 'IOS',
-  ANDROID = 'ANDROID',
-  WEB = 'WEB',
-  WINDOWS = 'WINDOWS',
-  MACOS = 'MACOS',
-  LINUX = 'LINUX',
-}
+export type DeviceType = (typeof DeviceType)[keyof typeof DeviceType];
 
-export enum TokenRevocationReason {
-  MANUAL_LOGOUT = 'MANUAL_LOGOUT',
-  PASSWORD_CHANGED = 'PASSWORD_CHANGED',
-  SUSPICIOUS_ACTIVITY = 'SUSPICIOUS_ACTIVITY',
-  TOKEN_ROTATION = 'TOKEN_ROTATION',
-  ADMIN_ACTION = 'ADMIN_ACTION',
-}
+export const Platform = {
+  IOS: 'IOS',
+  ANDROID: 'ANDROID',
+  WEB: 'WEB',
+  WINDOWS: 'WINDOWS',
+  MACOS: 'MACOS',
+  LINUX: 'LINUX',
+} as const;
+
+export type Platform = (typeof Platform)[keyof typeof Platform];
+
+export const TokenRevocationReason = {
+  MANUAL_LOGOUT: 'MANUAL_LOGOUT',
+  PASSWORD_CHANGED: 'PASSWORD_CHANGED',
+  SUSPICIOUS_ACTIVITY: 'SUSPICIOUS_ACTIVITY',
+  TOKEN_ROTATION: 'TOKEN_ROTATION',
+  ADMIN_ACTION: 'ADMIN_ACTION',
+} as const;
+
+export type TokenRevocationReason =
+  (typeof TokenRevocationReason)[keyof typeof TokenRevocationReason];
 
 // --- Events ---
-export enum EventType {
+export const EventType = {
   // Block Domain
-  USER_BLOCKED = 'USER_BLOCKED',
-  USER_UNBLOCKED = 'USER_UNBLOCKED',
+  USER_BLOCKED: 'USER_BLOCKED',
+  USER_UNBLOCKED: 'USER_UNBLOCKED',
 
   // Social Domain
-  FRIEND_REQUEST_SENT = 'FRIEND_REQUEST_SENT',
-  FRIEND_REQUEST_ACCEPTED = 'FRIEND_REQUEST_ACCEPTED',
-  FRIEND_REQUEST_REJECTED = 'FRIEND_REQUEST_REJECTED',
-  FRIEND_REQUEST_CANCELLED = 'FRIEND_REQUEST_CANCELLED',
-  UNFRIENDED = 'UNFRIENDED',
+  FRIEND_REQUEST_SENT: 'FRIEND_REQUEST_SENT',
+  FRIEND_REQUEST_ACCEPTED: 'FRIEND_REQUEST_ACCEPTED',
+  FRIEND_REQUEST_REJECTED: 'FRIEND_REQUEST_REJECTED',
+  FRIEND_REQUEST_CANCELLED: 'FRIEND_REQUEST_CANCELLED',
+  UNFRIENDED: 'UNFRIENDED',
 
   // Messaging Domain
-  MESSAGE_SENT = 'MESSAGE_SENT',
-  CONVERSATION_CREATED = 'CONVERSATION_CREATED',
-  CONVERSATION_MEMBER_ADDED = 'CONVERSATION_MEMBER_ADDED',
-  CONVERSATION_MEMBER_LEFT = 'CONVERSATION_MEMBER_LEFT',
-  CONVERSATION_MEMBER_PROMOTED = 'CONVERSATION_MEMBER_PROMOTED',
-  CONVERSATION_MEMBER_DEMOTED = 'CONVERSATION_MEMBER_DEMOTED',
-  GROUP_CREATED = 'GROUP_CREATED',
-  MESSAGE_DELIVERED = 'MESSAGE_DELIVERED',
-  MESSAGE_SEEN = 'MESSAGE_SEEN',
+  MESSAGE_SENT: 'MESSAGE_SENT',
+  CONVERSATION_CREATED: 'CONVERSATION_CREATED',
+  CONVERSATION_MEMBER_ADDED: 'CONVERSATION_MEMBER_ADDED',
+  CONVERSATION_MEMBER_LEFT: 'CONVERSATION_MEMBER_LEFT',
+  CONVERSATION_MEMBER_PROMOTED: 'CONVERSATION_MEMBER_PROMOTED',
+  CONVERSATION_MEMBER_DEMOTED: 'CONVERSATION_MEMBER_DEMOTED',
+  GROUP_CREATED: 'GROUP_CREATED',
+  MESSAGE_DELIVERED: 'MESSAGE_DELIVERED',
+  MESSAGE_SEEN: 'MESSAGE_SEEN',
 
   // Call Domain
-  CALL_INITIATED = 'CALL_INITIATED',
-  CALL_ANSWERED = 'CALL_ANSWERED',
-  CALL_ENDED = 'CALL_ENDED',
-  CALL_REJECTED = 'CALL_REJECTED',
+  CALL_INITIATED: 'CALL_INITIATED',
+  CALL_ANSWERED: 'CALL_ANSWERED',
+  CALL_ENDED: 'CALL_ENDED',
+  CALL_REJECTED: 'CALL_REJECTED',
 
   // Auth Domain
-  USER_REGISTERED = 'USER_REGISTERED',
-  USER_PROFILE_UPDATED = 'USER_PROFILE_UPDATED',
+  USER_REGISTERED: 'USER_REGISTERED',
+  USER_PROFILE_UPDATED: 'USER_PROFILE_UPDATED',
 
   // Presence Domain
-  USER_WENT_ONLINE = 'USER_WENT_ONLINE',
-  USER_WENT_OFFLINE = 'USER_WENT_OFFLINE',
+  USER_WENT_ONLINE: 'USER_WENT_ONLINE',
+  USER_WENT_OFFLINE: 'USER_WENT_OFFLINE',
 
   // Privacy Domain
-  PRIVACY_SETTINGS_UPDATED = 'PRIVACY_SETTINGS_UPDATED',
+  PRIVACY_SETTINGS_UPDATED: 'PRIVACY_SETTINGS_UPDATED',
 
   // Contact Domain
-  CONTACT_SYNCED = 'CONTACT_SYNCED',
-  CONTACT_ADDED = 'CONTACT_ADDED',
-  CONTACT_REMOVED = 'CONTACT_REMOVED',
+  CONTACT_SYNCED: 'CONTACT_SYNCED',
+  CONTACT_ADDED: 'CONTACT_ADDED',
+  CONTACT_REMOVED: 'CONTACT_REMOVED',
 
   // Notifications Domain
-  NOTIFICATION_SENT = 'NOTIFICATION_SENT',
+  NOTIFICATION_SENT: 'NOTIFICATION_SENT',
 
   // Media Domain
-  MEDIA_UPLOADED = 'MEDIA_UPLOADED',
-  MEDIA_DELETED = 'MEDIA_DELETED',
-}
+  MEDIA_UPLOADED: 'MEDIA_UPLOADED',
+  MEDIA_DELETED: 'MEDIA_DELETED',
+} as const;
+
+export type EventType = (typeof EventType)[keyof typeof EventType];
 
 // ============================================================================
 // 2. RESPONSE WRAPPERS
@@ -360,21 +402,37 @@ export interface UserContact {
 // 6. MESSAGING MODULE
 // ============================================================================
 
+
 export interface Conversation {
   id: string;
   type: ConversationType;
   name?: string;
   avatarUrl?: string;
   lastMessageAt?: string;
-  participants: string[];
-  requireApproval: boolean;
-  settings: Record<string, any>;
-  createdById?: string;
-  updatedById?: string;
-  deletedById?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ConversationLastMessage {
+  id: string;
+  content: string | null;
+  type: MessageType;
+  senderId: string | null;
   createdAt: string;
+}
+
+export interface ConversationListItem {
+  id: string;
+  type: ConversationType;
+  name: string | null;
+  avatar: string | null;
+  isOnline: boolean;
+  isBlocked: boolean;
+  lastSeenAt: string | null;
+  lastMessage: ConversationLastMessage | null;
   updatedAt: string;
-  deletedAt?: string;
+  unreadCount?: number;
+  lastReadMessageId?: string | null;
 }
 
 export interface ConversationMember {
@@ -409,13 +467,13 @@ export interface GroupJoinRequest {
 }
 
 export interface Message {
-  id: number;
+  id: string;
   conversationId: string;
   senderId?: string;
   type: MessageType;
   content?: string;
-  metadata?: Record<string, any>;
-  replyToId?: number;
+  metadata?: Record<string, unknown>;
+  replyToId?: string;
   clientMessageId?: string;
   updatedById?: string;
   deletedById?: string;
@@ -424,8 +482,46 @@ export interface Message {
   deletedAt?: string;
 }
 
+export interface MessageSender {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
+export interface MessageParentMessage {
+  id: string;
+  content?: string | null;
+  senderId?: string | null;
+}
+
+export interface MessageReceiptItem {
+  userId: string;
+  status: ReceiptStatus;
+  timestamp: string;
+}
+
+export interface MessageMediaAttachmentItem {
+  id: string;
+  mediaType: MediaType;
+  cdnUrl?: string | null;
+  thumbnailUrl?: string | null;
+  width?: number | null;
+  height?: number | null;
+  duration?: number | null;
+  processingStatus: MediaProcessingStatus;
+  originalName: string;
+  size: number;
+}
+
+export interface MessageListItem extends Message {
+  sender?: MessageSender | null;
+  parentMessage?: MessageParentMessage | null;
+  receipts?: MessageReceiptItem[];
+  mediaAttachments?: MessageMediaAttachmentItem[];
+}
+
 export interface MessageReceipt {
-  messageId: number;
+  messageId: string;
   userId: string;
   status: ReceiptStatus;
   timestamp: string;
@@ -512,8 +608,8 @@ export interface DomainEvent {
   source: string;
   correlationId?: string;
   causationId?: string;
-  payload: Record<string, any>;
-  metadata?: Record<string, any>;
+  payload: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   occurredAt: string;
   createdAt: string;
   issuedBy?: string;

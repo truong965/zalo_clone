@@ -3,6 +3,7 @@
  * Handles login, register, refresh, logout, sessions management
  */
 
+import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import api from '@/lib/axios';
 import type { LoginRequest, RegisterRequest, User } from '@/types/api';
 
@@ -40,7 +41,7 @@ export const authService = {
        * Register new user
        */
       async register(payload: RegisterRequest) {
-            const response = await api.post('api/v1/auth/register', payload);
+            const response = await api.post(API_ENDPOINTS.AUTH.REGISTER, payload);
             return response.data.data as User;
       },
 
@@ -50,7 +51,7 @@ export const authService = {
        * ✅ Refresh token set as httpOnly cookie (secure, httpOnly, sameSite)
        */
       async login(payload: LoginRequest) {
-            const response = await api.post('api/v1/auth/login', payload);
+            const response = await api.post(API_ENDPOINTS.AUTH.LOGIN, payload);
             const data = response.data.data as AuthResponseData;
 
             // Store access token (Refresh token is httpOnly, managed by browser)
@@ -66,7 +67,7 @@ export const authService = {
        * ✅ Axios interceptor handles response
        */
       async refresh() {
-            const response = await api.post('api/v1/auth/refresh', {});
+            const response = await api.post(API_ENDPOINTS.AUTH.REFRESH, {});
             const data = response.data.data as Omit<AuthResponseData, 'user'>;
 
             // Update stored access token
@@ -80,7 +81,7 @@ export const authService = {
        * Get current user profile
        */
       async getProfile() {
-            const response = await api.get('api/v1/auth/me');
+            const response = await api.get(API_ENDPOINTS.AUTH.ME);
             return response.data.data as User;
       },
 
@@ -88,7 +89,7 @@ export const authService = {
        * Get all active sessions for current user
        */
       async getSessions() {
-            const response = await api.get('api/v1/auth/sessions');
+            const response = await api.get(API_ENDPOINTS.AUTH.SESSIONS);
             return response.data.data as SessionInfo[];
       },
 
@@ -99,7 +100,7 @@ export const authService = {
        */
       async logout() {
             try {
-                  await api.post('api/v1/auth/logout', {});
+                  await api.post(API_ENDPOINTS.AUTH.LOGOUT, {});
             } finally {
                   // Clear tokens from localStorage
                   localStorage.removeItem('accessToken');
@@ -112,7 +113,7 @@ export const authService = {
        * Revoke specific device session (remote logout)
        */
       async revokeSession(deviceId: string) {
-            await api.delete(`api/v1/auth/sessions/${deviceId}`);
+            await api.delete(API_ENDPOINTS.AUTH.REVOKE_SESSION(deviceId));
       },
 
       /**

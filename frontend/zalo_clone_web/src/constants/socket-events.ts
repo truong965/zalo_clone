@@ -2,82 +2,87 @@
  * QUAN TRỌNG: Tất cả tên sự kiện Socket phải khớp với Backend NestJS
  * Tránh typo bằng cách sử dụng constant
  */
+export const SocketEvents = {
+      // Connection lifecycle
+      CONNECTION: 'connection',
+      DISCONNECT: 'disconnect',
+      DISCONNECTING: 'disconnecting',
 
-// Client emit to Server
-export const SOCKET_EMIT = {
-      // Connection
-      CONNECT_USER: 'connect_user',
-      DISCONNECT_USER: 'disconnect_user',
+      // Authentication
+      AUTHENTICATED: 'authenticated',
+      AUTH_FAILED: 'auth_failed',
 
-      // Chat
-      SEND_MESSAGE: 'send_message',
-      EDIT_MESSAGE: 'edit_message',
-      DELETE_MESSAGE: 'delete_message',
-      TYPING: 'typing',
-      STOP_TYPING: 'stop_typing',
-      READ_MESSAGE: 'read_message',
+      // Server events
+      SERVER_SHUTDOWN: 'server:shutdown',
+      SERVER_MAINTENANCE: 'server:maintenance',
 
-      // Call
-      INITIATE_CALL: 'initiate_call',
-      ACCEPT_CALL: 'accept_call',
-      REJECT_CALL: 'reject_call',
-      END_CALL: 'end_call',
-      SEND_ICE_CANDIDATE: 'send_ice_candidate',
-      SEND_OFFER: 'send_offer',
-      SEND_ANSWER: 'send_answer',
+      // Presence events
+      USER_ONLINE: 'user:online',
+      USER_OFFLINE: 'user:offline',
+      FRIEND_ONLINE: 'friend:online',
+      FRIEND_OFFLINE: 'friend:offline',
 
-      // Friend
-      FRIEND_REQUEST: 'friend_request',
-      FRIEND_REQUEST_ACCEPTED: 'friend_request_accepted',
-      FRIEND_REQUEST_REJECTED: 'friend_request_rejected',
-      FRIEND_REMOVED: 'friend_removed',
-
-      // Block
-      BLOCK_USER: 'block_user',
-      UNBLOCK_USER: 'unblock_user',
-
-      // Status
-      USER_ONLINE: 'user_online',
-      USER_OFFLINE: 'user_offline',
-} as const;
-
-// Server emit to Client
-export const SOCKET_ON = {
-      // Connection
-      CONNECTED: 'connected',
-      DISCONNECTED: 'disconnected',
-
-      // Chat
-      MESSAGE_RECEIVED: 'message_received',
-      MESSAGE_EDITED: 'message_edited',
-      MESSAGE_DELETED: 'message_deleted',
-      TYPING: 'typing',
-      STOP_TYPING: 'stop_typing',
-      MESSAGE_READ: 'message_read',
-
-      // Call
-      INCOMING_CALL: 'incoming_call',
-      CALL_ACCEPTED: 'call_accepted',
-      CALL_REJECTED: 'call_rejected',
-      CALL_ENDED: 'call_ended',
-      ICE_CANDIDATE: 'ice_candidate',
-      OFFER: 'offer',
-      ANSWER: 'answer',
-
-      // Friend
-      FRIEND_REQUEST_RECEIVED: 'friend_request_received',
-      FRIEND_REQUEST_ACCEPTED: 'friend_request_accepted',
-      FRIEND_REQUEST_REJECTED: 'friend_request_rejected',
-      FRIEND_REMOVED: 'friend_removed',
-
-      // Block
-      BLOCKED: 'blocked',
-      UNBLOCKED: 'unblocked',
-
-      // Status
-      USER_ONLINE: 'user_online',
-      USER_OFFLINE: 'user_offline',
-
-      // Error
+      // Error events
       ERROR: 'error',
+      RATE_LIMIT_EXCEEDED: 'rate_limit_exceeded',
+
+      // Heartbeat (handled by Socket.IO internally)
+      PING: 'ping',
+      PONG: 'pong',
+
+      //Client → Server
+      MESSAGE_SEND: 'message:send',
+      MESSAGE_DELIVERED_ACK: 'message:delivered',
+      MESSAGE_DELIVERED_CLIENT_ACK: 'message:delivered:ack',
+      MESSAGE_SEEN: 'message:seen',
+      TYPING_START: 'typing:start',
+      TYPING_STOP: 'typing:stop',
+
+      // Server → Client
+      MESSAGE_NEW: 'message:new', // New incoming message
+      MESSAGE_SENT_ACK: 'message:sent', // Server confirms send
+      MESSAGE_RECEIPT_UPDATE: 'message:receipt', // Delivery/seen status change
+      TYPING_STATUS: 'typing:status', // Someone is typing
+
+      // Sync events
+      MESSAGES_SYNC: 'messages:sync', // Offline message batch
+      CONVERSATION_UPDATED: 'conversation:updated', // Last message changed
+
+      // === GROUP EVENTS ===
+
+      // Client → Server
+      GROUP_CREATE: 'group:create',
+      GROUP_UPDATE: 'group:update',
+      GROUP_ADD_MEMBERS: 'group:addMembers',
+      GROUP_REMOVE_MEMBER: 'group:removeMember',
+      GROUP_LEAVE: 'group:leave',
+      GROUP_TRANSFER_ADMIN: 'group:transferAdmin',
+      GROUP_DISSOLVE: 'group:dissolve',
+      GROUP_PIN_MESSAGE: 'group:pinMessage',
+      GROUP_UNPIN_MESSAGE: 'group:unpinMessage',
+
+      // Join Requests
+      GROUP_REQUEST_JOIN: 'group:requestJoin',
+      GROUP_REVIEW_JOIN: 'group:reviewJoinRequest',
+      GROUP_GET_PENDING: 'group:getPendingRequests',
+      GROUP_CANCEL_REQUEST: 'group:cancelJoinRequest',
+
+      // Server → Client
+      GROUP_CREATED: 'group:created',
+      GROUP_UPDATED: 'group:updated',
+      GROUP_MEMBERS_ADDED: 'group:membersAdded',
+      GROUP_MEMBER_REMOVED: 'group:memberRemoved',
+      GROUP_MEMBER_LEFT: 'group:memberLeft',
+      GROUP_YOU_WERE_REMOVED: 'group:youWereRemoved',
+      GROUP_ADMIN_TRANSFERRED: 'group:adminTransferred',
+      GROUP_DISSOLVED: 'group:dissolved',
+      GROUP_MESSAGE_PINNED: 'group:messagePinned',
+      GROUP_MESSAGE_UNPINNED: 'group:messageUnpinned',
+
+      // Join Request Notifications
+      GROUP_JOIN_REQUEST_RECEIVED: 'group:joinRequestReceived',
+      GROUP_JOIN_REQUEST_REVIEWED: 'group:joinRequestReviewed',
+      GROUP_MEMBER_JOINED: 'group:memberJoined',
 } as const;
+
+export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

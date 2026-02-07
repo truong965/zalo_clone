@@ -6,78 +6,80 @@
 export const API_ENDPOINTS = {
   // Auth
   AUTH: {
-    LOGIN: '/auth/login',
-    REGISTER: '/auth/register',
-    LOGOUT: '/auth/logout',
-    REFRESH: '/auth/refresh',
-    ME: '/auth/me',
+    LOGIN: '/api/v1/auth/login',
+    REGISTER: '/api/v1/auth/register',
+    LOGOUT: '/api/v1/auth/logout',
+    REFRESH: '/api/v1/auth/refresh',
+    ME: '/api/v1/auth/me',
+    SESSIONS: '/api/v1/auth/sessions',
+    REVOKE_SESSION: (deviceId: string) => `/api/v1/auth/sessions/${deviceId}`,
   },
 
   // Users
   USERS: {
-    GET_BY_ID: (id: string) => `/users/${id}`,
-    GET_PROFILE: '/users/profile',
-    UPDATE_PROFILE: '/users/profile',
-    UPLOAD_AVATAR: '/users/avatar',
-    SEARCH: '/users/search',
+    GET_BY_ID: (id: string) => `/api/v1/users/${id}`,
+    GET_PROFILE: '/api/v1/users/profile',
+    UPDATE_PROFILE: '/api/v1/users/profile',
+    UPLOAD_AVATAR: '/api/v1/users/avatar',
+    SEARCH: '/api/v1/users/search',
   },
 
   // Chat - Conversations
   CONVERSATIONS: {
-    GET_ALL: '/conversations',
-    GET_BY_ID: (id: string) => `/conversations/${id}`,
-    CREATE: '/conversations',
-    UPDATE: (id: string) => `/conversations/${id}`,
-    DELETE: (id: string) => `/conversations/${id}`,
-    MARK_AS_READ: (id: string) => `/conversations/${id}/read`,
+    GET_ALL: '/api/v1/conversations',
+    GET_BY_ID: (id: string) => `/api/v1/conversations/${id}`,
+    CREATE: '/api/v1/conversations/direct',
+    UPDATE: (id: string) => `/api/v1/conversations/${id}`,
+    DELETE: (id: string) => `/api/v1/conversations/${id}`,
+    MARK_AS_READ: (id: string) => `/api/v1/conversations/${id}/read`,
   },
 
   // Chat - Messages
   MESSAGES: {
-    GET_BY_CONVERSATION: (conversationId: string) => `/messages/conversation/${conversationId}`,
-    SEND: '/messages',
-    EDIT: (id: string) => `/messages/${id}`,
-    DELETE: (id: string) => `/messages/${id}`,
-    SEARCH: '/messages/search',
+    GET_ALL: '/api/v1/messages',
+    SEND: '/api/v1/messages',
+    EDIT: (id: string) => `/api/v1/messages/${id}`,
+    DELETE: (id: string) => `/api/v1/messages/${id}`,
+    SEARCH: '/api/v1/messages/search',
   },
 
   // Contacts - Friends
   FRIENDS: {
-    GET_ALL: '/friends',
-    GET_BY_ID: (id: string) => `/friends/${id}`,
-    SEND_REQUEST: '/friends/request',
-    ACCEPT_REQUEST: (id: string) => `/friends/request/${id}/accept`,
-    REJECT_REQUEST: (id: string) => `/friends/request/${id}/reject`,
-    REMOVE: (id: string) => `/friends/${id}`,
-    GET_REQUESTS: '/friends/requests',
+    GET_ALL: '/api/v1/friends',
+    GET_BY_ID: (id: string) => `/api/v1/friends/${id}`,
+    SEND_REQUEST: '/api/v1/friends/request',
+    ACCEPT_REQUEST: (id: string) => `/api/v1/friends/request/${id}/accept`,
+    REJECT_REQUEST: (id: string) => `/api/v1/friends/request/${id}/reject`,
+    REMOVE: (id: string) => `/api/v1/friends/${id}`,
+    GET_REQUESTS: '/api/v1/friends/requests',
   },
 
   // Block
   BLOCK: {
-    GET_BLOCKED: '/block',
-    BLOCK_USER: '/block',
-    UNBLOCK_USER: (id: string) => `/block/${id}`,
+    GET_BLOCKED: '/api/v1/block',
+    BLOCK_USER: '/api/v1/block',
+    UNBLOCK_USER: (id: string) => `/api/v1/block/${id}`,
   },
 
   // Call
   CALL: {
-    INITIATE: '/calls',
-    END: (id: string) => `/calls/${id}/end`,
-    REJECT: (id: string) => `/calls/${id}/reject`,
-    ACCEPT: (id: string) => `/calls/${id}/accept`,
+    INITIATE: '/api/v1/calls',
+    END: (id: string) => `/api/v1/calls/${id}/end`,
+    REJECT: (id: string) => `/api/v1/calls/${id}/reject`,
+    ACCEPT: (id: string) => `/api/v1/calls/${id}/accept`,
   },
 
   // Notifications
   NOTIFICATIONS: {
-    GET_ALL: '/notifications',
-    MARK_AS_READ: (id: string) => `/notifications/${id}/read`,
-    MARK_ALL_AS_READ: '/notifications/read-all',
-    DELETE: (id: string) => `/notifications/${id}`,
+    GET_ALL: '/api/v1/notifications',
+    MARK_AS_READ: (id: string) => `/api/v1/notifications/${id}/read`,
+    MARK_ALL_AS_READ: '/api/v1/notifications/read-all',
+    DELETE: (id: string) => `/api/v1/notifications/${id}`,
   },
 
   // Media Upload
   MEDIA: {
-    UPLOAD: '/media/upload',
-    DELETE: (id: string) => `/media/${id}`,
+    UPLOAD: '/api/v1/media/upload',
+    DELETE: (id: string) => `/api/v1/media/${id}`,
   },
 };

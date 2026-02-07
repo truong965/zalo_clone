@@ -5,10 +5,11 @@
 
 import type {
   Conversation as ApiConversation,
-  Message as ApiMessage,
-  MediaAttachment,
+  ConversationLastMessage,
+  ConversationListItem,
   ConversationMember,
   MessageType,
+  MessageListItem,
 } from '@/types/api';
 
 // ============================================================================
@@ -27,19 +28,29 @@ export interface ChatConversation extends ApiConversation {
   unread?: number; // Unread message count
   isOnline?: boolean; // User online status
   isPinned?: boolean; // Pinned in list
+
+  // API fields from conversation list endpoint
+  updatedAt?: string;
+  lastMessageObj?: ConversationLastMessage | null;
+  unreadCount?: number;
+  lastReadMessageId?: string | null;
+  isBlocked?: boolean;
 }
+
+export type ChatConversationListItem = Omit<ConversationListItem, 'unreadCount'> & {
+  unreadCount?: number;
+};
 
 /**
  * Message type for UI display
- * Extends API Message with UI-friendly fields
+ * Backend already returns sender object; keep it and add UI-only fields.
  */
-export interface ChatMessage extends Omit<ApiMessage, 'isRead'> {
-  // UI Fields
-  sender?: 'me' | 'other';
-  displayTimestamp?: string; // Formatted time
-  avatar?: string; // Sender avatar
-  senderName?: string; // Sender display name
-}
+export type ChatMessage = MessageListItem & {
+  senderSide?: 'me' | 'other';
+  displayTimestamp?: string;
+  avatar?: string;
+  senderName?: string;
+};
 
 // ============================================================================
 // REQUEST/RESPONSE TYPES
@@ -47,25 +58,27 @@ export interface ChatMessage extends Omit<ApiMessage, 'isRead'> {
 
 export interface SendMessageRequest {
   conversationId: string;
-  content: string;
-  type?: MessageType;
-  mediaAttachments?: MediaAttachment[];
-  replyToId?: number;
+  clientMessageId: string;
+  type: MessageType;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  replyTo?: { messageId: string };
+  mediaIds?: string[];
 }
 
 export interface EditMessageRequest {
-  messageId: number;
+  messageId: string;
   content: string;
 }
 
 export interface DeleteMessageRequest {
-  messageId: number;
+  messageId: string;
   conversationId: string;
 }
 
 export interface MarkAsReadRequest {
   conversationId: string;
-  messageId?: number;
+  messageIds: string[];
 }
 
 export interface TypingRequest {

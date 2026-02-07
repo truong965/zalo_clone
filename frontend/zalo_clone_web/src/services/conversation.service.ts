@@ -1,0 +1,104 @@
+// src/services/conversation.service.ts
+import { API_ENDPOINTS } from '@/constants/api-endpoints';
+import type { ChatConversation } from '@/features/chat/types';
+import apiClient from '@/lib/axios';
+import type {
+      ApiResponse,
+      CursorPaginatedResponse,
+      Conversation,
+      ConversationListItem,
+} from '@/types/api';
+
+function mapConversationToUI(conv: Conversation): ChatConversation {
+      return {
+            ...conv,
+            avatar: conv.avatarUrl || `https://i.pravatar.cc/150?u=${conv.id}`,
+            lastMessage: 'Loading...',
+            timestamp: conv.lastMessageAt
+                  ? formatTimestamp(conv.lastMessageAt)
+                  : 'Vừa xong',
+            unread: 0, // TODO: Get from ConversationMember.unreadCount
+            isOnline: false, // TODO: Get from Presence module
+            isPinned: false, // TODO: Get from user settings
+      };
+}
+
+function formatTimestamp(isoDate: string): string {
+      const date = new Date(isoDate);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+
+      if (diffMins < 1) return 'Vừa xong';
+      if (diffMins < 60) return `${diffMins} phút`;
+      if (diffMins < 1440) return `${Math.floor(diffMins / 60)} giờ`;
+      return date.toLocaleDateString('vi-VN');
+}
+
+function mapConversationListItemToUI(item: ConversationListItem): ChatConversation {
+      const lastMessagePreview = item.lastMessage?.content ?? '';
+      const timestamp = item.updatedAt ? formatTimestamp(item.updatedAt) : undefined;
+
+      return {
+            id: item.id,
+            type: item.type,
+            name: item.name ?? undefined,
+            avatar: item.avatar ?? undefined,
+            isOnline: item.isOnline,
+            isBlocked: item.isBlocked,
+            updatedAt: item.updatedAt,
+            lastMessageObj: item.lastMessage,
+            lastMessage: lastMessagePreview,
+            timestamp,
+            unreadCount: item.unreadCount,
+            lastReadMessageId: item.lastReadMessageId ?? null,
+      };
+}
+
+export const conversationService = {
+      /**
+       * Get user's conversations with cursor pagination
+       */
+      async getConversations(params?: {
+            cursor?: string;
+            limit?: number;
+      }): Promise<CursorPaginatedResponse<ChatConversation>> {
+            const response = await apiClient.get<ApiResponse<CursorPaginatedResponse<ConversationListItem>>>(
+                  API_ENDPOINTS.CONVERSATIONS.GET_ALL,
+                  { params }
+            );
+
+            const result = response.data.data;
+            // console.log("r:", result);
+            // console.log('return', {
+            //       data: result.data.map(mapConversationListItemToUI),
+            //       meta: result.meta,
+            // })
+            return {
+                  data: result.data.map(mapConversationListItemToUI),
+                  meta: result.meta,
+            };
+
+      },
+
+      /**
+       * Get or create direct conversation
+       */
+      async getOrCreateDirectConversation(recipientId: string): Promise<ChatConversation> {
+            const response = await apiClient.post<ApiResponse<Conversation>>(
+                  API_ENDPOINTS.CONVERSATIONS.CREATE,
+                  { recipientId }
+            );
+            return mapConversationToUI(response.data.data);
+      },
+
+      /**
+       * Get conversation by ID
+       */
+      async getConversationById(conversationId: string): Promise<ChatConversation> {
+            const response = await apiClient.get<ApiResponse<Conversation>>(
+                  API_ENDPOINTS.CONVERSATIONS.GET_BY_ID(conversationId)
+            );
+            return mapConversationToUI(response.data.data);
+      },
+};

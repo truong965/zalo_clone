@@ -28,7 +28,8 @@ export function ConversationSidebar({
       const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
       const filteredConversations = conversations.filter(c => {
-            if (activeTab === 'unread') return (c.unread ?? 0) > 0;
+            const unreadCount = c.unreadCount ?? c.unread ?? 0;
+            if (activeTab === 'unread') return unreadCount > 0;
             return true;
       });
 

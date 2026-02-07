@@ -13,7 +13,12 @@ import { useState } from 'react';
 
 const { TextArea } = Input;
 
-export function ChatInput() {
+interface ChatInputProps {
+      conversationId: string | null;
+      onSend?: (text: string) => void;
+}
+
+export function ChatInput({ conversationId, onSend }: ChatInputProps) {
       const [message, setMessage] = useState('');
 
       // Danh sách các công cụ trên Toolbar
@@ -29,6 +34,7 @@ export function ChatInput() {
 
       return (
             <div className="bg-white border-t border-gray-200">
+
                   {/* 1. TOOLBAR (Hàng trên) */}
                   <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-50">
                         {toolbarActions.map((action) => (
@@ -50,14 +56,19 @@ export function ChatInput() {
                               <TextArea
                                     value={message}
                                     onChange={(e) => setMessage(e.target.value)}
-                                    placeholder="Nhập @, tin nhắn tới Khổng Tám"
+                                    placeholder={conversationId ? 'Nhập tin nhắn' : 'Chọn một cuộc trò chuyện để bắt đầu'}
                                     autoSize={{ minRows: 1, maxRows: 5 }}
                                     className="!bg-transparent !resize-none pr-8 text-[15px]"
                                     variant="borderless"
+                                    disabled={!conversationId}
                                     onPressEnter={(e) => {
                                           if (!e.shiftKey) {
                                                 e.preventDefault();
-                                                // Handle send message logic here
+                                                if (!conversationId) return;
+                                                const text = message.trim();
+                                                if (!text) return;
+                                                onSend?.(text);
+                                                setMessage('');
                                           }
                                     }}
                               />
@@ -79,7 +90,7 @@ export function ChatInput() {
                                     <Tooltip title="Gửi tin nhắn (Enter)">
                                           <Button
                                                 type="text"
-                                                disabled={!message.trim()} // Disable nếu không có text (tùy chọn)
+                                                disabled={!conversationId || !message.trim()} // Disable nếu không có conversation hoặc text
                                                 icon={
                                                       <SendOutlined
                                                             className={`text-xl ${message.trim() ? 'text-blue-600' : 'text-gray-400'}`}
@@ -87,11 +98,19 @@ export function ChatInput() {
                                                       />
                                                 }
                                                 className="hover:bg-blue-50 w-10 h-10 flex items-center justify-center rounded-lg"
+                                                onClick={() => {
+                                                      if (!conversationId) return;
+                                                      const text = message.trim();
+                                                      if (!text) return;
+                                                      onSend?.(text);
+                                                      setMessage('');
+                                                }}
                                           />
                                     </Tooltip>
                               </div>
                         </div>
                   </div>
+
             </div>
       );
 }

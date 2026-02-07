@@ -10,6 +10,7 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
 import { env } from '@/config/env';
+import { API_ENDPOINTS } from '@/constants/api-endpoints';
 
 // ============================================================================
 // AXIOS INSTANCE CONFIGURATION
@@ -96,7 +97,7 @@ api.interceptors.response.use(
         // Gọi refresh endpoint
         // ✅ Refresh token được gửi tự động qua httpOnly cookie
         const response = await axios.post(
-          `/api/v1/auth/refresh`,
+          API_ENDPOINTS.AUTH.REFRESH,
           {},
           {
             withCredentials: true, // Gửi httpOnly cookie
