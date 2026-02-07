@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  UseGuards,
+  Param,
+} from '@nestjs/common';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ConversationService } from './services/conversation.service';
 import {
@@ -40,6 +48,17 @@ export class ConversationController {
       user.id,
       cursor,
       limit ? +limit : 20,
+    );
+  }
+  @Get(':id')
+  @ApiOperation({ summary: 'Get conversation by ID' })
+  async getConversationById(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationService.getConversationById(
+      user.id,
+      conversationId,
     );
   }
 }

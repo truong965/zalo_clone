@@ -34,7 +34,6 @@ import { MarkAsReadDto } from './dto/mark-as-read.dto';
 import { TypingIndicatorDto } from './dto/typing-indicator.dto';
 
 @WebSocketGateway({
-  namespace: '/socket.io',
   cors: { origin: '*', credentials: true },
 })
 @UseGuards(WsThrottleGuard)

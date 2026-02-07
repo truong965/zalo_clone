@@ -34,7 +34,7 @@ import { EventPublisher } from 'src/shared/events/event-publisher.service';
   cors: {
     origin: (requestOrigin, callback) => {
       // 1. Lấy danh sách origin cho phép từ biến môi trường
-      const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',');
+      const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',');
 
       // 2. Logic kiểm tra (Allow all nếu là '*' hoặc dev mode)
       if (
@@ -325,10 +325,13 @@ export class SocketGateway
 
       // If user is now completely offline, publish presence update
       if (isOffline) {
-        await this.redisPubSub.publish(RedisKeyBuilder.channels.presenceOffline, {
-          userId: client.userId,
-          timestamp: new Date().toISOString(),
-        });
+        await this.redisPubSub.publish(
+          RedisKeyBuilder.channels.presenceOffline,
+          {
+            userId: client.userId,
+            timestamp: new Date().toISOString(),
+          },
+        );
       }
 
       // PHASE 2: Emit event for presence cleanup

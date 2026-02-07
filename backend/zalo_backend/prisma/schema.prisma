@@ -599,7 +599,7 @@ model ConversationMember {
   demotedAt         DateTime?    @map("demoted_at") @db.Timestamptz
 
   // Read status tracking
-  lastReadMessageId String?      @map("last_read_message_id") @db.Uuid
+  lastReadMessageId BigInt?      @map("last_read_message_id")
   lastReadAt        DateTime?    @map("last_read_at") @db.Timestamptz
   unreadCount       Int          @default(0) @map("unread_count")
   

@@ -39,7 +39,6 @@ import { CreateJoinRequestDto } from './dto/join-request.dto';
 import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
 
 @WebSocketGateway({
-  namespace: '/socket.io',
   cors: { origin: '*', credentials: true },
 })
 @UseGuards(WsThrottleGuard)

@@ -17,6 +17,7 @@ const conversationWithRelations =
       messages: {
         take: 1,
         orderBy: { createdAt: 'desc' },
+        where: { deletedAt: null },
         select: {
           id: true,
           content: true,
@@ -27,7 +28,6 @@ const conversationWithRelations =
         },
       },
       members: {
-        take: 4,
         include: {
           user: {
             select: {
@@ -285,6 +285,7 @@ export class ConversationService {
       where: {
         members: { some: { userId, status: MemberStatus.ACTIVE } },
         lastMessageAt: { not: null },
+        deletedAt: null,
       },
       take: limit + 1,
       cursor: cursor ? { id: cursor } : undefined,
@@ -315,6 +316,9 @@ export class ConversationService {
     blockMap: Map<string, boolean>,
     onlineMap: Map<string, boolean>,
   ) {
+    const currentUserMember = conversation.members.find(
+      (m) => m.userId === currentUserId,
+    );
     let name = conversation.name;
     let avatar = conversation.avatarUrl;
     let isOnline = false;
@@ -337,7 +341,6 @@ export class ConversationService {
     }
 
     const lastMsg = conversation.messages[0];
-
     return {
       id: conversation.id,
       type: conversation.type,
@@ -345,6 +348,8 @@ export class ConversationService {
       avatar,
       isOnline,
       isBlocked,
+      updatedAt: conversation.updatedAt,
+
       lastSeenAt: otherUserId
         ? conversation.members.find((m) => m.userId === otherUserId)?.user
             .lastSeenAt
@@ -360,7 +365,33 @@ export class ConversationService {
             createdAt: lastMsg.createdAt,
           }
         : null,
-      updatedAt: conversation.lastMessageAt || conversation.createdAt,
+      unreadCount: currentUserMember?.unreadCount ?? 0,
+      lastReadMessageId: currentUserMember?.lastReadMessageId
+        ? currentUserMember.lastReadMessageId.toString() // Convert BigInt to String
+        : null,
     };
+  }
+  async getConversationById(
+    userId: string,
+    conversationId: string,
+  ): Promise<unknown> {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        members: { some: { userId, status: MemberStatus.ACTIVE } },
+      },
+      include: conversationWithRelations.include,
+    });
+
+    if (!conversation) {
+      throw new BadRequestException('Conversation not found');
+    }
+
+    return this.mapConversationResponse(
+      conversation as ConversationWithRelations,
+      userId,
+      new Map<string, boolean>(),
+      new Map<string, boolean>(),
+    );
   }
 }
