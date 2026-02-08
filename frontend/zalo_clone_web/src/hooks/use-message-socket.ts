@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from './use-socket';
 import { SocketEvents } from '@/constants/socket-events';
 import type { CursorPaginatedResponse, MessageListItem, ReceiptStatus } from '@/types/api';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 type SocketAck<T> = ({ error?: undefined } & T) | { error: string };
 
@@ -27,6 +28,51 @@ type ReceiptUpdatePayload = {
   timestamp: string;
 };
 
+type TypingStatusPayload = {
+  conversationId: string;
+  userId: string;
+  isTyping: boolean;
+};
+
+type SocketErrorPayload = {
+  event?: string;
+  clientMessageId?: string;
+  error?: string;
+  message?: string | object;
+  code?: string;
+};
+
+function applySendFailedToCache(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  payload: SocketErrorPayload,
+) {
+  const clientMessageId = payload.clientMessageId;
+  if (!clientMessageId) return;
+
+  queryClient.setQueryData<MessagesInfiniteData>(queryKey, (prev) => {
+    if (!prev) return prev;
+
+    const pages = prev.pages.map((p) => ({
+      ...p,
+      data: p.data.map((m) => {
+        if (!m.clientMessageId) return m;
+        if (m.clientMessageId !== clientMessageId) return m;
+        return {
+          ...m,
+          metadata: {
+            ...(m.metadata ?? {}),
+            sendStatus: 'FAILED',
+            sendError: payload.error ?? 'Send failed',
+          },
+        };
+      }),
+    }));
+
+    return { ...prev, pages };
+  });
+}
+
 function upsertMessageToCache(
   queryClient: QueryClient,
   queryKey: QueryKey,
@@ -45,31 +91,46 @@ function upsertMessageToCache(
       };
     }
 
-    const pages = [...prev.pages];
-    const first = pages[0];
-    const exists = first.data.some(
-      (m) => m.id === message.id || (m.clientMessageId && m.clientMessageId === message.clientMessageId),
-    );
-
-    if (exists) {
-      pages[0] = {
-        ...first,
-        data: first.data.map((m) => {
-          const match =
-            m.id === message.id ||
-            (!!m.clientMessageId && m.clientMessageId === message.clientMessageId);
-          return match ? { ...m, ...message } : m;
-        }),
-      };
-      return { ...prev, pages };
-    }
-
-    pages[0] = {
-      ...first,
-      data: [message, ...first.data],
+    const isMatch = (m: MessageListItem) => {
+      if (m.id === message.id) return true;
+      if (!m.clientMessageId || !message.clientMessageId) return false;
+      return m.clientMessageId === message.clientMessageId;
     };
 
-    return { ...prev, pages };
+    const foundExisting = prev.pages
+      .flatMap((p) => p.data)
+      .find((m) => isMatch(m));
+
+    const merged: MessageListItem = foundExisting
+      ? {
+        ...foundExisting,
+        ...message,
+        metadata: {
+          ...(foundExisting.metadata ?? {}),
+          ...(message.metadata ?? {}),
+        },
+      }
+      : message;
+
+    const pagesWithoutDup = prev.pages.map((p) => ({
+      ...p,
+      data: p.data.filter((m) => !isMatch(m)),
+    }));
+
+    const first = pagesWithoutDup[0];
+    const nextFirstData = [merged, ...first.data].sort((a, b) => {
+      const aT = new Date(a.createdAt).getTime();
+      const bT = new Date(b.createdAt).getTime();
+      return bT - aT;
+    });
+
+    const nextPages = [...pagesWithoutDup];
+    nextPages[0] = {
+      ...first,
+      data: nextFirstData,
+    };
+
+    return { ...prev, pages: nextPages };
   });
 }
 
@@ -92,6 +153,10 @@ function applySentAckToCache(
           id: ack.serverMessageId,
           createdAt: ack.timestamp,
           updatedAt: ack.timestamp,
+          metadata: {
+            ...(m.metadata ?? {}),
+            sendStatus: 'SENT',
+          },
         };
       }),
     }));
@@ -142,66 +207,155 @@ function applyReceiptUpdateToCache(
 export function useMessageSocket(params: {
   conversationId: string | null;
   messagesQueryKey: QueryKey;
+  onTypingStatus?: (payload: TypingStatusPayload) => void;
 }) {
-  const { conversationId, messagesQueryKey } = params;
+  const { conversationId, messagesQueryKey, onTypingStatus } = params;
   const queryClient = useQueryClient();
   const { socket, isConnected } = useSocket();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+
+  const currentUserIdRef = useRef(currentUserId);
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
 
   const conversationIdRef = useRef(conversationId);
   useEffect(() => {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
+  const messagesQueryKeyRef = useRef(messagesQueryKey);
+  useEffect(() => {
+    messagesQueryKeyRef.current = messagesQueryKey;
+  }, [messagesQueryKey]);
+
+  const onTypingStatusRef = useRef(onTypingStatus);
+  useEffect(() => {
+    onTypingStatusRef.current = onTypingStatus;
+  }, [onTypingStatus]);
+
   useEffect(() => {
     if (!socket || !isConnected) return;
 
     const onMessageNew = (payload: MessageNewPayload) => {
-      const currentConversationId = conversationIdRef.current;
-      if (!currentConversationId) return;
-      if (payload.conversationId !== currentConversationId) return;
+      try {
+        const currentConversationId = conversationIdRef.current;
+        if (!currentConversationId) return;
+        if (payload.conversationId !== currentConversationId) return;
 
-      upsertMessageToCache(queryClient, messagesQueryKey, payload.message);
+        const senderId = payload.message.senderId ?? null;
+        const myId = currentUserIdRef.current;
+        if (socket && senderId && myId && senderId !== myId) {
+          socket.emit(SocketEvents.MESSAGE_DELIVERED_ACK, {
+            messageId: payload.message.id,
+          });
+        }
+
+        upsertMessageToCache(queryClient, messagesQueryKeyRef.current, payload.message);
+      } catch {
+        // ignore handler errors
+      }
     };
 
     const onMessagesSync = (payload: MessagesSyncPayload) => {
-      const currentConversationId = conversationIdRef.current;
-      if (!currentConversationId) return;
+      try {
+        const currentConversationId = conversationIdRef.current;
+        if (!currentConversationId) return;
 
-      for (const m of payload.messages) {
-        if (m.conversationId !== currentConversationId) continue;
-        upsertMessageToCache(queryClient, messagesQueryKey, m);
+        for (const m of payload.messages) {
+          if (m.conversationId !== currentConversationId) continue;
+          upsertMessageToCache(queryClient, messagesQueryKeyRef.current, m);
+        }
+      } catch {
+        // ignore handler errors
       }
     };
 
     const onSentAck = (payload: MessageSentAckPayload) => {
-      applySentAckToCache(queryClient, messagesQueryKey, payload);
+      try {
+        applySentAckToCache(queryClient, messagesQueryKeyRef.current, payload);
+      } catch {
+        // ignore handler errors
+      }
     };
 
     const onReceiptUpdate = (payload: ReceiptUpdatePayload) => {
-      applyReceiptUpdateToCache(queryClient, messagesQueryKey, payload);
+      try {
+        applyReceiptUpdateToCache(queryClient, messagesQueryKeyRef.current, payload);
+      } catch {
+        // ignore handler errors
+      }
+    };
+
+    const onSocketError = (payload: SocketErrorPayload) => {
+      try {
+        if (payload.event !== SocketEvents.MESSAGE_SEND) return;
+        const errorMsg = typeof payload.error === 'string'
+          ? payload.error
+          : (typeof payload.message === 'string' ? payload.message : 'Send failed');
+        applySendFailedToCache(queryClient, messagesQueryKeyRef.current, {
+          ...payload,
+          error: errorMsg,
+        });
+      } catch {
+        // ignore handler errors
+      }
+    };
+
+    const onTypingStatusEvent = (payload: TypingStatusPayload) => {
+      try {
+        const handler = onTypingStatusRef.current;
+        if (!handler) return;
+        const currentConversationId = conversationIdRef.current;
+        if (!currentConversationId) return;
+        if (payload.conversationId !== currentConversationId) return;
+        handler(payload);
+      } catch {
+        // ignore handler errors
+      }
     };
 
     socket.on(SocketEvents.MESSAGE_NEW, onMessageNew);
     socket.on(SocketEvents.MESSAGES_SYNC, onMessagesSync);
     socket.on(SocketEvents.MESSAGE_SENT_ACK, onSentAck);
     socket.on(SocketEvents.MESSAGE_RECEIPT_UPDATE, onReceiptUpdate);
+    socket.on(SocketEvents.ERROR, onSocketError);
+    socket.on(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
 
     return () => {
       socket.off(SocketEvents.MESSAGE_NEW, onMessageNew);
       socket.off(SocketEvents.MESSAGES_SYNC, onMessagesSync);
       socket.off(SocketEvents.MESSAGE_SENT_ACK, onSentAck);
       socket.off(SocketEvents.MESSAGE_RECEIPT_UPDATE, onReceiptUpdate);
+      socket.off(SocketEvents.ERROR, onSocketError);
+      socket.off(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
     };
-  }, [socket, isConnected, queryClient, messagesQueryKey]);
+  }, [socket, isConnected, queryClient]);
 
   return {
     isConnected,
+    emitDelivered: (messageId: string) => {
+      if (!socket) return;
+      socket.emit(SocketEvents.MESSAGE_DELIVERED_ACK, { messageId });
+    },
+    emitMarkAsSeen: (dto: { conversationId: string; messageIds: string[] }) => {
+      if (!socket) return;
+      socket.emit(SocketEvents.MESSAGE_SEEN, dto);
+    },
     emitSendMessage: <T extends Record<string, unknown>>(
       dto: T,
       ack?: (response: SocketAck<{ messageId: string }>) => void,
     ) => {
       if (!socket) return;
       socket.emit(SocketEvents.MESSAGE_SEND, dto, ack);
+    },
+    emitTypingStart: (dto: { conversationId: string }) => {
+      if (!socket) return;
+      socket.emit(SocketEvents.TYPING_START, { ...dto, isTyping: true });
+    },
+    emitTypingStop: (dto: { conversationId: string }) => {
+      if (!socket) return;
+      socket.emit(SocketEvents.TYPING_STOP, { ...dto, isTyping: false });
     },
   };
 }

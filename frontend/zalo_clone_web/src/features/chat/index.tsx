@@ -10,6 +10,8 @@ import type { ChatConversation, RightSidebarState } from './types';
 import { conversationService } from '@/services/conversation.service';
 import { useConversationSocket } from '@/hooks/use-conversation-socket';
 import { useMessageSocket } from '@/hooks/use-message-socket';
+import { useConversationListRealtime } from '@/hooks/use-conversation-list-realtime';
+import { useSocket } from '@/hooks/use-socket';
 import { messageService } from '@/services/message.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { notification } from 'antd';
@@ -23,6 +25,9 @@ export function ChatFeature() {
       const [api, contextHolder] = notification.useNotification();
       const queryClient = useQueryClient();
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+      const { isConnected: isSocketConnected, connectionNonce } = useSocket();
+
+      const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 
       // --- STATE: UI ---
       const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,6 +61,11 @@ export function ChatFeature() {
             getNextPageParam: (lastPage) => {
                   return lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined;
             },
+      });
+
+      useConversationListRealtime({
+            conversationsQueryKey,
+            selectedConversationId: selectedId,
       });
 
       const conversations = (conversationsQuery.data?.pages ?? []).flatMap((p) => p.data);
@@ -111,6 +121,21 @@ export function ChatFeature() {
                   });
       }, [queryClient, conversationsQueryKey]);
 
+      const removeConversation = useCallback((conversationId: string) => {
+            queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
+                  conversationsQueryKey,
+                  (prev) => {
+                        if (!prev) return prev;
+
+                        const nextPages = prev.pages.map((page) => ({
+                              ...page,
+                              data: page.data.filter((c) => c.id !== conversationId),
+                        }));
+
+                        return { ...prev, pages: nextPages };
+                  });
+      }, [queryClient, conversationsQueryKey]);
+
       // ============================================================================
       // WebSocket - Realtime Events
       // ============================================================================
@@ -162,6 +187,28 @@ export function ChatFeature() {
                   });
             },
 
+            onGroupYouWereRemoved: (data) => {
+                  api.warning({
+                        message: 'Bạn đã bị xóa khỏi nhóm',
+                        placement: 'topRight',
+                        duration: 5,
+                  });
+
+                  removeConversation(data.conversationId);
+
+                  if (selectedId === data.conversationId) {
+                        setSelectedId(null);
+                  }
+            },
+
+            onGroupMemberJoined: () => {
+                  api.info({
+                        message: 'Có thành viên mới tham gia nhóm',
+                        placement: 'topRight',
+                        duration: 5,
+                  });
+            },
+
             onGroupDissolved: (data) => {
                   console.log('🔴 Group dissolved:', data);
                   api.error({
@@ -170,8 +217,11 @@ export function ChatFeature() {
                         duration: 5,
                   });
 
-                  // Remove conversation from list
-                  // removeConversation(data.conversationId);
+                  removeConversation(data.conversationId);
+
+                  if (selectedId === data.conversationId) {
+                        setSelectedId(null);
+                  }
             },
       });
 
@@ -183,6 +233,10 @@ export function ChatFeature() {
             messages,
             query: messagesQuery,
             isInitialLoad,
+            isAtBottom,
+            newMessageCount,
+            clearNewMessageCount,
+            scrollToBottom,
             loadOlder,
             queryKey: messagesQueryKey,
       } = useChatMessages({
@@ -191,10 +245,79 @@ export function ChatFeature() {
             messagesContainerRef,
       });
 
-      const { isConnected: isMsgSocketConnected, emitSendMessage } = useMessageSocket({
+      useEffect(() => {
+            if (!isSocketConnected) return;
+            void queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
+            if (selectedId) {
+                  void queryClient.invalidateQueries({ queryKey: messagesQueryKey });
+            }
+      }, [isSocketConnected, connectionNonce, queryClient, conversationsQueryKey, selectedId, messagesQueryKey]);
+
+      const {
+            isConnected: isMsgSocketConnected,
+            emitSendMessage,
+            emitMarkAsSeen,
+            emitTypingStart,
+            emitTypingStop,
+      } = useMessageSocket({
             conversationId: selectedId,
             messagesQueryKey,
+            onTypingStatus: (payload) => {
+                  const myId = currentUserId;
+                  if (myId && payload.userId === myId) return;
+                  setTypingUserIds((prev) => {
+                        if (payload.isTyping) {
+                              if (prev.includes(payload.userId)) return prev;
+                              return [...prev, payload.userId];
+                        }
+                        return prev.filter((id) => id !== payload.userId);
+                  });
+            },
       });
+
+      const typingText = typingUserIds.length > 0 ? 'Đang nhập...' : null;
+
+      const resetConversationUnread = useCallback((conversationId: string, lastReadMessageId?: string) => {
+            queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
+                  conversationsQueryKey,
+                  (prev) => {
+                        if (!prev) return prev;
+                        const pages = prev.pages.map((page) => ({
+                              ...page,
+                              data: page.data.map((c) => {
+                                    if (c.id !== conversationId) return c;
+                                    return {
+                                          ...c,
+                                          unreadCount: 0,
+                                          unread: 0,
+                                          ...(lastReadMessageId ? { lastReadMessageId } : {}),
+                                    };
+                              }),
+                        }));
+                        return { ...prev, pages };
+                  });
+      }, [queryClient, conversationsQueryKey]);
+
+      useEffect(() => {
+            if (!selectedId) return;
+            if (!isMsgSocketConnected) return;
+            if (messages.length === 0) return;
+
+            const latestMessageId = messages[messages.length - 1]?.id;
+            resetConversationUnread(selectedId, latestMessageId);
+
+            const messageIds = messages
+                  .filter((m) => (m.senderId ?? null) !== (currentUserId ?? null))
+                  .slice(-50)
+                  .map((m) => m.id);
+
+            if (messageIds.length === 0) return;
+
+            emitMarkAsSeen({
+                  conversationId: selectedId,
+                  messageIds,
+            });
+      }, [selectedId, isMsgSocketConnected, messages, currentUserId, emitMarkAsSeen, resetConversationUnread]);
 
       const handleSendText = useCallback(async (text: string) => {
             if (!selectedId) return;
@@ -210,6 +333,7 @@ export function ChatFeature() {
                   senderId: currentUserId ?? undefined,
                   type: 'TEXT' as MessageType,
                   content: trimmed,
+                  metadata: { sendStatus: 'SENDING' },
                   clientMessageId,
                   createdAt: nowIso,
                   updatedAt: nowIso,
@@ -234,13 +358,28 @@ export function ChatFeature() {
                   return { ...prev, pages };
             });
 
-            // Prefer socket when connected; fallback to HTTP
             if (isMsgSocketConnected) {
                   emitSendMessage({
                         conversationId: selectedId,
                         clientMessageId,
                         type: 'TEXT',
                         content: trimmed,
+                  }, (ack) => {
+                        if (!ack || !('error' in ack) || !ack.error) return;
+                        queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
+                              if (!prev) return prev;
+                              const pages = prev.pages.map((p) => ({
+                                    ...p,
+                                    data: p.data.map((m) => {
+                                          if (m.clientMessageId !== clientMessageId) return m;
+                                          return {
+                                                ...m,
+                                                metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: ack.error },
+                                          };
+                                    }),
+                              }));
+                              return { ...prev, pages };
+                        });
                   });
                   return;
             }
@@ -253,9 +392,67 @@ export function ChatFeature() {
                         content: trimmed,
                   });
             } catch {
+                  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
+                        if (!prev) return prev;
+                        const pages = prev.pages.map((p) => ({
+                              ...p,
+                              data: p.data.map((m) => {
+                                    if (m.clientMessageId !== clientMessageId) return m;
+                                    return {
+                                          ...m,
+                                          metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: 'Send failed' },
+                                    };
+                              }),
+                        }));
+                        return { ...prev, pages };
+                  });
                   api.error({ message: 'Gửi tin nhắn thất bại', placement: 'topRight' });
             }
       }, [selectedId, currentUserId, queryClient, messagesQueryKey, isMsgSocketConnected, emitSendMessage, api]);
+
+      const handleRetryMessage = useCallback((msg: MessageListItem) => {
+            if (!selectedId) return;
+            if (!isMsgSocketConnected) return;
+            if (!msg.clientMessageId) return;
+
+            queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
+                  if (!prev) return prev;
+                  const pages = prev.pages.map((p) => ({
+                        ...p,
+                        data: p.data.map((m) => {
+                              if (m.clientMessageId !== msg.clientMessageId) return m;
+                              return {
+                                    ...m,
+                                    metadata: { ...(m.metadata ?? {}), sendStatus: 'SENDING' },
+                              };
+                        }),
+                  }));
+                  return { ...prev, pages };
+            });
+
+            emitSendMessage({
+                  conversationId: selectedId,
+                  clientMessageId: msg.clientMessageId,
+                  type: msg.type,
+                  content: msg.content,
+            }, (ack) => {
+                  if (!ack || !('error' in ack) || !ack.error) return;
+                  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
+                        if (!prev) return prev;
+                        const pages = prev.pages.map((p) => ({
+                              ...p,
+                              data: p.data.map((m) => {
+                                    if (m.clientMessageId !== msg.clientMessageId) return m;
+                                    return {
+                                          ...m,
+                                          metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: ack.error },
+                                    };
+                              }),
+                        }));
+                        return { ...prev, pages };
+                  });
+            });
+      }, [selectedId, isMsgSocketConnected, queryClient, messagesQueryKey, emitSendMessage]);
 
       const msgHasMore = messagesQuery.hasNextPage;
       const isLoadingMsg = messagesQuery.isLoading || messagesQuery.isFetchingNextPage;
@@ -271,11 +468,10 @@ export function ChatFeature() {
       }, [msgInView, loadOlder]);
 
       const handleSelectConversation = useCallback((id: string) => {
-            // Nếu click lại vào người đang chat thì không làm gì
             if (id === selectedId) return;
-
             setSelectedId(id);
-      }, [selectedId]); // Thêm dependencies
+            setTypingUserIds([]);
+      }, [selectedId]);
 
       const selectedConversation = conversations.find((c) => c.id === selectedId) as ChatConversation | undefined;
 
@@ -296,6 +492,11 @@ export function ChatFeature() {
                               <>
                                     <ChatHeader
                                           conversationName={selectedConversation.name || 'Chat'}
+                                          avatarUrl={selectedConversation.avatar ?? null}
+                                          isDirect={selectedConversation.type === 'DIRECT'}
+                                          isOnline={selectedConversation.type === 'DIRECT' ? selectedConversation.isOnline ?? false : false}
+                                          lastSeenAt={selectedConversation.type === 'DIRECT' ? selectedConversation.lastSeenAt ?? null : null}
+                                          typingText={typingText}
                                           onToggleSearch={() => setRightSidebar(prev => prev === 'search' ? 'none' : 'search')}
                                           onToggleInfo={() => setRightSidebar(prev => prev === 'info' ? 'none' : 'info')}
                                     />
@@ -308,9 +509,28 @@ export function ChatFeature() {
                                           isInitialLoad={isInitialLoad}
                                           messagesContainerRef={messagesContainerRef}
                                           messagesEndRef={messagesEndRef}
+                                          isAtBottom={isAtBottom}
+                                          newMessageCount={newMessageCount}
+                                          onScrollToBottom={() => {
+                                                clearNewMessageCount();
+                                                scrollToBottom();
+                                          }}
+                                          onRetry={(m) => handleRetryMessage(m)}
                                     />
 
-                                    <ChatInput conversationId={selectedId} onSend={handleSendText} />
+                                    <ChatInput
+                                          conversationId={selectedId}
+                                          onSend={handleSendText}
+                                          onTypingChange={(isTyping) => {
+                                                if (!selectedId) return;
+                                                if (!isMsgSocketConnected) return;
+                                                if (isTyping) {
+                                                      emitTypingStart({ conversationId: selectedId });
+                                                      return;
+                                                }
+                                                emitTypingStop({ conversationId: selectedId });
+                                          }}
+                                    />
                               </>
                         ) : (
                               <div className="flex-1 flex items-center justify-center text-gray-400">

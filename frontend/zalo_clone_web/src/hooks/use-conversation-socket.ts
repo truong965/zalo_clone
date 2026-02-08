@@ -10,6 +10,8 @@ type GroupMembersAddedPayload = { conversationId: string; memberIds: string[] };
 type GroupMemberRemovedPayload = { conversationId: string; memberId: string };
 type GroupMemberLeftPayload = { conversationId: string; memberId: string };
 type GroupDissolvedPayload = { conversationId: string };
+type GroupYouWereRemovedPayload = { conversationId: string; removedBy: string };
+type GroupMemberJoinedPayload = { conversationId: string; userId: string };
 
 type SocketAck<T> = ({ error?: undefined } & T) | { error: string };
 
@@ -22,6 +24,8 @@ interface ConversationSocketHandlers {
       onGroupMemberRemoved?: (data: GroupMemberRemovedPayload) => void;
       onGroupMemberLeft?: (data: GroupMemberLeftPayload) => void;
       onGroupDissolved?: (data: GroupDissolvedPayload) => void;
+      onGroupYouWereRemoved?: (data: GroupYouWereRemovedPayload) => void;
+      onGroupMemberJoined?: (data: GroupMemberJoinedPayload) => void;
 }
 
 export function useConversationSocket(handlers: ConversationSocketHandlers) {
@@ -39,27 +43,67 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
             if (!socket || !isConnected) return;
 
             const onGroupCreated = (data: GroupCreatedPayload) => {
-                  handlersRef.current.onGroupCreated?.(data);
+                  try {
+                        handlersRef.current.onGroupCreated?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
             };
 
             const onGroupUpdated = (data: GroupUpdatedPayload) => {
-                  handlersRef.current.onGroupUpdated?.(data);
+                  try {
+                        handlersRef.current.onGroupUpdated?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
             };
 
             const onGroupMembersAdded = (data: GroupMembersAddedPayload) => {
-                  handlersRef.current.onGroupMembersAdded?.(data);
+                  try {
+                        handlersRef.current.onGroupMembersAdded?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
             };
 
             const onGroupMemberRemoved = (data: GroupMemberRemovedPayload) => {
-                  handlersRef.current.onGroupMemberRemoved?.(data);
+                  try {
+                        handlersRef.current.onGroupMemberRemoved?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
             };
 
             const onGroupMemberLeft = (data: GroupMemberLeftPayload) => {
-                  handlersRef.current.onGroupMemberLeft?.(data);
+                  try {
+                        handlersRef.current.onGroupMemberLeft?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
             };
 
             const onGroupDissolved = (data: GroupDissolvedPayload) => {
-                  handlersRef.current.onGroupDissolved?.(data);
+                  try {
+                        handlersRef.current.onGroupDissolved?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
+            };
+
+            const onGroupYouWereRemoved = (data: GroupYouWereRemovedPayload) => {
+                  try {
+                        handlersRef.current.onGroupYouWereRemoved?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
+            };
+
+            const onGroupMemberJoined = (data: GroupMemberJoinedPayload) => {
+                  try {
+                        handlersRef.current.onGroupMemberJoined?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
             };
 
             // Register all listeners
@@ -69,6 +113,8 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
             socket.on(SocketEvents.GROUP_MEMBER_REMOVED, onGroupMemberRemoved);
             socket.on(SocketEvents.GROUP_MEMBER_LEFT, onGroupMemberLeft);
             socket.on(SocketEvents.GROUP_DISSOLVED, onGroupDissolved);
+            socket.on(SocketEvents.GROUP_YOU_WERE_REMOVED, onGroupYouWereRemoved);
+            socket.on(SocketEvents.GROUP_MEMBER_JOINED, onGroupMemberJoined);
 
             // Cleanup
             return () => {
@@ -78,6 +124,8 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
                   socket.off(SocketEvents.GROUP_MEMBER_REMOVED, onGroupMemberRemoved);
                   socket.off(SocketEvents.GROUP_MEMBER_LEFT, onGroupMemberLeft);
                   socket.off(SocketEvents.GROUP_DISSOLVED, onGroupDissolved);
+                  socket.off(SocketEvents.GROUP_YOU_WERE_REMOVED, onGroupYouWereRemoved);
+                  socket.off(SocketEvents.GROUP_MEMBER_JOINED, onGroupMemberJoined);
             };
       }, [socket, isConnected]); //  Only depend on socket & isConnected
 

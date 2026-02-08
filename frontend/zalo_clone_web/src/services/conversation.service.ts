@@ -45,12 +45,16 @@ function mapConversationListItemToUI(item: ConversationListItem): ChatConversati
             name: item.name ?? undefined,
             avatar: item.avatar ?? undefined,
             isOnline: item.isOnline,
+            lastSeenAt: item.lastSeenAt,
             isBlocked: item.isBlocked,
+            otherUserId: item.otherUserId ?? null,
             updatedAt: item.updatedAt,
+            lastMessageAt: item.lastMessageAt,
             lastMessageObj: item.lastMessage,
             lastMessage: lastMessagePreview,
             timestamp,
-            unreadCount: item.unreadCount,
+            unreadCount: item.unreadCount ?? 0,
+            unread: item.unreadCount ?? 0,
             lastReadMessageId: item.lastReadMessageId ?? null,
       };
 }

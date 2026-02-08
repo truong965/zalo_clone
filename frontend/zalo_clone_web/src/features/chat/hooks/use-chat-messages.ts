@@ -34,6 +34,8 @@ export function useChatMessages(params: {
   const { conversationId, limit = 50, messagesContainerRef } = params;
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [newMessageCount, setNewMessageCount] = useState(0);
 
   const scrollSnapshotRef = useRef({ scrollHeight: 0, scrollTop: 0 });
 
@@ -70,6 +72,7 @@ export function useChatMessages(params: {
   });
 
   const messagesDesc = (query.data?.pages ?? []).flatMap((p) => p.data);
+  const newestMessageId = messagesDesc[0]?.id ?? null;
   const messagesAsc = useMemo(() => {
     const asc = [...messagesDesc].reverse();
     return asc.map((m) => mapMessageToUI(m, currentUserId));
@@ -94,22 +97,78 @@ export function useChatMessages(params: {
     });
   }, [messagesContainerRef]);
 
+  const clearNewMessageCount = useCallback(() => {
+    setNewMessageCount(0);
+  }, []);
+
   useEffect(() => {
     if (!conversationId) return;
     queueMicrotask(() => setIsInitialLoad(true));
+    queueMicrotask(() => {
+      setNewMessageCount(0);
+      setIsAtBottom(true);
+    });
   }, [conversationId]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const thresholdPx = 40;
+    const computeIsAtBottom = () => {
+      const distance = container.scrollHeight - (container.scrollTop + container.clientHeight);
+      const atBottom = distance <= thresholdPx;
+      setIsAtBottom(atBottom);
+      if (atBottom) setNewMessageCount(0);
+    };
+
+    computeIsAtBottom();
+    container.addEventListener('scroll', computeIsAtBottom, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', computeIsAtBottom);
+    };
+  }, [messagesContainerRef, conversationId]);
+
+  const prevNewestMessageIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!conversationId) return;
+    if (!newestMessageId) return;
+    if (isInitialLoad) {
+      prevNewestMessageIdRef.current = newestMessageId;
+      return;
+    }
+
+    const prev = prevNewestMessageIdRef.current;
+    if (prev === newestMessageId) return;
+    prevNewestMessageIdRef.current = newestMessageId;
+
+    if (isAtBottom) {
+      scrollToBottom();
+      return;
+    }
+
+    queueMicrotask(() => setNewMessageCount((c) => c + 1));
+  }, [conversationId, newestMessageId, isAtBottom, isInitialLoad, scrollToBottom]);
 
   useEffect(() => {
     if (!conversationId) return;
     if (!query.data) return;
 
+    // Only auto-scroll on first load, or when user is already at bottom.
+    // If user is not at bottom, keep their scroll position and show the new-message indicator instead.
+    if (!isInitialLoad && !isAtBottom) {
+      return;
+    }
+
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         scrollToBottom();
-        setTimeout(() => setIsInitialLoad(false), 200);
+        if (isInitialLoad) {
+          setTimeout(() => setIsInitialLoad(false), 200);
+        }
       });
     });
-  }, [conversationId, query.data, scrollToBottom]);
+  }, [conversationId, query.data, scrollToBottom, isInitialLoad, isAtBottom]);
 
   const loadOlder = useCallback(async () => {
     if (isInitialLoad) return;
@@ -148,6 +207,9 @@ export function useChatMessages(params: {
     query,
     messages: messagesAsc,
     isInitialLoad,
+    isAtBottom,
+    newMessageCount,
+    clearNewMessageCount,
     scrollToBottom,
     loadOlder,
     buildSendTextDto,

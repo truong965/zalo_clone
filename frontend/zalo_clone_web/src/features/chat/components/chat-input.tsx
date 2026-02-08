@@ -9,17 +9,27 @@ import {
       FormatPainterOutlined,
       SnippetsOutlined
 } from '@ant-design/icons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const { TextArea } = Input;
 
 interface ChatInputProps {
       conversationId: string | null;
       onSend?: (text: string) => void;
+      onTypingChange?: (isTyping: boolean) => void;
 }
 
-export function ChatInput({ conversationId, onSend }: ChatInputProps) {
+export function ChatInput({ conversationId, onSend, onTypingChange }: ChatInputProps) {
       const [message, setMessage] = useState('');
+
+      const isTypingRef = useRef(false);
+      const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+      useEffect(() => {
+            return () => {
+                  if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+            };
+      }, []);
 
       // Danh sách các công cụ trên Toolbar
       const toolbarActions = [
@@ -55,18 +65,47 @@ export function ChatInput({ conversationId, onSend }: ChatInputProps) {
                         <div className="flex-1 relative">
                               <TextArea
                                     value={message}
-                                    onChange={(e) => setMessage(e.target.value)}
+                                    onChange={(e) => {
+                                          const next = e.target.value;
+                                          setMessage(next);
+
+                                          if (!conversationId) return;
+                                          if (!onTypingChange) return;
+
+                                          if (!isTypingRef.current) {
+                                                isTypingRef.current = true;
+                                                onTypingChange(true);
+                                          }
+
+                                          if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+                                          stopTimerRef.current = setTimeout(() => {
+                                                if (!isTypingRef.current) return;
+                                                isTypingRef.current = false;
+                                                onTypingChange(false);
+                                          }, 1200);
+                                    }}
                                     placeholder={conversationId ? 'Nhập tin nhắn' : 'Chọn một cuộc trò chuyện để bắt đầu'}
                                     autoSize={{ minRows: 1, maxRows: 5 }}
                                     className="!bg-transparent !resize-none pr-8 text-[15px]"
                                     variant="borderless"
                                     disabled={!conversationId}
+                                    onBlur={() => {
+                                          if (!conversationId) return;
+                                          if (!onTypingChange) return;
+                                          if (!isTypingRef.current) return;
+                                          isTypingRef.current = false;
+                                          onTypingChange(false);
+                                    }}
                                     onPressEnter={(e) => {
                                           if (!e.shiftKey) {
                                                 e.preventDefault();
                                                 if (!conversationId) return;
                                                 const text = message.trim();
                                                 if (!text) return;
+                                                if (onTypingChange && isTypingRef.current) {
+                                                      isTypingRef.current = false;
+                                                      onTypingChange(false);
+                                                }
                                                 onSend?.(text);
                                                 setMessage('');
                                           }
@@ -102,6 +141,10 @@ export function ChatInput({ conversationId, onSend }: ChatInputProps) {
                                                       if (!conversationId) return;
                                                       const text = message.trim();
                                                       if (!text) return;
+                                                      if (onTypingChange && isTypingRef.current) {
+                                                            isTypingRef.current = false;
+                                                            onTypingChange(false);
+                                                      }
                                                       onSend?.(text);
                                                       setMessage('');
                                                 }}

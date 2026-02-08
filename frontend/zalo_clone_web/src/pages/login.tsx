@@ -88,7 +88,7 @@ export function LoginPage() {
               rules={[
                 { required: true, message: 'Vui lòng nhập số điện thoại' },
                 {
-                  pattern: /(84|0[3|5|7|8|9])+([0-9]{8})\b/g,
+                  // pattern: /(84|0[3|5|7|8|9])+([0-9]{8})\b/g,
                   message: 'Số điện thoại không đúng định dạng (VD: 0987654321)',
                 },
               ]}

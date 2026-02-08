@@ -428,7 +428,9 @@ export interface ConversationListItem {
   avatar: string | null;
   isOnline: boolean;
   isBlocked: boolean;
+  otherUserId?: string | null;
   lastSeenAt: string | null;
+  lastMessageAt: string | null;
   lastMessage: ConversationLastMessage | null;
   updatedAt: string;
   unreadCount?: number;

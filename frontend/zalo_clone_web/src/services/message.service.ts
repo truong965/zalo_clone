@@ -11,7 +11,7 @@ export const messageService = {
     const response = await apiClient.get<
       ApiResponse<CursorPaginatedResponse<MessageListItem>>
     >(API_ENDPOINTS.MESSAGES.GET_ALL, { params });
-    console.log("chat: ", response);
+    // console.log("chat: ", response.data.data);
     return response.data.data;
   },
 

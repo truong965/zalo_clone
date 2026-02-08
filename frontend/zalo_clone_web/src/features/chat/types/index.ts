@@ -27,6 +27,7 @@ export interface ChatConversation extends ApiConversation {
   timestamp?: string; // Formatted time like "24/01", "Vài giây"
   unread?: number; // Unread message count
   isOnline?: boolean; // User online status
+  lastSeenAt?: string | null;
   isPinned?: boolean; // Pinned in list
 
   // API fields from conversation list endpoint
@@ -35,6 +36,8 @@ export interface ChatConversation extends ApiConversation {
   unreadCount?: number;
   lastReadMessageId?: string | null;
   isBlocked?: boolean;
+
+  otherUserId?: string | null;
 }
 
 export type ChatConversationListItem = Omit<ConversationListItem, 'unreadCount'> & {

@@ -1,4 +1,4 @@
-import { Empty, Spin } from 'antd';
+import { Button, Empty, Spin } from 'antd';
 import type { ChatMessage } from '../types';
 import { MessageType } from '@/types/api';
 
@@ -9,6 +9,7 @@ interface MessageListProps {
       msgLoadMoreRef: React.Ref<HTMLDivElement>;
       isInitialLoad: boolean;
       messagesEndRef: React.RefObject<HTMLDivElement | null>;
+      onRetry?: (msg: ChatMessage) => void;
 }
 
 function renderMessageBody(msg: ChatMessage) {
@@ -68,6 +69,13 @@ function renderMessageBody(msg: ChatMessage) {
       return <div className="whitespace-pre-wrap">{msg.content ?? ''}</div>;
 }
 
+function getSendStatus(metadata: ChatMessage['metadata']): string | undefined {
+      if (!metadata) return undefined;
+      if (typeof metadata !== 'object') return undefined;
+      const v = (metadata as Record<string, unknown>).sendStatus;
+      return typeof v === 'string' ? v : undefined;
+}
+
 export function MessageList({
       messages,
       isLoadingMsg,
@@ -75,6 +83,7 @@ export function MessageList({
       msgLoadMoreRef,
       isInitialLoad,
       messagesEndRef,
+      onRetry,
 }: MessageListProps) {
       return (
             <>
@@ -99,8 +108,27 @@ export function MessageList({
                                                 : 'bg-white text-gray-800 border border-gray-200'
                                                 }`}>
                                                 {renderMessageBody(msg)}
-                                                <div className="text-[10px] opacity-60 text-right mt-1">
-                                                      {msg.displayTimestamp}
+                                                {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
+                                                      <div className="mt-2 flex items-center justify-end gap-2">
+                                                            <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
+                                                            <Button
+                                                                  size="small"
+                                                                  type="link"
+                                                                  className="!p-0 !h-auto"
+                                                                  onClick={() => onRetry?.(msg)}
+                                                            >
+                                                                  Gửi lại
+                                                            </Button>
+                                                      </div>
+                                                )}
+                                                <div className="text-[10px] opacity-60 text-right mt-1 flex items-center justify-end gap-2">
+                                                      {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
+                                                            <span className="inline-flex items-center gap-1">
+                                                                  <Spin size="small" />
+                                                                  <span>Đang gửi...</span>
+                                                            </span>
+                                                      )}
+                                                      <span>{msg.displayTimestamp}</span>
                                                 </div>
                                           </div>
                                     </div>

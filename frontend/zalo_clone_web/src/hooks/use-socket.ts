@@ -6,6 +6,7 @@ import { useAuthStore } from '@/features/auth';
 export function useSocket() {
       const [socket, setSocket] = useState<Socket | null>(null);
       const [isConnected, setIsConnected] = useState(false);
+      const [connectionNonce, setConnectionNonce] = useState(0);
       const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
       useEffect(() => {
@@ -24,7 +25,10 @@ export function useSocket() {
             queueMicrotask(() => setSocket(socketInstance));
 
             // Track connection status
-            const handleConnect = () => queueMicrotask(() => setIsConnected(true));
+            const handleConnect = () => queueMicrotask(() => {
+                  setIsConnected(true);
+                  setConnectionNonce((v) => v + 1);
+            });
             const handleDisconnect = () => queueMicrotask(() => setIsConnected(false));
 
             socketInstance.on('connect', handleConnect);
@@ -40,5 +44,5 @@ export function useSocket() {
             };
       }, [isAuthenticated]);
 
-      return { socket, isConnected };
+      return { socket, isConnected, connectionNonce };
 }
