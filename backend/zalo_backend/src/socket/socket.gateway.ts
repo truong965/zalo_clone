@@ -5,8 +5,6 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   ConnectedSocket,
-  SubscribeMessage,
-  MessageBody,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import {
@@ -29,6 +27,9 @@ import socketConfig from 'src/config/socket.config';
 import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { WsValidationPipe } from './pipes/ws-validation.pipe';
 import { EventPublisher } from 'src/shared/events/event-publisher.service';
+import { FriendshipService } from 'src/modules/friendship/service/friendship.service';
+import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
+import { PrismaService } from 'src/database/prisma.service';
 
 @WebSocketGateway({
   cors: {
@@ -65,8 +66,7 @@ import { EventPublisher } from 'src/shared/events/event-publisher.service';
 // Validation pipe for incoming messages
 @UsePipes(WsValidationPipe)
 export class SocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -82,14 +82,48 @@ export class SocketGateway
     private readonly socketState: SocketStateService,
     private readonly redisPubSub: RedisPubSubService,
     private readonly eventPublisher: EventPublisher,
+    private readonly friendshipService: FriendshipService,
+    private readonly privacyService: PrivacyService,
+    private readonly prisma: PrismaService,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
-  ) {}
+  ) { }
+
+  private async notifyFriendsPresence(
+    userId: string,
+    isOnline: boolean,
+    timestamp?: Date,
+  ) {
+    try {
+      const settings = await this.privacyService.getSettings(userId);
+      if (!settings.showOnlineStatus) return;
+
+      const friendIds =
+        await this.friendshipService.getFriendIdsForPresence(userId);
+
+      const payload = {
+        userId,
+        timestamp: (timestamp ?? new Date()).toISOString(),
+      };
+
+      await Promise.all(
+        friendIds.map((fid) =>
+          this.emitToUser(
+            fid,
+            isOnline ? SocketEvents.FRIEND_ONLINE : SocketEvents.FRIEND_OFFLINE,
+            payload,
+          ).catch(() => undefined),
+        ),
+      );
+    } catch {
+      // ignore presence notify errors
+    }
+  }
 
   /**
    * Gateway initialization
    */
-  afterInit(server: Server) {
+  afterInit() {
     this.logger.log('🔌 Socket.IO Gateway initialized');
 
     // Setup Redis adapter for cluster support
@@ -200,12 +234,12 @@ export class SocketGateway
     // Subscribe to presence updates
     await this.redisPubSub.subscribe(
       RedisKeyBuilder.channels.presenceOnline,
-      this.handlePresenceOnline.bind(this),
+      (channel, message) => void this.handlePresenceOnline(channel, message),
     );
 
     await this.redisPubSub.subscribe(
       RedisKeyBuilder.channels.presenceOffline,
-      this.handlePresenceOffline.bind(this),
+      (channel, message) => void this.handlePresenceOffline(channel, message),
     );
 
     this.logger.log('✅ Subscribed to cross-server events');
@@ -256,10 +290,12 @@ export class SocketGateway
       });
 
       // Publish presence update (cross-server)
-      await this.redisPubSub.publish(RedisKeyBuilder.channels.presenceOnline, {
+      void this.redisPubSub.publish(RedisKeyBuilder.channels.presenceOnline, {
         userId: user.id,
         timestamp: new Date().toISOString(),
       });
+
+      await this.notifyFriendsPresence(user.id, true);
 
       // --- VÍ DỤ SỬ DỤNG SAFE INTERVAL (TASK 2 APPLIED) ---
       // Gửi packet 'pong' application-level mỗi 30s để đảm bảo kết nối "sống"
@@ -325,13 +361,29 @@ export class SocketGateway
 
       // If user is now completely offline, publish presence update
       if (isOffline) {
-        await this.redisPubSub.publish(
+        const now = new Date();
+
+        await this.prisma.user
+          .update({
+            where: { id: client.userId },
+            data: { lastSeenAt: now },
+          })
+          .catch((err) => {
+            this.logger.error(
+              `Failed to update lastSeenAt for ${client.userId}`,
+              err,
+            );
+          });
+
+        void this.redisPubSub.publish(
           RedisKeyBuilder.channels.presenceOffline,
           {
             userId: client.userId,
-            timestamp: new Date().toISOString(),
+            timestamp: now.toISOString(),
           },
         );
+
+        await this.notifyFriendsPresence(client.userId, false, now);
       }
 
       // PHASE 2: Emit event for presence cleanup
@@ -356,11 +408,12 @@ export class SocketGateway
     message: string,
   ): Promise<void> {
     try {
-      const data = JSON.parse(message);
+      const data = JSON.parse(message) as { userId?: string };
       this.logger.debug(`Presence online (cross-server): ${data.userId}`);
 
-      // TODO: Phase 2 - Notify user's friends
-      // For now, just log
+      if (data.userId) {
+        await this.notifyFriendsPresence(data.userId, true);
+      }
     } catch (error) {
       this.logger.error('Error handling presence online:', error);
     }
@@ -374,11 +427,12 @@ export class SocketGateway
     message: string,
   ): Promise<void> {
     try {
-      const data = JSON.parse(message);
+      const data = JSON.parse(message) as { userId?: string };
       this.logger.debug(`Presence offline (cross-server): ${data.userId}`);
 
-      // TODO: Phase 2 - Notify user's friends
-      // For now, just log
+      if (data.userId) {
+        await this.notifyFriendsPresence(data.userId, false);
+      }
     } catch (error) {
       this.logger.error('Error handling presence offline:', error);
     }
@@ -426,8 +480,8 @@ export class SocketGateway
       }
     };
 
-    process.on('SIGTERM', () => void shutdown('SIGTERM'));
-    process.on('SIGINT', () => void shutdown('SIGINT'));
+    void process.on('SIGTERM', () => void shutdown('SIGTERM'));
+    void process.on('SIGINT', () => void shutdown('SIGINT'));
   }
 
   /**

@@ -29,7 +29,9 @@ export class MessageRealtimeService {
     private readonly receiptService: ReceiptService,
     private readonly messageQueue: MessageQueueService,
     private readonly broadcaster: MessageBroadcasterService,
-  ) {}
+  ) {
+    return;
+  }
 
   async syncOfflineMessages(client: AuthenticatedSocket): Promise<void> {
     const userId = client.userId;
@@ -57,6 +59,39 @@ export class MessageRealtimeService {
         messages: sanitizedMessages,
         count: offlineMessages.length,
       });
+
+      const grouped = new Map<string, { last: Message; count: number }>();
+      for (const qm of offlineMessages) {
+        const rawMsg = qm.data as Message;
+        const current = grouped.get(rawMsg.conversationId);
+        if (!current) {
+          grouped.set(rawMsg.conversationId, { last: rawMsg, count: 1 });
+          continue;
+        }
+        current.count += 1;
+        if (
+          new Date(rawMsg.createdAt).getTime() >
+          new Date(current.last.createdAt).getTime()
+        ) {
+          current.last = rawMsg;
+        }
+      }
+
+      for (const [conversationId, entry] of grouped.entries()) {
+        const m = entry.last;
+        client.emit(SocketEvents.CONVERSATION_LIST_ITEM_UPDATED, {
+          conversationId,
+          lastMessage: {
+            id: m.id.toString(),
+            content: m.content ?? null,
+            type: m.type,
+            senderId: m.senderId ?? null,
+            createdAt: new Date(m.createdAt).toISOString(),
+          },
+          lastMessageAt: new Date(m.createdAt).toISOString(),
+          unreadCountDelta: entry.count,
+        });
+      }
 
       const messageIds = offlineMessages.map((qm) => qm.messageId);
       await this.receiptService.bulkMarkAsDelivered(messageIds, userId);
@@ -101,7 +136,7 @@ export class MessageRealtimeService {
     const members = await this.getActiveMembers(dto.conversationId);
     const recipients = members.filter((m) => m.userId !== senderId);
     const recipientIds = recipients.map((r) => r.userId);
-
+    const isoCreatedAt = new Date(message.createdAt).toISOString();
     const safeMsg = safeJSON(message);
     await this.broadcaster.broadcastNewMessage(dto.conversationId, {
       message: safeMsg,
@@ -117,6 +152,31 @@ export class MessageRealtimeService {
       isUserOnline,
     );
 
+    const listItemPayloadBase = {
+      conversationId: dto.conversationId,
+      lastMessage: {
+        id: message.id.toString(),
+        content: message.content ?? null,
+        type: message.type,
+        senderId: message.senderId ?? null,
+        createdAt: isoCreatedAt,
+      },
+      lastMessageAt: isoCreatedAt,
+    };
+
+    await Promise.all([
+      emitToUser(senderId, SocketEvents.CONVERSATION_LIST_ITEM_UPDATED, {
+        ...listItemPayloadBase,
+        unreadCountDelta: 0,
+      }),
+      ...recipientIds.map((userId) =>
+        emitToUser(userId, SocketEvents.CONVERSATION_LIST_ITEM_UPDATED, {
+          ...listItemPayloadBase,
+          unreadCountDelta: 1,
+        }),
+      ),
+    ]);
+
     return message;
   }
 
@@ -126,15 +186,26 @@ export class MessageRealtimeService {
       throw new Error('Not a member of this conversation');
     }
 
-    await this.receiptService.markAsSeen(dto.messageIds, userId);
+    const messageIds = dto.messageIds
+      .map((id) => {
+        try {
+          return BigInt(id);
+        } catch {
+          return null;
+        }
+      })
+      .filter((id): id is bigint => id !== null);
+
+    await this.receiptService.markAsSeen(messageIds, userId);
     await this.resetUnreadCount(dto.conversationId, userId);
 
-    for (const messageId of dto.messageIds) {
-      const message = await this.messageService.findByClientMessageId(
-        messageId.toString(),
-      );
+    for (const messageId of messageIds) {
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: { senderId: true },
+      });
 
-      if (message && message.senderId && message.senderId !== userId) {
+      if (message?.senderId && message.senderId !== userId) {
         await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
           messageId,
           userId,
@@ -162,6 +233,34 @@ export class MessageRealtimeService {
       userId,
       isTyping: false,
     });
+  }
+
+  async broadcastTypingToMembers(
+    dto: TypingIndicatorDto,
+    userId: string,
+    emitToUser: (
+      userId: string,
+      event: string,
+      data: unknown,
+    ) => void | Promise<void>,
+  ): Promise<void> {
+    const isMember = await this.isMember(dto.conversationId, userId);
+    if (!isMember) return;
+
+    const members = await this.getActiveMembers(dto.conversationId);
+    await Promise.all(
+      members
+        .filter((m) => m.userId !== userId)
+        .map((m) =>
+          Promise.resolve(
+            emitToUser(m.userId, SocketEvents.TYPING_STATUS, {
+              conversationId: dto.conversationId,
+              userId,
+              isTyping: dto.isTyping,
+            }),
+          ).catch(() => undefined),
+        ),
+    );
   }
 
   async subscribeToConversation(

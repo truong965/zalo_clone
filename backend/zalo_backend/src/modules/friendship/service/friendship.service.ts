@@ -89,7 +89,7 @@ export class FriendshipService {
     private readonly lockService: DistributedLockService,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) {}
+  ) { }
 
   /**
    * Send a friend request
@@ -997,6 +997,10 @@ export class FriendshipService {
     return friendships.map((f) =>
       f.user1Id === userId ? f.user2Id : f.user1Id,
     );
+  }
+
+  async getFriendIdsForPresence(userId: string): Promise<string[]> {
+    return this.getFriendIds(userId);
   }
 
   /**

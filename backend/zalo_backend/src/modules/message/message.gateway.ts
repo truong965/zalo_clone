@@ -35,6 +35,7 @@ import { TypingIndicatorDto } from './dto/typing-indicator.dto';
 
 @WebSocketGateway({
   cors: { origin: '*', credentials: true },
+  namespace: '/socket.io',
 })
 @UseGuards(WsThrottleGuard)
 @UsePipes(new ValidationPipe({ transform: true }))
@@ -57,7 +58,7 @@ export class MessageGateway implements OnGatewayInit {
     private readonly broadcaster: MessageBroadcasterService,
     private readonly realtime: MessageRealtimeService,
     private readonly socketState: SocketStateService,
-  ) {}
+  ) { }
 
   afterInit() {
     this.logger.log('📨 Message Gateway initialized');
@@ -130,14 +131,14 @@ export class MessageGateway implements OnGatewayInit {
         error: (error as Error).message,
       });
 
-      throw error;
+      return { success: false, data: null, error: (error as Error).message };
     }
   }
 
   @SubscribeMessage(SocketEvents.MESSAGE_DELIVERED_ACK)
   async handleMessageDelivered(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { messageId: bigint },
+    @MessageBody() data: { messageId: string },
   ) {
     return this.handleMessageDeliveredInternal(client, data);
   }
@@ -145,14 +146,14 @@ export class MessageGateway implements OnGatewayInit {
   @SubscribeMessage(SocketEvents.MESSAGE_DELIVERED_CLIENT_ACK)
   async handleMessageDeliveredClientAck(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { messageId: bigint },
+    @MessageBody() data: { messageId: string },
   ) {
     return this.handleMessageDeliveredInternal(client, data);
   }
 
   private async handleMessageDeliveredInternal(
     client: AuthenticatedSocket,
-    data: { messageId: bigint },
+    data: { messageId: string },
   ) {
     const userId = client.userId;
 
@@ -160,15 +161,16 @@ export class MessageGateway implements OnGatewayInit {
       if (!userId) {
         throw new Error('Unauthenticated');
       }
-      await this.receiptService.markAsDelivered(data.messageId, userId);
+      const messageId = BigInt(data.messageId);
+      await this.receiptService.markAsDelivered(messageId, userId);
 
       const message = await this.messageService.findByClientMessageId(
-        data.messageId.toString(),
+        messageId.toString(),
       );
 
       if (message && message.senderId) {
         await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
-          messageId: data.messageId,
+          messageId,
           userId,
           status: ReceiptStatus.DELIVERED,
           timestamp: new Date(),
@@ -203,7 +205,7 @@ export class MessageGateway implements OnGatewayInit {
         event: SocketEvents.MESSAGE_SEEN,
         error: (error as Error).message,
       });
-      throw error;
+      return { success: false, data: null, error: (error as Error).message };
     }
   }
 
@@ -219,15 +221,23 @@ export class MessageGateway implements OnGatewayInit {
         throw new Error('Unauthenticated');
       }
 
-      await this.realtime.typingStart(dto, userId);
+      await this.realtime.broadcastTypingToMembers(dto, userId, (uid, event, data) =>
+        this.emitToUser(uid, event, data),
+      );
 
       setTimeout(() => {
-        this.realtime.typingStop(dto, userId).catch((error) => {
-          this.logger.error(
-            `Error broadcasting typing timeout for user ${userId}`,
-            error,
-          );
-        });
+        this.realtime
+          .broadcastTypingToMembers(
+            { ...dto, isTyping: false },
+            userId,
+            (uid, event, data) => this.emitToUser(uid, event, data),
+          )
+          .catch((error) => {
+            this.logger.error(
+              `Error broadcasting typing timeout for user ${userId}`,
+              error,
+            );
+          });
       }, 3000);
     } catch (error) {
       this.logger.error('Error handling typing start', error);
@@ -245,7 +255,9 @@ export class MessageGateway implements OnGatewayInit {
       if (!userId) {
         throw new Error('Unauthenticated');
       }
-      await this.realtime.typingStop(dto, userId);
+      await this.realtime.broadcastTypingToMembers(dto, userId, (uid, event, data) =>
+        this.emitToUser(uid, event, data),
+      );
     } catch (error) {
       this.logger.error('Error handling typing stop', error);
     }

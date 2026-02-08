@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { EventType, Gender } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
+import type { MessageSentEvent } from '@modules/message/events';
 import type {
   ConversationCreatedEvent,
   ConversationMemberAddedEvent,
@@ -30,7 +31,78 @@ export class ConversationEventHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly idempotency: IdempotencyService,
-  ) {}
+  ) { }
+
+  @OnEvent('message.sent')
+  async handleMessageSent(payload: MessageSentEvent): Promise<void> {
+    const eventId = payload.eventId;
+    const handlerId = this.constructor.name;
+
+    try {
+      const alreadyProcessed = await this.idempotency.isProcessed(
+        eventId,
+        handlerId,
+      );
+      if (alreadyProcessed) {
+        this.logger.debug(`[MESSAGE_SENT] Skipping duplicate event: ${eventId}`);
+        return;
+      }
+    } catch (idempotencyError) {
+      this.logger.warn(
+        `[MESSAGE_SENT] Idempotency check failed, proceeding with caution`,
+        idempotencyError,
+      );
+    }
+
+    try {
+      const msg = await this.prisma.message.findUnique({
+        where: { id: BigInt(payload.messageId) },
+        select: { conversationId: true, createdAt: true },
+      });
+
+      if (!msg) {
+        this.logger.warn(`[MESSAGE_SENT] Message not found: ${payload.messageId}`);
+        return;
+      }
+
+      await this.prisma.conversation.update({
+        where: { id: msg.conversationId },
+        data: { lastMessageAt: msg.createdAt },
+      });
+
+      try {
+        await this.idempotency.recordProcessed(
+          eventId,
+          handlerId,
+          EventType.MESSAGE_SENT,
+        );
+      } catch (recordError) {
+        this.logger.warn(
+          `[MESSAGE_SENT] Failed to record idempotency tracking`,
+          recordError,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `[MESSAGE_SENT] Failed to handle message.sent event:`,
+        error,
+      );
+      try {
+        await this.idempotency.recordError(
+          eventId,
+          handlerId,
+          error as Error,
+          EventType.MESSAGE_SENT,
+        );
+      } catch (recordError) {
+        this.logger.warn(
+          `[MESSAGE_SENT] Failed to record error in idempotency tracking`,
+          recordError,
+        );
+      }
+      throw error;
+    }
+  }
 
   @OnEvent('conversation.created')
   async handleConversationCreated(
@@ -148,14 +220,14 @@ export class ConversationEventHandler {
             : `${addedBy} added ${memberIds.length} member(s)`,
           metadata: isSelfJoin
             ? {
-                action: 'MEMBER_JOINED',
-                userId: addedBy,
-              }
+              action: 'MEMBER_JOINED',
+              userId: addedBy,
+            }
             : {
-                action: 'MEMBERS_ADDED',
-                actorId: addedBy,
-                addedUserIds: memberIds,
-              },
+              action: 'MEMBERS_ADDED',
+              actorId: addedBy,
+              addedUserIds: memberIds,
+            },
         },
       });
 
@@ -242,14 +314,14 @@ export class ConversationEventHandler {
             : `${memberId} left the group`,
           metadata: isRemoved
             ? {
-                action: 'MEMBER_KICKED',
-                actorId: kickedBy,
-                targetUserId: memberId,
-              }
+              action: 'MEMBER_KICKED',
+              actorId: kickedBy,
+              targetUserId: memberId,
+            }
             : {
-                action: 'MEMBER_LEFT',
-                actorId: memberId,
-              },
+              action: 'MEMBER_LEFT',
+              actorId: memberId,
+            },
         },
       });
 

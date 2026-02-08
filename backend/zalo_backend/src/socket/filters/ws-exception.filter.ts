@@ -24,7 +24,8 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
     const data = host.switchToWs().getData<unknown>();
 
     // 1. Extract Context Info
-    const eventName = this.extractEventName(data);
+    const pattern = host.switchToWs().getPattern?.() as string | undefined;
+    const eventName = pattern || this.extractEventName(data);
 
     // Fix access an toàn cho headers
     const headers = client.handshake?.headers || {};
@@ -73,7 +74,17 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
     }
 
     // 5. Emit standardized error to client
-    client.emit(SocketEvents.ERROR, errorResponse);
+    // Include original event name and clientMessageId for FE error matching
+    const clientMessageId =
+      data && typeof data === 'object' && 'clientMessageId' in data
+        ? (data as Record<string, unknown>).clientMessageId
+        : undefined;
+
+    client.emit(SocketEvents.ERROR, {
+      ...errorResponse,
+      event: eventName,
+      ...(clientMessageId ? { clientMessageId } : {}),
+    });
   }
 
   /**
@@ -111,7 +122,6 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
    * Build standardized error response
    */
   private buildErrorResponse(exception: unknown): {
-    event: string;
     message: string | object;
     code: string;
     timestamp: string;
@@ -143,7 +153,6 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
     }
 
     return {
-      event: SocketEvents.ERROR,
       message,
       code,
       details,

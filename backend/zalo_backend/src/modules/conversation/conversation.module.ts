@@ -8,6 +8,7 @@ import { EventsModule } from '@shared/events';
 import { AuthorizationModule } from '@modules/authorization/authorization.module';
 import { SocketModule } from 'src/socket/socket.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
+import { PrivacyModule } from 'src/modules/privacy/privacy.module';
 
 // Services
 import { ConversationService } from './services/conversation.service';
@@ -45,6 +46,7 @@ import { ConversationGateway } from './conversation.gateway';
     EventEmitterModule,
     EventsModule,
     AuthorizationModule,
+    PrivacyModule,
     forwardRef(() => SocketModule),
     IdempotencyModule,
   ],
@@ -64,4 +66,4 @@ import { ConversationGateway } from './conversation.gateway';
   ],
   exports: [ConversationService, GroupService, GroupJoinService],
 })
-export class ConversationModule {}
+export class ConversationModule { }

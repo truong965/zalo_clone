@@ -49,6 +49,8 @@ export const SocketEvents = {
   MESSAGES_SYNC: 'messages:sync', // Offline message batch
   CONVERSATION_UPDATED: 'conversation:updated', // Last message changed
 
+  CONVERSATION_LIST_ITEM_UPDATED: 'conversation:list:itemUpdated',
+
   // === GROUP EVENTS ===
 
   // Client → Server

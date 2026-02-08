@@ -1,5 +1,4 @@
-import { IsUUID, IsArray, IsNotEmpty } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsUUID, IsArray, IsNotEmpty, IsString } from 'class-validator';
 
 export class MarkAsReadDto {
   @IsUUID()
@@ -7,6 +6,6 @@ export class MarkAsReadDto {
   conversationId: string;
 
   @IsArray()
-  @Type(() => BigInt)
-  messageIds: bigint[]; // Can batch multiple messages
+  @IsString({ each: true })
+  messageIds: string[];
 }

@@ -12,6 +12,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { RedisIoAdapter } from './socket/adapters/redis-io.adapter';
 import { ConfigService } from '@nestjs/config';
+// (BigInt.prototype as any).toJSON = function () {
+//   return this.toString();
+// };
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const port = process.env.PORT || 3000;

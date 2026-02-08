@@ -870,7 +870,7 @@ model DomainEvent {
   eventType         EventType  @map("event_type")
   
   // Aggregate Identity (what changed)
-  aggregateId       String     @map("aggregate_id") @db.Uuid      // userId, conversationId, etc.
+  aggregateId       String     @map("aggregate_id")    // userId, conversationId, etc.
   aggregateType     String     @map("aggregate_type") @db.VarChar(50)  // User, Conversation, Call
   
   // Event Versioning & Metadata

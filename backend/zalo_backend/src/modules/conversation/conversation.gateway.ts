@@ -40,6 +40,7 @@ import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
 
 @WebSocketGateway({
   cors: { origin: '*', credentials: true },
+  namespace: '/socket.io',
 })
 @UseGuards(WsThrottleGuard)
 @UsePipes(new ValidationPipe({ transform: true }))
@@ -57,7 +58,7 @@ export class ConversationGateway implements OnGatewayInit {
     private readonly groupJoinService: GroupJoinService,
     private readonly realtime: ConversationRealtimeService,
     private readonly socketState: SocketStateService,
-  ) {}
+  ) { }
 
   afterInit() {
     this.logger.log('🗣️ Conversation Gateway initialized');

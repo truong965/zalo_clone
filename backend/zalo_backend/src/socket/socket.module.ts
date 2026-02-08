@@ -17,6 +17,8 @@ import { EventsModule } from '@shared/events';
 // PHASE 2: Event listener (instead of MessagingModule import)
 import { SocketNotificationListener } from './listeners/socket-notification.listener';
 import { AuthModule } from 'src/modules/auth/auth.module';
+import { FriendshipModule } from 'src/modules/friendship/friendship.module';
+import { PrivacyModule } from 'src/modules/privacy/privacy.module';
 
 /**
  * SocketModule (PHASE 2 - REFACTORED)
@@ -48,6 +50,8 @@ import { AuthModule } from 'src/modules/auth/auth.module';
     EventEmitterModule, // PHASE 2: For event listeners
     EventsModule,
     AuthModule, // For DeviceFingerprintService
+    FriendshipModule,
+    PrivacyModule,
   ],
   providers: [
     SocketGateway,
@@ -62,4 +66,4 @@ import { AuthModule } from 'src/modules/auth/auth.module';
   ],
   exports: [SocketGateway, SocketStateService],
 })
-export class SocketModule {}
+export class SocketModule { }

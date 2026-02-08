@@ -2,6 +2,8 @@
 
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
+import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
+import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
 import {
   ConversationType,
   MemberRole,
@@ -50,7 +52,11 @@ type ConversationWithRelations = Prisma.ConversationGetPayload<
 export class ConversationService {
   private readonly logger = new Logger(ConversationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisPresence: RedisPresenceService,
+    private readonly privacyService: PrivacyService,
+  ) { }
 
   /**
    * Check if user is member of conversation
@@ -296,6 +302,30 @@ export class ConversationService {
     const blockMap = new Map<string, boolean>();
     const onlineMap = new Map<string, boolean>();
 
+    const directOtherUserIds = Array.from(
+      new Set(
+        conversations
+          .filter((c) => c.type === ConversationType.DIRECT)
+          .map((c) =>
+            c.members.find((m) => m.userId !== userId)?.user?.id ?? null,
+          )
+          .filter((id): id is string => !!id),
+      ),
+    );
+
+    const privacyMap = await this.privacyService.getManySettings(directOtherUserIds);
+    await Promise.all(
+      directOtherUserIds.map(async (otherId) => {
+        const settings = privacyMap.get(otherId);
+        if (settings && !settings.showOnlineStatus) {
+          onlineMap.set(otherId, false);
+          return;
+        }
+        const online = await this.redisPresence.isUserOnline(otherId);
+        onlineMap.set(otherId, online);
+      }),
+    );
+
     return CursorPaginationHelper.buildResult({
       items: conversations,
       limit,
@@ -348,22 +378,23 @@ export class ConversationService {
       avatar,
       isOnline,
       isBlocked,
+      otherUserId,
       updatedAt: conversation.updatedAt,
 
       lastSeenAt: otherUserId
         ? conversation.members.find((m) => m.userId === otherUserId)?.user
-            .lastSeenAt
+          .lastSeenAt
         : null,
       lastMessage: lastMsg
         ? {
-            id: lastMsg.id.toString(),
-            content: lastMsg.deletedById
-              ? 'Tin nhắn đã bị thu hồi'
-              : lastMsg.content,
-            type: lastMsg.type,
-            senderId: lastMsg.senderId,
-            createdAt: lastMsg.createdAt,
-          }
+          id: lastMsg.id.toString(),
+          content: lastMsg.deletedById
+            ? 'Tin nhắn đã bị thu hồi'
+            : lastMsg.content,
+          type: lastMsg.type,
+          senderId: lastMsg.senderId,
+          createdAt: lastMsg.createdAt,
+        }
         : null,
       unreadCount: currentUserMember?.unreadCount ?? 0,
       lastReadMessageId: currentUserMember?.lastReadMessageId
