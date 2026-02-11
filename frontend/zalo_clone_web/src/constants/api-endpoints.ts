@@ -32,6 +32,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/api/v1/conversations/${id}`,
     DELETE: (id: string) => `/api/v1/conversations/${id}`,
     MARK_AS_READ: (id: string) => `/api/v1/conversations/${id}/read`,
+    GET_MEMBERS: (id: string) => `/api/v1/conversations/${id}/members`,
   },
 
   // Chat - Messages
@@ -41,6 +42,7 @@ export const API_ENDPOINTS = {
     EDIT: (id: string) => `/api/v1/messages/${id}`,
     DELETE: (id: string) => `/api/v1/messages/${id}`,
     SEARCH: '/api/v1/messages/search',
+    CONTEXT: '/api/v1/messages/context',
   },
 
   // Contacts - Friends
@@ -81,5 +83,13 @@ export const API_ENDPOINTS = {
   MEDIA: {
     UPLOAD: '/api/v1/media/upload',
     DELETE: (id: string) => `/api/v1/media/${id}`,
+  },
+
+  // Search Analytics
+  SEARCH: {
+    HISTORY: '/api/v1/search/analytics/history',
+    SUGGESTIONS: '/api/v1/search/analytics/suggestions',
+    TRENDING: '/api/v1/search/analytics/trending',
+    TRACK_CLICK: '/api/v1/search/analytics/track-click',
   },
 };

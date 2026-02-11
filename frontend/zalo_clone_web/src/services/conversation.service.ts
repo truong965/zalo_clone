@@ -49,7 +49,7 @@ function mapConversationListItemToUI(item: ConversationListItem): ChatConversati
             isBlocked: item.isBlocked,
             otherUserId: item.otherUserId ?? null,
             updatedAt: item.updatedAt,
-            lastMessageAt: item.lastMessageAt,
+            lastMessageAt: item.lastMessageAt ?? undefined,
             lastMessageObj: item.lastMessage,
             lastMessage: lastMessagePreview,
             timestamp,
@@ -57,6 +57,12 @@ function mapConversationListItemToUI(item: ConversationListItem): ChatConversati
             unread: item.unreadCount ?? 0,
             lastReadMessageId: item.lastReadMessageId ?? null,
       };
+}
+
+export interface ConversationMemberInfo {
+      id: string;
+      displayName: string;
+      avatarUrl: string | null;
 }
 
 export const conversationService = {
@@ -73,11 +79,6 @@ export const conversationService = {
             );
 
             const result = response.data.data;
-            // console.log("r:", result);
-            // console.log('return', {
-            //       data: result.data.map(mapConversationListItemToUI),
-            //       meta: result.meta,
-            // })
             return {
                   data: result.data.map(mapConversationListItemToUI),
                   meta: result.meta,
@@ -98,11 +99,23 @@ export const conversationService = {
 
       /**
        * Get conversation by ID
+       * Backend returns same shape as list API (ConversationListItem), not Conversation
        */
       async getConversationById(conversationId: string): Promise<ChatConversation> {
-            const response = await apiClient.get<ApiResponse<Conversation>>(
+            const response = await apiClient.get<ApiResponse<ConversationListItem>>(
                   API_ENDPOINTS.CONVERSATIONS.GET_BY_ID(conversationId)
             );
-            return mapConversationToUI(response.data.data);
+            // console.log("conversation :", response.data.data);
+            return mapConversationListItemToUI(response.data.data);
+      },
+
+      /**
+       * Get conversation members (for sender filter in search)
+       */
+      async getConversationMembers(conversationId: string): Promise<ConversationMemberInfo[]> {
+            const response = await apiClient.get<ApiResponse<ConversationMemberInfo[]>>(
+                  API_ENDPOINTS.CONVERSATIONS.GET_MEMBERS(conversationId)
+            );
+            return response.data.data;
       },
 };

@@ -15,6 +15,8 @@ interface ConversationSidebarProps {
       loadMoreRef: (node?: Element | null) => void; // ✅ NEW
       hasMore?: boolean;
       isLoading?: boolean;
+      /** Open global search panel (Option A) */
+      onSearchClick?: () => void;
 }
 
 export function ConversationSidebar({
@@ -23,7 +25,8 @@ export function ConversationSidebar({
       onSelect,
       loadMoreRef, // ✅ NEW
       hasMore = false,
-      isLoading = false
+      isLoading = false,
+      onSearchClick,
 }: ConversationSidebarProps) {
       const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
@@ -50,6 +53,14 @@ export function ConversationSidebar({
                               prefix={<SearchOutlined className="text-gray-400" />}
                               placeholder="Tìm kiếm"
                               className="bg-gray-100 border-none rounded-lg"
+                              readOnly={!!onSearchClick}
+                              onClick={onSearchClick}
+                              onFocus={(e) => {
+                                    if (onSearchClick) {
+                                          e.target.blur();
+                                          onSearchClick();
+                                    }
+                              }}
                         />
                         <Button type="text" icon={<UserAddOutlined />} className="text-gray-500" />
                         <Button type="text" icon={<UsergroupAddOutlined />} className="text-gray-500" />

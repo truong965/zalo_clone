@@ -208,8 +208,11 @@ export function useMessageSocket(params: {
   conversationId: string | null;
   messagesQueryKey: QueryKey;
   onTypingStatus?: (payload: TypingStatusPayload) => void;
+  // Approach A: Guard refs from useChatMessages to buffer messages during jump
+  isJumpingRef?: React.RefObject<boolean>;
+  jumpBufferRef?: React.MutableRefObject<MessageListItem[]>;
 }) {
-  const { conversationId, messagesQueryKey, onTypingStatus } = params;
+  const { conversationId, messagesQueryKey, onTypingStatus, isJumpingRef, jumpBufferRef } = params;
   const queryClient = useQueryClient();
   const { socket, isConnected } = useSocket();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -234,6 +237,12 @@ export function useMessageSocket(params: {
     onTypingStatusRef.current = onTypingStatus;
   }, [onTypingStatus]);
 
+  // Approach A: Keep refs accessible in socket handlers
+  const isJumpingRefCurrent = useRef(isJumpingRef);
+  isJumpingRefCurrent.current = isJumpingRef;
+  const jumpBufferRefCurrent = useRef(jumpBufferRef);
+  jumpBufferRefCurrent.current = jumpBufferRef;
+
   useEffect(() => {
     if (!socket || !isConnected) return;
 
@@ -251,6 +260,14 @@ export function useMessageSocket(params: {
           });
         }
 
+        // Approach A: Buffer messages during jump to avoid race condition
+        const jumping = isJumpingRefCurrent.current?.current;
+        const buffer = jumpBufferRefCurrent.current?.current;
+        if (jumping && buffer) {
+          buffer.push(payload.message);
+          return;
+        }
+
         upsertMessageToCache(queryClient, messagesQueryKeyRef.current, payload.message);
       } catch {
         // ignore handler errors
@@ -262,9 +279,17 @@ export function useMessageSocket(params: {
         const currentConversationId = conversationIdRef.current;
         if (!currentConversationId) return;
 
+        // Approach A: Buffer messages during jump to avoid race condition
+        const jumping = isJumpingRefCurrent.current?.current;
+        const buffer = jumpBufferRefCurrent.current?.current;
+
         for (const m of payload.messages) {
           if (m.conversationId !== currentConversationId) continue;
-          upsertMessageToCache(queryClient, messagesQueryKeyRef.current, m);
+          if (jumping && buffer) {
+            buffer.push(m);
+          } else {
+            upsertMessageToCache(queryClient, messagesQueryKeyRef.current, m);
+          }
         }
       } catch {
         // ignore handler errors

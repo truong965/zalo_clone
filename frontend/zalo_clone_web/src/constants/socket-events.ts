@@ -85,6 +85,22 @@ export const SocketEvents = {
       GROUP_JOIN_REQUEST_RECEIVED: 'group:joinRequestReceived',
       GROUP_JOIN_REQUEST_REVIEWED: 'group:joinRequestReviewed',
       GROUP_MEMBER_JOINED: 'group:memberJoined',
+
+      // === SEARCH EVENTS (Phase 4: Real-Time Search) ===
+
+      // Client → Server
+      SEARCH_SUBSCRIBE: 'search:subscribe',
+      SEARCH_UNSUBSCRIBE: 'search:unsubscribe',
+      SEARCH_UPDATE_QUERY: 'search:updateQuery',
+      SEARCH_LOAD_MORE: 'search:loadMore',
+
+      // Server → Client
+      SEARCH_RESULTS: 'search:results',
+      SEARCH_MORE_RESULTS: 'search:moreResults',
+      SEARCH_NEW_MATCH: 'search:newMatch',
+      SEARCH_RESULT_REMOVED: 'search:resultRemoved',
+      SEARCH_SUGGESTIONS: 'search:suggestions',
+      SEARCH_ERROR: 'search:error',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

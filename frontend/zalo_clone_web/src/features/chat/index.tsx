@@ -6,6 +6,7 @@ import { ChatInput } from './components/chat-input';
 import { ChatSearchSidebar } from './components/chat-search-sidebar';
 import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
+import { SearchPanel } from '@/features/search/components/SearchPanel';
 import type { ChatConversation, RightSidebarState } from './types';
 import { conversationService } from '@/services/conversation.service';
 import { useConversationSocket } from '@/hooks/use-conversation-socket';
@@ -30,8 +31,21 @@ export function ChatFeature() {
       const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 
       // --- STATE: UI ---
-      const [selectedId, setSelectedId] = useState<string | null>(null);
+      const [selectedId, setSelectedId] = useState<string | null>(
+            () => sessionStorage.getItem('chat_selectedId') ?? null,
+      );
       const [rightSidebar, setRightSidebar] = useState<RightSidebarState>('none');
+      const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+      const [prefillSearchKeyword, setPrefillSearchKeyword] = useState<string | undefined>(undefined);
+
+      // Persist selectedId to sessionStorage so F5 reload preserves it
+      useEffect(() => {
+            if (selectedId) {
+                  sessionStorage.setItem('chat_selectedId', selectedId);
+            } else {
+                  sessionStorage.removeItem('chat_selectedId');
+            }
+      }, [selectedId]);
 
       // --- REFS ---
       const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -77,12 +91,27 @@ export function ChatFeature() {
             rootMargin: '100px',
       });
 
+      // Ref to access latest query state without re-creating callback
+      const convQueryRef = useRef(conversationsQuery);
+      convQueryRef.current = conversationsQuery;
+      const convFetchingRef = useRef(false);
+
+      const loadMoreConversations = useCallback(async () => {
+            if (convFetchingRef.current) return;
+            const q = convQueryRef.current;
+            if (!q.hasNextPage || q.isFetchingNextPage) return;
+            convFetchingRef.current = true;
+            try {
+                  await q.fetchNextPage();
+            } finally {
+                  convFetchingRef.current = false;
+            }
+      }, []);
+
       useEffect(() => {
             if (!convInView) return;
-            if (!conversationsQuery.hasNextPage) return;
-            if (conversationsQuery.isFetchingNextPage) return;
-            void conversationsQuery.fetchNextPage();
-      }, [convInView, conversationsQuery]);
+            void loadMoreConversations();
+      }, [convInView, loadMoreConversations]);
 
       const prependConversation = useCallback((item: ChatConversation) => {
             queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
@@ -95,16 +124,18 @@ export function ChatFeature() {
                               };
                         }
 
-                        const pages = [...prev.pages];
-                        const first = pages[0];
-                        const exists = first.data.some((c) => c.id === item.id);
-                        if (exists) return prev;
+                        // Remove from ALL pages to avoid duplicates (conversation may exist in page 2+)
+                        const cleaned = prev.pages.map((page) => ({
+                              ...page,
+                              data: page.data.filter((c) => c.id !== item.id),
+                        }));
 
-                        pages[0] = {
-                              ...first,
-                              data: [item, ...first.data],
+                        // Prepend to first page
+                        cleaned[0] = {
+                              ...cleaned[0],
+                              data: [item, ...cleaned[0].data],
                         };
-                        return { ...prev, pages };
+                        return { ...prev, pages: cleaned };
                   });
       }, [queryClient, conversationsQueryKey]);
 
@@ -235,10 +266,18 @@ export function ChatFeature() {
             isInitialLoad,
             isAtBottom,
             newMessageCount,
+            highlightedMessageId,
             clearNewMessageCount,
             scrollToBottom,
             loadOlder,
+            loadNewer,
+            jumpToMessage,
+            returnToLatest,
+            isJumpedAway,
             queryKey: messagesQueryKey,
+            isJumpingRef,
+            jumpBufferRef,
+            isFetchingNewerRef,
       } = useChatMessages({
             conversationId: selectedId,
             limit: 50,
@@ -262,6 +301,8 @@ export function ChatFeature() {
       } = useMessageSocket({
             conversationId: selectedId,
             messagesQueryKey,
+            isJumpingRef,
+            jumpBufferRef,
             onTypingStatus: (payload) => {
                   const myId = currentUserId;
                   if (myId && payload.userId === myId) return;
@@ -467,25 +508,102 @@ export function ChatFeature() {
             void loadOlder();
       }, [msgInView, loadOlder]);
 
+      const [isLoadingNewer, setIsLoadingNewer] = useState(false);
+
+      // Use ref to always access latest loadNewer without re-creating callback
+      const loadNewerRef = useRef(loadNewer);
+      loadNewerRef.current = loadNewer;
+
+      const handleNewerInView = useCallback((inView: boolean) => {
+            if (!inView) return;
+            if (!isJumpedAway) return;
+            if (isFetchingNewerRef.current) return;
+            setIsLoadingNewer(true);
+            void loadNewerRef.current().finally(() => setIsLoadingNewer(false));
+      }, [isJumpedAway, isFetchingNewerRef]);
+
+      const { ref: msgLoadNewerRef } = useInView({
+            threshold: 0.1,
+            rootMargin: '200px',
+            onChange: handleNewerInView,
+      });
+
       const handleSelectConversation = useCallback((id: string) => {
             if (id === selectedId) return;
             setSelectedId(id);
             setTypingUserIds([]);
       }, [selectedId]);
 
-      const selectedConversation = conversations.find((c) => c.id === selectedId) as ChatConversation | undefined;
+      const fetchedSearchConvIds = useRef(new Set<string>());
+      const [searchConvMap, setSearchConvMap] = useState<Record<string, ChatConversation>>({});
+
+      // Ref to always access latest conversations without stale closures
+      const conversationsRef = useRef(conversations);
+      conversationsRef.current = conversations;
+
+      const ensureConversationLoaded = useCallback(async (id: string): Promise<void> => {
+            // Already in the paginated list → no fetch needed
+            if (conversationsRef.current.some((c) => c.id === id)) return;
+            // Already fetched before (might still be prepending) → skip duplicate fetch
+            if (fetchedSearchConvIds.current.has(id)) return;
+
+            fetchedSearchConvIds.current.add(id);
+            try {
+                  const conv = await conversationService.getConversationById(id);
+                  prependConversation(conv);
+                  // Also store in local state as fallback (setQueryData on infinite queries
+                  // may not always trigger useInfiniteQuery re-render)
+                  setSearchConvMap((prev) => ({ ...prev, [id]: conv }));
+            } catch (error) {
+                  console.error(`[ensureConversationLoaded] Failed to load conversation ${id}:`, error);
+                  fetchedSearchConvIds.current.delete(id); // Allow retry on next attempt
+            }
+      }, [prependConversation]);
+
+      // Trigger fetch when selectedId changes and conversation isn't loaded yet
+      useEffect(() => {
+            if (!selectedId) return;
+            void ensureConversationLoaded(selectedId);
+      }, [selectedId, ensureConversationLoaded]);
+
+      const selectedConversation = (
+            conversations.find((c) => c.id === selectedId)
+            ?? (selectedId ? searchConvMap[selectedId] : undefined)
+      ) as ChatConversation | undefined;
 
       return (
             <div className="h-full w-full flex overflow-hidden bg-gray-50">
                   {contextHolder}
-                  <ConversationSidebar
-                        conversations={conversations}
-                        selectedId={selectedId}
-                        onSelect={handleSelectConversation}
-                        loadMoreRef={convLoadMoreRef}
-                        hasMore={convHasMore}
-                        isLoading={isLoadingConv}
-                  />
+                  {isGlobalSearchOpen ? (
+                        <SearchPanel
+                              onClose={() => setIsGlobalSearchOpen(false)}
+                              onNavigateToConversation={async (id) => {
+                                    handleSelectConversation(id);
+                                    setIsGlobalSearchOpen(false);
+                                    await ensureConversationLoaded(id);
+                              }}
+                              onNavigateToConversationSearch={async (convId, searchKeyword) => {
+                                    handleSelectConversation(convId);
+                                    setIsGlobalSearchOpen(false);
+                                    await ensureConversationLoaded(convId);
+                                    setRightSidebar('search');
+                                    setPrefillSearchKeyword(searchKeyword);
+                              }}
+                        />
+                  ) : (
+                        <ConversationSidebar
+                              conversations={conversations}
+                              selectedId={selectedId}
+                              onSelect={handleSelectConversation}
+                              loadMoreRef={convLoadMoreRef}
+                              hasMore={convHasMore}
+                              isLoading={isLoadingConv}
+                              onSearchClick={() => {
+                                    setIsGlobalSearchOpen(true);
+                                    setRightSidebar('none');
+                              }}
+                        />
+                  )}
 
                   <div className="flex-1 flex flex-col h-full overflow-hidden">
                         {selectedConversation ? (
@@ -497,7 +615,10 @@ export function ChatFeature() {
                                           isOnline={selectedConversation.type === 'DIRECT' ? selectedConversation.isOnline ?? false : false}
                                           lastSeenAt={selectedConversation.type === 'DIRECT' ? selectedConversation.lastSeenAt ?? null : null}
                                           typingText={typingText}
-                                          onToggleSearch={() => setRightSidebar(prev => prev === 'search' ? 'none' : 'search')}
+                                          onToggleSearch={() => {
+                                                setRightSidebar(prev => prev === 'search' ? 'none' : 'search');
+                                                setIsGlobalSearchOpen(false);
+                                          }}
                                           onToggleInfo={() => setRightSidebar(prev => prev === 'info' ? 'none' : 'info')}
                                     />
 
@@ -510,11 +631,16 @@ export function ChatFeature() {
                                           messagesContainerRef={messagesContainerRef}
                                           messagesEndRef={messagesEndRef}
                                           isAtBottom={isAtBottom}
+                                          isJumpedAway={isJumpedAway}
                                           newMessageCount={newMessageCount}
+                                          highlightedMessageId={highlightedMessageId}
                                           onScrollToBottom={() => {
                                                 clearNewMessageCount();
                                                 scrollToBottom();
                                           }}
+                                          onReturnToLatest={returnToLatest}
+                                          msgLoadNewerRef={msgLoadNewerRef}
+                                          isLoadingNewer={isLoadingNewer}
                                           onRetry={(m) => handleRetryMessage(m)}
                                     />
 
@@ -532,6 +658,13 @@ export function ChatFeature() {
                                           }}
                                     />
                               </>
+                        ) : selectedId ? (
+                              <div className="flex-1 flex items-center justify-center text-gray-400">
+                                    <div className="flex flex-col items-center gap-2">
+                                          <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                          <span className="text-sm">Đang tải cuộc trò chuyện...</span>
+                                    </div>
+                              </div>
                         ) : (
                               <div className="flex-1 flex items-center justify-center text-gray-400">
                                     Chọn một cuộc trò chuyện để bắt đầu
@@ -539,7 +672,19 @@ export function ChatFeature() {
                         )}
                   </div>
 
-                  {rightSidebar === 'search' && <ChatSearchSidebar onClose={() => setRightSidebar('none')} />}
+                  {rightSidebar === 'search' && selectedId && (
+                        <ChatSearchSidebar
+                              conversationId={selectedId}
+                              initialKeyword={prefillSearchKeyword}
+                              onClose={() => {
+                                    setRightSidebar('none');
+                                    setPrefillSearchKeyword(undefined);
+                              }}
+                              onNavigateToMessage={(msgId) => {
+                                    if (msgId) void jumpToMessage(msgId);
+                              }}
+                        />
+                  )}
                   {rightSidebar === 'info' && <ChatInfoSidebar onClose={() => setRightSidebar('none')} />}
             </div>
       );
