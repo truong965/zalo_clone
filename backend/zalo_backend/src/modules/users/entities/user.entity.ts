@@ -19,7 +19,7 @@ export class UserEntity implements User {
   // Không nên trả về client để tránh lộ vector tấn công brute-force số điện thoại.
   @Exclude()
   phoneNumberHash: string | null;
-
+  phoneNumberNormalized: string | null;
   // ==============================
   // 2. Public Profile
   // ==============================

@@ -21,7 +21,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
 export class ConversationController {
-  constructor(private readonly conversationService: ConversationService) {}
+  constructor(private readonly conversationService: ConversationService) { }
 
   @Post('direct')
   @UseGuards(InteractionGuard)
@@ -57,6 +57,18 @@ export class ConversationController {
     @Param('id') conversationId: string,
   ) {
     return this.conversationService.getConversationById(
+      user.id,
+      conversationId,
+    );
+  }
+
+  @Get(':id/members')
+  @ApiOperation({ summary: 'Get conversation members' })
+  async getConversationMembers(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationService.getConversationMembers(
       user.id,
       conversationId,
     );

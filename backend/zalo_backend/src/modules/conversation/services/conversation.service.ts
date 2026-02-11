@@ -114,15 +114,14 @@ export class ConversationService {
 
     const [user1, user2] = [userId1, userId2].sort();
 
+    // Use Prisma AND + some to guarantee BOTH users are ACTIVE members
     const existing = await this.prisma.conversation.findFirst({
       where: {
         type: ConversationType.DIRECT,
-        members: {
-          every: {
-            userId: { in: [user1, user2] },
-            status: MemberStatus.ACTIVE,
-          },
-        },
+        AND: [
+          { members: { some: { userId: user1, status: MemberStatus.ACTIVE } } },
+          { members: { some: { userId: user2, status: MemberStatus.ACTIVE } } },
+        ],
       },
       select: { id: true },
     });
@@ -132,6 +131,22 @@ export class ConversationService {
     }
 
     const conversation = await this.prisma.$transaction(async (tx) => {
+      // Re-check inside transaction to prevent race conditions (double creation)
+      const recheck = await tx.conversation.findFirst({
+        where: {
+          type: ConversationType.DIRECT,
+          AND: [
+            { members: { some: { userId: user1, status: MemberStatus.ACTIVE } } },
+            { members: { some: { userId: user2, status: MemberStatus.ACTIVE } } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (recheck) {
+        return { id: recheck.id, _existing: true };
+      }
+
       const conv = await tx.conversation.create({
         data: {
           type: ConversationType.DIRECT,
@@ -156,6 +171,11 @@ export class ConversationService {
 
       return conv;
     });
+
+    // If the transaction found existing conversation during re-check
+    if ('_existing' in conversation && conversation._existing) {
+      return { id: conversation.id, isNew: false };
+    }
 
     this.logger.log(
       `Created DIRECT conversation ${conversation.id} between ${user1} and ${user2}`,
@@ -263,20 +283,19 @@ export class ConversationService {
   ): Promise<{ id: string } | null> {
     const [user1, user2] = [userId1, userId2].sort();
 
-    const conversation = await this.prisma.conversation.findFirst({
+    // Use Prisma AND + some to guarantee BOTH users are ACTIVE members
+    const result = await this.prisma.conversation.findFirst({
       where: {
         type: ConversationType.DIRECT,
-        members: {
-          every: {
-            userId: { in: [user1, user2] },
-            status: MemberStatus.ACTIVE,
-          },
-        },
+        AND: [
+          { members: { some: { userId: user1, status: MemberStatus.ACTIVE } } },
+          { members: { some: { userId: user2, status: MemberStatus.ACTIVE } } },
+        ],
       },
       select: { id: true },
     });
 
-    return conversation || null;
+    return result ? { id: result.id } : null;
   }
 
   /**
@@ -290,11 +309,10 @@ export class ConversationService {
     const conversations = await this.prisma.conversation.findMany({
       where: {
         members: { some: { userId, status: MemberStatus.ACTIVE } },
-        lastMessageAt: { not: null },
         deletedAt: null,
       },
       take: limit + 1,
-      cursor: cursor ? { id: cursor } : undefined,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: { lastMessageAt: 'desc' },
       include: conversationWithRelations.include,
     });
@@ -380,6 +398,7 @@ export class ConversationService {
       isBlocked,
       otherUserId,
       updatedAt: conversation.updatedAt,
+      lastMessageAt: conversation.lastMessageAt,
 
       lastSeenAt: otherUserId
         ? conversation.members.find((m) => m.userId === otherUserId)?.user
@@ -410,6 +429,7 @@ export class ConversationService {
       where: {
         id: conversationId,
         members: { some: { userId, status: MemberStatus.ACTIVE } },
+        deletedAt: null,
       },
       include: conversationWithRelations.include,
     });
@@ -418,11 +438,72 @@ export class ConversationService {
       throw new BadRequestException('Conversation not found');
     }
 
+    // Enrich with online/block status (same as getUserConversations)
+    const blockMap = new Map<string, boolean>();
+    const onlineMap = new Map<string, boolean>();
+
+    if (conversation.type === ConversationType.DIRECT) {
+      const otherMember = conversation.members.find(
+        (m) => m.userId !== userId,
+      );
+      if (otherMember?.user) {
+        const otherId = otherMember.user.id;
+        const privacyMap = await this.privacyService.getManySettings([otherId]);
+        const settings = privacyMap.get(otherId);
+        if (settings && !settings.showOnlineStatus) {
+          onlineMap.set(otherId, false);
+        } else {
+          const online = await this.redisPresence.isUserOnline(otherId);
+          onlineMap.set(otherId, online);
+        }
+      }
+    }
+
     return this.mapConversationResponse(
       conversation as ConversationWithRelations,
       userId,
-      new Map<string, boolean>(),
-      new Map<string, boolean>(),
+      blockMap,
+      onlineMap,
     );
+  }
+
+  /**
+   * Get list of members for a conversation (for sender filter in search).
+   * Only returns members if the requesting user is an active member.
+   */
+  async getConversationMembers(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ id: string; displayName: string; avatarUrl: string | null }[]> {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        members: { some: { userId, status: MemberStatus.ACTIVE } },
+      },
+      include: {
+        members: {
+          where: { status: MemberStatus.ACTIVE },
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new BadRequestException('Conversation not found');
+    }
+
+    return conversation.members.map((m) => ({
+      id: m.user.id,
+      displayName: m.user.displayName,
+      avatarUrl: m.user.avatarUrl,
+    }));
   }
 }

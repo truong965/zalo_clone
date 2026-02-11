@@ -31,6 +31,7 @@ import { PrivacyModule } from './modules/privacy/privacy.module';
 import { FriendshipModule } from './modules/friendship/friendship.module';
 import { ContactModule } from './modules/contact/contact.module';
 import { EventPersistenceModule } from './common/events/event-persistence.module';
+import { SearchEngineModule } from './modules/search_engine/search_engine.module';
 
 // Configs
 import jwtConfig from './config/jwt.config';
@@ -125,7 +126,7 @@ import socialConfig from './config/social.config';
     AuthorizationModule, // PHASE 2: canInteract, InteractionGuard
     // CallModule, // Phụ thuộc Social
     FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
-    PrivacyModule, // Privacy settings & permissions (Independent)
+    PrivacyModule, SearchEngineModule, // Privacy settings & permissions (Independent)
 
     // Utilities
     // HealthModule,

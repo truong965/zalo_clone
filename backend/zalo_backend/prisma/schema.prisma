@@ -9,7 +9,7 @@ generator client {
 
 datasource db {
   provider   = "postgresql"
-  extensions = [pgcrypto, uuidOssp(map: "uuid-ossp")]
+  extensions = [pgcrypto, uuidOssp(map: "uuid-ossp"), pg_trgm, unaccent]
 }
 
 // ============================================================================
@@ -22,6 +22,7 @@ enum UserStatus {
   INACTIVE
   SUSPENDED
   DELETED
+
   @@map("user_status")
 }
 
@@ -29,6 +30,7 @@ enum Gender {
   MALE
   FEMALE
   OTHER
+
   @@map("gender_type")
 }
 
@@ -36,6 +38,7 @@ enum Gender {
 enum PrivacyLevel {
   EVERYONE
   CONTACTS
+
   @@map("privacy_level")
 }
 
@@ -43,6 +46,7 @@ enum FriendshipStatus {
   PENDING
   ACCEPTED
   DECLINED
+
   @@map("friendship_status")
 }
 
@@ -50,20 +54,23 @@ enum FriendshipStatus {
 enum ConversationType {
   DIRECT
   GROUP
+
   @@map("conversation_type")
 }
 
 enum MemberRole {
   ADMIN
   MEMBER
+
   @@map("member_role")
 }
 
 enum MemberStatus {
   PENDING // Chờ duyệt
-  ACTIVE  // Đã là thành viên
-  KICKED  // Bị kick bởi Admin
-  LEFT    // Tự rời nhóm
+  ACTIVE // Đã là thành viên
+  KICKED // Bị kick bởi Admin
+  LEFT // Tự rời nhóm
+
   @@map("member_status")
 }
 
@@ -71,6 +78,7 @@ enum JoinRequestStatus {
   PENDING
   APPROVED
   REJECTED
+
   @@map("join_request_status")
 }
 
@@ -78,18 +86,20 @@ enum MessageType {
   TEXT
   IMAGE
   VIDEO
-  FILE    // document
+  FILE // document
   STICKER // = image (media type)
   SYSTEM // notification
   AUDIO
   VOICE
+
   @@map("message_type")
 }
 
 enum ReceiptStatus {
-  SENT      // Server confirmed receipt
+  SENT // Server confirmed receipt
   DELIVERED // Reached recipient's device
-  SEEN      // User viewed the message
+  SEEN // User viewed the message
+
   @@map("receipt_status")
 }
 
@@ -99,26 +109,29 @@ enum MediaType {
   VIDEO
   DOCUMENT
   AUDIO
+
   @@map("media_type")
 }
 
 enum MediaProcessingStatus {
-  PENDING       // Presigned URL issued, awaiting upload
-  UPLOADED      // File in S3 temp/, not confirmed
-  CONFIRMED     // Confirmed by client, awaiting processing
-  PROCESSING    // Worker picked up job
-  READY         // Processing complete, ready to use
-  FAILED        // Processing failed after retries
-  EXPIRED       // Upload never completed (cleanup)
+  PENDING // Presigned URL issued, awaiting upload
+  UPLOADED // File in S3 temp/, not confirmed
+  CONFIRMED // Confirmed by client, awaiting processing
+  PROCESSING // Worker picked up job
+  READY // Processing complete, ready to use
+  FAILED // Processing failed after retries
+  EXPIRED // Upload never completed (cleanup)
+
   @@map("media_processing_status")
 }
 
 // --- Call ---
 enum CallStatus {
-  COMPLETED   // Call connected and ended normally
-  MISSED      // Callee didn't answer
-  REJECTED    // Callee explicitly rejected
-  CANCELLED   // Caller cancelled before answer
+  COMPLETED // Call connected and ended normally
+  MISSED // Callee didn't answer
+  REJECTED // Callee explicitly rejected
+  CANCELLED // Caller cancelled before answer
+
   @@map("call_status")
 }
 
@@ -127,6 +140,7 @@ enum DeviceType {
   WEB
   MOBILE
   DESKTOP
+
   @@map("device_type")
 }
 
@@ -137,6 +151,7 @@ enum Platform {
   WINDOWS
   MACOS
   LINUX
+
   @@map("platform")
 }
 
@@ -146,6 +161,7 @@ enum TokenRevocationReason {
   SUSPICIOUS_ACTIVITY
   TOKEN_ROTATION
   ADMIN_ACTION
+
   @@map("token_revocation_reason")
 }
 
@@ -154,14 +170,14 @@ enum EventType {
   // Block Domain
   USER_BLOCKED
   USER_UNBLOCKED
-  
+
   // Social Domain
   FRIEND_REQUEST_SENT
   FRIEND_REQUEST_ACCEPTED
   FRIEND_REQUEST_REJECTED
   FRIEND_REQUEST_CANCELLED // Requester withdraws request
   UNFRIENDED
-  
+
   // Messaging Domain
   MESSAGE_SENT
   CONVERSATION_CREATED
@@ -172,36 +188,36 @@ enum EventType {
   GROUP_CREATED
   MESSAGE_DELIVERED
   MESSAGE_SEEN
-  
+
   // Call Domain
   CALL_INITIATED
   CALL_ANSWERED
   CALL_ENDED
   CALL_REJECTED
-  
+
   // Auth Domain
   USER_REGISTERED
   USER_PROFILE_UPDATED
-  
+
   // Presence Domain
   USER_WENT_ONLINE
   USER_WENT_OFFLINE
-  
+
   // Privacy Domain
   PRIVACY_SETTINGS_UPDATED
-  
+
   // Contact Domain
   CONTACT_SYNCED
   CONTACT_ADDED
   CONTACT_REMOVED
-  
+
   // Notifications Domain
   NOTIFICATION_SENT
-  
+
   // Media Domain
   MEDIA_UPLOADED
   MEDIA_DELETED
-  
+
   @@map("event_type")
 }
 
@@ -214,79 +230,85 @@ enum EventType {
  * Central entity of the system.
  */
 model User {
-  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  phoneNumber     String     @unique @map("phone_number") @db.VarChar(20)
-  phoneCode       String     @default("+84") @map("phone_country_code") @db.VarChar(5)
+  id                    String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phoneNumber           String  @unique @map("phone_number") @db.VarChar(20)
+  phoneCode             String  @default("+84") @map("phone_country_code") @db.VarChar(5)
   // Secure contact sync matching
-  phoneNumberHash String?    @map("phone_number_hash") @db.VarChar(64)
+  phoneNumberHash       String? @map("phone_number_hash") @db.VarChar(64)
+  // Normalized phone for prefix search (e.g., "+84901234567" or "0901234567")
+  phoneNumberNormalized String? @map("phone_number_normalized") @db.VarChar(20)
 
   // Profile Info
-  displayName     String     @map("display_name") @db.VarChar(100)
-  avatarUrl       String?    @map("avatar_url")
-  bio             String?    @db.Text
-  dateOfBirth     DateTime?  @map("date_of_birth") @db.Date
-  gender          Gender?
-  status          UserStatus @default(ACTIVE)
+  displayName String     @map("display_name") @db.VarChar(100)
+  avatarUrl   String?    @map("avatar_url")
+  bio         String?    @db.Text
+  dateOfBirth DateTime?  @map("date_of_birth") @db.Date
+  gender      Gender?
+  status      UserStatus @default(ACTIVE)
 
   // Security & Activity
-  passwordHash    String     @map("password_hash")
-  passwordVersion Int        @default(1) @map("password_version") // For instant token invalidation
-  lastSeenAt      DateTime?  @map("last_seen_at") @db.Timestamptz
+  passwordHash    String    @map("password_hash")
+  passwordVersion Int       @default(1) @map("password_version") // For instant token invalidation
+  lastSeenAt      DateTime? @map("last_seen_at") @db.Timestamptz
 
   // RBAC (Role Based Access Control)
-  roleId          String?    @map("role_id") @db.Uuid 
-  role            Role?      @relation(fields: [roleId], references: [id])
+  roleId String? @map("role_id") @db.Uuid
+  role   Role?   @relation(fields: [roleId], references: [id])
 
   // --- Audit Fields ---
-  createdById     String?    @map("created_by") @db.Uuid
-  updatedById     String?    @map("updated_by") @db.Uuid
-  deletedById     String?    @map("deleted_by") @db.Uuid
-  
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime?  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime?  @map("deleted_at") @db.Timestamptz
-  
+  createdById String? @map("created_by") @db.Uuid
+  updatedById String? @map("updated_by") @db.Uuid
+  deletedById String? @map("deleted_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
   // --- Relationships ---
   // Auth & Settings
-  privacySettings      PrivacySettings?
-  devices              UserDevice[]
-  tokens               UserToken[]
+  privacySettings PrivacySettings?
+  devices         UserDevice[]
+  tokens          UserToken[]
 
   // Social Graph
-  sentFriendRequests   Friendship[] @relation("User1")
+  sentFriendRequests     Friendship[] @relation("User1")
   receivedFriendRequests Friendship[] @relation("User2")
-  friendshipInitiator  Friendship[] @relation("Requester")
-  friendshipActions    Friendship[] @relation("LastActionBy")
-  
-  blocksBlocked        Block[]      @relation("Blocker")
-  blocksWasBlocked     Block[]      @relation("Blocked")
+  friendshipInitiator    Friendship[] @relation("Requester")
+  friendshipActions      Friendship[] @relation("LastActionBy")
+
+  blocksBlocked    Block[] @relation("Blocker")
+  blocksWasBlocked Block[] @relation("Blocked")
 
   // Messaging & Groups
   conversations        ConversationMember[]
-  joinRequests         GroupJoinRequest[] @relation("MemberRequesting") // tự xin vào group
-  groupInvitesSent     GroupJoinRequest[] @relation("RequestInviter") // Lời mời vào nhóm tôi gửi
-  reviewedJoinRequests GroupJoinRequest[] @relation("ReviewedRequests")
-  
-  messagesSent         Message[]
-  messagesDeleted      Message[]    @relation("DeletedBy")
+  joinRequests         GroupJoinRequest[]   @relation("MemberRequesting") // tự xin vào group
+  groupInvitesSent     GroupJoinRequest[]   @relation("RequestInviter") // Lời mời vào nhóm tôi gửi
+  reviewedJoinRequests GroupJoinRequest[]   @relation("ReviewedRequests")
+
+  messagesSent    Message[]
+  messagesDeleted Message[] @relation("DeletedBy")
 
   // Contacts (Shadow Graph)
-  myContacts           UserContact[] @relation("MyContacts") // Danh bạ tôi lưu
-  inContactsOf         UserContact[] @relation("InContacts") // Tôi nằm trong danh bạ ai
+  myContacts   UserContact[] @relation("MyContacts") // Danh bạ tôi lưu
+  inContactsOf UserContact[] @relation("InContacts") // Tôi nằm trong danh bạ ai
 
   // Media
-  uploadedMedia        MediaAttachment[] @relation("UploadedMedia")
+  uploadedMedia MediaAttachment[] @relation("UploadedMedia")
 
   // Calls [NEW]
-  callsMade            CallHistory[] @relation("CallsMade")
-  callsReceived        CallHistory[] @relation("CallsReceived")
+  callsMade     CallHistory[] @relation("CallsMade")
+  callsReceived CallHistory[] @relation("CallsReceived")
 
   // System Logs
-  socketConnections    SocketConnection[]
+  socketConnections SocketConnection[]
+
+  // Search Analytics
+  searchQueries SearchQuery[]
 
   @@index([phoneNumber])
   @@index([roleId])
   @@index([phoneNumberHash])
+  @@index([phoneNumberNormalized]) // For prefix phone search
   @@map("users")
 }
 
@@ -295,40 +317,40 @@ model User {
  * Handles Refresh Tokens for authentication & session management.
  */
 model UserToken {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  
-  // Token Storage (Hashed for security)
-  refreshTokenHash String    @unique @map("refresh_token_hash") @db.VarChar(64)
-  
-  // Device Fingerprint
-  deviceId         String    @map("device_id") @db.VarChar(255) 
-  deviceName       String?   @map("device_name") @db.VarChar(100) 
-  deviceType       DeviceType? @map("device_type")
-  platform         Platform?
-  
-  // Security Tracking
-  ipAddress        String?   @map("ip_address") @db.VarChar(45) 
-  userAgent        String?   @map("user_agent") @db.Text
-  
-  // Token Lifecycle
-  issuedAt         DateTime  @default(now()) @map("issued_at") @db.Timestamptz
-  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
-  lastUsedAt       DateTime  @default(now()) @map("last_used_at") @db.Timestamptz
-  
-  // Revocation Logic
-  isRevoked        Boolean   @default(false) @map("is_revoked")
-  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
-  revokedReason    TokenRevocationReason? @map("revoked_reason")
-  
-  // Token Family (Rotation Chain)
-  parentTokenId    String?   @map("parent_token_id") @db.Uuid
-  parentToken      UserToken? @relation("TokenFamily", fields: [parentTokenId], references: [id], onDelete: SetNull)
-  childTokens      UserToken[] @relation("TokenFamily")
-  
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
 
-  @@index([userId, deviceId]) 
+  // Token Storage (Hashed for security)
+  refreshTokenHash String @unique @map("refresh_token_hash") @db.VarChar(64)
+
+  // Device Fingerprint
+  deviceId   String      @map("device_id") @db.VarChar(255)
+  deviceName String?     @map("device_name") @db.VarChar(100)
+  deviceType DeviceType? @map("device_type")
+  platform   Platform?
+
+  // Security Tracking
+  ipAddress String? @map("ip_address") @db.VarChar(45)
+  userAgent String? @map("user_agent") @db.Text
+
+  // Token Lifecycle
+  issuedAt   DateTime @default(now()) @map("issued_at") @db.Timestamptz
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz
+  lastUsedAt DateTime @default(now()) @map("last_used_at") @db.Timestamptz
+
+  // Revocation Logic
+  isRevoked     Boolean                @default(false) @map("is_revoked")
+  revokedAt     DateTime?              @map("revoked_at") @db.Timestamptz
+  revokedReason TokenRevocationReason? @map("revoked_reason")
+
+  // Token Family (Rotation Chain)
+  parentTokenId String?     @map("parent_token_id") @db.Uuid
+  parentToken   UserToken?  @relation("TokenFamily", fields: [parentTokenId], references: [id], onDelete: SetNull)
+  childTokens   UserToken[] @relation("TokenFamily")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, deviceId])
   @@index([userId, isRevoked])
   @@index([refreshTokenHash])
   @@index([expiresAt])
@@ -348,7 +370,7 @@ model UserDevice {
   platform     String?  @db.VarChar(20)
   lastActiveAt DateTime @default(now()) @map("last_active_at") @db.Timestamptz
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@map("user_devices")
@@ -359,19 +381,19 @@ model UserDevice {
  * Defines system-level roles (e.g., ADMIN, USER).
  */
 model Role {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String   @unique @db.VarChar(50) 
-  description String?  @db.VarChar(255)
-  
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String  @unique @db.VarChar(50)
+  description String? @db.VarChar(255)
+
   // Audit
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-  
-  createdById String?  @map("created_by") @db.Uuid
-  updatedById String?  @map("updated_by") @db.Uuid
-  deletedById String?  @map("deleted_by") @db.Uuid
-  
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  createdById String? @map("created_by") @db.Uuid
+  updatedById String? @map("updated_by") @db.Uuid
+  deletedById String? @map("deleted_by") @db.Uuid
+
   users           User[]
   rolePermissions RolePermission[]
 
@@ -383,22 +405,22 @@ model Role {
  * Granular permissions mapped to API paths or modules.
  */
 model Permission {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String   @unique @db.VarChar(100) 
-  apiPath     String   @map("api_path") 
-  method      String   @db.VarChar(10)  
-  module      String   @db.VarChar(50)  
-  
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name    String @unique @db.VarChar(100)
+  apiPath String @map("api_path")
+  method  String @db.VarChar(10)
+  module  String @db.VarChar(50)
+
   // Audit
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
-  
-  createdById String?  @map("created_by") @db.Uuid
-  updatedById String?  @map("updated_by") @db.Uuid
-  deletedById String?  @map("deleted_by") @db.Uuid
-  
-  roles       RolePermission[]
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  createdById String? @map("created_by") @db.Uuid
+  updatedById String? @map("updated_by") @db.Uuid
+  deletedById String? @map("deleted_by") @db.Uuid
+
+  roles RolePermission[]
 
   @@unique([apiPath, method, module])
   @@map("permissions")
@@ -411,9 +433,9 @@ model Permission {
 model RolePermission {
   roleId       String @map("role_id") @db.Uuid
   permissionId String @map("permission_id") @db.Uuid
-  
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
@@ -424,20 +446,20 @@ model RolePermission {
  * User preferences for privacy.
  */
 model PrivacySettings {
-  userId           String       @id @map("user_id") @db.Uuid
-  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @id @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  showProfile  PrivacyLevel @default(CONTACTS) @map("show_profile")
-  whoCanMessageMe  PrivacyLevel @default(EVERYONE) @map("who_can_message_me")
-  whoCanCallMe     PrivacyLevel @default(CONTACTS) @map("who_can_call_me")
+  showProfile     PrivacyLevel @default(CONTACTS) @map("show_profile")
+  whoCanMessageMe PrivacyLevel @default(EVERYONE) @map("who_can_message_me")
+  whoCanCallMe    PrivacyLevel @default(CONTACTS) @map("who_can_call_me")
 
   // [NEW] Online Status
-  showOnlineStatus Boolean      @default(true) @map("show_online_status")
-  showLastSeen     Boolean      @default(true) @map("show_last_seen")
+  showOnlineStatus Boolean @default(true) @map("show_online_status")
+  showLastSeen     Boolean @default(true) @map("show_last_seen")
 
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedById      String?      @map("updated_by") @db.Uuid
-  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedById String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("privacy_settings")
 }
@@ -458,40 +480,35 @@ model Friendship {
   user2Id     String           @map("user2_id") @db.Uuid
   requesterId String           @map("requester_id") @db.Uuid
   status      FriendshipStatus @default(PENDING)
-  
 
   // [NEW] Timestamps defined in Plan
 
-  acceptedAt  DateTime?        @map("accepted_at") @db.Timestamptz
-  declinedAt  DateTime?        @map("declined_at") @db.Timestamptz
-  expiresAt   DateTime?        @map("expires_at") @db.Timestamptz
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz
+  declinedAt DateTime? @map("declined_at") @db.Timestamptz
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz
 
   // [NEW] Anti-spam tracking
-  lastActionAt DateTime?       @map("last_action_at") @db.Timestamptz
-  lastActionBy String?         @map("last_action_by") @db.Uuid
+  lastActionAt DateTime? @map("last_action_at") @db.Timestamptz
+  lastActionBy String?   @map("last_action_by") @db.Uuid
 
   // Audit
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime?        @map("deleted_at") @db.Timestamptz
-  
-  user1       User             @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2       User             @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
-  requester   User             @relation("Requester", fields: [requesterId], references: [id])
-  actionUser  User?            @relation("LastActionBy", fields: [lastActionBy], references: [id])
-  
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  user1      User  @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2      User  @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
+  requester  User  @relation("Requester", fields: [requesterId], references: [id])
+  actionUser User? @relation("LastActionBy", fields: [lastActionBy], references: [id])
+
   // 1. Core Integrity (GIỮ NGUYÊN)
-  @@unique([user1Id, user2Id]) 
-  
+  @@unique([user1Id, user2Id])
   // 2. User 1 Friend List (Cursor Pagination) -> THAY THẾ index cũ [user1Id, status]
   @@index([user1Id, status, createdAt(sort: Desc), id], name: "idx_friendship_user1_list")
-  
   // 3. User 2 Friend List (Cursor Pagination) -> THAY THẾ index cũ [user2Id, status]
   @@index([user2Id, status, createdAt(sort: Desc), id], name: "idx_friendship_user2_list")
-  
   // 4. Sent Requests (kèm expires check) -> THAY THẾ index cũ [requesterId, status]
   @@index([requesterId, status, expiresAt], name: "idx_friendship_sent_requests")
-  
   // 5. Cleanup Job (GIỮ NGUYÊN - phục vụ cron job xóa request hết hạn)
   @@index([status, expiresAt], name: "idx_friendship_cleanup")
   @@map("friendships")
@@ -504,15 +521,15 @@ model Friendship {
  * Quyền lực cao nhất (Override mọi quan hệ khác).
  */
 model Block {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  blockerId String   @map("blocker_id") @db.Uuid
-  blockedId String   @map("blocked_id") @db.Uuid
-  reason    String?  @db.VarChar(500) // [NEW] Optional reason
-  
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blockerId String  @map("blocker_id") @db.Uuid
+  blockedId String  @map("blocked_id") @db.Uuid
+  reason    String? @db.VarChar(500) // [NEW] Optional reason
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
   @@index([blockedId]) // [NEW] Reverse lookup
@@ -526,21 +543,21 @@ model Block {
  * Tồn tại độc lập với Friendship.
  */
 model UserContact {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ownerId       String   @map("owner_id") @db.Uuid         // Người sở hữu danh bạ (A)
-  contactUserId String   @map("contact_user_id") @db.Uuid  // Người được lưu (B)
-  
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId       String @map("owner_id") @db.Uuid // Người sở hữu danh bạ (A)
+  contactUserId String @map("contact_user_id") @db.Uuid // Người được lưu (B)
+
   // Quan trọng: Tên gợi nhớ đè lên DisplayName gốc khi hiển thị cho Owner
-  aliasName     String?  @map("alias_name") @db.VarChar(100) 
-  
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  
-  owner         User     @relation("MyContacts", fields: [ownerId], references: [id], onDelete: Cascade)
-  contactUser   User     @relation("InContacts", fields: [contactUserId], references: [id], onDelete: Cascade)
+  aliasName String? @map("alias_name") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner       User @relation("MyContacts", fields: [ownerId], references: [id], onDelete: Cascade)
+  contactUser User @relation("InContacts", fields: [contactUserId], references: [id], onDelete: Cascade)
 
   @@unique([ownerId, contactUserId]) // Một người chỉ lưu người kia 1 lần
-  @@index([ownerId, aliasName])      // Search nhanh theo tên gợi nhớ
+  @@index([ownerId, aliasName]) // Search nhanh theo tên gợi nhớ
   @@index([ownerId, createdAt(sort: Desc)])
   @@map("user_contacts")
 }
@@ -554,29 +571,29 @@ model UserContact {
  * Represents a chat room (Direct or Group).
  */
 model Conversation {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type            ConversationType
-  name            String?           @db.VarChar(255)
-  avatarUrl       String?           @map("avatar_url")
-  lastMessageAt   DateTime?         @map("last_message_at") @db.Timestamptz
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type          ConversationType
+  name          String?          @db.VarChar(255)
+  avatarUrl     String?          @map("avatar_url")
+  lastMessageAt DateTime?        @map("last_message_at") @db.Timestamptz
 
   // Group specific settings
-  participants    String[]          @default([]) 
-  requireApproval Boolean           @default(false) @map("require_approval")
-  settings        Json              @default("{}") @db.JsonB
-  
-  // Audit
-  createdById     String?           @map("created_by") @db.Uuid
-  updatedById     String?           @map("updated_by") @db.Uuid
-  deletedById     String?           @map("deleted_by") @db.Uuid
-  
-  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz
+  participants    String[] @default([])
+  requireApproval Boolean  @default(false) @map("require_approval")
+  settings        Json     @default("{}") @db.JsonB
 
-  members         ConversationMember[]
-  messages        Message[]
-  joinRequests    GroupJoinRequest[]
+  // Audit
+  createdById String? @map("created_by") @db.Uuid
+  updatedById String? @map("updated_by") @db.Uuid
+  deletedById String? @map("deleted_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  members      ConversationMember[]
+  messages     Message[]
+  joinRequests GroupJoinRequest[]
 
   @@index([lastMessageAt(sort: Desc)])
   @@map("conversations")
@@ -587,34 +604,39 @@ model Conversation {
  * Link user to a conversation with roles and status.
  */
 model ConversationMember {
-  conversationId    String       @map("conversation_id") @db.Uuid
-  userId            String       @map("user_id") @db.Uuid
-  role              MemberRole   @default(MEMBER)
-  status            MemberStatus @default(ACTIVE) @map("status")
+  conversationId String       @map("conversation_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  role           MemberRole   @default(MEMBER)
+  status         MemberStatus @default(ACTIVE) @map("status")
 
   // [NEW] Audit for Promoted/Demoted
-  promotedBy        String?      @map("promoted_by") @db.Uuid
-  promotedAt        DateTime?    @map("promoted_at") @db.Timestamptz
-  demotedBy         String?      @map("demoted_by") @db.Uuid
-  demotedAt         DateTime?    @map("demoted_at") @db.Timestamptz
+  promotedBy String?   @map("promoted_by") @db.Uuid
+  promotedAt DateTime? @map("promoted_at") @db.Timestamptz
+  demotedBy  String?   @map("demoted_by") @db.Uuid
+  demotedAt  DateTime? @map("demoted_at") @db.Timestamptz
 
   // Read status tracking
-  lastReadMessageId BigInt?      @map("last_read_message_id")
-  lastReadAt        DateTime?    @map("last_read_at") @db.Timestamptz
-  unreadCount       Int          @default(0) @map("unread_count")
-  
-  // Lifecycle
-  joinedAt          DateTime     @default(now()) @map("joined_at") @db.Timestamptz
-  leftAt            DateTime?    @map("left_at") @db.Timestamptz
-  kickedBy          String?      @map("kicked_by") @db.Uuid
-  kickedAt          DateTime?    @map("kicked_at") @db.Timestamptz
+  lastReadMessageId BigInt?   @map("last_read_message_id")
+  lastReadAt        DateTime? @map("last_read_at") @db.Timestamptz
+  unreadCount       Int       @default(0) @map("unread_count")
 
-  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // [NEW] Archive/Mute state for search filtering
+  isArchived Boolean @default(false) @map("is_archived")
+  isMuted    Boolean @default(false) @map("is_muted")
+
+  // Lifecycle
+  joinedAt DateTime  @default(now()) @map("joined_at") @db.Timestamptz
+  leftAt   DateTime? @map("left_at") @db.Timestamptz
+  kickedBy String?   @map("kicked_by") @db.Uuid
+  kickedAt DateTime? @map("kicked_at") @db.Timestamptz
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, userId])
   @@index([userId, status])
   @@index([userId, unreadCount(sort: Desc)])
+  @@index([userId, isArchived, isMuted, joinedAt(sort: Desc)]) // Search filter index
   //@@unique([conversationId, role], name: "unique_admin_per_group", where: { role: ADMIN, status: ACTIVE })
   @@map("conversation_members")
 }
@@ -628,23 +650,23 @@ model GroupJoinRequest {
   conversationId String            @map("conversation_id") @db.Uuid
   userId         String            @map("user_id") @db.Uuid // Người muốn vào/được mời
   status         JoinRequestStatus @default(PENDING)
-  
+
   // MỚI: Người mời (NULL nếu user tự xin vào)
-  inviterId      String?           @map("inviter_id") @db.Uuid
+  inviterId String? @map("inviter_id") @db.Uuid
 
   // Metadata
-  requestedAt    DateTime          @default(now()) @map("requested_at") @db.Timestamptz
-  expiresAt      DateTime?         @map("expires_at") @db.Timestamptz
-  message        String?           @db.VarChar(500)
-  
+  requestedAt DateTime  @default(now()) @map("requested_at") @db.Timestamptz
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  message     String?   @db.VarChar(500)
+
   // Review tracking
-  reviewedBy     String?           @map("reviewed_by") @db.Uuid
-  reviewedAt     DateTime?         @map("reviewed_at") @db.Timestamptz
-  
-  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User              @relation("MemberRequesting", fields: [userId], references: [id], onDelete: Cascade)
-  reviewer       User?             @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
-  inviter        User?             @relation("RequestInviter", fields: [inviterId], references: [id])
+  reviewedBy String?   @map("reviewed_by") @db.Uuid
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation("MemberRequesting", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer     User?        @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
+  inviter      User?        @relation("RequestInviter", fields: [inviterId], references: [id])
 
   @@unique([conversationId, userId])
   @@index([conversationId, status])
@@ -658,41 +680,46 @@ model GroupJoinRequest {
  * Stores individual messages (Core entity).
  */
 model Message {
-  id              BigInt           @id @default(autoincrement())
-  conversationId  String           @map("conversation_id") @db.Uuid
-  senderId        String?          @map("sender_id") @db.Uuid
-  type            MessageType      @default(TEXT)
-  content         String?          @db.Text
-  metadata        Json?            @default("{}") @db.JsonB
-  
+  id             BigInt      @id @default(autoincrement())
+  conversationId String      @map("conversation_id") @db.Uuid
+  senderId       String?     @map("sender_id") @db.Uuid
+  type           MessageType @default(TEXT)
+  content        String?     @db.Text
+  metadata       Json?       @default("{}") @db.JsonB
+
+  // [NEW] Full-text search vector (for GIN index searching)
+  searchVector Unsupported("tsvector")? @map("search_vector")
+
   // Threading / Reply
-  replyToId       BigInt?          @map("reply_to_message_id")
+  replyToId BigInt? @map("reply_to_message_id")
 
   // Idempotency
-  clientMessageId String?          @unique @map("client_message_id") @db.VarChar(36)
+  clientMessageId String? @unique @map("client_message_id") @db.VarChar(36)
 
   // Audit
-  updatedById     String?          @map("updated_by") @db.Uuid
-  deletedById     String?          @map("deleted_by") @db.Uuid
-  
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime?        @map("deleted_at") @db.Timestamptz
+  updatedById String? @map("updated_by") @db.Uuid
+  deletedById String? @map("deleted_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
   // Relations
-  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender          User?            @relation(fields: [senderId], references: [id])
-  deletedBy       User?            @relation("DeletedBy", fields: [deletedById], references: [id])
-  
-  parentMessage   Message?         @relation("Reply", fields: [replyToId], references: [id])
-  replies         Message[]        @relation("Reply")
-  
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?        @relation(fields: [senderId], references: [id])
+  deletedBy    User?        @relation("DeletedBy", fields: [deletedById], references: [id])
+
+  parentMessage Message?  @relation("Reply", fields: [replyToId], references: [id])
+  replies       Message[] @relation("Reply")
+
   mediaAttachments MediaAttachment[]
   receipts         MessageReceipt[]
 
   @@index([conversationId, createdAt(sort: Desc)])
   @@index([senderId, createdAt(sort: Desc)])
   @@index([clientMessageId])
+  @@index([conversationId, deletedAt, createdAt(sort: Desc)]) // Search scope + soft-delete filter
+  @@index([senderId, conversationId, deletedAt]) // User messages in conversation
   @@map("messages")
 }
 
@@ -705,9 +732,9 @@ model MessageReceipt {
   userId    String        @map("user_id") @db.Uuid
   status    ReceiptStatus
   timestamp DateTime      @default(now()) @db.Timestamptz
-  
-  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
   @@id([messageId, userId])
   @@index([userId, status, timestamp])
   @@index([messageId, status])
@@ -723,28 +750,28 @@ model MessageReceipt {
  * Handles file uploads, S3 storage references, and processing status.
  */
 model MediaAttachment {
-  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  messageId        BigInt?               @map("message_id") // Nullable before message is sent
-  
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId BigInt? @map("message_id") // Nullable before message is sent
+
   // File Metadata
-  originalName     String                @map("original_name") @db.VarChar(255)
-  mimeType         String                @map("mime_type") @db.VarChar(100)
-  mediaType        MediaType             @map("media_type")
-  size             BigInt
-  
+  originalName String    @map("original_name") @db.VarChar(255)
+  mimeType     String    @map("mime_type") @db.VarChar(100)
+  mediaType    MediaType @map("media_type")
+  size         BigInt
+
   // S3 Storage
-  s3Key            String?                @unique @map("s3_key") @db.VarChar(500)
-  s3Bucket         String                @map("s3_bucket") @db.VarChar(100)
-  cdnUrl           String?               @map("cdn_url") @db.VarChar(1000)
+  s3Key    String? @unique @map("s3_key") @db.VarChar(500)
+  s3Bucket String  @map("s3_bucket") @db.VarChar(100)
+  cdnUrl   String? @map("cdn_url") @db.VarChar(1000)
 
   // Processed Variants (Thumbnails, etc.)
-  thumbnailUrl     String?               @map("thumbnail_url") @db.VarChar(1000)
-  thumbnailS3Key   String?               @map("thumbnail_s3_key") @db.VarChar(500)
-  optimizedUrl     String?   // URL to optimized/resized version (images only)
-  hlsPlaylistUrl   String?   // URL to HLS master.m3u8 (videos only)
-  duration         Int?                  // Seconds
-  width            Int?                  // Pixels
-  height           Int?                  // Pixels
+  thumbnailUrl   String? @map("thumbnail_url") @db.VarChar(1000)
+  thumbnailS3Key String? @map("thumbnail_s3_key") @db.VarChar(500)
+  optimizedUrl   String? // URL to optimized/resized version (images only)
+  hlsPlaylistUrl String? // URL to HLS master.m3u8 (videos only)
+  duration       Int? // Seconds
+  width          Int? // Pixels
+  height         Int? // Pixels
 
   // Processing Workflow
   processingStatus MediaProcessingStatus @default(PENDING) @map("processing_status")
@@ -752,23 +779,22 @@ model MediaAttachment {
   processedAt      DateTime?             @map("processed_at") @db.Timestamptz
 
   //Để hỗ trợ Presigned URL flow
-  uploadId         String?               @unique @map("upload_id") @db.VarChar(36)
-  s3KeyTemp        String?               @map("s3_key_temp") @db.VarChar(500)
-  retryCount       Int                   @default(0) @map("retry_count")
+  uploadId   String? @unique @map("upload_id") @db.VarChar(36)
+  s3KeyTemp  String? @map("s3_key_temp") @db.VarChar(500)
+  retryCount Int     @default(0) @map("retry_count")
 
   // Upload Context
-  uploadedBy       String                @map("uploaded_by") @db.Uuid
-  uploadedFrom     String?               @map("uploaded_from") @db.VarChar(50)
-  
-  // Audit
-  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt        DateTime?             @map("deleted_at") @db.Timestamptz
-  deletedById      String?               @map("deleted_by") @db.Uuid
-  
+  uploadedBy   String  @map("uploaded_by") @db.Uuid
+  uploadedFrom String? @map("uploaded_from") @db.VarChar(50)
 
-  message          Message?              @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  uploader         User                  @relation("UploadedMedia", fields: [uploadedBy], references: [id])
+  // Audit
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById String?   @map("deleted_by") @db.Uuid
+
+  message  Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader User     @relation("UploadedMedia", fields: [uploadedBy], references: [id])
 
   @@index([uploadedBy, createdAt(sort: Desc)])
   @@index([processingStatus])
@@ -788,29 +814,26 @@ model MediaAttachment {
  * Lưu lịch sử cuộc gọi (write on CALL_ENDED only).
  */
 model CallHistory {
-  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  callerId    String     @map("caller_id") @db.Uuid
-  calleeId    String     @map("callee_id") @db.Uuid
-  duration    Int?       // seconds (nullable if missed)
-  status      CallStatus 
-  
-  startedAt   DateTime   @map("started_at") @db.Timestamptz
-  endedAt     DateTime?  @map("ended_at") @db.Timestamptz
-  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  deletedAt   DateTime?   @default(now()) @map("deleted_at") @db.Timestamptz
-  
-  caller      User       @relation("CallsMade", fields: [callerId], references: [id])
-  callee      User       @relation("CallsReceived", fields: [calleeId], references: [id])
+  id       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  callerId String     @map("caller_id") @db.Uuid
+  calleeId String     @map("callee_id") @db.Uuid
+  duration Int? // seconds (nullable if missed)
+  status   CallStatus
+
+  startedAt DateTime  @map("started_at") @db.Timestamptz
+  endedAt   DateTime? @map("ended_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt DateTime? @default(now()) @map("deleted_at") @db.Timestamptz
+
+  caller User @relation("CallsMade", fields: [callerId], references: [id])
+  callee User @relation("CallsReceived", fields: [calleeId], references: [id])
 
   // 1. Caller Feed: Lấy lịch sử gọi đi, loại bỏ bản ghi đã xóa, sort theo thời gian thực
   @@index([callerId, deletedAt, startedAt(sort: Desc), id], name: "idx_call_history_caller_feed")
-  
   // 2. Callee Feed: Lấy lịch sử gọi đến
   @@index([calleeId, deletedAt, startedAt(sort: Desc), id], name: "idx_call_history_callee_feed")
-  
   // 3. Missed Calls: Lấy danh sách gọi nhỡ nhanh
   @@index([calleeId, status, startedAt(sort: Desc)], name: "idx_call_history_missed")
-  
   // 4. Analytics: Thống kê theo thời gian (giữ lại cái cũ nếu cần report)
   @@index([startedAt], name: "idx_call_history_time_range")
   @@map("call_history")
@@ -821,35 +844,34 @@ model CallHistory {
  * Logs historical socket connections for analytics and debugging.
  */
 model SocketConnection {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  socketId         String    @map("socket_id") @db.VarChar(100)
-  
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+  socketId String @map("socket_id") @db.VarChar(100)
+
   // Device Context
-  deviceId         String    @map("device_id") @db.VarChar(255)
-  serverInstance   String?   @map("server_instance") @db.VarChar(50)
-  ipAddress        String    @map("ip_address") @db.VarChar(45)
-  userAgent        String?   @map("user_agent") @db.Text
-  
+  deviceId       String  @map("device_id") @db.VarChar(255)
+  serverInstance String? @map("server_instance") @db.VarChar(50)
+  ipAddress      String  @map("ip_address") @db.VarChar(45)
+  userAgent      String? @map("user_agent") @db.Text
+
   // Lifecycle
   connectedAt      DateTime  @default(now()) @map("connected_at") @db.Timestamptz
   disconnectedAt   DateTime? @map("disconnected_at") @db.Timestamptz
   disconnectReason String?   @map("disconnect_reason") @db.VarChar(100)
-  
+
   // Usage Metrics
-  messagesSent     Int       @default(0) @map("messages_sent")
-  messagesReceived Int       @default(0) @map("messages_received")
-  duration         Int?      @map("duration_seconds")
-  
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  messagesSent     Int  @default(0) @map("messages_sent")
+  messagesReceived Int  @default(0) @map("messages_received")
+  duration         Int? @map("duration_seconds")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, connectedAt(sort: Desc)])
   @@index([socketId])
   @@index([serverInstance])
   @@index([connectedAt])
   @@map("socket_connections")
 }
-
 
 // ============================================================================
 // 15. EVENT SOURCING & IDEMPOTENCY (PHASE 1: Event-Driven Architecture)
@@ -858,38 +880,37 @@ model SocketConnection {
 /**
  * Model: DomainEvent
  * Stores all business-critical events for audit trail, event sourcing, and replay capability.
- * 
  * Critical events (stored): USER_BLOCKED, MESSAGE_SENT, CALL_INITIATED, etc.
  * Transient events (emit only): MESSAGE_DELIVERED, USER_WENT_ONLINE, etc.
  */
 model DomainEvent {
-  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
   // Event Identity
-  eventId           String     @unique @map("event_id") @db.Uuid  // Idempotency key
-  eventType         EventType  @map("event_type")
-  
+  eventId   String    @unique @map("event_id") @db.Uuid // Idempotency key
+  eventType EventType @map("event_type")
+
   // Aggregate Identity (what changed)
-  aggregateId       String     @map("aggregate_id")    // userId, conversationId, etc.
-  aggregateType     String     @map("aggregate_type") @db.VarChar(50)  // User, Conversation, Call
-  
+  aggregateId   String @map("aggregate_id") // userId, conversationId, etc.
+  aggregateType String @map("aggregate_type") @db.VarChar(50) // User, Conversation, Call
+
   // Event Versioning & Metadata
-  version           Int        @default(1)                         // Event contract version
-  source            String     @db.VarChar(50)                     // Module that emitted: BlockModule, SocialModule
-  correlationId     String?    @map("correlation_id") @db.Uuid     // Trace across events
-  causationId       String?    @map("causation_id") @db.Uuid       // What event caused this
-  
+  version       Int     @default(1) // Event contract version
+  source        String  @db.VarChar(50) // Module that emitted: BlockModule, SocialModule
+  correlationId String? @map("correlation_id") @db.Uuid // Trace across events
+  causationId   String? @map("causation_id") @db.Uuid // What event caused this
+
   // Event Content
-  payload           Json       @db.JsonB            // Event data (blockerId, blockedId, etc.)
-  metadata          Json?      @db.JsonB            // Extra context (userId, timestamp, etc.)
-  
+  payload  Json  @db.JsonB // Event data (blockerId, blockedId, etc.)
+  metadata Json? @db.JsonB // Extra context (userId, timestamp, etc.)
+
   // Timestamp Tracking
-  occurredAt        DateTime   @map("occurred_at") @db.Timestamptz  // When event happened
-  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz // When event happened
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
   // Audit Trail
-  issuedBy          String?    @map("issued_by") @db.Uuid         // Which service published
-  
+  issuedBy String? @map("issued_by") @db.Uuid // Which service published
+
   @@index([eventType, occurredAt(sort: Desc)])
   @@index([aggregateId, aggregateType])
   @@index([correlationId])
@@ -901,34 +922,75 @@ model DomainEvent {
 /**
  * Model: ProcessedEvent
  * Tracks processed events per listener to ensure idempotency.
- * 
  * If an event is retried from message broker, this table prevents duplicate processing.
  * Example: MessageSent event processed by CacheInvalidator, SocketNotifier, AnalyticsLogger
  */
 model ProcessedEvent {
-  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
   // Event Reference
-  eventId           String     @map("event_id") @db.Uuid           // Which event was processed
-  eventType         EventType  @map("event_type")                   // For debugging
-  eventVersion      Int        @default(1) @map("event_version")    // PHASE 3.4: Event version for compatibility
-  
+  eventId      String    @map("event_id") @db.Uuid // Which event was processed
+  eventType    EventType @map("event_type") // For debugging
+  eventVersion Int       @default(1) @map("event_version") // PHASE 3.4: Event version for compatibility
+
   // Handler Reference
-  handlerId         String     @map("handler_id") @db.VarChar(100) // e.g. BlockCacheListener, SocketNotifier
-  
+  handlerId String @map("handler_id") @db.VarChar(100) // e.g. BlockCacheListener, SocketNotifier
+
   // Processing Result
-  processedAt       DateTime   @default(now()) @map("processed_at") @db.Timestamptz
-  status            String     @default("SUCCESS") @db.VarChar(20) // SUCCESS, FAILED, RETRYING
-  errorMessage      String?    @map("error_message") @db.Text       // If failed
-  retryCount        Int        @default(0) @map("retry_count")
-  
+  processedAt  DateTime @default(now()) @map("processed_at") @db.Timestamptz
+  status       String   @default("SUCCESS") @db.VarChar(20) // SUCCESS, FAILED, RETRYING
+  errorMessage String?  @map("error_message") @db.Text // If failed
+  retryCount   Int      @default(0) @map("retry_count")
+
   // Tracking
-  correlationId     String?    @map("correlation_id") @db.Uuid
-  
-  @@unique([eventId, handlerId])  // Only process event once per handler
+  correlationId String? @map("correlation_id") @db.Uuid
+
+  @@unique([eventId, handlerId]) // Only process event once per handler
   @@index([eventId])
   @@index([handlerId])
   @@index([processedAt(sort: Desc)])
   @@index([status])
   @@map("processed_events")
+}
+
+// ============================================================================
+// 16. SEARCH ENGINE & ANALYTICS (PHASE 3)
+// ============================================================================
+
+/**
+ * Model: SearchQuery
+ * Tracks search queries for analytics, trending topics, and ranking optimization.
+ * Used in Phase 3 of Search Engine Module implementation.
+ * Helps understand user search behavior and optimize search results.
+ */
+model SearchQuery {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // User & Context
+  userId String @map("user_id") @db.Uuid
+
+  // Search Parameters
+  keyword    String @db.VarChar(255)
+  searchType String @map("search_type") @db.VarChar(50) // GLOBAL, CONVERSATION, CONTACT, MEDIA
+  filters    Json?  @db.JsonB // Additional filters (messageType, dateRange, etc.)
+
+  // Results & Performance
+  resultCount     Int @default(0) @map("result_count")
+  executionTimeMs Int @map("execution_time_ms")
+
+  // User Interaction
+  clickedResultId String?   @map("clicked_result_id") @db.VarChar(255) // Which result user clicked
+  clickedAt       DateTime? @map("clicked_at") @db.Timestamptz
+
+  // Tracking
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([keyword, searchType])
+  @@index([createdAt(sort: Desc)])
+  @@index([searchType, resultCount])
+  @@map("search_queries")
 }

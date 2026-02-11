@@ -112,7 +112,7 @@ export class RedisPubSubService implements OnModuleInit {
     const subscriberCount = await publisher.publish(channel, payload);
 
     if (subscriberCount === 0) {
-      this.logger.warn(`No subscribers for channel: ${channel}`);
+      this.logger.debug(`No subscribers for channel: ${channel}`);
     }
 
     return subscriberCount;

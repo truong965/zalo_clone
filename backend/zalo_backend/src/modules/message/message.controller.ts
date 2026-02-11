@@ -22,7 +22,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
 export class MessageController {
-  constructor(private readonly messageService: MessageService) {}
+  constructor(private readonly messageService: MessageService) { }
 
   @Post()
   @ApiOperation({ summary: 'Send message via HTTP (fallback)' })
@@ -34,6 +34,26 @@ export class MessageController {
   @ApiOperation({ summary: 'Get messages with pagination' })
   async getMessages(@CurrentUser() user, @Query() dto: GetMessagesDto) {
     return this.messageService.getMessages(dto, user.id);
+  }
+
+  @Get('context')
+  @ApiOperation({
+    summary: 'Get messages around a target message (jump-to-message)',
+  })
+  getMessageContext(
+    @CurrentUser() user,
+    @Query('conversationId') conversationId: string,
+    @Query('messageId') messageId: string,
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    return this.messageService.getMessagesContext(
+      conversationId,
+      messageId,
+      user.id as string,
+      before ? parseInt(before, 10) : 25,
+      after ? parseInt(after, 10) : 25,
+    );
   }
 
   @Delete(':messageId')

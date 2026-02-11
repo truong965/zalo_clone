@@ -1,4 +1,12 @@
-import { IsUUID, IsOptional, IsInt, Min, Max, IsString } from 'class-validator';
+import {
+  IsUUID,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+  IsString,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GetMessagesDto {
@@ -15,4 +23,8 @@ export class GetMessagesDto {
   @IsOptional()
   @IsString()
   cursor?: string; // Message ID for cursor-based pagination (string from query)
+
+  @IsOptional()
+  @IsIn(['older', 'newer'])
+  direction?: 'older' | 'newer' = 'older';
 }

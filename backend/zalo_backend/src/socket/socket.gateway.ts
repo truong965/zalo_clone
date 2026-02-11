@@ -27,6 +27,7 @@ import socketConfig from 'src/config/socket.config';
 import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { WsValidationPipe } from './pipes/ws-validation.pipe';
 import { EventPublisher } from 'src/shared/events/event-publisher.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { FriendshipService } from 'src/modules/friendship/service/friendship.service';
 import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
 import { PrismaService } from 'src/database/prisma.service';
@@ -66,7 +67,8 @@ import { PrismaService } from 'src/database/prisma.service';
 // Validation pipe for incoming messages
 @UsePipes(WsValidationPipe)
 export class SocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -82,12 +84,13 @@ export class SocketGateway
     private readonly socketState: SocketStateService,
     private readonly redisPubSub: RedisPubSubService,
     private readonly eventPublisher: EventPublisher,
+    private readonly eventEmitter: EventEmitter2,
     private readonly friendshipService: FriendshipService,
     private readonly privacyService: PrivacyService,
     private readonly prisma: PrismaService,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
-  ) { }
+  ) {}
 
   private async notifyFriendsPresence(
     userId: string,
@@ -304,7 +307,7 @@ export class SocketGateway
         client,
         () => {
           if (client.connected) {
-            client.emit('server_heartbeat', { ts: Date.now() });
+            client.emit(SocketEvents.SERVER_HEARTBEAT, { ts: Date.now() });
           }
         },
         30_000,
@@ -386,8 +389,12 @@ export class SocketGateway
         await this.notifyFriendsPresence(client.userId, false, now);
       }
 
-      // PHASE 2: Emit event for presence cleanup
-      // MessagingUserPresenceListener will react to this
+      // Emit internal event for other gateways/listeners to cleanup resources
+      this.eventEmitter.emit(SocketEvents.USER_SOCKET_DISCONNECTED, {
+        userId: client.userId,
+        socketId: client.id,
+      });
+
       this.logger.debug(
         `[Socket] User ${client.userId} disconnected from socket ${client.id}`,
       );
@@ -573,7 +580,7 @@ export class SocketGateway
       // Tìm socket object thực tế trên node này
       const socket = this.server.sockets.sockets.get(socketId);
       if (socket) {
-        socket.emit('auth.force_logout', { reason });
+        socket.emit(SocketEvents.AUTH_FORCE_LOGOUT, { reason });
         socket.disconnect(true);
       }
     });

@@ -42,7 +42,7 @@ export class MessageService {
     private readonly interactionAuth: InteractionAuthorizationService,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
-  ) {}
+  ) { }
 
   private async getDirectTargetUserId(
     conversationId: string,
@@ -389,6 +389,7 @@ export class MessageService {
     }
 
     const limit = dto.limit || 50;
+    const direction = dto.direction || 'older';
 
     let cursorId: bigint | undefined;
     if (dto.cursor) {
@@ -399,15 +400,17 @@ export class MessageService {
       }
     }
 
+    const isNewer = direction === 'newer';
+
     const messages = await this.prisma.message.findMany({
       where: {
         conversationId: dto.conversationId,
         deletedAt: null,
-        ...(cursorId && { id: { lt: cursorId } }),
+        ...(cursorId && { id: isNewer ? { gt: cursorId } : { lt: cursorId } }),
       },
       take: limit + 1,
       orderBy: {
-        createdAt: 'desc',
+        createdAt: isNewer ? 'asc' : 'desc',
       },
       include: {
         sender: {
@@ -452,12 +455,139 @@ export class MessageService {
       },
     });
 
-    return CursorPaginationHelper.buildResult({
+    const result = CursorPaginationHelper.buildResult({
       items: messages,
       limit,
       getCursor: (m) => m.id.toString(),
       mapToDto: (m) => safeJSON(m),
     });
+
+    // For 'newer' direction: query was ASC, reverse data to maintain DESC order
+    // for the frontend. hasNextPage/nextCursor are already correct from ASC order.
+    if (isNewer) {
+      result.data = result.data.reverse();
+    }
+
+    return result;
+  }
+
+  /**
+   * Get messages around a target message (for jump-to-message from search).
+   * Returns messages in the same shape as getMessages() (MessageListItem).
+   */
+  async getMessagesContext(
+    conversationId: string,
+    targetMessageId: string,
+    userId: string,
+    before = 25,
+    after = 25,
+  ) {
+    const isMember = await this.isMember(conversationId, userId);
+    if (!isMember) {
+      throw new ForbiddenException('You cannot view this conversation');
+    }
+
+    let targetBigInt: bigint;
+    try {
+      targetBigInt = BigInt(targetMessageId);
+    } catch {
+      throw new BadRequestException('Invalid message ID');
+    }
+
+    // Get the target message to obtain its createdAt for range query
+    const target = await this.prisma.message.findFirst({
+      where: {
+        id: targetBigInt,
+        conversationId,
+        deletedAt: null,
+      },
+      select: { id: true, createdAt: true },
+    });
+
+    if (!target) {
+      throw new BadRequestException('Message not found in this conversation');
+    }
+
+    const includeFields = {
+      sender: {
+        select: { id: true, displayName: true, avatarUrl: true },
+      },
+      parentMessage: {
+        select: { id: true, content: true, senderId: true },
+      },
+      receipts: {
+        select: { userId: true, status: true, timestamp: true },
+      },
+      mediaAttachments: {
+        select: {
+          id: true,
+          mediaType: true,
+          cdnUrl: true,
+          thumbnailUrl: true,
+          width: true,
+          height: true,
+          duration: true,
+          processingStatus: true,
+          originalName: true,
+          size: true,
+        },
+        where: {
+          processingStatus: MediaProcessingStatus.READY,
+          deletedAt: null,
+        },
+      },
+    } as const;
+
+    // Fetch: before messages, target message, after messages in parallel
+    const [beforeMsgs, targetMsg, afterMsgs] = await Promise.all([
+      this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          OR: [
+            { createdAt: { lt: target.createdAt } },
+            { createdAt: target.createdAt, id: { lt: targetBigInt } },
+          ],
+        },
+        take: before,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: includeFields,
+      }),
+      this.prisma.message.findUnique({
+        where: { id: targetBigInt },
+        include: includeFields,
+      }),
+      this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          OR: [
+            { createdAt: { gt: target.createdAt } },
+            { createdAt: target.createdAt, id: { gt: targetBigInt } },
+          ],
+        },
+        take: after,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        include: includeFields,
+      }),
+    ]);
+
+    // Combine: before (reversed to ASC) + target + after — all in DESC order for consistency
+    const allMessages = [
+      ...afterMsgs.reverse(),  // newest first
+      ...(targetMsg ? [targetMsg] : []),
+      ...beforeMsgs,           // already DESC order from query
+    ];
+
+    const hasOlderMessages = beforeMsgs.length >= before;
+    const hasNewerMessages = afterMsgs.length >= after;
+
+    return {
+      data: allMessages.map((m) => safeJSON(m)),
+      targetMessageId: targetMessageId,
+      hasOlderMessages,
+      hasNewerMessages,
+    };
   }
 
   async findByClientMessageId(

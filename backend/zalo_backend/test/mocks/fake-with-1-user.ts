@@ -1,10 +1,5 @@
+//npx dotenv -e .env.development.local -- npx tsx test/mocks/fake-with-1-user.ts
 import 'dotenv/config';
-
-// Ensure DATABASE_URL is loaded before importing PrismaClient
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not set');
-}
-
 import {
   PrismaClient,
   Prisma,
@@ -17,17 +12,25 @@ import {
   MessageType,
   ReceiptStatus,
   PrivacyLevel,
+  Gender,
+  MediaType,
+  MediaProcessingStatus,
 } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { fakerVI as faker } from '@faker-js/faker';
+
+// Ensure DATABASE_URL is loaded
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set');
+}
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
 });
 const prisma = new PrismaClient({ adapter });
 
-// ================= CONFIGURATION =================
-const TARGET_PHONE = '0909000111';
+// ================= CONFIGURATION (GIỮ NGUYÊN) =================
+const TARGET_PHONE = '0987654321';
 const CONFIG = {
   TOTAL_USERS: 150, // Tổng user trong hệ thống (bao gồm target)
   TARGET_FRIENDS: 100, // Số bạn bè của user chính
@@ -41,67 +44,130 @@ const CONFIG = {
 
 async function cleanDatabase() {
   console.log('🗑️  Cleaning database...');
-  // Xóa theo thứ tự để tránh lỗi khóa ngoại
+  // Xóa theo thứ tự phụ thuộc khóa ngoại ngược
   await prisma.messageReceipt.deleteMany();
   await prisma.mediaAttachment.deleteMany();
   await prisma.message.deleteMany();
   await prisma.groupJoinRequest.deleteMany();
   await prisma.conversationMember.deleteMany();
   await prisma.conversation.deleteMany();
+  await prisma.userContact.deleteMany(); // [NEW]
   await prisma.block.deleteMany();
   await prisma.friendship.deleteMany();
+  await prisma.privacySettings.deleteMany(); // [NEW]
   await prisma.user.deleteMany();
   console.log('✅ Database cleaned');
 }
 
+/**
+ * 1. Tạo Users và Privacy Settings
+ */
 async function createUsers() {
-  console.log('👤 Creating users...');
-  const usersData: Prisma.UserCreateManyInput[] = [];
+  console.log('👤 Creating users & Privacy Settings...');
+  const usersData: any[] = [];
+  const privacyData: any[] = [];
 
-  // 1. Tạo User chính (Target)
+  // 1.1 Tạo User chính (Target)
+  const targetId = faker.string.uuid(); // Pre-generate ID để link Privacy
   usersData.push({
+    id: targetId,
     phoneNumber: TARGET_PHONE,
+    phoneCode: '+84',
+    phoneNumberNormalized: TARGET_PHONE,
     displayName: 'BOSS (Target User)',
     avatarUrl: 'https://i.pravatar.cc/300?u=target',
     passwordHash: CONFIG.DEFAULT_PASSWORD_HASH,
-    bio: 'Account dùng để test full chức năng chat',
+    bio: 'Account dùng để test full chức năng chat Enterprise',
     status: UserStatus.ACTIVE,
-    gender: 'MALE',
+    gender: Gender.MALE,
+    dateOfBirth: new Date('1995-01-01'),
     lastSeenAt: new Date(),
   });
 
-  // 2. Tạo các User phụ
+  privacyData.push({
+    userId: targetId,
+    showProfile: PrivacyLevel.EVERYONE,
+    whoCanMessageMe: PrivacyLevel.EVERYONE,
+    whoCanCallMe: PrivacyLevel.EVERYONE,
+    showOnlineStatus: true,
+    showLastSeen: true,
+  });
+
+  // 1.2 Tạo các User phụ (Friends + Strangers)
   for (let i = 0; i < CONFIG.TOTAL_USERS - 1; i++) {
+    const userId = faker.string.uuid();
     const sex = faker.person.sexType();
+    const rawPhone = faker.phone.number({ style: 'national' }).replace(/\D/g, '').slice(0, 15);
+
     usersData.push({
-      phoneNumber: faker.phone
-        .number({ style: 'national' })
-        .replace(/\D/g, '')
-        .slice(0, 15),
+      id: userId,
+      phoneNumber: rawPhone,
+      phoneCode: '+84',
+      phoneNumberNormalized: rawPhone,
       displayName: faker.person.fullName({ sex }),
       avatarUrl: faker.image.avatar(),
       passwordHash: CONFIG.DEFAULT_PASSWORD_HASH,
       bio: faker.lorem.sentence(5),
       status: UserStatus.ACTIVE,
-      gender: sex.toUpperCase() === 'MALE' ? 'MALE' : 'FEMALE',
+      gender: sex.toUpperCase() === 'MALE' ? Gender.MALE : Gender.FEMALE,
+      dateOfBirth: faker.date.birthdate({ min: 18, max: 60, mode: 'age' }),
       lastSeenAt: faker.date.recent(),
+    });
+
+    // Random Privacy Settings
+    privacyData.push({
+      userId: userId,
+      showProfile: faker.helpers.enumValue(PrivacyLevel),
+      whoCanMessageMe: faker.helpers.enumValue(PrivacyLevel), // Có người chặn tin nhắn người lạ
+      whoCanCallMe: faker.helpers.enumValue(PrivacyLevel),
+      showOnlineStatus: faker.datatype.boolean(),
+      showLastSeen: faker.datatype.boolean(),
     });
   }
 
+  // Create Users
   await prisma.user.createMany({ data: usersData, skipDuplicates: true });
+  // Create Privacy Settings
+  await prisma.privacySettings.createMany({ data: privacyData, skipDuplicates: true });
 
-  // Lấy lại danh sách user có ID
+  // Fetch back objects
   const allUsers = await prisma.user.findMany();
   const targetUser = allUsers.find((u) => u.phoneNumber === TARGET_PHONE);
 
   if (!targetUser) throw new Error('Failed to create target user');
 
   console.log(
-    `✅ Created ${allUsers.length} users (Target ID: ${targetUser.id})`,
+    `✅ Created ${allUsers.length} users and privacy settings.`,
   );
   return { allUsers, targetUser };
 }
 
+/**
+ * 2. Tạo User Contacts (Shadow Graph) - Danh bạ
+ */
+async function createUserContacts(targetUser: any, allUsers: any[]) {
+  console.log('📒 Creating User Contacts (Shadow Graph)...');
+  const contactsData: Prisma.UserContactCreateManyInput[] = [];
+
+  // Target lưu khoảng 50 người vào danh bạ (bao gồm cả friend và chưa friend)
+  const usersInContact = faker.helpers.arrayElements(allUsers.filter(u => u.id !== targetUser.id), 50);
+
+  for (const contact of usersInContact) {
+    contactsData.push({
+      ownerId: targetUser.id,
+      contactUserId: contact.id,
+      aliasName: faker.datatype.boolean(0.3) ? `Alias: ${faker.person.firstName()}` : null, // 30% có đặt tên gợi nhớ
+      createdAt: faker.date.past(),
+    });
+  }
+
+  await prisma.userContact.createMany({ data: contactsData, skipDuplicates: true });
+  console.log(`✅ Created ${contactsData.length} contacts for Target User.`);
+}
+
+/**
+ * 3. Tạo Friendships (Đúng quy tắc user1Id < user2Id)
+ */
 async function createTargetFriendships(targetUser: any, otherUsers: any[]) {
   console.log(
     `🤝 Creating ${CONFIG.TARGET_FRIENDS} friendships for Target User...`,
@@ -115,13 +181,32 @@ async function createTargetFriendships(targetUser: any, otherUsers: any[]) {
   const friendshipsData: Prisma.FriendshipCreateManyInput[] = [];
 
   for (const friend of friends) {
-    const [user1Id, user2Id] = [targetUser.id, friend.id].sort();
+    // QUY TẮC SCHEMA: user1Id < user2Id
+    const [u1, u2] = [targetUser.id, friend.id].sort();
+
     friendshipsData.push({
-      user1Id,
-      user2Id,
-      requesterId: targetUser.id,
+      user1Id: u1,
+      user2Id: u2,
+      requesterId: friend.id, // Giả lập họ add mình
       status: FriendshipStatus.ACCEPTED,
       createdAt: faker.date.past({ years: 1 }),
+      lastActionAt: new Date(),
+      lastActionBy: targetUser.id,
+    });
+  }
+
+  // Tạo thêm vài request đang PENDING (Người lạ add Target)
+  const strangers = otherUsers.filter(u => !friends.includes(u));
+  const pendingRequests = faker.helpers.arrayElements(strangers, 5);
+  for (const stranger of pendingRequests) {
+    const [u1, u2] = [targetUser.id, stranger.id].sort();
+    friendshipsData.push({
+      user1Id: u1,
+      user2Id: u2,
+      requesterId: stranger.id,
+      status: FriendshipStatus.PENDING,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Het han sau 7 ngay
     });
   }
 
@@ -129,58 +214,59 @@ async function createTargetFriendships(targetUser: any, otherUsers: any[]) {
     data: friendshipsData,
     skipDuplicates: true,
   });
-  console.log(`✅ Created friendships`);
-  return friends;
+  console.log(`✅ Created friendships & requests.`);
+  return friends; // Chỉ trả về list đã là bạn bè
 }
 
-// Hàm giả lập block
+/**
+ * 4. Hàm giả lập Block
+ */
 async function simulateBlock(blockerId: string, blockedId: string) {
   await prisma.block.create({
     data: {
       blockerId,
       blockedId,
+      reason: faker.lorem.sentence(),
       createdAt: new Date(),
     },
   });
 }
 
 /**
- * LOGIC QUAN TRỌNG: Tạo tin nhắn và trạng thái đọc giả lập
+ * 5. LOGIC QUAN TRỌNG: Messages, Media, Reply, Receipts
  */
 async function seedDetailedMessagesForConversation(
   conversationId: string,
-  participants: any[], // Bao gồm cả targetUser
+  participants: any[],
   targetUserId: string,
 ) {
   const messagesData: Prisma.MessageCreateManyInput[] = [];
-  let currentTime = faker.date.past({ years: 0.5 }); // Bắt đầu từ 6 tháng trước
+  let currentTime = faker.date.past({ years: 0.5 });
 
-  // 1. Tạo 100 tin nhắn (chưa insert ngay để lấy ID sau)
-  // Vì Prisma createMany không trả về ID (BigInt) trên Postgres cũ, ta sẽ insert từng batch nhỏ hoặc insert xong query lại.
-  // Cách tốt nhất: Insert createMany -> Query lại theo created_at -> Xử lý receipt.
+  // Giữ lại ID của các tin nhắn Text để làm reply
+  // Vì createMany không trả ID, ta sẽ tạo message trước, sau đó query lại để gắn Media
 
+  // Simulation Loop
   for (let i = 0; i < CONFIG.MESSAGES_PER_CONV; i++) {
     const sender = faker.helpers.arrayElement(participants);
+    currentTime = new Date(currentTime.getTime() + faker.number.int({ min: 10000, max: 7200000 }));
 
-    // Tăng thời gian ngẫu nhiên (từ 10s đến 2 tiếng)
-    currentTime = new Date(
-      currentTime.getTime() + faker.number.int({ min: 10000, max: 7200000 }),
-    );
-
-    // Random message type
-    const type = faker.helpers.arrayElement([
-      MessageType.TEXT,
-      MessageType.TEXT,
-      MessageType.TEXT, // Ưu tiên Text
-      MessageType.IMAGE,
-      MessageType.STICKER,
+    // Weighted Random Types
+    const type = faker.helpers.weightedArrayElement([
+      { weight: 70, value: MessageType.TEXT },
+      { weight: 15, value: MessageType.IMAGE },
+      { weight: 5, value: MessageType.VIDEO },
+      { weight: 5, value: MessageType.FILE },
+      { weight: 5, value: MessageType.STICKER },
     ]);
 
     let content = faker.lorem.sentence();
-    if (type === MessageType.IMAGE) content = faker.image.url();
-    if (type === MessageType.STICKER) content = 'sticker_url_123';
+    if (type === MessageType.STICKER) content = 'sticker_cat_pack_01';
+    if (type !== MessageType.TEXT && type !== MessageType.STICKER) content = null; // Content null nếu là file thuần
 
-    // 5% tin nhắn bị xóa
+    // Metadata JSON
+    const metadata = type === MessageType.TEXT ? { mentions: [] } : {};
+
     const isDeleted = faker.datatype.boolean(0.05);
 
     messagesData.push({
@@ -188,103 +274,136 @@ async function seedDetailedMessagesForConversation(
       senderId: sender.id,
       type,
       content,
+      metadata,
       clientMessageId: faker.string.uuid(),
       createdAt: currentTime,
       deletedAt: isDeleted ? new Date(currentTime.getTime() + 60000) : null,
       deletedById: isDeleted ? sender.id : null,
+      updatedById: null,
     });
   }
 
-  // Insert Messages
+  // 5.1 Insert Messages
   await prisma.message.createMany({ data: messagesData });
 
-  // Lấy lại messages đã insert, sort theo thời gian để giả lập luồng đọc
+  // 5.2 Fetch back messages to handle Media & Receipts & Replies
   const createdMessages = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, senderId: true, createdAt: true },
   });
 
-  // 2. Xử lý Unread Count & Last Read cho từng member
-  // Giả lập: Mỗi member sẽ đọc đến một vị trí ngẫu nhiên trong cuộc trò chuyện
-
+  const mediaData: Prisma.MediaAttachmentCreateManyInput[] = [];
   const receiptsData: Prisma.MessageReceiptCreateManyInput[] = [];
+  const updates: any[] = []; // Promises for updating replies
 
-  for (const participant of participants) {
-    // Random vị trí user này đã đọc tới.
-    // - 80% trường hợp là đọc hết (index = length - 1)
-    // - 20% là còn unread (index < length - 1)
-    const isUpToDate = faker.datatype.boolean(0.8);
-    let lastReadIndex = createdMessages.length - 1;
+  for (let i = 0; i < createdMessages.length; i++) {
+    const msg = createdMessages[i];
 
-    if (!isUpToDate) {
-      // Đọc tới tin thứ 50 -> 90 ngẫu nhiên
-      lastReadIndex = faker.number.int({
-        min: 50,
-        max: createdMessages.length - 10,
+    // --- A. Create Media Attachments if needed ---
+    if ([MessageType.IMAGE, MessageType.VIDEO, MessageType.FILE].includes(msg.type)) {
+      const mediaTypeMap = {
+        [MessageType.IMAGE]: MediaType.IMAGE,
+        [MessageType.VIDEO]: MediaType.VIDEO,
+        [MessageType.FILE]: MediaType.DOCUMENT,
+      };
+
+      mediaData.push({
+        messageId: msg.id, // BigInt
+        uploadedBy: msg.senderId!,
+        originalName: faker.system.fileName(),
+        mimeType: msg.type === MessageType.IMAGE ? 'image/jpeg' : 'application/pdf',
+        mediaType: mediaTypeMap[msg.type as keyof typeof mediaTypeMap] || MediaType.IMAGE,
+        size: BigInt(faker.number.int({ min: 1024, max: 10485760 })), // 1KB - 10MB
+        s3Key: `uploads/${conversationId}/${msg.id}_${faker.string.alphanumeric(10)}`,
+        s3Bucket: 'chat-app-bucket-dev',
+        cdnUrl: faker.image.url(),
+        processingStatus: MediaProcessingStatus.READY,
+        width: msg.type === MessageType.IMAGE ? 1920 : null,
+        height: msg.type === MessageType.IMAGE ? 1080 : null,
+        duration: msg.type === MessageType.VIDEO ? 120 : null,
       });
     }
 
-    // Biến tính toán unread
-    let unreadCount = 0;
-    let lastReadMessageId = null;
-    let lastReadAt = null;
+    // --- B. Simulate Reply (Threading) ---
+    // 20% tin nhắn là reply của tin nhắn trước đó (trong khoảng 10 tin gần nhất)
+    if (i > 5 && faker.datatype.boolean(0.2)) {
+      const parentMsg = createdMessages[faker.number.int({ min: i - 5, max: i - 1 })];
+      updates.push(
+        prisma.message.update({
+          where: { id: msg.id },
+          data: { replyToId: parentMsg.id },
+        })
+      );
+    }
+  }
 
-    // Duyệt qua từng tin nhắn để tạo Receipt
+  // --- C. Insert Media ---
+  if (mediaData.length > 0) {
+    await prisma.mediaAttachment.createMany({ data: mediaData });
+  }
+
+  // --- D. Execute Reply Updates (Parallel) ---
+  await Promise.all(updates);
+
+
+  // --- E. Receipts & Unread Logic (Giữ nguyên logic cũ nhưng mapping lại status) ---
+  for (const participant of participants) {
+    const isUpToDate = faker.datatype.boolean(0.8);
+    let lastReadIndex = createdMessages.length - 1;
+    if (!isUpToDate) lastReadIndex = faker.number.int({ min: 50, max: createdMessages.length - 10 });
+
+    let unreadCount = 0;
+    let lastReadMessageId: bigint | null = null;
+    let lastReadAt: Date | null = null;
+
     for (let i = 0; i < createdMessages.length; i++) {
       const msg = createdMessages[i];
       let status: ReceiptStatus = ReceiptStatus.SENT;
 
-      // Logic Receipt
       if (msg.senderId === participant.id) {
-        status = ReceiptStatus.SEEN; // Tin mình gửi thì coi như đã xem
+        status = ReceiptStatus.SEEN;
       } else {
         if (i <= lastReadIndex) {
           status = ReceiptStatus.SEEN;
         } else {
-          status = ReceiptStatus.DELIVERED; // Đã nhận nhưng chưa xem
+          status = ReceiptStatus.DELIVERED;
           unreadCount++;
         }
       }
 
-      // Tạo receipt
       receiptsData.push({
         messageId: msg.id,
         userId: participant.id,
         status,
-        timestamp: new Date(msg.createdAt.getTime() + 1000), // Receipt sau tin nhắn 1s
+        timestamp: new Date(msg.createdAt.getTime() + 1000),
       });
 
-      // Cập nhật marker
       if (i === lastReadIndex) {
         lastReadMessageId = msg.id;
-        lastReadAt = new Date(msg.createdAt.getTime() + 5000); // Đọc sau 5s
+        lastReadAt = new Date(msg.createdAt.getTime() + 5000);
       }
     }
 
-    // Update Conversation Member state
-    // Lưu ý: prisma.conversationMember.update yêu cầu unique compound key
+    // Update Conversation Member
     await prisma.conversationMember.update({
       where: {
         conversationId_userId: { conversationId, userId: participant.id },
       },
       data: {
-        lastReadMessageId: lastReadMessageId as any, // Cast vì BigInt type issue đôi khi xảy ra
+        lastReadMessageId: lastReadMessageId as any,
         lastReadAt,
         unreadCount,
+        isArchived: faker.datatype.boolean(0.05), // 5% archived
+        isMuted: faker.datatype.boolean(0.1), // 10% muted
       },
     });
   }
 
-  // Insert tất cả receipts (batch lớn)
   if (receiptsData.length > 0) {
-    await prisma.messageReceipt.createMany({
-      data: receiptsData,
-      skipDuplicates: true,
-    });
+    await prisma.messageReceipt.createMany({ data: receiptsData, skipDuplicates: true });
   }
 
-  // Update Conversation Last Message
+  // Update Last Message
   const lastMsg = createdMessages[createdMessages.length - 1];
   await prisma.conversation.update({
     where: { id: conversationId },
@@ -292,116 +411,108 @@ async function seedDetailedMessagesForConversation(
   });
 }
 
-async function createTargetConversations(targetUser: any, friends: any[]) {
-  console.log(
-    '💬 Creating Conversations & Messages (This may take a while)...',
-  );
+/**
+ * 6. Tạo Conversations
+ */
+async function createTargetConversations(targetUser: any, friends: any[], allUsers: any[]) {
+  console.log('💬 Creating Conversations & Messages...');
 
-  // Chia tỷ lệ: 70 Direct, 30 Group
   const DIRECT_COUNT = 70;
   const GROUP_COUNT = 30;
 
-  // --- 1. DIRECT CONVERSATIONS ---
-  // Lấy 70 friends đầu tiên
-  const directFriends = friends.slice(0, DIRECT_COUNT);
+  // --- 6.1 DIRECT CONVERSATIONS ---
+  // Lấy 65 friends + 5 strangers (Message Requests)
+  const directParticipants = [
+    ...friends.slice(0, 65),
+    ...allUsers.filter(u => u.id !== targetUser.id && !friends.includes(u)).slice(0, 5)
+  ];
 
-  for (const [index, friend] of directFriends.entries()) {
+  for (const [index, partner] of directParticipants.entries()) {
     console.log(`Processing Direct Conv ${index + 1}/${DIRECT_COUNT}...`);
 
     const conv = await prisma.conversation.create({
       data: {
         type: ConversationType.DIRECT,
-        participants: [targetUser.id, friend.id],
+        participants: [targetUser.id, partner.id], // [NEW] caching participants array
+        settings: {},
         members: {
           create: [
-            {
-              userId: targetUser.id,
-              role: MemberRole.MEMBER,
-              status: MemberStatus.ACTIVE,
-            },
-            {
-              userId: friend.id,
-              role: MemberRole.MEMBER,
-              status: MemberStatus.ACTIVE,
-            },
+            { userId: targetUser.id, role: MemberRole.MEMBER, status: MemberStatus.ACTIVE },
+            { userId: partner.id, role: MemberRole.MEMBER, status: MemberStatus.ACTIVE },
           ],
         },
       },
     });
 
-    // 5% cơ hội bị block
+    // Block logic: 5%
     if (faker.datatype.boolean(0.05)) {
-      // Random ai block ai
       const isTargetBlocker = faker.datatype.boolean();
-      if (isTargetBlocker) await simulateBlock(targetUser.id, friend.id);
-      else await simulateBlock(friend.id, targetUser.id);
-      console.log(`   -> Blocked relationship created for conv ${conv.id}`);
+      if (isTargetBlocker) await simulateBlock(targetUser.id, partner.id);
+      else await simulateBlock(partner.id, targetUser.id);
     }
 
-    await seedDetailedMessagesForConversation(
-      conv.id,
-      [targetUser, friend],
-      targetUser.id,
-    );
+    await seedDetailedMessagesForConversation(conv.id, [targetUser, partner], targetUser.id);
   }
 
-  // --- 2. GROUP CONVERSATIONS ---
+  // --- 6.2 GROUP CONVERSATIONS ---
   for (let i = 0; i < GROUP_COUNT; i++) {
     console.log(`Processing Group Conv ${i + 1}/${GROUP_COUNT}...`);
 
-    // Chọn random 3-8 friends + targetUser
-    const groupMembers = faker.helpers.arrayElements(
-      friends,
-      faker.number.int({ min: 3, max: 8 }),
-    );
+    const groupMembers = faker.helpers.arrayElements(friends, faker.number.int({ min: 3, max: 8 }));
     const allMembers = [targetUser, ...groupMembers];
-
-    // Random role của Target
-    const isTargetAdmin = faker.datatype.boolean(0.7); // 70% là admin
+    const isTargetAdmin = faker.datatype.boolean(0.7);
+    const requireApproval = faker.datatype.boolean(0.3); // 30% nhóm cần duyệt
 
     const conv = await prisma.conversation.create({
       data: {
         type: ConversationType.GROUP,
-        name: `Group: ${faker.commerce.productName()} Team`,
-        avatarUrl: faker.image.urlLoremFlickr({ category: 'tech' }),
+        name: `Group: ${faker.commerce.department()} Team`,
+        avatarUrl: faker.image.urlLoremFlickr({ category: 'business' }),
+        participants: allMembers.map(u => u.id),
+        requireApproval,
+        settings: { allowMemberInvite: true, muteUntil: null },
         members: {
           create: allMembers.map((u) => ({
             userId: u.id,
-            role:
-              u.id === targetUser.id && isTargetAdmin
-                ? MemberRole.ADMIN
-                : MemberRole.MEMBER,
+            role: (u.id === targetUser.id && isTargetAdmin) ? MemberRole.ADMIN : MemberRole.MEMBER,
             status: MemberStatus.ACTIVE,
+            joinedAt: faker.date.past(),
           })),
         },
       },
     });
 
-    // Edge case: Target User rời nhóm hoặc bị kick (5%)
-    if (faker.datatype.boolean(0.05)) {
-      const status = faker.helpers.arrayElement([
-        MemberStatus.LEFT,
-        MemberStatus.KICKED,
-      ]);
-      await prisma.conversationMember.update({
-        where: {
-          conversationId_userId: {
+    // 6.3 Giả lập Join Requests (nếu nhóm cần duyệt)
+    if (requireApproval && isTargetAdmin) {
+      // Có người lạ xin vào nhóm
+      const stranger = allUsers.find(u => !allMembers.includes(u));
+      if (stranger) {
+        await prisma.groupJoinRequest.create({
+          data: {
             conversationId: conv.id,
-            userId: targetUser.id,
-          },
-        },
-        data: { status },
-      });
-      console.log(
-        `   -> Target user status set to ${status} in group ${conv.id}`,
-      );
+            userId: stranger.id,
+            status: JoinRequestStatus.PENDING,
+            message: 'Cho mình vào nhóm với!',
+            inviterId: null, // Tự xin vào
+          }
+        });
+      }
     }
 
-    await seedDetailedMessagesForConversation(
-      conv.id,
-      allMembers,
-      targetUser.id,
-    );
+    // Giả lập Target user được mời vào một nhóm khác (Inviter ID)
+    if (i === GROUP_COUNT - 1) {
+      const friendAdmin = groupMembers[0];
+      await prisma.groupJoinRequest.create({
+        data: {
+          conversationId: conv.id,
+          userId: targetUser.id, // Target được mời
+          inviterId: friendAdmin.id,
+          status: JoinRequestStatus.PENDING,
+        }
+      });
+    }
+
+    await seedDetailedMessagesForConversation(conv.id, allMembers, targetUser.id);
   }
 }
 
@@ -412,22 +523,22 @@ async function main() {
 
     await cleanDatabase();
 
-    // 1. Create Users
+    // 1. Create Users & Privacy
     const { targetUser, allUsers } = await createUsers();
 
-    // 2. Create Friends (Target <-> Others)
+    // 2. Create Contacts (Shadow Graph)
+    await createUserContacts(targetUser, allUsers);
+
+    // 3. Create Friends (Target <-> Others)
     const otherUsers = allUsers.filter((u) => u.id !== targetUser.id);
     const friends = await createTargetFriendships(targetUser, otherUsers);
 
-    // 3. Create Conversations & Full Messages History
-    // (Direct & Group, Block, Delete, Unread Count logic included)
-    await createTargetConversations(targetUser, friends);
+    // 4. Create Conversations & Full Messages History
+    await createTargetConversations(targetUser, friends, allUsers);
 
     console.log('🎉 Seeding COMPLETED!');
-    console.log('👉 Login with phone: 0909000111');
-    console.log(
-      '👉 Expectation: 100 Conversations, rich message history, unread badges.',
-    );
+    console.log('👉 Login with phone: ' + TARGET_PHONE);
+    console.log('👉 Features Simulated: Privacy, Shadow Contacts, Media, Reply, Block, Join Requests.');
   } catch (error) {
     console.error('❌ Seed failed:', error);
     process.exit(1);
