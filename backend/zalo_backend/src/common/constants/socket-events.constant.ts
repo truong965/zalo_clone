@@ -86,6 +86,34 @@ export const SocketEvents = {
   GROUP_JOIN_REQUEST_RECEIVED: 'group:joinRequestReceived',
   GROUP_JOIN_REQUEST_REVIEWED: 'group:joinRequestReviewed',
   GROUP_MEMBER_JOINED: 'group:memberJoined',
+
+  // === SEARCH EVENTS (Phase 4: Real-Time Search) ===
+
+  // Client → Server
+  SEARCH_SUBSCRIBE: 'search:subscribe', // Subscribe to real-time search updates
+  SEARCH_UNSUBSCRIBE: 'search:unsubscribe', // Unsubscribe from search updates
+  SEARCH_UPDATE_QUERY: 'search:updateQuery', // Update search query (debounced)
+  SEARCH_LOAD_MORE: 'search:loadMore', // Load more results (pagination)
+
+  // Server → Client
+  SEARCH_RESULTS: 'search:results', // Initial search results
+  SEARCH_MORE_RESULTS: 'search:moreResults', // Paginated results (load more)
+  SEARCH_NEW_MATCH: 'search:newMatch', // New message matches active search
+  SEARCH_RESULT_REMOVED: 'search:resultRemoved', // Result removed (deleted message)
+  SEARCH_SUGGESTIONS: 'search:suggestions', // Autocomplete suggestions
+  SEARCH_ERROR: 'search:error', // Search error notification
+
+  // === SEARCH INTERNAL EVENTS (EventEmitter — gateway ↔ listener) ===
+  SEARCH_INTERNAL_NEW_MATCH: 'search.internal.newMatch',
+  SEARCH_INTERNAL_RESULT_REMOVED: 'search.internal.resultRemoved',
+
+  // === SOCKET LIFECYCLE (server-to-server internal presence) ===
+  SERVER_HEARTBEAT: 'server_heartbeat',
+  AUTH_FORCE_LOGOUT: 'auth.force_logout',
+
+  // === SOCKET LIFECYCLE (internal EventEmitter events) ===
+  USER_SOCKET_CONNECTED: 'user.socket.connected',
+  USER_SOCKET_DISCONNECTED: 'user.socket.disconnected',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];
