@@ -108,6 +108,7 @@ export interface RawContactSearchResult {
   canMessage?: boolean;
   lastSeenAt?: Date;
   isOnline?: boolean;
+  showProfile?: 'EVERYONE' | 'CONTACTS';
   /** Allow additional dynamic fields from different query shapes */
   [key: string]: unknown;
 }

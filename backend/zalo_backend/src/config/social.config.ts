@@ -5,6 +5,8 @@ export default registerAs('social', () => ({
   limits: {
     // Giới hạn kết bạn
     friendRequest: {
+      disabled:
+        process.env.SOCIAL_FRIEND_REQUEST_LIMIT_DISABLED !== 'false',
       daily: parseInt(
         process.env.SOCIAL_FRIEND_REQUEST_DAILY_LIMIT || '20',
         10,

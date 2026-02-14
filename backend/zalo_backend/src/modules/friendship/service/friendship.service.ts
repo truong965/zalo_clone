@@ -39,6 +39,7 @@ import { Friendship, FriendshipStatus, Prisma } from '@prisma/client';
 import {
   GetFriendsQueryDto,
   FriendshipResponseDto,
+  FriendRequestWithUserDto,
   FriendWithUserDto,
   MutualFriendsDto,
 } from '../dto/friendship.dto';
@@ -707,7 +708,7 @@ export class FriendshipService {
       where,
       take: limit + 1, // Lấy dư 1 để check next page
       cursor: cursor ? { id: cursor } : undefined,
-      // skip: cursor ? 1 : 0,
+      skip: cursor ? 1 : 0, // Skip cursor record to avoid duplicates
       orderBy: { createdAt: 'desc' }, // Bạn mới kết bạn lên đầu
       include: {
         // Chỉ select các field cần thiết để tối ưu performance
@@ -754,7 +755,7 @@ export class FriendshipService {
   /**
    * Get pending friend requests (received)
    */
-  async getReceivedRequests(userId: string): Promise<FriendshipResponseDto[]> {
+  async getReceivedRequests(userId: string): Promise<FriendRequestWithUserDto[]> {
     const friendships = await this.prisma.friendship.findMany({
       where: {
         OR: [
@@ -764,26 +765,86 @@ export class FriendshipService {
         status: FriendshipStatus.PENDING,
         deletedAt: null,
       },
+      include: {
+        user1: { select: { id: true, displayName: true, avatarUrl: true } },
+        user2: { select: { id: true, displayName: true, avatarUrl: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
-    return friendships.map((friendship) => this.mapToResponseDto(friendship));
+    return friendships.map((friendship) => {
+      const requester =
+        friendship.requesterId === friendship.user1Id
+          ? friendship.user1
+          : friendship.user2;
+      const target =
+        friendship.requesterId === friendship.user1Id
+          ? friendship.user2
+          : friendship.user1;
+
+      return {
+        id: friendship.id,
+        status: friendship.status,
+        createdAt: friendship.createdAt,
+        expiresAt: friendship.expiresAt ?? undefined,
+        requester: {
+          userId: requester.id,
+          displayName: requester.displayName,
+          avatarUrl: requester.avatarUrl ?? undefined,
+        },
+        target: {
+          userId: target.id,
+          displayName: target.displayName,
+          avatarUrl: target.avatarUrl ?? undefined,
+        },
+      };
+    });
   }
 
   /**
    * Get sent friend requests
    */
-  async getSentRequests(userId: string): Promise<FriendshipResponseDto[]> {
+  async getSentRequests(userId: string): Promise<FriendRequestWithUserDto[]> {
     const friendships = await this.prisma.friendship.findMany({
       where: {
         requesterId: userId,
         status: FriendshipStatus.PENDING,
         deletedAt: null,
       },
+      include: {
+        user1: { select: { id: true, displayName: true, avatarUrl: true } },
+        user2: { select: { id: true, displayName: true, avatarUrl: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
-    return friendships.map((friendship) => this.mapToResponseDto(friendship));
+    return friendships.map((friendship) => {
+      const requester =
+        friendship.requesterId === friendship.user1Id
+          ? friendship.user1
+          : friendship.user2;
+      const target =
+        friendship.requesterId === friendship.user1Id
+          ? friendship.user2
+          : friendship.user1;
+
+      return {
+        id: friendship.id,
+        status: friendship.status,
+        createdAt: friendship.createdAt,
+        expiresAt: friendship.expiresAt ?? undefined,
+        requester: {
+          userId: requester.id,
+          displayName: requester.displayName,
+          avatarUrl: requester.avatarUrl ?? undefined,
+        },
+        target: {
+          userId: target.id,
+          displayName: target.displayName,
+          avatarUrl: target.avatarUrl ?? undefined,
+        },
+      };
+    });
   }
 
   /**
@@ -911,6 +972,11 @@ export class FriendshipService {
    * Validate rate limits
    */
   private async validateRateLimits(userId: string): Promise<void> {
+    if (this.config.limits.friendRequest.disabled) {
+      // Temporary toggle: skip rate limit enforcement
+      return;
+    }
+
     const dailyKey = RedisKeyBuilder.rateLimitFriendRequest(userId, 'daily');
     const weeklyKey = RedisKeyBuilder.rateLimitFriendRequest(userId, 'weekly');
 
@@ -1006,7 +1072,7 @@ export class FriendshipService {
   /**
    * Get friend count (cached)
    */
-  private async getFriendCount(
+  async getFriendCount(
     userId: string,
     status: FriendshipStatus = FriendshipStatus.ACCEPTED,
   ): Promise<number> {

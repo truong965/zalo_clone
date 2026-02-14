@@ -111,6 +111,13 @@ export const SocketEvents = {
   SERVER_HEARTBEAT: 'server_heartbeat',
   AUTH_FORCE_LOGOUT: 'auth.force_logout',
 
+  // === FRIENDSHIP EVENTS (Server → Client) ===
+  FRIEND_REQUEST_RECEIVED: 'friendship:requestReceived',
+  FRIEND_REQUEST_ACCEPTED: 'friendship:requestAccepted',
+  FRIEND_REQUEST_CANCELLED: 'friendship:requestCancelled',
+  FRIEND_REQUEST_DECLINED: 'friendship:requestDeclined',
+  FRIEND_UNFRIENDED: 'friendship:unfriended',
+
   // === SOCKET LIFECYCLE (internal EventEmitter events) ===
   USER_SOCKET_CONNECTED: 'user.socket.connected',
   USER_SOCKET_DISCONNECTED: 'user.socket.disconnected',

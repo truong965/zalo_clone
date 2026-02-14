@@ -15,7 +15,7 @@ import { GetFriendsQueryDto } from '../dto/friendship.dto';
 @ApiTags('Social - Friendships')
 @Controller('friendships')
 export class FriendshipsController {
-  constructor(private readonly friendshipService: FriendshipService) {}
+  constructor(private readonly friendshipService: FriendshipService) { }
   // ==============================
   // 2. FRIEND LIST & MANAGEMENT
   // ==============================
@@ -36,6 +36,13 @@ export class FriendshipsController {
     @Param('targetUserId', ParseUUIDPipe) targetUserId: string,
   ) {
     return await this.friendshipService.removeFriendship(user.id, targetUserId);
+  }
+
+  @Get('count')
+  @ApiOperation({ summary: 'Get my friend count' })
+  async getFriendCount(@CurrentUser() user: User) {
+    const count = await this.friendshipService.getFriendCount(user.id);
+    return { count };
   }
 
   @Get('mutual/:targetUserId')

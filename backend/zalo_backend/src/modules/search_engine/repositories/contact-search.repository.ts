@@ -124,6 +124,9 @@ export class ContactSearchRepository {
           WHEN f.status = 'PENDING' THEN 'REQUEST'
           ELSE 'NONE'
         END as relationship_status,
+        -- Friendship context for pending requests
+        f.id as friendship_id,
+        f.requester_id,
         -- Check if alias exists
         CASE WHEN uc.alias_name IS NOT NULL THEN true ELSE false END as has_alias,
         -- Existing DIRECT conversation ID (null if never messaged)
@@ -143,10 +146,11 @@ export class ContactSearchRepository {
       -- Optional alias lookup
       LEFT JOIN user_contacts uc 
         ON uc.owner_id = $1::uuid AND uc.contact_user_id = u.id
-      -- Friendship lookup (need to handle both orders)
+      -- Friendship lookup (need to handle both orders, exclude soft-deleted)
       LEFT JOIN friendships f ON 
-        (f.user1_id = $1::uuid AND f.user2_id = u.id) 
-        OR (f.user1_id = u.id AND f.user2_id = $1::uuid)
+        ((f.user1_id = $1::uuid AND f.user2_id = u.id) 
+        OR (f.user1_id = u.id AND f.user2_id = $1::uuid))
+        AND f.deleted_at IS NULL
       WHERE 
         -- Searcher is looking for other users
         u.id != $1::uuid
@@ -341,31 +345,70 @@ export class ContactSearchRepository {
    * Map raw results to ContactSearchResultDto.
    * Accepts heterogeneous shapes: raw SQL (snake_case) and Prisma (camelCase).
    * Uses Record<string, unknown> to safely handle both shapes without `any`.
+   *
+   * Privacy enforcement: If target user's showProfile = 'CONTACTS' and
+   * the relationship is not 'FRIEND', sensitive fields are omitted.
    */
-  mapToDto(rawContacts: Record<string, unknown>[]): ContactSearchResultDto[] {
-    return rawContacts.map((contact) => ({
-      id: contact.id as string,
-      phoneNumber: (contact.phone_number ?? contact.phoneNumber) as string,
-      displayName: (contact.display_name ?? contact.displayName) as string,
-      displayNameFinal:
-        ((contact.display_name_final ??
-          contact.displayNameFinal ??
-          contact.display_name ??
-          contact.displayName) as string) || '',
-      avatarUrl:
-        ((contact.avatar_url ?? contact.avatarUrl) as string | null) ??
-        undefined,
-      relationshipStatus: ((contact.relationship_status as string) ||
-        'NONE') as 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED',
-      hasAlias: (contact.has_alias ?? contact.hasAlias ?? false) as boolean,
-      aliasPriority: (contact.relevance_score as number) || 4,
-      isBlocked: contact.relationship_status === 'BLOCKED',
-      canMessage: contact.canMessage as boolean | undefined,
-      isOnline: contact.isOnline as boolean | undefined,
-      lastSeenAt: contact.lastSeenAt as Date | undefined,
-      existingConversationId:
-        ((contact.existing_conversation_id ??
-          contact.existingConversationId) as string | null) ?? undefined,
-    }));
+  mapToDto(
+    rawContacts: Record<string, unknown>[],
+    viewerId: string,
+    canMessage = false,
+  ): ContactSearchResultDto[] {
+    return rawContacts.map((contact) => {
+      const relationshipStatus = ((contact.relationship_status as string) ||
+        (contact.relationshipStatus as string) ||
+        'NONE') as 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED';
+
+      const showProfile =
+        ((contact.showProfile as string | undefined) ??
+          ((contact.privacySettings as { showProfile?: string } | undefined)
+            ?.showProfile)) ?? 'CONTACTS';
+
+      const isFriend = relationshipStatus === 'FRIEND';
+      const effectiveCanMessage =
+        (contact.canMessage as boolean | undefined) ?? canMessage ?? false;
+      const isPrivacyLimited =
+        showProfile === 'CONTACTS' && !isFriend;
+
+      const requesterId =
+        (contact.requester_id ?? contact.requesterId) as string | undefined;
+      const pendingRequestId =
+        (contact.friendship_id ?? contact.friendshipId) as string | undefined;
+
+      const requestDirection =
+        relationshipStatus === 'REQUEST' && requesterId
+          ? requesterId === viewerId
+            ? 'OUTGOING'
+            : 'INCOMING'
+          : undefined;
+
+      return {
+        id: contact.id as string,
+        phoneNumber:
+          (contact.phone_number ?? contact.phoneNumber) as string | undefined,
+        displayName: (contact.display_name ?? contact.displayName) as string,
+        displayNameFinal:
+          ((contact.display_name_final ??
+            contact.displayNameFinal ??
+            contact.display_name ??
+            contact.displayName) as string) || '',
+        avatarUrl:
+          ((contact.avatar_url ?? contact.avatarUrl) as string | null) ??
+          undefined,
+        relationshipStatus,
+        hasAlias: (contact.has_alias ?? contact.hasAlias ?? false) as boolean,
+        aliasPriority: (contact.relevance_score as number) || 4,
+        isBlocked: relationshipStatus === 'BLOCKED',
+        canMessage: effectiveCanMessage,
+        isOnline: contact.isOnline as boolean | undefined,
+        lastSeenAt: contact.lastSeenAt as Date | undefined,
+        isPrivacyLimited,
+        existingConversationId:
+          ((contact.existing_conversation_id ??
+            contact.existingConversationId) as string | null) ?? undefined,
+        pendingRequestId,
+        requestDirection,
+      };
+    });
   }
 }

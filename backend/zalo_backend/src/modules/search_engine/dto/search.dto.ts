@@ -163,11 +163,13 @@ export class HighlightLocation {
 
 export class ContactSearchResultDto {
   id: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   displayName: string; // Alias or real name
   displayNameFinal: string; // Returned name to show
   avatarUrl?: string;
   relationshipStatus: 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED';
+  requestDirection?: 'OUTGOING' | 'INCOMING';
+  pendingRequestId?: string;
   hasAlias: boolean;
   aliasPriority: number; // 1=alias exists, 2=friend, 3=request, 4=none
   isBlocked?: boolean;
@@ -176,7 +178,7 @@ export class ContactSearchResultDto {
   canMessage?: boolean; // Can send message based on whoCanMessageMe privacy
   lastSeenAt?: Date; // Only included if showOnlineStatus allows
   isOnline?: boolean; // Only included if showOnlineStatus allows
-
+  isPrivacyLimited?: boolean; // True if any privacy settings limit info shown to requester
   // Existing DIRECT conversation (null if never messaged)
   existingConversationId?: string;
 }

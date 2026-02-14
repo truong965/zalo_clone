@@ -36,6 +36,21 @@ export class FriendshipResponseDto {
   expiresAt?: Date;
 }
 
+export class FriendRequestUserDto {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+}
+
+export class FriendRequestWithUserDto {
+  id: string;
+  status: FriendshipStatus;
+  createdAt: Date;
+  expiresAt?: Date;
+  requester: FriendRequestUserDto;
+  target: FriendRequestUserDto;
+}
+
 export class FriendWithUserDto {
   friendshipId: string;
   userId: string;

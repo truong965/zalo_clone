@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
+import { RelationshipType } from '../utils/ranking.util';
 import { SearchErrorHandler } from '../utils/search-error.handler';
 import {
   ContactSearchRequestDto,
@@ -95,12 +96,16 @@ export class ContactSearchService {
             // Only include lastSeenAt/isOnline if privacy allows
             lastSeenAt: ctx.canSeeOnlineStatus ? contact.lastSeenAt : undefined,
             isOnline: ctx.canSeeOnlineStatus ? contact.isOnline : undefined,
+            showProfile: ctx.showProfile,
           };
         })
         .filter((c) => c !== null);
 
       // Map to DTOs
-      const results = this.contactSearchRepository.mapToDto(filteredContacts);
+      const results = this.contactSearchRepository.mapToDto(
+        filteredContacts,
+        userId,
+      );
 
       // Build next cursor from last raw contact (before privacy filtering)
       let nextCursor: string | undefined;
@@ -170,7 +175,10 @@ export class ContactSearchService {
         limit,
       );
 
-      const results = this.contactSearchRepository.mapToDto(rawContacts);
+      const results = this.contactSearchRepository.mapToDto(
+        rawContacts,
+        userId,
+      );
 
       // Cache result (5 minutes)
       await this.cacheService.set(
@@ -213,7 +221,10 @@ export class ContactSearchService {
         offset,
       );
 
-      const results = this.contactSearchRepository.mapToDto(rawContacts);
+      const results = this.contactSearchRepository.mapToDto(
+        rawContacts,
+        userId,
+      );
 
       // Cache result (5 minutes)
       await this.cacheService.set(
@@ -256,7 +267,6 @@ export class ContactSearchService {
         viewerId,
         targetId,
       );
-
       if (!notBlocked) {
         throw new ForbiddenException('This user is blocked');
       }
@@ -271,8 +281,29 @@ export class ContactSearchService {
         return null;
       }
 
+      // check can message 
+      const canMessage = await this.validationService.canUserMessage(
+        viewerId,
+        targetId,
+      );
+
+      // Determine friendship status to compute privacy-limited fields correctly
+      const friendshipStatus =
+        await this.validationService.getFriendshipStatus(viewerId, targetId);
+
+      const relationshipStatus: 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED' =
+        friendshipStatus === RelationshipType.FRIEND
+          ? 'FRIEND'
+          : friendshipStatus === RelationshipType.REQUEST_PENDING
+            ? 'REQUEST'
+            : 'NONE';
+
       // Map to DTO
-      const [result] = this.contactSearchRepository.mapToDto([rawContact]);
+      const [result] = this.contactSearchRepository.mapToDto(
+        [{ ...rawContact, relationship_status: relationshipStatus }],
+        viewerId,
+        canMessage,
+      );
 
       return result;
     } catch (error) {

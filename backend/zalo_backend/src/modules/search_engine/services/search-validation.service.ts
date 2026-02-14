@@ -110,12 +110,11 @@ export class SearchValidationService {
     const [u1, u2] =
       userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
 
-    const friendship = await this.prisma.friendship.findUnique({
+    const friendship = await this.prisma.friendship.findFirst({
       where: {
-        user1Id_user2Id: {
-          user1Id: u1,
-          user2Id: u2,
-        },
+        user1Id: u1,
+        user2Id: u2,
+        deletedAt: null,
       },
       select: { status: true },
     });
@@ -348,6 +347,7 @@ export class SearchValidationService {
         canSeeOnlineStatus: boolean;
         isBlocked: boolean;
         friendshipStatus: RelationshipType;
+        showProfile: 'EVERYONE' | 'CONTACTS';
       }
     >
   > {
@@ -359,6 +359,7 @@ export class SearchValidationService {
         canSeeOnlineStatus: boolean;
         isBlocked: boolean;
         friendshipStatus: RelationshipType;
+        showProfile: 'EVERYONE' | 'CONTACTS';
       }
     >();
 
@@ -385,6 +386,7 @@ export class SearchValidationService {
           canSeeOnlineStatus: false,
           isBlocked: true,
           friendshipStatus: RelationshipType.NONE,
+          showProfile: 'CONTACTS',
         });
       }
     }
@@ -424,6 +426,7 @@ export class SearchValidationService {
         canSeeOnlineStatus: (settings?.showOnlineStatus ?? true) || isFriend,
         isBlocked: false,
         friendshipStatus: friendship,
+        showProfile,
       });
     }
 
@@ -450,6 +453,7 @@ export class SearchValidationService {
           { user1Id: userId, user2Id: { in: targetUserIds } },
           { user1Id: { in: targetUserIds }, user2Id: userId },
         ],
+        deletedAt: null,
       },
       select: { user1Id: true, user2Id: true, status: true },
     });
