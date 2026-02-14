@@ -40,7 +40,7 @@ export type {
 export { SEARCH_TAB_TO_TYPE, EMPTY_SEARCH_RESULTS } from './types';
 
 // Store
-export { useGlobalSearchStore, useConversationSearchStore, useSearchStore } from './stores/search.store';
+export { useGlobalSearchStore, useConversationSearchStore, useFriendSearchStore, useSearchStore } from './stores/search.store';
 export type { SearchState, SearchStoreApi } from './stores/search.store';
 
 // Hooks

@@ -265,17 +265,20 @@ export interface MessageSearchResult {
  */
 export interface ContactSearchResult {
       id: string;
-      phoneNumber: string;
+      phoneNumber?: string;
       displayName: string;
       displayNameFinal: string;
       avatarUrl?: string;
       relationshipStatus: RelationshipStatus;
+      requestDirection?: 'OUTGOING' | 'INCOMING';
+      pendingRequestId?: string;
       hasAlias: boolean;
       aliasPriority: number;
       isBlocked?: boolean;
       canMessage?: boolean;
       lastSeenAt?: string; // ISO date
       isOnline?: boolean;
+      isPrivacyLimited?: boolean;
       /** Existing DIRECT conversation ID (null/undefined if never messaged) */
       existingConversationId?: string;
 }

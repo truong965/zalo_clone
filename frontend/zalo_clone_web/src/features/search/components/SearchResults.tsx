@@ -66,6 +66,10 @@ interface SearchResultsProps {
       onSendMessage?: (contactId: string) => void;
       /** Called when add friend */
       onAddFriend?: (contactId: string) => void;
+      /** Called when accept incoming friend request */
+      onAcceptRequest?: (requestId: string, contactId: string) => void;
+      /** Called when cancel outgoing friend request */
+      onCancelRequest?: (requestId: string, contactId: string) => void;
 }
 
 export function SearchResults({
@@ -84,6 +88,8 @@ export function SearchResults({
       onMediaClick,
       onSendMessage,
       onAddFriend,
+      onAcceptRequest,
+      onCancelRequest,
 }: SearchResultsProps) {
       const isLoading = status === 'loading';
       const hasSearched = status === 'success' || status === 'error';
@@ -165,6 +171,8 @@ export function SearchResults({
                                                                   onClick={onContactClick}
                                                                   onSendMessage={onSendMessage}
                                                                   onAddFriend={onAddFriend}
+                                                                  onAcceptRequest={onAcceptRequest}
+                                                                  onCancelRequest={onCancelRequest}
                                                             />
                                                       ))}
                                                 </ResultSection>
@@ -226,6 +234,8 @@ export function SearchResults({
                                                             onClick={onContactClick}
                                                             onSendMessage={onSendMessage}
                                                             onAddFriend={onAddFriend}
+                                                            onAcceptRequest={onAcceptRequest}
+                                                            onCancelRequest={onCancelRequest}
                                                       />
                                                 ))
                                           ) : (

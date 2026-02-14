@@ -17,6 +17,8 @@ interface ConversationSidebarProps {
       isLoading?: boolean;
       /** Open global search panel (Option A) */
       onSearchClick?: () => void;
+      /** Open friendship search modal */
+      onFriendSearchClick?: () => void;
 }
 
 export function ConversationSidebar({
@@ -27,6 +29,7 @@ export function ConversationSidebar({
       hasMore = false,
       isLoading = false,
       onSearchClick,
+      onFriendSearchClick,
 }: ConversationSidebarProps) {
       const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
@@ -62,7 +65,12 @@ export function ConversationSidebar({
                                     }
                               }}
                         />
-                        <Button type="text" icon={<UserAddOutlined />} className="text-gray-500" />
+                        <Button
+                              type="text"
+                              icon={<UserAddOutlined />}
+                              className="text-gray-500"
+                              onClick={onFriendSearchClick}
+                        />
                         <Button type="text" icon={<UsergroupAddOutlined />} className="text-gray-500" />
                   </div>
 

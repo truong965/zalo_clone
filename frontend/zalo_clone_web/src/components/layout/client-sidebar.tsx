@@ -1,4 +1,4 @@
-import { Layout, Avatar, Tooltip, Popover, Button, Modal } from 'antd';
+import { Layout, Avatar, Tooltip, Popover, Button, Modal, Badge } from 'antd';
 import {
   MessageOutlined,
   ContainerOutlined,
@@ -12,6 +12,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth';
 import { useState } from 'react';
 import { UserProfileModal } from '@/features/profile/components/user-profile-modal';
+import { useFriendshipStore } from '@/features/contacts/stores/friendship.store';
 
 const { Sider } = Layout;
 
@@ -22,9 +23,10 @@ interface SidebarItemProps {
   isActive?: boolean;
   onClick?: () => void;
   isBottom?: boolean; // Thêm props để phân biệt icon trên và dưới
+  badgeCount?: number; // Badge count hiển thị trên icon
 }
 
-const SidebarIcon = ({ icon, label, isActive, onClick, isBottom }: SidebarItemProps) => (
+const SidebarIcon = ({ icon, label, isActive, onClick, isBottom, badgeCount }: SidebarItemProps) => (
   <Tooltip title={label} placement="right">
     <div
       onClick={onClick}
@@ -32,14 +34,15 @@ const SidebarIcon = ({ icon, label, isActive, onClick, isBottom }: SidebarItemPr
         w-12 h-12 flex items-center justify-center rounded-xl cursor-pointer transition-all mx-auto mb-1
         ${isActive
           ? 'bg-[#005AE0] text-white shadow-sm'
-          : 'text-white/80 hover:bg-[#005AE0] hover:text-white' // Chỉnh text-white/80 để màu icon sáng lên trên nền xanh
+          : 'text-white/80 hover:bg-[#005AE0] hover:text-white'
         }
       `}
     >
-      {/* Tăng kích thước icon lên text-2xl (24px) hoặc text-3xl tùy ý */}
-      <div className={`${isBottom ? 'text-xl' : 'text-2xl'}`}>
-        {icon}
-      </div>
+      <Badge count={badgeCount} size="small" offset={[2, -2]}>
+        <div className={`${isBottom ? 'text-xl' : 'text-2xl'} ${isActive ? 'text-white' : 'text-white/80'}`}>
+          {icon}
+        </div>
+      </Badge>
     </div>
   </Tooltip>
 );
@@ -48,6 +51,7 @@ export function ClientSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore(); // Lấy user từ store
+  const pendingReceivedCount = useFriendshipStore((s) => s.pendingReceivedCount);
 
   // State quản lý Modal
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -167,6 +171,7 @@ export function ClientSidebar() {
                 label="Danh bạ"
                 isActive={location.pathname.startsWith('/contacts')}
                 onClick={() => navigate('/contacts')}
+                badgeCount={pendingReceivedCount}
               />
             </div>
           </div>

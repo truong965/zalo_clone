@@ -1,213 +1,155 @@
 /**
  * Contacts Page
+ *
+ * Tabs: Bạn bè | Lời mời kết bạn | Nhóm (placeholder) | Chặn (placeholder)
+ * Uses FriendList and FriendRequestList from contacts feature module.
+ * Group and Block tabs show basic placeholder UI (no logic implemented).
  */
 
-import { Card, List, Avatar, Button, Space, Typography, Tabs, Input, Empty, Badge } from 'antd';
-import { UserAddOutlined, UserDeleteOutlined, SearchOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Badge, Empty, Typography } from 'antd';
+import {
+  TeamOutlined,
+  UserAddOutlined,
+  UsergroupAddOutlined,
+  StopOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { useState } from 'react';
+import { FriendList } from '@/features/contacts/components/friend-list';
+import { FriendRequestList } from '@/features/contacts/components/friend-request-list';
+import { useFriendshipStore } from '@/features/contacts/stores/friendship.store';
 
-const { Title } = Typography;
+const { Text } = Typography;
 
-interface Contact {
-  id: string;
-  name: string;
-  avatar: string;
-  status: string;
-  isOnline: boolean;
-}
+type ContactTab = 'friends' | 'requests' | 'groups' | 'blocked';
 
-interface FriendRequest {
-  id: string;
-  name: string;
-  avatar: string;
-  status: 'pending' | 'blocked';
+interface TabConfig {
+  key: ContactTab;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number;
 }
 
 export function ContactsPage() {
-  const [contacts] = useState<Contact[]>([
-    {
-      id: '1',
-      name: 'Alice Johnson',
-      avatar: 'https://i.pravatar.cc/150?img=1',
-      status: 'Available',
-      isOnline: true,
-    },
-    {
-      id: '2',
-      name: 'Bob Smith',
-      avatar: 'https://i.pravatar.cc/150?img=2',
-      status: 'In a call',
-      isOnline: true,
-    },
-    {
-      id: '3',
-      name: 'Charlie Brown',
-      avatar: 'https://i.pravatar.cc/150?img=3',
-      status: 'Away',
-      isOnline: false,
-    },
-  ]);
+  const [activeTab, setActiveTab] = useState<ContactTab>('friends');
+  const pendingReceivedCount = useFriendshipStore((s) => s.pendingReceivedCount);
 
-  const [requests] = useState<FriendRequest[]>([
-    {
-      id: '1',
-      name: 'David Lee',
-      avatar: 'https://i.pravatar.cc/150?img=4',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      name: 'Emma Wilson',
-      avatar: 'https://i.pravatar.cc/150?img=5',
-      status: 'pending',
-    },
-  ]);
-
-  const [blockedUsers] = useState<Contact[]>([
-    {
-      id: '1',
-      name: 'Blocked User 1',
-      avatar: 'https://i.pravatar.cc/150?img=6',
-      status: 'Blocked',
-      isOnline: false,
-    },
-  ]);
-
-  const tabItems = [
+  const tabs: TabConfig[] = [
     {
       key: 'friends',
-      label: `Friends (${contacts.length})`,
-      children: (
-        <div className="space-y-4">
-          <Input
-            prefix={<SearchOutlined />}
-            placeholder="Search friends..."
-          />
-          <List
-            dataSource={contacts}
-            renderItem={(contact) => (
-              <Card className="mb-2 hover:shadow-md transition">
-                <List.Item>
-                  <List.Item.Meta
-                    avatar={
-                      <Badge
-                        count={contact.isOnline ? <span className="bg-green-500 rounded-full w-3 h-3"></span> : null}
-                      >
-                        <Avatar src={contact.avatar} size="large">
-                          {contact.name[0]}
-                        </Avatar>
-                      </Badge>
-                    }
-                    title={contact.name}
-                    description={contact.status}
-                  />
-                  <Space>
-                    <Button
-                      type="primary"
-                      icon={<UserAddOutlined />}
-                      size="small"
-                    >
-                      Message
-                    </Button>
-                    <Button
-                      danger
-                      icon={<UserDeleteOutlined />}
-                      size="small"
-                    >
-                      Remove
-                    </Button>
-                  </Space>
-                </List.Item>
-              </Card>
-            )}
-          />
-        </div>
-      ),
+      label: 'Bạn bè',
+      icon: <TeamOutlined />,
     },
     {
       key: 'requests',
-      label: `Friend Requests (${requests.length})`,
-      children: (
-        <div className="space-y-4">
-          {requests.length > 0 ? (
-            requests.map((request) => (
-              <Card key={request.id}>
-                <List.Item>
-                  <List.Item.Meta
-                    avatar={
-                      <Avatar src={request.avatar} size="large">
-                        {request.name[0]}
-                      </Avatar>
-                    }
-                    title={request.name}
-                    description="Wants to add you as a friend"
-                  />
-                  <Space>
-                    <Button
-                      type="primary"
-                      icon={<CheckOutlined />}
-                      size="small"
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      danger
-                      icon={<CloseOutlined />}
-                      size="small"
-                    >
-                      Decline
-                    </Button>
-                  </Space>
-                </List.Item>
-              </Card>
-            ))
-          ) : (
-            <Empty description="No friend requests" />
-          )}
-        </div>
-      ),
+      label: 'Lời mời kết bạn',
+      icon: <UserAddOutlined />,
+      badge: pendingReceivedCount,
+    },
+    {
+      key: 'groups',
+      label: 'Nhóm',
+      icon: <UsergroupAddOutlined />,
     },
     {
       key: 'blocked',
-      label: `Blocked Users (${blockedUsers.length})`,
-      children: (
-        <div className="space-y-4">
-          {blockedUsers.length > 0 ? (
-            <List
-              dataSource={blockedUsers}
-              renderItem={(user) => (
-                <Card className="mb-2">
-                  <List.Item>
-                    <List.Item.Meta
-                      avatar={
-                        <Avatar src={user.avatar} size="large">
-                          {user.name[0]}
-                        </Avatar>
-                      }
-                      title={user.name}
-                    />
-                    <Button
-                      type="default"
-                      size="small"
-                    >
-                      Unblock
-                    </Button>
-                  </List.Item>
-                </Card>
-              )}
-            />
-          ) : (
-            <Empty description="No blocked users" />
-          )}
-        </div>
-      ),
+      label: 'Chặn',
+      icon: <StopOutlined />,
     },
   ];
 
   return (
-    <div className="p-4">
-      <Title level={2}>Contacts & Friends</Title>
-      <Tabs items={tabItems} />
+    <div className="h-full flex">
+      {/* Left sidebar — tab navigation */}
+      <div className="w-[280px] border-r border-gray-200 flex flex-col h-full bg-white">
+        {/* Header */}
+        <div className="px-4 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <UserOutlined className="text-lg text-blue-600" />
+            <Text strong className="text-base">Danh bạ</Text>
+          </div>
+        </div>
+
+        {/* Tab list */}
+        <nav className="flex-1 py-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${activeTab === tab.key
+                  ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
+                  : 'text-gray-700 hover:bg-gray-50'
+                }`}
+            >
+              <span className="text-lg">{tab.icon}</span>
+              <span className="flex-1 text-sm font-medium">{tab.label}</span>
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <Badge count={tab.badge} size="small" />
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Right content — active tab content */}
+      <div className="flex-1 h-full overflow-hidden">
+        {activeTab === 'friends' && <FriendList />}
+        {activeTab === 'requests' && <FriendRequestList />}
+        {activeTab === 'groups' && <GroupsPlaceholder />}
+        {activeTab === 'blocked' && <BlockedPlaceholder />}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder tabs — basic UI only, no logic
+// ---------------------------------------------------------------------------
+
+function GroupsPlaceholder() {
+  return (
+    <div className="h-full flex flex-col">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <Text className="text-sm text-gray-500">Nhóm</Text>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        <Empty
+          image={<UsergroupAddOutlined className="text-5xl text-gray-300" />}
+          description={
+            <div className="space-y-1">
+              <Text type="secondary">Tính năng nhóm đang được phát triển</Text>
+              <br />
+              <Text type="secondary" className="text-xs">
+                Bạn sẽ sớm có thể tạo và quản lý nhóm chat tại đây.
+              </Text>
+            </div>
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function BlockedPlaceholder() {
+  return (
+    <div className="h-full flex flex-col">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <Text className="text-sm text-gray-500">Người dùng bị chặn</Text>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        <Empty
+          image={<StopOutlined className="text-5xl text-gray-300" />}
+          description={
+            <div className="space-y-1">
+              <Text type="secondary">Tính năng chặn đang được phát triển</Text>
+              <br />
+              <Text type="secondary" className="text-xs">
+                Bạn sẽ sớm có thể quản lý danh sách chặn tại đây.
+              </Text>
+            </div>
+          }
+        />
+      </div>
     </div>
   );
 }

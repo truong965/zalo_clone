@@ -417,5 +417,8 @@ export const useGlobalSearchStore = createSearchStore('GlobalSearchStore');
 /** Store cho ChatSearchSidebar (in-conversation search) */
 export const useConversationSearchStore = createSearchStore('ConversationSearchStore');
 
+/** Store cho tim kiem ket ban theo so dien thoai */
+export const useFriendSearchStore = createSearchStore('FriendSearchStore');
+
 /** @deprecated Dùng useGlobalSearchStore hoặc useConversationSearchStore */
 export const useSearchStore = useGlobalSearchStore;

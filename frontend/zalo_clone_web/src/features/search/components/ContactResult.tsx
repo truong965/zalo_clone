@@ -9,7 +9,12 @@
  */
 
 import { Avatar, Typography, Tag, Button } from 'antd';
-import { MessageOutlined, UserAddOutlined } from '@ant-design/icons';
+import {
+      MessageOutlined,
+      UserAddOutlined,
+      CheckOutlined,
+      RollbackOutlined,
+} from '@ant-design/icons';
 import type { ContactSearchResult } from '../types';
 import { getRelationshipLabel } from '../utils/search.util';
 
@@ -20,10 +25,22 @@ interface ContactResultProps {
       onClick?: (result: ContactSearchResult) => void;
       onSendMessage?: (contactId: string) => void;
       onAddFriend?: (contactId: string) => void;
+      onAcceptRequest?: (requestId: string, contactId: string) => void;
+      onCancelRequest?: (requestId: string, contactId: string) => void;
 }
 
-export function ContactResult({ data, onClick, onSendMessage, onAddFriend }: ContactResultProps) {
-      const relationLabel = getRelationshipLabel(data.relationshipStatus);
+export function ContactResult({
+      data,
+      onClick,
+      onSendMessage,
+      onAddFriend,
+      onAcceptRequest,
+      onCancelRequest,
+}: ContactResultProps) {
+      const relationLabel = getRelationshipLabel(
+            data.relationshipStatus,
+            data.requestDirection,
+      );
 
       const tagColor =
             data.relationshipStatus === 'FRIEND'
@@ -63,9 +80,11 @@ export function ContactResult({ data, onClick, onSendMessage, onAddFriend }: Con
                                     {relationLabel}
                               </Tag>
                         </div>
-                        <Text className="text-xs text-gray-400 block">
-                              {data.phoneNumber}
-                        </Text>
+                        {data.phoneNumber ? (
+                              <Text className="text-xs text-gray-400 block">
+                                    {data.phoneNumber}
+                              </Text>
+                        ) : null}
                   </div>
 
                   {/* Actions — show on hover */}
@@ -93,6 +112,32 @@ export function ContactResult({ data, onClick, onSendMessage, onAddFriend }: Con
                                     onClick={(e) => {
                                           e.stopPropagation();
                                           onAddFriend?.(data.id);
+                                    }}
+                              />
+                        )}
+                        {data.relationshipStatus === 'REQUEST' && data.requestDirection === 'OUTGOING' && data.pendingRequestId && (
+                              <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<RollbackOutlined />}
+                                    className="text-orange-500"
+                                    title="Thu hồi lời mời"
+                                    onClick={(e) => {
+                                          e.stopPropagation();
+                                          onCancelRequest?.(data.pendingRequestId!, data.id);
+                                    }}
+                              />
+                        )}
+                        {data.relationshipStatus === 'REQUEST' && data.requestDirection === 'INCOMING' && data.pendingRequestId && (
+                              <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<CheckOutlined />}
+                                    className="text-green-600"
+                                    title="Chấp nhận kết bạn"
+                                    onClick={(e) => {
+                                          e.stopPropagation();
+                                          onAcceptRequest?.(data.pendingRequestId!, data.id);
                                     }}
                               />
                         )}

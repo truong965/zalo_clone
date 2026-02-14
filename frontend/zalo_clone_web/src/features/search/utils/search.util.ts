@@ -163,12 +163,13 @@ export function getConversationTypeLabel(
  */
 export function getRelationshipLabel(
       status: 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED',
+      direction?: 'OUTGOING' | 'INCOMING',
 ): string {
       switch (status) {
             case 'FRIEND':
                   return 'Bạn bè';
             case 'REQUEST':
-                  return 'Đã gửi lời mời';
+                  return direction === 'INCOMING' ? 'Có lời mời kết bạn' : 'Đã gửi lời mời';
             case 'BLOCKED':
                   return 'Đã chặn';
             case 'NONE':

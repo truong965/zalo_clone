@@ -17,7 +17,11 @@
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { debounce } from 'lodash-es';
 import { useSearchSocket } from './use-search-socket';
-import { useGlobalSearchStore, useConversationSearchStore } from '../stores/search.store';
+import {
+      useGlobalSearchStore,
+      useConversationSearchStore,
+      useFriendSearchStore,
+} from '../stores/search.store';
 import type { SearchStoreApi } from '../stores/search.store';
 import { searchService } from '../api/search.service';
 import type {
@@ -38,16 +42,19 @@ export interface UseSearchOptions {
       /** Auto-subscribe when keyword changes (default: true) */
       autoSubscribe?: boolean;
       /** Which store instance to use (default: 'global') */
-      store?: 'global' | 'conversation';
+      store?: 'global' | 'conversation' | 'friend';
 }
 
 export function useSearch(options?: UseSearchOptions) {
       const { conversationId, autoSubscribe = true, store: storeOption = 'global' } = options ?? {};
 
       // --- Select store instance based on option ---
-      const useStore: SearchStoreApi = storeOption === 'conversation'
-            ? useConversationSearchStore
-            : useGlobalSearchStore;
+      const useStore: SearchStoreApi =
+            storeOption === 'conversation'
+                  ? useConversationSearchStore
+                  : storeOption === 'friend'
+                        ? useFriendSearchStore
+                        : useGlobalSearchStore;
 
       // --- Store selectors (fine-grained to avoid unnecessary re-renders) ---
       const keyword = useStore((s) => s.keyword);
@@ -416,6 +423,7 @@ export function useSearch(options?: UseSearchOptions) {
             triggerSearch,
             mergeNewMatches,
             setFilters,
+            setSearchType,
             openSearch,
             closeSearch,
             resetSearch,

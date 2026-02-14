@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* Prevent white flash on reload by keeping a persistent light background */
+html,
+body {
+      height: 100%;
+      width: 100%;
+      background-color: #f5f7fb;
+      color: #0f172a;
+      margin: 0;
+}
+
+#root {
+      min-height: 100%;
+      background-color: inherit;
+}
+
 /* Prevent global scroll */
 /* html,
 body {

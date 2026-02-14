@@ -5,11 +5,9 @@
  * → Hiện modal gợi ý gửi lời mời kết bạn.
  */
 
-import { useState } from 'react';
 import { Modal, Button, Avatar, notification } from 'antd';
 import { UserAddOutlined } from '@ant-design/icons';
-import apiClient from '@/lib/axios';
-import { API_ENDPOINTS } from '@/constants/api-endpoints';
+import { useSendFriendRequest } from '../api/friendship.api';
 
 interface FriendRequestModalProps {
       visible: boolean;
@@ -22,27 +20,24 @@ interface FriendRequestModalProps {
 }
 
 export function FriendRequestModal({ visible, target, onClose }: FriendRequestModalProps) {
-      const [loading, setLoading] = useState(false);
+      const sendRequest = useSendFriendRequest();
 
-      const handleSendRequest = async () => {
+      const handleSendRequest = () => {
             if (!target) return;
-            setLoading(true);
-            try {
-                  await apiClient.post(API_ENDPOINTS.FRIENDS.SEND_REQUEST, {
-                        friendId: target.userId,
-                  });
-                  notification.success({
-                        message: 'Đã gửi lời mời kết bạn',
-                        description: `Lời mời kết bạn đã được gửi đến ${target.displayName}`,
-                  });
-                  onClose();
-            } catch (error: unknown) {
-                  const axiosErr = error as { response?: { data?: { message?: string } } };
-                  const msg = axiosErr?.response?.data?.message || 'Không thể gửi lời mời kết bạn';
-                  notification.error({ message: msg });
-            } finally {
-                  setLoading(false);
-            }
+            sendRequest.mutate(target.userId, {
+                  onSuccess: () => {
+                        notification.success({
+                              message: 'Đã gửi lời mời kết bạn',
+                              description: `Lời mời kết bạn đã được gửi đến ${target.displayName}`,
+                        });
+                        onClose();
+                  },
+                  onError: (error: unknown) => {
+                        const axiosErr = error as { response?: { data?: { message?: string } } };
+                        const msg = axiosErr?.response?.data?.message || 'Không thể gửi lời mời kết bạn';
+                        notification.error({ message: msg });
+                  },
+            });
       };
 
       return (
@@ -84,7 +79,7 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
                                           type="primary"
                                           block
                                           icon={<UserAddOutlined />}
-                                          loading={loading}
+                                          loading={sendRequest.isPending}
                                           onClick={handleSendRequest}
                                     >
                                           Kết bạn

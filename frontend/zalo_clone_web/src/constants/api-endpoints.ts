@@ -45,15 +45,20 @@ export const API_ENDPOINTS = {
     CONTEXT: '/api/v1/messages/context',
   },
 
-  // Contacts - Friends
+  // Contacts - Friendships (/friendships controller)
   FRIENDS: {
-    GET_ALL: '/api/v1/friends',
-    GET_BY_ID: (id: string) => `/api/v1/friends/${id}`,
-    SEND_REQUEST: '/api/v1/friends/request',
-    ACCEPT_REQUEST: (id: string) => `/api/v1/friends/request/${id}/accept`,
-    REJECT_REQUEST: (id: string) => `/api/v1/friends/request/${id}/reject`,
-    REMOVE: (id: string) => `/api/v1/friends/${id}`,
-    GET_REQUESTS: '/api/v1/friends/requests',
+    GET_ALL: '/api/v1/friendships',
+    UNFRIEND: (targetUserId: string) => `/api/v1/friendships/${targetUserId}`,
+    MUTUAL: (targetUserId: string) => `/api/v1/friendships/mutual/${targetUserId}`,
+    CHECK_STATUS: (targetUserId: string) => `/api/v1/friendships/check/${targetUserId}`,
+    COUNT: '/api/v1/friendships/count',
+    // Friend requests (/friend-requests controller)
+    SEND_REQUEST: '/api/v1/friend-requests',
+    GET_RECEIVED: '/api/v1/friend-requests/received',
+    GET_SENT: '/api/v1/friend-requests/sent',
+    ACCEPT_REQUEST: (id: string) => `/api/v1/friend-requests/${id}/accept`,
+    DECLINE_REQUEST: (id: string) => `/api/v1/friend-requests/${id}/decline`,
+    CANCEL_REQUEST: (id: string) => `/api/v1/friend-requests/${id}`,
   },
 
   // Block

@@ -6,6 +6,7 @@ import { ChatInput } from './components/chat-input';
 import { ChatSearchSidebar } from './components/chat-search-sidebar';
 import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
+import { FriendshipSearchModal } from '@/features/contacts/components/friendship-search-modal';
 import { SearchPanel } from '@/features/search/components/SearchPanel';
 import type { ChatConversation, RightSidebarState } from './types';
 import { conversationService } from '@/services/conversation.service';
@@ -36,6 +37,7 @@ export function ChatFeature() {
       );
       const [rightSidebar, setRightSidebar] = useState<RightSidebarState>('none');
       const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+      const [isFriendSearchOpen, setIsFriendSearchOpen] = useState(false);
       const [prefillSearchKeyword, setPrefillSearchKeyword] = useState<string | undefined>(undefined);
 
       // Persist selectedId to sessionStorage so F5 reload preserves it
@@ -572,120 +574,133 @@ export function ChatFeature() {
       ) as ChatConversation | undefined;
 
       return (
-            <div className="h-full w-full flex overflow-hidden bg-gray-50">
-                  {contextHolder}
-                  {isGlobalSearchOpen ? (
-                        <SearchPanel
-                              onClose={() => setIsGlobalSearchOpen(false)}
-                              onNavigateToConversation={async (id) => {
-                                    handleSelectConversation(id);
-                                    setIsGlobalSearchOpen(false);
-                                    await ensureConversationLoaded(id);
-                              }}
-                              onNavigateToConversationSearch={async (convId, searchKeyword) => {
-                                    handleSelectConversation(convId);
-                                    setIsGlobalSearchOpen(false);
-                                    await ensureConversationLoaded(convId);
-                                    setRightSidebar('search');
-                                    setPrefillSearchKeyword(searchKeyword);
-                              }}
-                        />
-                  ) : (
-                        <ConversationSidebar
-                              conversations={conversations}
-                              selectedId={selectedId}
-                              onSelect={handleSelectConversation}
-                              loadMoreRef={convLoadMoreRef}
-                              hasMore={convHasMore}
-                              isLoading={isLoadingConv}
-                              onSearchClick={() => {
-                                    setIsGlobalSearchOpen(true);
-                                    setRightSidebar('none');
-                              }}
-                        />
-                  )}
-
-                  <div className="flex-1 flex flex-col h-full overflow-hidden">
-                        {selectedConversation ? (
-                              <>
-                                    <ChatHeader
-                                          conversationName={selectedConversation.name || 'Chat'}
-                                          avatarUrl={selectedConversation.avatar ?? null}
-                                          isDirect={selectedConversation.type === 'DIRECT'}
-                                          isOnline={selectedConversation.type === 'DIRECT' ? selectedConversation.isOnline ?? false : false}
-                                          lastSeenAt={selectedConversation.type === 'DIRECT' ? selectedConversation.lastSeenAt ?? null : null}
-                                          typingText={typingText}
-                                          onToggleSearch={() => {
-                                                setRightSidebar(prev => prev === 'search' ? 'none' : 'search');
-                                                setIsGlobalSearchOpen(false);
-                                          }}
-                                          onToggleInfo={() => setRightSidebar(prev => prev === 'info' ? 'none' : 'info')}
-                                    />
-
-                                    <ChatContent
-                                          messages={messages}
-                                          isLoadingMsg={isLoadingMsg}
-                                          msgHasMore={msgHasMore}
-                                          msgLoadMoreRef={msgLoadMoreRef}
-                                          isInitialLoad={isInitialLoad}
-                                          messagesContainerRef={messagesContainerRef}
-                                          messagesEndRef={messagesEndRef}
-                                          isAtBottom={isAtBottom}
-                                          isJumpedAway={isJumpedAway}
-                                          newMessageCount={newMessageCount}
-                                          highlightedMessageId={highlightedMessageId}
-                                          onScrollToBottom={() => {
-                                                clearNewMessageCount();
-                                                scrollToBottom();
-                                          }}
-                                          onReturnToLatest={returnToLatest}
-                                          msgLoadNewerRef={msgLoadNewerRef}
-                                          isLoadingNewer={isLoadingNewer}
-                                          onRetry={(m) => handleRetryMessage(m)}
-                                    />
-
-                                    <ChatInput
-                                          conversationId={selectedId}
-                                          onSend={handleSendText}
-                                          onTypingChange={(isTyping) => {
-                                                if (!selectedId) return;
-                                                if (!isMsgSocketConnected) return;
-                                                if (isTyping) {
-                                                      emitTypingStart({ conversationId: selectedId });
-                                                      return;
-                                                }
-                                                emitTypingStop({ conversationId: selectedId });
-                                          }}
-                                    />
-                              </>
-                        ) : selectedId ? (
-                              <div className="flex-1 flex items-center justify-center text-gray-400">
-                                    <div className="flex flex-col items-center gap-2">
-                                          <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-                                          <span className="text-sm">Đang tải cuộc trò chuyện...</span>
-                                    </div>
-                              </div>
+            <>
+                  <div className="h-full w-full flex overflow-hidden bg-gray-50">
+                        {contextHolder}
+                        {isGlobalSearchOpen ? (
+                              <SearchPanel
+                                    onClose={() => setIsGlobalSearchOpen(false)}
+                                    onNavigateToConversation={async (id) => {
+                                          handleSelectConversation(id);
+                                          setIsGlobalSearchOpen(false);
+                                          await ensureConversationLoaded(id);
+                                    }}
+                                    onNavigateToConversationSearch={async (convId, searchKeyword) => {
+                                          handleSelectConversation(convId);
+                                          setIsGlobalSearchOpen(false);
+                                          await ensureConversationLoaded(convId);
+                                          setRightSidebar('search');
+                                          setPrefillSearchKeyword(searchKeyword);
+                                    }}
+                              />
                         ) : (
-                              <div className="flex-1 flex items-center justify-center text-gray-400">
-                                    Chọn một cuộc trò chuyện để bắt đầu
-                              </div>
+                              <ConversationSidebar
+                                    conversations={conversations}
+                                    selectedId={selectedId}
+                                    onSelect={handleSelectConversation}
+                                    loadMoreRef={convLoadMoreRef}
+                                    hasMore={convHasMore}
+                                    isLoading={isLoadingConv}
+                                    onSearchClick={() => {
+                                          setIsGlobalSearchOpen(true);
+                                          setRightSidebar('none');
+                                    }}
+                                    onFriendSearchClick={() => setIsFriendSearchOpen(true)}
+                              />
                         )}
+
+                        <div className="flex-1 flex flex-col h-full overflow-hidden">
+                              {selectedConversation ? (
+                                    <>
+                                          <ChatHeader
+                                                conversationName={selectedConversation.name || 'Chat'}
+                                                avatarUrl={selectedConversation.avatar ?? null}
+                                                isDirect={selectedConversation.type === 'DIRECT'}
+                                                isOnline={selectedConversation.type === 'DIRECT' ? selectedConversation.isOnline ?? false : false}
+                                                lastSeenAt={selectedConversation.type === 'DIRECT' ? selectedConversation.lastSeenAt ?? null : null}
+                                                typingText={typingText}
+                                                onToggleSearch={() => {
+                                                      setRightSidebar(prev => prev === 'search' ? 'none' : 'search');
+                                                      setIsGlobalSearchOpen(false);
+                                                }}
+                                                onToggleInfo={() => setRightSidebar(prev => prev === 'info' ? 'none' : 'info')}
+                                          />
+
+                                          <ChatContent
+                                                messages={messages}
+                                                isLoadingMsg={isLoadingMsg}
+                                                msgHasMore={msgHasMore}
+                                                msgLoadMoreRef={msgLoadMoreRef}
+                                                isInitialLoad={isInitialLoad}
+                                                messagesContainerRef={messagesContainerRef}
+                                                messagesEndRef={messagesEndRef}
+                                                isAtBottom={isAtBottom}
+                                                isJumpedAway={isJumpedAway}
+                                                newMessageCount={newMessageCount}
+                                                highlightedMessageId={highlightedMessageId}
+                                                onScrollToBottom={() => {
+                                                      clearNewMessageCount();
+                                                      scrollToBottom();
+                                                }}
+                                                onReturnToLatest={returnToLatest}
+                                                msgLoadNewerRef={msgLoadNewerRef}
+                                                isLoadingNewer={isLoadingNewer}
+                                                onRetry={(m) => handleRetryMessage(m)}
+                                          />
+
+                                          <ChatInput
+                                                conversationId={selectedId}
+                                                onSend={handleSendText}
+                                                onTypingChange={(isTyping) => {
+                                                      if (!selectedId) return;
+                                                      if (!isMsgSocketConnected) return;
+                                                      if (isTyping) {
+                                                            emitTypingStart({ conversationId: selectedId });
+                                                            return;
+                                                      }
+                                                      emitTypingStop({ conversationId: selectedId });
+                                                }}
+                                          />
+                                    </>
+                              ) : selectedId ? (
+                                    <div className="flex-1 flex items-center justify-center text-gray-400">
+                                          <div className="flex flex-col items-center gap-2">
+                                                <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                                <span className="text-sm">Đang tải cuộc trò chuyện...</span>
+                                          </div>
+                                    </div>
+                              ) : (
+                                    <div className="flex-1 flex items-center justify-center text-gray-400">
+                                          Chọn một cuộc trò chuyện để bắt đầu
+                                    </div>
+                              )}
+                        </div>
+
+                        {rightSidebar === 'search' && selectedId && (
+                              <ChatSearchSidebar
+                                    conversationId={selectedId}
+                                    initialKeyword={prefillSearchKeyword}
+                                    onClose={() => {
+                                          setRightSidebar('none');
+                                          setPrefillSearchKeyword(undefined);
+                                    }}
+                                    onNavigateToMessage={(msgId) => {
+                                          if (msgId) void jumpToMessage(msgId);
+                                    }}
+                              />
+                        )}
+                        {rightSidebar === 'info' && <ChatInfoSidebar onClose={() => setRightSidebar('none')} />}
                   </div>
 
-                  {rightSidebar === 'search' && selectedId && (
-                        <ChatSearchSidebar
-                              conversationId={selectedId}
-                              initialKeyword={prefillSearchKeyword}
-                              onClose={() => {
-                                    setRightSidebar('none');
-                                    setPrefillSearchKeyword(undefined);
-                              }}
-                              onNavigateToMessage={(msgId) => {
-                                    if (msgId) void jumpToMessage(msgId);
-                              }}
-                        />
-                  )}
-                  {rightSidebar === 'info' && <ChatInfoSidebar onClose={() => setRightSidebar('none')} />}
-            </div>
+                  <FriendshipSearchModal
+                        open={isFriendSearchOpen}
+                        onClose={() => setIsFriendSearchOpen(false)}
+                        onNavigateToConversation={async (id) => {
+                              handleSelectConversation(id);
+                              setIsGlobalSearchOpen(false);
+                              await ensureConversationLoaded(id);
+                        }}
+                  />
+            </>
       );
 }

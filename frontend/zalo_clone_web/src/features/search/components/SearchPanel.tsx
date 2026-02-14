@@ -11,14 +11,16 @@
 
 import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { notification } from 'antd';
 import { useSearch } from '../hooks/use-search';
 import { SearchBar } from './SearchBar';
 import { SearchResults } from './SearchResults';
 import { SearchEmpty } from './SearchEmpty';
-import { FriendRequestModal } from './FriendRequestModal';
+import { FriendRequestModal } from '@/features/contacts/components/friend-request-modal';
 import { conversationService } from '@/services/conversation.service';
 import { searchService } from '../api/search.service';
 import { handleInteractionError } from '@/utils/interaction-error';
+import { useAcceptRequest, useCancelRequest } from '@/features/contacts/api/friendship.api';
 import type {
       ConversationMessageGroup,
       ContactSearchResult,
@@ -56,6 +58,9 @@ export function SearchPanel({
             mergeNewMatches,
             closeSearch,
       } = useSearch();
+
+      const acceptRequest = useAcceptRequest();
+      const cancelRequest = useCancelRequest();
 
       // --- Friend Request Modal state ---
       const [friendRequestTarget, setFriendRequestTarget] = useState<{
@@ -215,6 +220,50 @@ export function SearchPanel({
             [results],
       );
 
+      const handleAcceptFriendRequest = useCallback(
+            (contactId: string) => {
+                  const contact = results?.contacts.find((c) => c.id === contactId);
+                  if (!contact?.pendingRequestId) {
+                        notification.warning({ message: 'Thiếu mã lời mời để chấp nhận' });
+                        return;
+                  }
+
+                  acceptRequest.mutate(contact.pendingRequestId, {
+                        onSuccess: () => {
+                              notification.success({ message: 'Đã chấp nhận lời mời kết bạn' });
+                              triggerSearch(keyword);
+                              void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+                        },
+                        onError: () => {
+                              notification.error({ message: 'Không thể chấp nhận lời mời' });
+                        },
+                  });
+            },
+            [acceptRequest, keyword, results, triggerSearch, queryClient],
+      );
+
+      const handleCancelFriendRequest = useCallback(
+            (contactId: string) => {
+                  const contact = results?.contacts.find((c) => c.id === contactId);
+                  if (!contact?.pendingRequestId) {
+                        notification.warning({ message: 'Thiếu mã lời mời để thu hồi' });
+                        return;
+                  }
+
+                  cancelRequest.mutate(contact.pendingRequestId, {
+                        onSuccess: () => {
+                              notification.success({ message: 'Đã thu hồi lời mời kết bạn' });
+                              triggerSearch(keyword);
+                              void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+                        },
+                        onError: () => {
+                              notification.error({ message: 'Không thể thu hồi lời mời' });
+                        },
+                  });
+            },
+            [cancelRequest, keyword, results, triggerSearch, queryClient],
+      );
+
       const handleClose = useCallback(() => {
             closeSearch();
             onClose();
@@ -257,6 +306,8 @@ export function SearchPanel({
                               onMediaClick={handleMediaClick}
                               onSendMessage={handleSendMessage}
                               onAddFriend={handleAddFriend}
+                              onAcceptRequest={(requestId, contactId) => handleAcceptFriendRequest(contactId)}
+                              onCancelRequest={(requestId, contactId) => handleCancelFriendRequest(contactId)}
                         />
                   ) : (
                         <SearchEmpty />

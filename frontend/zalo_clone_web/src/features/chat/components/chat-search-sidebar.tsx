@@ -16,12 +16,14 @@ import { CloseOutlined, SearchOutlined, LoadingOutlined, FilterOutlined, UserOut
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { useQuery } from '@tanstack/react-query';
-import { useSearch } from '@/features/search/hooks/use-search';
-import { MessageResult } from '@/features/search/components/MessageResult';
-import { SearchEmpty } from '@/features/search/components/SearchEmpty';
-import { SearchLoading } from '@/features/search/components/SearchLoading';
-import { RealtimeBanner } from '@/features/search/components/RealtimeBanner';
-import type { MessageSearchResult } from '@/features/search/types';
+import {
+      useSearch,
+      MessageResult,
+      SearchEmpty,
+      SearchLoading,
+      RealtimeBanner,
+} from '@/features/search';
+import type { MessageSearchResult } from '@/features/search';
 import { conversationService } from '@/services/conversation.service';
 
 const { Title, Text } = Typography;
