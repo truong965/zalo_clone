@@ -87,10 +87,15 @@ export function FriendshipSearchModal({
       const contact = (results?.contacts?.[0] as ContactSearchResult | undefined) ?? undefined;
       const isPrivacyLimited = contact?.isPrivacyLimited ?? false;
 
+      // Bug 7 fix: Only show alias for friends; strangers always see original name
+      const effectiveDisplayName = contact?.relationshipStatus === 'FRIEND'
+            ? (contact.displayNameFinal || contact.displayName)
+            : contact?.displayName ?? '';
+
       const mappedUser: (Partial<User> & { displayName: string }) | null = contact
             ? {
                   id: contact.id,
-                  displayName: contact.displayNameFinal || contact.displayName,
+                  displayName: effectiveDisplayName,
                   avatarUrl: contact.avatarUrl,
                   phoneNumber: contact.phoneNumber,
             }
@@ -137,7 +142,7 @@ export function FriendshipSearchModal({
                   onSuccess: () => {
                         notification.success({
                               message: 'Đã gửi lời mời kết bạn',
-                              description: `Lời mời kết bạn đã được gửi đến ${contact.displayNameFinal || contact.displayName}`,
+                              description: `Lời mời kết bạn đã được gửi đến ${effectiveDisplayName}`,
                         });
                         // Re-search to refresh relationship status
                         triggerSearch(normalizedInput);
@@ -353,7 +358,7 @@ export function FriendshipSearchModal({
                               onClose={() => setShowFriendRequestModal(false)}
                               target={{
                                     userId: contact.id,
-                                    displayName: contact.displayNameFinal || contact.displayName,
+                                    displayName: effectiveDisplayName,
                                     avatarUrl: contact.avatarUrl,
                               }}
                         />

@@ -4,13 +4,13 @@
  */
 
 import type {
-  Conversation as ApiConversation,
   ConversationLastMessage,
   ConversationListItem,
   ConversationMember,
   MessageType,
   MessageListItem,
 } from '@/types/api';
+import type { ConversationUI } from '@/features/conversation/types/conversation';
 
 // ============================================================================
 // UI-SPECIFIC TYPES (Extend API types with UI fields)
@@ -20,25 +20,7 @@ import type {
  * Conversation type for UI display
  * Extends API Conversation with UI-friendly fields for list rendering
  */
-export interface ChatConversation extends ApiConversation {
-  // UI Fields (not from API)
-  avatar?: string; // User avatar or group avatar
-  lastMessage?: string; // Latest message preview text
-  timestamp?: string; // Formatted time like "24/01", "Vài giây"
-  unread?: number; // Unread message count
-  isOnline?: boolean; // User online status
-  lastSeenAt?: string | null;
-  isPinned?: boolean; // Pinned in list
-
-  // API fields from conversation list endpoint
-  updatedAt?: string;
-  lastMessageObj?: ConversationLastMessage | null;
-  unreadCount?: number;
-  lastReadMessageId?: string | null;
-  isBlocked?: boolean;
-
-  otherUserId?: string | null;
-}
+export type ChatConversation = ConversationUI;
 
 export type ChatConversationListItem = Omit<ConversationListItem, 'unreadCount'> & {
   unreadCount?: number;

@@ -19,6 +19,8 @@ interface ConversationSidebarProps {
       onSearchClick?: () => void;
       /** Open friendship search modal */
       onFriendSearchClick?: () => void;
+      /** Open create group modal */
+      onCreateGroupClick?: () => void;
 }
 
 export function ConversationSidebar({
@@ -30,6 +32,7 @@ export function ConversationSidebar({
       isLoading = false,
       onSearchClick,
       onFriendSearchClick,
+      onCreateGroupClick,
 }: ConversationSidebarProps) {
       const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
@@ -71,7 +74,7 @@ export function ConversationSidebar({
                               className="text-gray-500"
                               onClick={onFriendSearchClick}
                         />
-                        <Button type="text" icon={<UsergroupAddOutlined />} className="text-gray-500" />
+                        <Button type="text" icon={<UsergroupAddOutlined />} className="text-gray-500" onClick={onCreateGroupClick} />
                   </div>
 
                   {/* Filter Bar */}

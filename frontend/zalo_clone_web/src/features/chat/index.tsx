@@ -1,5 +1,6 @@
 // src/features/chat/index.tsx
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ConversationSidebar } from './components/conversation-sidebar';
 import { ChatHeader } from './components/chat-header';
 import { ChatInput } from './components/chat-input';
@@ -7,10 +8,11 @@ import { ChatSearchSidebar } from './components/chat-search-sidebar';
 import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
 import { FriendshipSearchModal } from '@/features/contacts/components/friendship-search-modal';
+import { CreateGroupModal } from '@/features/conversation/components/create-group-modal';
+import { useCreateGroupStore } from '@/features/conversation/stores/create-group.store';
 import { SearchPanel } from '@/features/search/components/SearchPanel';
 import type { ChatConversation, RightSidebarState } from './types';
 import { conversationService } from '@/services/conversation.service';
-import { useConversationSocket } from '@/hooks/use-conversation-socket';
 import { useMessageSocket } from '@/hooks/use-message-socket';
 import { useConversationListRealtime } from '@/hooks/use-conversation-list-realtime';
 import { useSocket } from '@/hooks/use-socket';
@@ -22,6 +24,7 @@ import { useInView } from 'react-intersection-observer';
 import { useChatMessages } from './hooks/use-chat-messages';
 import type { MessageListItem, MessageType } from '@/types/api';
 import type { MessagesInfiniteData, MessagesPage } from '@/hooks/use-message-socket';
+import { useChatConversationRealtime } from './hooks/use-chat-conversation-realtime';
 
 export function ChatFeature() {
       const [api, contextHolder] = notification.useNotification();
@@ -32,13 +35,28 @@ export function ChatFeature() {
       const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 
       // --- STATE: UI ---
+      const [searchParams, setSearchParams] = useSearchParams();
       const [selectedId, setSelectedId] = useState<string | null>(
-            () => sessionStorage.getItem('chat_selectedId') ?? null,
+            () => searchParams.get('conversationId') ?? sessionStorage.getItem('chat_selectedId') ?? null,
       );
       const [rightSidebar, setRightSidebar] = useState<RightSidebarState>('none');
       const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
       const [isFriendSearchOpen, setIsFriendSearchOpen] = useState(false);
       const [prefillSearchKeyword, setPrefillSearchKeyword] = useState<string | undefined>(undefined);
+
+      // Sync selectedId when URL query param changes (e.g. navigating from /contacts)
+      useEffect(() => {
+            const urlConversationId = searchParams.get('conversationId');
+            if (urlConversationId && urlConversationId !== selectedId) {
+                  setSelectedId(urlConversationId);
+                  // Clean up the query param to keep URL tidy
+                  setSearchParams((prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.delete('conversationId');
+                        return next;
+                  }, { replace: true });
+            }
+      }, [searchParams, selectedId, setSearchParams]);
 
       // Persist selectedId to sessionStorage so F5 reload preserves it
       useEffect(() => {
@@ -173,89 +191,12 @@ export function ChatFeature() {
       // WebSocket - Realtime Events
       // ============================================================================
 
-      useConversationSocket({
-            onGroupCreated: (data) => {
-                  // Add to top of conversation list
-                  prependConversation(data.group as ChatConversation);
-                  api.success({
-                        message: 'Nhóm đã được tạo',
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-            },
-
-            onGroupUpdated: (data) => {
-                  // Update conversation in list
-                  updateConversation(data.conversationId, data.updates as Partial<ChatConversation>);
-                  api.success({
-                        message: 'Thông tin nhóm đã cập nhật',
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-            },
-
-            onGroupMembersAdded: (data) => {
-                  api.success({
-                        message: `${data.memberIds.length} thành viên đã được thêm`,
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-            },
-
-            onGroupMemberRemoved: (data) => {
-                  console.log('⚠️ Member removed:', data);
-                  api.warning({
-                        message: 'Một thành viên đã bị xóa khỏi nhóm',
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-            },
-
-            onGroupMemberLeft: (data) => {
-                  console.log('⚠️ Member left:', data);
-                  api.info({
-                        message: 'Một thành viên đã bị xóa khỏi nhóm',
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-            },
-
-            onGroupYouWereRemoved: (data) => {
-                  api.warning({
-                        message: 'Bạn đã bị xóa khỏi nhóm',
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-
-                  removeConversation(data.conversationId);
-
-                  if (selectedId === data.conversationId) {
-                        setSelectedId(null);
-                  }
-            },
-
-            onGroupMemberJoined: () => {
-                  api.info({
-                        message: 'Có thành viên mới tham gia nhóm',
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-            },
-
-            onGroupDissolved: (data) => {
-                  console.log('🔴 Group dissolved:', data);
-                  api.error({
-                        message: 'Nhóm đã bị giải tán',
-                        placement: 'topRight',
-                        duration: 5,
-                  });
-
-                  removeConversation(data.conversationId);
-
-                  if (selectedId === data.conversationId) {
-                        setSelectedId(null);
-                  }
-            },
+      useChatConversationRealtime({
+            prependConversation,
+            updateConversation,
+            removeConversation,
+            selectedId,
+            setSelectedId,
       });
 
       // ============================================================================
@@ -606,6 +547,7 @@ export function ChatFeature() {
                                           setRightSidebar('none');
                                     }}
                                     onFriendSearchClick={() => setIsFriendSearchOpen(true)}
+                                    onCreateGroupClick={() => useCreateGroupStore.getState().open()}
                               />
                         )}
 
@@ -689,7 +631,20 @@ export function ChatFeature() {
                                     }}
                               />
                         )}
-                        {rightSidebar === 'info' && <ChatInfoSidebar onClose={() => setRightSidebar('none')} />}
+                        {rightSidebar === 'info' && selectedId && currentUserId && (
+                              <ChatInfoSidebar
+                                    conversationId={selectedId}
+                                    currentUserId={currentUserId}
+                                    onClose={() => setRightSidebar('none')}
+                                    onLeaveGroup={() => {
+                                          // Immediately remove from cache + clear selection
+                                          // to prevent stale API calls (members, messages, message:seen)
+                                          if (selectedId) removeConversation(selectedId);
+                                          setSelectedId(null);
+                                          setRightSidebar('none');
+                                    }}
+                              />
+                        )}
                   </div>
 
                   <FriendshipSearchModal
@@ -699,6 +654,13 @@ export function ChatFeature() {
                               handleSelectConversation(id);
                               setIsGlobalSearchOpen(false);
                               await ensureConversationLoaded(id);
+                        }}
+                  />
+
+                  <CreateGroupModal
+                        onCreated={async (conversationId) => {
+                              handleSelectConversation(conversationId);
+                              await ensureConversationLoaded(conversationId);
                         }}
                   />
             </>

@@ -435,6 +435,12 @@ export interface ConversationListItem {
   updatedAt: string;
   unreadCount?: number;
   lastReadMessageId?: string | null;
+  /** Current user's role in this conversation (enriched by backend) */
+  myRole?: MemberRole;
+  /** Whether this group requires admin approval to join */
+  requireApproval?: boolean;
+  /** Whether current user has muted this conversation */
+  isMuted?: boolean;
 }
 
 export interface ConversationMember {

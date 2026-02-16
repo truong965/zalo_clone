@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/api/v1/conversations/${id}`,
     MARK_AS_READ: (id: string) => `/api/v1/conversations/${id}/read`,
     GET_MEMBERS: (id: string) => `/api/v1/conversations/${id}/members`,
+    GROUPS: '/api/v1/conversations/groups',
   },
 
   // Chat - Messages
@@ -92,6 +93,7 @@ export const API_ENDPOINTS = {
 
   // Search Analytics
   SEARCH: {
+    CONTACTS: '/api/v1/search/contacts',
     HISTORY: '/api/v1/search/analytics/history',
     SUGGESTIONS: '/api/v1/search/analytics/suggestions',
     TRENDING: '/api/v1/search/analytics/trending',

@@ -3,9 +3,10 @@
  *
  * Uses `useFriendsList()` (useInfiniteQuery + cursor pagination) for data.
  * Each friend renders via FriendCard with "Nhắn tin" / "Hủy kết bạn" actions.
+ * Virtualized via @tanstack/react-virtual to avoid rendering all rows.
  */
 
-import { useRef, useCallback, useState, type ChangeEvent } from 'react';
+import { useRef, useCallback, useState, useEffect, type ChangeEvent } from 'react';
 import { Input, Button, Spin, Empty, Typography, Popconfirm } from 'antd';
 import {
       SearchOutlined,
@@ -13,12 +14,15 @@ import {
       UserDeleteOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFriendsList, useUnfriend, useFriendCount, friendshipKeys } from '../api/friendship.api';
 import { FriendCard } from './friend-card';
 import type { FriendWithUserDto } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
 
 const { Text } = Typography;
+
+const ITEM_HEIGHT = 92;
 
 export function FriendList() {
       const navigate = useNavigate();
@@ -47,21 +51,28 @@ export function FriendList() {
       // Flatten pages into single array
       const friends = data?.pages.flatMap((page) => page.data) ?? [];
 
-      // Infinite scroll via IntersectionObserver
-      const observerRef = useRef<IntersectionObserver | null>(null);
-      const lastItemRef = useCallback(
-            (node: HTMLDivElement | null) => {
-                  if (isFetchingNextPage) return;
-                  if (observerRef.current) observerRef.current.disconnect();
-                  observerRef.current = new IntersectionObserver((entries) => {
-                        if (entries[0]?.isIntersecting && hasNextPage) {
-                              void fetchNextPage();
-                        }
-                  });
-                  if (node) observerRef.current.observe(node);
-            },
-            [isFetchingNextPage, hasNextPage, fetchNextPage],
-      );
+      // Include a loader row when there are more pages
+      const totalCount = hasNextPage ? friends.length + 1 : friends.length;
+
+      // Virtualizer (replaces manual windowing — no render-time side-effects)
+      const scrollParentRef = useRef<HTMLDivElement | null>(null);
+      const virtualizer = useVirtualizer({
+            count: totalCount,
+            getScrollElement: () => scrollParentRef.current,
+            estimateSize: () => ITEM_HEIGHT,
+            overscan: 6,
+      });
+
+      // Fetch next page via useEffect when the last virtual item is visible
+      const virtualItems = virtualizer.getVirtualItems();
+      const lastVirtualItem = virtualItems.at(-1);
+
+      useEffect(() => {
+            if (lastVirtualItem == null) return;
+            if (lastVirtualItem.index >= friends.length && hasNextPage && !isFetchingNextPage) {
+                  void fetchNextPage();
+            }
+      }, [lastVirtualItem?.index, friends.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
       return (
             <div className="h-full flex flex-col">
@@ -84,7 +95,7 @@ export function FriendList() {
                   </div>
 
                   {/* List */}
-                  <div className="flex-1 overflow-y-auto">
+                  <div className="flex-1 overflow-y-auto" ref={scrollParentRef}>
                         {isLoading ? (
                               <div className="flex items-center justify-center py-12">
                                     <Spin />
@@ -99,22 +110,39 @@ export function FriendList() {
                                     className="py-12"
                               />
                         ) : (
-                              <div className="divide-y divide-gray-100">
-                                    {friends.map((friend, index) => {
-                                          const isLast = index === friends.length - 1;
+                              <div
+                                    className="relative w-full"
+                                    style={{ height: virtualizer.getTotalSize() }}
+                              >
+                                    {virtualItems.map((virtualRow) => {
+                                          const isLoaderRow = virtualRow.index >= friends.length;
+                                          const friend = friends[virtualRow.index];
+
                                           return (
-                                                <div key={friend.friendshipId} ref={isLast ? lastItemRef : undefined}>
-                                                      <FriendItem friend={friend} onMessage={() => navigate(`/chat/new?userId=${friend.userId}`)} />
+                                                <div
+                                                      key={virtualRow.key}
+                                                      className="absolute left-0 right-0"
+                                                      style={{
+                                                            transform: `translateY(${virtualRow.start}px)`,
+                                                            top: 0,
+                                                            height: virtualRow.size,
+                                                      }}
+                                                >
+                                                      {isLoaderRow ? (
+                                                            <div className="flex items-center justify-center py-4">
+                                                                  <Spin size="small" />
+                                                            </div>
+                                                      ) : (
+                                                            <FriendItem
+                                                                  friend={friend}
+                                                                  onMessage={() =>
+                                                                        navigate(`/chat/new?userId=${friend.userId}`)
+                                                                  }
+                                                            />
+                                                      )}
                                                 </div>
                                           );
                                     })}
-                              </div>
-                        )}
-
-                        {/* Loading more indicator */}
-                        {isFetchingNextPage && (
-                              <div className="flex items-center justify-center py-4">
-                                    <Spin size="small" />
                               </div>
                         )}
                   </div>

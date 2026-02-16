@@ -28,6 +28,17 @@ import type {
       MediaSearchResult,
 } from '../types';
 
+/**
+ * Bug 7 fix: Resolve display name based on relationship status.
+ * Only show alias (displayNameFinal) for friends. Strangers always see original name.
+ */
+function resolveContactName(contact: ContactSearchResult): string {
+      if (contact.relationshipStatus === 'FRIEND') {
+            return contact.displayNameFinal || contact.displayName;
+      }
+      return contact.displayName;
+}
+
 interface SearchPanelProps {
       /** Close search panel → return to conversation sidebar */
       onClose: () => void;
@@ -109,7 +120,7 @@ export function SearchPanel({
                   if (result.canMessage === false) {
                         setFriendRequestTarget({
                               userId: result.id,
-                              displayName: result.displayNameFinal,
+                              displayName: resolveContactName(result),
                               avatarUrl: result.avatarUrl,
                         });
                         return;
@@ -124,13 +135,13 @@ export function SearchPanel({
                         onNavigateToConversation?.(conv.id);
                   } catch (error) {
                         const errResult = handleInteractionError(error, {
-                              target: { userId: result.id, displayName: result.displayNameFinal, avatarUrl: result.avatarUrl },
+                              target: { userId: result.id, displayName: resolveContactName(result), avatarUrl: result.avatarUrl },
                         });
                         // 403 privacy restriction (not blocked) → show friend request modal
                         if (errResult.isPrivacyRestriction) {
                               setFriendRequestTarget({
                                     userId: result.id,
-                                    displayName: result.displayNameFinal,
+                                    displayName: resolveContactName(result),
                                     avatarUrl: result.avatarUrl,
                               });
                         }
@@ -184,14 +195,14 @@ export function SearchPanel({
                         const contact = results?.contacts.find((c) => c.id === contactId);
                         const errResult = handleInteractionError(error, {
                               target: contact
-                                    ? { userId: contact.id, displayName: contact.displayNameFinal, avatarUrl: contact.avatarUrl }
+                                    ? { userId: contact.id, displayName: resolveContactName(contact), avatarUrl: contact.avatarUrl }
                                     : undefined,
                         });
                         // 403 privacy restriction (not blocked) → show friend request modal
                         if (errResult.isPrivacyRestriction && contact) {
                               setFriendRequestTarget({
                                     userId: contact.id,
-                                    displayName: contact.displayNameFinal,
+                                    displayName: resolveContactName(contact),
                                     avatarUrl: contact.avatarUrl,
                               });
                         }
@@ -212,7 +223,7 @@ export function SearchPanel({
                   if (contact) {
                         setFriendRequestTarget({
                               userId: contact.id,
-                              displayName: contact.displayNameFinal,
+                              displayName: resolveContactName(contact),
                               avatarUrl: contact.avatarUrl,
                         });
                   }

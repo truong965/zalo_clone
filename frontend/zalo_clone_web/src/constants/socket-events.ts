@@ -68,6 +68,7 @@ export const SocketEvents = {
       GROUP_REVIEW_JOIN: 'group:reviewJoinRequest',
       GROUP_GET_PENDING: 'group:getPendingRequests',
       GROUP_CANCEL_REQUEST: 'group:cancelJoinRequest',
+      GROUP_INVITE_MEMBERS: 'group:inviteMembers',
 
       // Server → Client
       GROUP_CREATED: 'group:created',

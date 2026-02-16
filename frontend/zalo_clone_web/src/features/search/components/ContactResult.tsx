@@ -42,6 +42,14 @@ export function ContactResult({
             data.requestDirection,
       );
 
+      // Bug 7 fix: Only show alias (displayNameFinal) for friends.
+      // For non-friends, always show the original displayName to prevent
+      // stale alias data from appearing for strangers.
+      const effectiveName =
+            data.relationshipStatus === 'FRIEND'
+                  ? (data.displayNameFinal || data.displayName)
+                  : data.displayName;
+
       const tagColor =
             data.relationshipStatus === 'FRIEND'
                   ? 'green'
@@ -63,7 +71,7 @@ export function ContactResult({
                               src={data.avatarUrl || undefined}
                               className={!data.avatarUrl ? 'bg-blue-500' : ''}
                         >
-                              {data.displayNameFinal?.[0]?.toUpperCase() ?? 'U'}
+                              {effectiveName?.[0]?.toUpperCase() ?? 'U'}
                         </Avatar>
                         {data.isOnline && (
                               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
@@ -74,7 +82,7 @@ export function ContactResult({
                   <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                               <Text strong className="truncate text-sm text-gray-800">
-                                    {data.displayNameFinal}
+                                    {effectiveName}
                               </Text>
                               <Tag className="text-[10px] leading-none border-0 m-0" color={tagColor}>
                                     {relationLabel}
