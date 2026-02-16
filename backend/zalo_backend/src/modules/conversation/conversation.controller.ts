@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Query,
   UseGuards,
@@ -50,6 +51,23 @@ export class ConversationController {
       limit ? +limit : 20,
     );
   }
+
+  @Get('groups')
+  @ApiOperation({ summary: 'Get list of group conversations' })
+  async getGroups(
+    @CurrentUser() user,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    return this.conversationService.getUserGroups(
+      user.id,
+      cursor,
+      limit ? +limit : 20,
+      search?.trim() || undefined,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get conversation by ID' })
   async getConversationById(
@@ -71,6 +89,20 @@ export class ConversationController {
     return this.conversationService.getConversationMembers(
       user.id,
       conversationId,
+    );
+  }
+
+  @Patch(':id/mute')
+  @ApiOperation({ summary: 'Toggle mute/unmute a conversation' })
+  async toggleMute(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+    @Body() body: { muted: boolean },
+  ) {
+    return this.conversationService.toggleMute(
+      user.id,
+      conversationId,
+      body.muted,
     );
   }
 }

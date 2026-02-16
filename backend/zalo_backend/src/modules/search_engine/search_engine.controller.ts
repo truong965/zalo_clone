@@ -13,6 +13,8 @@ import { IsString, IsNotEmpty } from 'class-validator';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { CurrentUserId } from '@common/decorator/customize';
 import { SearchAnalyticsService } from './services/search-analytics.service';
+import { ContactSearchService } from './services/contact-search.service';
+import { ContactSearchRequestDto } from './dto/search.dto';
 
 /** DTO for POST /analytics/track-click */
 class TrackClickDto {
@@ -45,7 +47,29 @@ class TrackClickDto {
 @UseGuards(JwtAuthGuard)
 @Controller('search')
 export class SearchEngineController {
-  constructor(private analyticsService: SearchAnalyticsService) { }
+  constructor(
+    private analyticsService: SearchAnalyticsService,
+    private contactSearchService: ContactSearchService,
+  ) { }
+
+  // ============================================================================
+  // CONTACT SEARCH (REST — for create group modal)
+  // ============================================================================
+
+  /**
+   * Search contacts via REST (alternative to WebSocket search)
+   * Used by create-group modal to find users to add
+   * Includes privacy checks: canMessage, relationshipStatus, existingConversationId
+   */
+  @Get('contacts')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search contacts (REST endpoint for group creation)' })
+  async searchContacts(
+    @CurrentUserId() userId: string,
+    @Query() query: ContactSearchRequestDto,
+  ) {
+    return this.contactSearchService.searchContacts(userId, query);
+  }
 
   // ============================================================================
   // SEARCH ANALYTICS

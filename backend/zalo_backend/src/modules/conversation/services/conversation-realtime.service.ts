@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MemberRole, MemberStatus } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
+import { safeJSON } from '@common/utils/json.util';
 
 import { ConversationService } from './conversation.service';
 import { GroupService } from './group.service';
@@ -13,6 +15,7 @@ import { RemoveMemberDto } from '../dto/remove-member.dto';
 import { TransferAdminDto } from '../dto/transfer-admin.dto';
 import { CreateJoinRequestDto } from '../dto/join-request.dto';
 import { ReviewJoinRequestDto } from '../dto/review-join-request.dto';
+import { InviteMembersDto } from '../dto/invite-members.dto';
 
 export type ConversationGatewayNotification = {
   userId: string;
@@ -27,7 +30,8 @@ export class ConversationRealtimeService {
     private readonly groupService: GroupService,
     private readonly groupJoinService: GroupJoinService,
     private readonly prisma: PrismaService,
-  ) {}
+    private readonly eventEmitter: EventEmitter2,
+  ) { }
 
   async createGroup(
     dto: CreateGroupDto,
@@ -40,16 +44,18 @@ export class ConversationRealtimeService {
     const group = await this.groupService.createGroup(dto, userId);
     const members = await this.groupService.getGroupMembers(group.id, userId);
 
-    const notifications: ConversationGatewayNotification[] = members.map(
-      (member) => ({
+    // Notify all members EXCEPT the creator — creator already receives
+    // the result via the socket ack callback.
+    const notifications: ConversationGatewayNotification[] = members
+      .filter((member) => member.userId !== userId)
+      .map((member) => ({
         userId: member.userId,
         event: groupCreatedEvent,
         data: {
           group,
           role: member.role,
         },
-      }),
-    );
+      }));
 
     return { group, notifications };
   }
@@ -68,6 +74,37 @@ export class ConversationRealtimeService {
       updates,
       userId,
     );
+
+    // Create system message for requireApproval toggle
+    if (updates.requireApproval !== undefined) {
+      const actor = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
+      const actorName = actor?.displayName ?? 'Một thành viên';
+      const action = updates.requireApproval ? 'bật' : 'tắt';
+
+      const sysMsg = await this.prisma.message.create({
+        data: {
+          conversationId,
+          type: 'SYSTEM',
+          content: `${actorName} đã ${action} phê duyệt thành viên mới`,
+          metadata: {
+            action: 'SETTINGS_CHANGED',
+            actorId: userId,
+            setting: 'requireApproval',
+            value: updates.requireApproval,
+          },
+        },
+      });
+
+      // Broadcast system message to all members
+      this.eventEmitter.emit('system-message.broadcast', {
+        conversationId,
+        message: safeJSON(sysMsg),
+        excludeUserIds: [],
+      });
+    }
 
     const members =
       await this.conversationService.getActiveMembers(conversationId);
@@ -106,7 +143,7 @@ export class ConversationRealtimeService {
         event: membersAddedEvent,
         data: {
           conversationId: dto.conversationId,
-          addedUserIds: dto.userIds,
+          memberIds: dto.userIds,
           addedBy: userId,
         },
       }),
@@ -133,7 +170,7 @@ export class ConversationRealtimeService {
         event: memberRemovedEvent,
         data: {
           conversationId: dto.conversationId,
-          removedUserId: dto.userId,
+          memberId: dto.userId,
           removedBy: userId,
         },
       }),
@@ -202,7 +239,7 @@ export class ConversationRealtimeService {
         event: memberLeftEvent,
         data: {
           conversationId,
-          userId,
+          memberId: userId,
         },
       }),
     );
@@ -331,6 +368,45 @@ export class ConversationRealtimeService {
     userId: string,
   ): Promise<unknown> {
     return this.groupJoinService.getPendingRequests(conversationId, userId);
+  }
+
+  async inviteMembers(
+    dto: InviteMembersDto,
+    inviterId: string,
+    joinRequestReceivedEvent: string,
+  ): Promise<{
+    result: { invitedCount: number; skippedCount: number };
+    notifications: ConversationGatewayNotification[];
+  }> {
+    const result: { invitedCount: number; skippedCount: number } =
+      await this.groupJoinService.inviteMembers(
+        dto.conversationId,
+        dto.userIds,
+        inviterId,
+      );
+
+    const notifications: ConversationGatewayNotification[] = [];
+
+    // Notify admin about the new pending join requests
+    if (result.invitedCount > 0) {
+      const members = await this.conversationService.getActiveMembers(
+        dto.conversationId,
+      );
+      const admin = members.find((m) => m.role === MemberRole.ADMIN);
+      if (admin) {
+        notifications.push({
+          userId: admin.userId,
+          event: joinRequestReceivedEvent,
+          data: {
+            conversationId: dto.conversationId,
+            requesterId: inviterId,
+            invitedUserIds: dto.userIds,
+          },
+        });
+      }
+    }
+
+    return { result, notifications };
   }
 
   async pinMessage(

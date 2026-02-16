@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
 import { EventType, Gender } from '@prisma/client';
+import type { Message } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
+import { safeJSON } from '@common/utils/json.util';
 import type { MessageSentEvent } from '@modules/message/events';
 import type {
   ConversationCreatedEvent,
@@ -31,7 +33,31 @@ export class ConversationEventHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly idempotency: IdempotencyService,
+    private readonly eventEmitter: EventEmitter2,
   ) { }
+
+  /**
+   * Emit system-message.broadcast so the gateway can broadcast
+   * message:new + conversation:list:itemUpdated to all active members.
+   */
+  private emitSystemMessageBroadcast(
+    conversationId: string,
+    message: Message,
+    excludeUserIds: string[] = [],
+  ) {
+    try {
+      this.eventEmitter.emit('system-message.broadcast', {
+        conversationId,
+        message: safeJSON(message),
+        excludeUserIds,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[SYSTEM_MSG_BROADCAST] Failed to emit broadcast for conversation ${conversationId}`,
+        error,
+      );
+    }
+  }
 
   @OnEvent('message.sent')
   async handleMessageSent(payload: MessageSentEvent): Promise<void> {
@@ -132,11 +158,18 @@ export class ConversationEventHandler {
 
     try {
       if (type === 'GROUP') {
+        // Lookup creator's display name instead of using raw UUID
+        const creator = await this.prisma.user.findUnique({
+          where: { id: createdBy },
+          select: { displayName: true },
+        });
+        const actorName = creator?.displayName ?? 'Một thành viên';
+
         const sysMsg = await this.prisma.message.create({
           data: {
             conversationId,
             type: 'SYSTEM',
-            content: `${createdBy} created the group "${name || ''}"`,
+            content: `${actorName} đã tạo nhóm "${name || ''}"`,
             metadata: {
               action: 'GROUP_CREATED',
               actorId: createdBy,
@@ -149,6 +182,9 @@ export class ConversationEventHandler {
           where: { id: conversationId },
           data: { lastMessageAt: sysMsg.createdAt },
         });
+
+        // Broadcast system message to all members
+        this.emitSystemMessageBroadcast(conversationId, sysMsg);
       }
 
       await this.idempotency.recordProcessed(
@@ -210,14 +246,36 @@ export class ConversationEventHandler {
     );
 
     try {
+      // Lookup display names for actor and added members
       const isSelfJoin = memberIds.length === 1 && memberIds[0] === addedBy;
+
+      const userIdsToLookup = isSelfJoin
+        ? [addedBy]
+        : [...new Set([addedBy, ...memberIds])];
+
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIdsToLookup } },
+        select: { id: true, displayName: true },
+      });
+      const nameMap = new Map(users.map((u) => [u.id, u.displayName]));
+
+      const actorName = nameMap.get(addedBy) ?? 'Một thành viên';
+
+      let content: string;
+      if (isSelfJoin) {
+        content = `${actorName} đã tham gia nhóm`;
+      } else {
+        const addedNames = memberIds
+          .map((id) => nameMap.get(id) ?? 'Một thành viên')
+          .join(', ');
+        content = `${actorName} đã thêm ${addedNames} vào nhóm`;
+      }
+
       const sysMsg = await this.prisma.message.create({
         data: {
           conversationId,
           type: 'SYSTEM',
-          content: isSelfJoin
-            ? `${addedBy} joined the group`
-            : `${addedBy} added ${memberIds.length} member(s)`,
+          content,
           metadata: isSelfJoin
             ? {
               action: 'MEMBER_JOINED',
@@ -235,6 +293,9 @@ export class ConversationEventHandler {
         where: { id: conversationId },
         data: { lastMessageAt: sysMsg.createdAt },
       });
+
+      // Broadcast system message to all members
+      this.emitSystemMessageBroadcast(conversationId, sysMsg);
 
       this.logger.log(
         `[MEMBER_ADDED] Complete: Members added to conversation`,
@@ -304,14 +365,29 @@ export class ConversationEventHandler {
     );
 
     try {
-      const isRemoved = kickedBy !== memberId;
+      const isRemoved = kickedBy != null && kickedBy !== memberId;
+
+      // Lookup display names
+      const userIdsToLookup = isRemoved
+        ? [...new Set([memberId, kickedBy])]
+        : [memberId];
+
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIdsToLookup } },
+        select: { id: true, displayName: true },
+      });
+      const nameMap = new Map(users.map((u) => [u.id, u.displayName]));
+
+      const memberName = nameMap.get(memberId) ?? 'Một thành viên';
+      const kickerName = kickedBy ? (nameMap.get(kickedBy) ?? 'Một thành viên') : undefined;
+
       const sysMsg = await this.prisma.message.create({
         data: {
           conversationId,
           type: 'SYSTEM',
           content: isRemoved
-            ? `${memberId} was removed by ${kickedBy}`
-            : `${memberId} left the group`,
+            ? `${memberName} đã bị ${kickerName} xóa khỏi nhóm`
+            : `${memberName} đã rời nhóm`,
           metadata: isRemoved
             ? {
               action: 'MEMBER_KICKED',
@@ -329,6 +405,9 @@ export class ConversationEventHandler {
         where: { id: conversationId },
         data: { lastMessageAt: sysMsg.createdAt },
       });
+
+      // Broadcast system message to remaining members (exclude the one who left)
+      this.emitSystemMessageBroadcast(conversationId, sysMsg, [memberId]);
 
       this.logger.log(
         `[MEMBER_LEFT] Complete: ${memberId} left conversation`,
@@ -464,11 +543,21 @@ export class ConversationEventHandler {
     }
 
     try {
+      // Lookup display names for promoter and promoted member
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: [promotedBy, memberId] } },
+        select: { id: true, displayName: true },
+      });
+      const nameMap = new Map(users.map((u) => [u.id, u.displayName]));
+
+      const actorName = nameMap.get(promotedBy) ?? 'Một thành viên';
+      const memberName = nameMap.get(memberId) ?? 'Một thành viên';
+
       const sysMsg = await this.prisma.message.create({
         data: {
           conversationId,
           type: 'SYSTEM',
-          content: `${promotedBy} transferred admin rights to ${memberId}`,
+          content: `${actorName} đã chuyển quyền quản trị cho ${memberName}`,
           metadata: {
             action: 'ADMIN_TRANSFERRED',
             fromUserId: promotedBy,
@@ -481,6 +570,9 @@ export class ConversationEventHandler {
         where: { id: conversationId },
         data: { lastMessageAt: sysMsg.createdAt },
       });
+
+      // Broadcast system message to all members
+      this.emitSystemMessageBroadcast(conversationId, sysMsg);
 
       await this.idempotency.recordProcessed(
         eventId,

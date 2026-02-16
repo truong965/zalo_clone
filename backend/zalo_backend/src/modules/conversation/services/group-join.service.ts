@@ -27,7 +27,7 @@ export class GroupJoinService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
-  ) {}
+  ) { }
 
   async requestJoin(dto: CreateJoinRequestDto, userId: string) {
     const group = await this.prisma.conversation.findUnique({
@@ -141,6 +141,33 @@ export class GroupJoinService {
 
     await this.verifyAdmin(request.conversationId, adminId);
 
+    // Check if user is already an active member (stale request scenario)
+    const existingMember = await this.prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId: request.conversationId,
+          userId: request.userId,
+        },
+      },
+    });
+
+    if (existingMember?.status === MemberStatus.ACTIVE) {
+      // User is already a member — delete the stale request and return info
+      await this.prisma.groupJoinRequest.delete({
+        where: { id: dto.requestId },
+      });
+
+      this.logger.log(
+        `[reviewJoinRequest] Deleted stale request ${dto.requestId} — user ${request.userId} is already a member`,
+      );
+
+      return {
+        success: true,
+        alreadyMember: true,
+        message: 'Người này đã là thành viên của nhóm. Yêu cầu đã được xóa.',
+      };
+    }
+
     const newStatus = dto.approve
       ? JoinRequestStatus.APPROVED
       : JoinRequestStatus.REJECTED;
@@ -234,6 +261,112 @@ export class GroupJoinService {
     });
 
     return { success: true };
+  }
+
+  // ============================================================
+  // INVITE MEMBERS (non-admin with requireApproval)
+  // ============================================================
+
+  /**
+   * Invite users to a group that has requireApproval enabled.
+   * Creates GroupJoinRequest entries with inviterId set to the inviting member.
+   * Only active members can invite; admin should use addMembers instead.
+   */
+  async inviteMembers(
+    conversationId: string,
+    targetUserIds: string[],
+    inviterId: string,
+  ): Promise<{ invitedCount: number; skippedCount: number }> {
+    const group = await this.prisma.conversation.findUnique({
+      where: { id: conversationId, deletedAt: null },
+      select: { id: true, type: true, requireApproval: true },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (group.type !== ConversationType.GROUP) {
+      throw new BadRequestException('Not a group conversation');
+    }
+
+    if (!group.requireApproval) {
+      throw new BadRequestException(
+        'Group does not require approval. Use addMembers instead.',
+      );
+    }
+
+    // Verify inviter is an active member (not admin — admin uses addMembers directly)
+    const inviterMember = await this.prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: { conversationId, userId: inviterId },
+      },
+    });
+
+    if (!inviterMember || inviterMember.status !== MemberStatus.ACTIVE) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
+
+    let invitedCount = 0;
+    let skippedCount = 0;
+
+    for (const targetUserId of targetUserIds) {
+      // Skip if already a member
+      const existing = await this.prisma.conversationMember.findUnique({
+        where: {
+          conversationId_userId: { conversationId, userId: targetUserId },
+        },
+      });
+
+      if (existing && existing.status === MemberStatus.ACTIVE) {
+        skippedCount++;
+        continue;
+      }
+
+      // Skip if already has a pending request
+      const existingRequest = await this.prisma.groupJoinRequest.findUnique({
+        where: {
+          conversationId_userId: { conversationId, userId: targetUserId },
+        },
+      });
+
+      if (
+        existingRequest &&
+        existingRequest.status === JoinRequestStatus.PENDING
+      ) {
+        skippedCount++;
+        continue;
+      }
+
+      // Create join request with inviterId
+      await this.prisma.groupJoinRequest.upsert({
+        where: {
+          conversationId_userId: { conversationId, userId: targetUserId },
+        },
+        create: {
+          conversationId,
+          userId: targetUserId,
+          inviterId,
+          status: JoinRequestStatus.PENDING,
+          message: null,
+        },
+        update: {
+          status: JoinRequestStatus.PENDING,
+          inviterId,
+          message: null,
+          reviewedBy: null,
+          reviewedAt: null,
+        },
+      });
+
+      invitedCount++;
+    }
+
+    this.logger.log(
+      `User ${inviterId} invited ${invitedCount} users to group ${conversationId} (${skippedCount} skipped)`,
+    );
+
+    return { invitedCount, skippedCount };
   }
 
   // ============================================================

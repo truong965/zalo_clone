@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import type { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
+import type { GroupListItemDto } from '../dto/group-list-item.dto';
 
 const conversationWithRelations =
   Prisma.validator<Prisma.ConversationDefaultArgs>()({
@@ -419,6 +420,10 @@ export class ConversationService {
       lastReadMessageId: currentUserMember?.lastReadMessageId
         ? currentUserMember.lastReadMessageId.toString() // Convert BigInt to String
         : null,
+      // E.3: Enriched fields for group info sidebar
+      myRole: (currentUserMember?.role as string) ?? 'MEMBER',
+      requireApproval: conversation.requireApproval ?? false,
+      isMuted: currentUserMember?.isMuted ?? false,
     };
   }
   async getConversationById(
@@ -468,13 +473,42 @@ export class ConversationService {
   }
 
   /**
+   * E.2: Toggle mute/unmute a conversation for the current user.
+   * Updates isMuted on ConversationMember.
+   */
+  async toggleMute(
+    userId: string,
+    conversationId: string,
+    muted: boolean,
+  ): Promise<{ isMuted: boolean }> {
+    const member = await this.prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: { conversationId, userId },
+      },
+    });
+
+    if (!member || member.status !== MemberStatus.ACTIVE) {
+      throw new BadRequestException('Not a member of this conversation');
+    }
+
+    await this.prisma.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: { isMuted: muted },
+    });
+
+    return { isMuted: muted };
+  }
+
+  /**
    * Get list of members for a conversation (for sender filter in search).
    * Only returns members if the requesting user is an active member.
    */
   async getConversationMembers(
     userId: string,
     conversationId: string,
-  ): Promise<{ id: string; displayName: string; avatarUrl: string | null }[]> {
+  ): Promise<
+    { id: string; displayName: string; avatarUrl: string | null; role: string }[]
+  > {
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
@@ -492,6 +526,7 @@ export class ConversationService {
               },
             },
           },
+          orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
         },
       },
     });
@@ -504,6 +539,102 @@ export class ConversationService {
       id: m.user.id,
       displayName: m.user.displayName,
       avatarUrl: m.user.avatarUrl,
+      role: m.role,
     }));
+  }
+
+  /**
+   * Get user's GROUP conversations list (cursor-paginated)
+   * Returns groups where user is an ACTIVE member, ordered by lastMessageAt desc
+   */
+  async getUserGroups(
+    userId: string,
+    cursor?: string,
+    limit: number = 20,
+    search?: string,
+  ): Promise<CursorPaginatedResult<GroupListItemDto>> {
+    const groups = await this.prisma.conversation.findMany({
+      where: {
+        type: ConversationType.GROUP,
+        members: { some: { userId, status: MemberStatus.ACTIVE } },
+        deletedAt: null,
+        ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+      },
+      ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
+      orderBy: { lastMessageAt: 'desc' },
+      include: {
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            content: true,
+            type: true,
+            senderId: true,
+            createdAt: true,
+            deletedById: true,
+          },
+        },
+        members: {
+          where: { status: MemberStatus.ACTIVE },
+          select: {
+            userId: true,
+            role: true,
+            isMuted: true,
+            unreadCount: true,
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return CursorPaginationHelper.buildResult({
+      items: groups,
+      limit,
+      getCursor: (g) => g.id,
+      mapToDto: (g): GroupListItemDto => {
+        const currentMember = g.members.find(
+          (m: { userId: string }) => m.userId === userId,
+        );
+        const otherMembers = g.members
+          .filter((m: { userId: string }) => m.userId !== userId)
+          .slice(0, 3);
+        const lastMsg = g.messages[0];
+
+        return {
+          id: g.id,
+          name: g.name,
+          avatarUrl: g.avatarUrl,
+          memberCount: g.members.length,
+          membersPreview: otherMembers.map(
+            (m: { user: { displayName: string } }) => m.user.displayName,
+          ),
+          lastMessageAt: g.lastMessageAt?.toISOString() ?? null,
+          lastMessage: lastMsg
+            ? {
+              id: lastMsg.id.toString(),
+              content: lastMsg.deletedById
+                ? 'Tin nhắn đã bị thu hồi'
+                : lastMsg.content,
+              type: lastMsg.type,
+              senderId: lastMsg.senderId,
+              createdAt: lastMsg.createdAt.toISOString(),
+            }
+            : null,
+          unreadCount: currentMember?.unreadCount ?? 0,
+          myRole: (currentMember?.role as string) ?? 'MEMBER',
+          isMuted: currentMember?.isMuted ?? false,
+          requireApproval: g.requireApproval ?? false,
+          createdAt: g.createdAt.toISOString(),
+          updatedAt: g.updatedAt.toISOString(),
+        };
+      },
+    });
   }
 }

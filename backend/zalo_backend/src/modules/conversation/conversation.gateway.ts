@@ -15,6 +15,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
@@ -25,6 +26,7 @@ import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
 import { ConversationService } from './services/conversation.service';
 import { GroupService } from './services/group.service';
 import { GroupJoinService } from './services/group-join.service';
+import { PrismaService } from '@database/prisma.service';
 import {
   ConversationGatewayNotification,
   ConversationRealtimeService,
@@ -37,6 +39,7 @@ import { RemoveMemberDto } from './dto/remove-member.dto';
 import { TransferAdminDto } from './dto/transfer-admin.dto';
 import { CreateJoinRequestDto } from './dto/join-request.dto';
 import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
+import { InviteMembersDto } from './dto/invite-members.dto';
 
 @WebSocketGateway({
   cors: { origin: '*', credentials: true },
@@ -58,6 +61,7 @@ export class ConversationGateway implements OnGatewayInit {
     private readonly groupJoinService: GroupJoinService,
     private readonly realtime: ConversationRealtimeService,
     private readonly socketState: SocketStateService,
+    private readonly prisma: PrismaService,
   ) { }
 
   afterInit() {
@@ -338,6 +342,33 @@ export class ConversationGateway implements OnGatewayInit {
     }
   }
 
+  @SubscribeMessage(SocketEvents.GROUP_INVITE_MEMBERS)
+  async handleInviteMembers(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: InviteMembersDto,
+  ) {
+    if (!client.userId) {
+      throw new Error('Unauthenticated');
+    }
+    try {
+      const { result, notifications } = await this.realtime.inviteMembers(
+        dto,
+        client.userId,
+        SocketEvents.GROUP_JOIN_REQUEST_RECEIVED,
+      );
+
+      await this.emitNotifications(notifications);
+      return { result };
+    } catch (error) {
+      this.logger.error('Error inviting members', (error as Error).stack);
+      client.emit(SocketEvents.ERROR, {
+        event: SocketEvents.GROUP_INVITE_MEMBERS,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
   @SubscribeMessage(SocketEvents.GROUP_PIN_MESSAGE)
   async handlePinMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -393,6 +424,82 @@ export class ConversationGateway implements OnGatewayInit {
         error: (error as Error).message,
       });
       throw error;
+    }
+  }
+
+  /**
+   * Listen for system-message.broadcast events emitted by ConversationEventHandler
+   * and broadcast message:new + conversation:list:itemUpdated to all active members.
+   */
+  @OnEvent('system-message.broadcast')
+  async handleSystemMessageBroadcast(payload: {
+    conversationId: string;
+    message: Record<string, unknown>;
+    excludeUserIds?: string[];
+  }): Promise<void> {
+    const { conversationId, message, excludeUserIds = [] } = payload;
+    const excludeSet = new Set(excludeUserIds);
+
+    try {
+      const members =
+        await this.conversationService.getActiveMembers(conversationId);
+
+      const recipientIds = members
+        .map((m) => m.userId)
+        .filter((uid) => !excludeSet.has(uid));
+
+      if (recipientIds.length === 0) return;
+
+      const isoCreatedAt =
+        typeof message.createdAt === 'string'
+          ? message.createdAt
+          : new Date(message.createdAt as string | number | Date).toISOString();
+
+      const listItemPayload = {
+        conversationId,
+        lastMessage: {
+          id: String(message.id),
+          content: (message.content as string) ?? null,
+          type: message.type,
+          senderId: (message.senderId as string) ?? null,
+          createdAt: isoCreatedAt,
+        },
+        lastMessageAt: isoCreatedAt,
+      };
+
+      await Promise.all(
+        recipientIds.map(async (userId) => {
+          // Emit message:new
+          await this.emitToUser(userId, SocketEvents.MESSAGE_NEW, {
+            message,
+            conversationId,
+          });
+          // Emit conversation:list:itemUpdated with unreadCountDelta
+          await this.emitToUser(
+            userId,
+            SocketEvents.CONVERSATION_LIST_ITEM_UPDATED,
+            { ...listItemPayload, unreadCountDelta: 1 },
+          );
+          // Increment unread count in DB
+          await this.prisma.conversationMember
+            .update({
+              where: { conversationId_userId: { conversationId, userId } },
+              data: { unreadCount: { increment: 1 } },
+            })
+            .catch(() => {
+              /* member may have just left */
+            });
+        }),
+      );
+
+      this.logger.debug(
+        `[SYSTEM_MSG_BROADCAST] Broadcasted to ${recipientIds.length} members in ${conversationId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[SYSTEM_MSG_BROADCAST] Failed to broadcast system message`,
+        (error as Error).stack,
+      );
     }
   }
 
