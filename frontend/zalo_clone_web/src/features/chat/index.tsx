@@ -282,6 +282,20 @@ export function ChatFeature() {
                   });
       }, [queryClient, conversationsQueryKey]);
 
+      // Track which messages have already been marked as seen to avoid re-emitting
+      const seenMessageIdsRef = useRef(new Set<string>());
+
+      // Reset seen tracking when conversation changes
+      useEffect(() => {
+            seenMessageIdsRef.current = new Set<string>();
+      }, [selectedId]);
+
+      // Use a ref to access current messages without adding it as a dependency
+      const messagesRef = useRef(messages);
+      useEffect(() => {
+            messagesRef.current = messages;
+      }, [messages]);
+
       useEffect(() => {
             if (!selectedId) return;
             if (!isMsgSocketConnected) return;
@@ -290,17 +304,26 @@ export function ChatFeature() {
             const latestMessageId = messages[messages.length - 1]?.id;
             resetConversationUnread(selectedId, latestMessageId);
 
-            const messageIds = messages
+            // Only emit seen for messages NOT yet tracked in our local set
+            const unseenMessageIds = messages
                   .filter((m) => (m.senderId ?? null) !== (currentUserId ?? null))
+                  .filter((m) => !seenMessageIdsRef.current.has(m.id))
                   .slice(-50)
                   .map((m) => m.id);
 
-            if (messageIds.length === 0) return;
+            if (unseenMessageIds.length === 0) return;
+
+            // Track these IDs so we never re-emit for them
+            for (const id of unseenMessageIds) {
+                  seenMessageIdsRef.current.add(id);
+            }
 
             emitMarkAsSeen({
                   conversationId: selectedId,
-                  messageIds,
+                  messageIds: unseenMessageIds,
             });
+            // NOTE: `messages` is intentionally kept as dependency so we catch NEW messages arriving.
+            // The seenMessageIdsRef guard prevents re-emitting for messages already processed.
       }, [selectedId, isMsgSocketConnected, messages, currentUserId, emitMarkAsSeen, resetConversationUnread]);
 
       const handleSendText = useCallback(async (text: string) => {
@@ -325,7 +348,10 @@ export function ChatFeature() {
                         ? { id: currentUserId, displayName: 'Bạn', avatarUrl: null }
                         : null,
                   parentMessage: null,
-                  receipts: [],
+                  deliveredCount: 0,
+                  seenCount: 0,
+                  totalRecipients: 0,
+                  directReceipts: null,
                   mediaAttachments: [],
             };
 
@@ -588,6 +614,7 @@ export function ChatFeature() {
                                                 msgLoadNewerRef={msgLoadNewerRef}
                                                 isLoadingNewer={isLoadingNewer}
                                                 onRetry={(m) => handleRetryMessage(m)}
+                                                isDirect={selectedConversation.type === 'DIRECT'}
                                           />
 
                                           <ChatInput

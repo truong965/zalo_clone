@@ -502,11 +502,20 @@ export interface MessageParentMessage {
   senderId?: string | null;
 }
 
+/** @deprecated Legacy receipt item — kept for reference only */
 export interface MessageReceiptItem {
   userId: string;
   status: ReceiptStatus;
   timestamp: string;
 }
+
+/** JSONB shape for direct (1v1) receipts stored on the message */
+export interface DirectReceiptEntry {
+  delivered: string | null;
+  seen: string | null;
+}
+
+export type DirectReceipts = Record<string, DirectReceiptEntry>;
 
 export interface MessageMediaAttachmentItem {
   id: string;
@@ -524,10 +533,18 @@ export interface MessageMediaAttachmentItem {
 export interface MessageListItem extends Message {
   sender?: MessageSender | null;
   parentMessage?: MessageParentMessage | null;
-  receipts?: MessageReceiptItem[];
   mediaAttachments?: MessageMediaAttachmentItem[];
+  /** Number of recipients who received a delivery ack (group only) */
+  deliveredCount?: number;
+  /** Number of recipients who have seen the message (group counter / direct derived) */
+  seenCount?: number;
+  /** Total expected recipients excluding sender */
+  totalRecipients?: number;
+  /** Per-user delivery/seen timestamps for DIRECT conversations (null for GROUP) */
+  directReceipts?: DirectReceipts | null;
 }
 
+/** @deprecated Legacy receipt — kept for reference only */
 export interface MessageReceipt {
   messageId: string;
   userId: string;

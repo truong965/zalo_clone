@@ -22,6 +22,8 @@ interface ChatContentProps {
       /** Whether newer messages are currently being fetched */
       isLoadingNewer?: boolean;
       onRetry?: (msg: ChatMessage) => void;
+      /** Whether the current conversation is DIRECT (1v1) */
+      isDirect?: boolean;
 }
 
 export function ChatContent({
@@ -41,6 +43,7 @@ export function ChatContent({
       msgLoadNewerRef,
       isLoadingNewer,
       onRetry,
+      isDirect = true,
 }: ChatContentProps) {
       // Unified bottom indicator:
       // 1. isJumpedAway → "Quay về tin nhắn mới nhất" button
@@ -67,6 +70,7 @@ export function ChatContent({
                         msgLoadNewerRef={msgLoadNewerRef}
                         isJumpedAway={isJumpedAway}
                         isLoadingNewer={isLoadingNewer}
+                        isDirect={isDirect}
                   />
                   {showReturnToLatest && (
                         <div className="sticky bottom-4 ml-auto mr-4 w-fit z-10">
