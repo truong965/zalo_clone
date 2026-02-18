@@ -113,7 +113,10 @@ describe('MessageService', () => {
           deletedAt: null,
           sender: { id: 'user-1', displayName: 'U1', avatarUrl: null },
           parentMessage: null,
-          receipts: [],
+          deliveredCount: 0,
+          seenCount: 0,
+          totalRecipients: 1,
+          directReceipts: null,
           mediaAttachments: [
             {
               id: 'media-1',
@@ -140,7 +143,10 @@ describe('MessageService', () => {
           deletedAt: null,
           sender: { id: 'user-2', displayName: 'U2', avatarUrl: null },
           parentMessage: null,
-          receipts: [],
+          deliveredCount: 0,
+          seenCount: 0,
+          totalRecipients: 1,
+          directReceipts: null,
           mediaAttachments: [],
           deletedById: null,
         },

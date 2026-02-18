@@ -67,8 +67,7 @@ import { PrismaService } from 'src/database/prisma.service';
 // Validation pipe for incoming messages
 @UsePipes(WsValidationPipe)
 export class SocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -90,7 +89,7 @@ export class SocketGateway
     private readonly prisma: PrismaService,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
-  ) {}
+  ) { }
 
   private async notifyFriendsPresence(
     userId: string,
@@ -299,6 +298,14 @@ export class SocketGateway
       });
 
       await this.notifyFriendsPresence(user.id, true);
+
+      // PHASE 2: Emit event for module gateways to setup their subscriptions
+      // MessageGateway will listen to this and subscribe user to receipt updates
+      this.eventEmitter.emit(SocketEvents.USER_SOCKET_CONNECTED, {
+        userId: user.id,
+        socketId: client.id,
+        socket: client,
+      });
 
       // --- VÍ DỤ SỬ DỤNG SAFE INTERVAL (TASK 2 APPLIED) ---
       // Gửi packet 'pong' application-level mỗi 30s để đảm bảo kết nối "sống"

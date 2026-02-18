@@ -15,19 +15,21 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
 import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
 import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
-import { ReceiptStatus } from '@prisma/client';
+import { ConversationType } from '@prisma/client';
 
 import { MessageService } from './services/message.service';
 import { ReceiptService } from './services/receipt.service';
 import { MessageQueueService } from './services/message-queue.service';
 import { MessageBroadcasterService } from './services/message-broadcaster.service';
 import { MessageRealtimeService } from './services/message-realtime.service';
+import { PrismaService } from 'src/database/prisma.service';
 
 import { SendMessageDto } from './dto/send-message.dto';
 import { MarkAsReadDto } from './dto/mark-as-read.dto';
@@ -58,38 +60,61 @@ export class MessageGateway implements OnGatewayInit {
     private readonly broadcaster: MessageBroadcasterService,
     private readonly realtime: MessageRealtimeService,
     private readonly socketState: SocketStateService,
+    private readonly prisma: PrismaService,
   ) { }
 
   afterInit() {
     this.logger.log('📨 Message Gateway initialized');
   }
 
-  async handleUserConnected(client: AuthenticatedSocket) {
-    const userId = client.userId;
-    this.logger.log(`📱 User ${userId} connected to messaging`);
+  /**
+   * Listen to USER_SOCKET_CONNECTED event from SocketGateway
+   * This is emitted AFTER authentication, so userId is guaranteed to be set
+   */
+  @OnEvent(SocketEvents.USER_SOCKET_CONNECTED)
+  async handleUserConnected(payload: {
+    userId: string;
+    socketId: string;
+    socket: AuthenticatedSocket;
+  }) {
+    const { userId, socket } = payload;
+    this.logger.log(`📱 User ${userId} authenticated - setting up message subscriptions`);
 
     try {
-      await this.realtime.syncOfflineMessages(client);
+      await this.realtime.syncOfflineMessages(socket);
 
-      if (!userId) return;
+      if (!userId) {
+        this.logger.warn(`Cannot subscribe receipts: userId is undefined for socket ${socket.id}`);
+        return;
+      }
+
+      // Subscribe user to their personal receipt channel
       const unsubReceipts = await this.realtime.subscribeToReceipts(
         userId,
         async (payload) =>
           this.emitToUser(userId, SocketEvents.MESSAGE_RECEIPT_UPDATE, payload),
       );
 
-      this.addSubscription(client.id, unsubReceipts);
+      this.addSubscription(socket.id, unsubReceipts);
+      this.logger.debug(`✅ User ${userId} subscribed to receipt channel`);
     } catch (error) {
       this.logger.error(
-        `Error handling user connection for ${userId}`,
+        `Error subscribing user ${userId} to message channels`,
         (error as Error).stack,
       );
     }
   }
 
-  async handleUserDisconnected(client: AuthenticatedSocket) {
-    await this.cleanupSubscriptions(client.id);
-    this.logger.log(`📴 User ${client.userId} disconnected from messaging`);
+  /**
+   * Listen to USER_SOCKET_DISCONNECTED event from SocketGateway
+   */
+  @OnEvent(SocketEvents.USER_SOCKET_DISCONNECTED)
+  async handleUserDisconnected(payload: {
+    userId: string;
+    socketId: string;
+  }) {
+    await this.cleanupSubscriptions(payload.socketId);
+    this.logger.log(`📴 User ${payload.userId} disconnected - cleaned up message subscriptions`);
   }
 
   @SubscribeMessage(SocketEvents.MESSAGE_SEND)
@@ -162,17 +187,30 @@ export class MessageGateway implements OnGatewayInit {
         throw new Error('Unauthenticated');
       }
       const messageId = BigInt(data.messageId);
-      await this.receiptService.markAsDelivered(messageId, userId);
 
-      const message = await this.messageService.findByClientMessageId(
-        messageId.toString(),
-      );
+      // Look up the message to get conversationId and determine type
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: {
+          senderId: true,
+          conversationId: true,
+          conversation: { select: { type: true } },
+        },
+      });
 
-      if (message && message.senderId) {
+      if (!message) return;
+
+      // Only mark direct delivered in JSONB for DIRECT conversations
+      if (message.conversation.type === ConversationType.DIRECT) {
+        await this.receiptService.markDirectDelivered(messageId, userId);
+      }
+
+      if (message.senderId) {
         await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
           messageId,
+          conversationId: message.conversationId,
           userId,
-          status: ReceiptStatus.DELIVERED,
+          type: 'delivered',
           timestamp: new Date(),
         });
       }
@@ -278,6 +316,20 @@ export class MessageGateway implements OnGatewayInit {
         conversationId,
         userId,
         (payload) => {
+          // Handle conversation:read events (group read broadcasts)
+          if (payload._type === 'conversation:read') {
+            if (payload.userId !== userId) {
+              client.emit(SocketEvents.CONVERSATION_READ, {
+                conversationId: payload.conversationId,
+                userId: payload.userId,
+                messageId: payload.messageId,
+                timestamp: payload.timestamp,
+              });
+            }
+            return;
+          }
+
+          // Normal new message payload
           if (payload.recipientIds.includes(userId)) {
             client.emit(SocketEvents.MESSAGE_NEW, {
               message: payload.message,

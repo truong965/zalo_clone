@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MemberStatus, Message, ReceiptStatus } from '@prisma/client';
+import { ConversationType, MemberStatus, Message } from '@prisma/client';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { safeJSON } from 'src/common/utils/json.util';
@@ -94,15 +94,16 @@ export class MessageRealtimeService {
       }
 
       const messageIds = offlineMessages.map((qm) => qm.messageId);
-      await this.receiptService.bulkMarkAsDelivered(messageIds, userId);
+      await this.receiptService.bulkMarkDirectDelivered(messageIds, userId);
 
       for (const qm of offlineMessages) {
         const message = qm.data as Message;
         if (message.senderId && message.senderId !== userId) {
           await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
             messageId: message.id,
+            conversationId: message.conversationId,
             userId,
-            status: ReceiptStatus.DELIVERED,
+            type: 'delivered',
             timestamp: new Date(),
           });
         }
@@ -186,6 +187,9 @@ export class MessageRealtimeService {
       throw new Error('Not a member of this conversation');
     }
 
+    const conversationType =
+      await this.receiptService.getConversationType(dto.conversationId);
+
     const messageIds = dto.messageIds
       .map((id) => {
         try {
@@ -196,23 +200,65 @@ export class MessageRealtimeService {
       })
       .filter((id): id is bigint => id !== null);
 
-    await this.receiptService.markAsSeen(messageIds, userId);
-    await this.resetUnreadCount(dto.conversationId, userId);
+    if (conversationType === ConversationType.DIRECT) {
+      // ─── DIRECT: Update directReceipts JSONB + emit per-message receipt
+      // markDirectSeen returns ONLY the IDs that were actually updated (idempotent)
+      const { updatedIds, senderMap } = await this.receiptService.markDirectSeen(messageIds, userId);
+      await this.resetUnreadCount(dto.conversationId, userId);
 
-    for (const messageId of messageIds) {
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: { senderId: true },
-      });
+      // Only broadcast for messages that actually transitioned to SEEN (not already seen)
+      // Group by senderId to reduce broadcasts
+      if (updatedIds.length > 0) {
+        const bySender = new Map<string, bigint[]>();
+        for (const msgId of updatedIds) {
+          const senderId = senderMap.get(msgId);
+          if (senderId && senderId !== userId) {
+            const list = bySender.get(senderId) ?? [];
+            list.push(msgId);
+            bySender.set(senderId, list);
+          }
+        }
 
-      if (message?.senderId && message.senderId !== userId) {
-        await this.broadcaster.broadcastReceiptUpdate(message.senderId, {
-          messageId,
-          userId,
-          status: ReceiptStatus.SEEN,
-          timestamp: new Date(),
-        });
+        // Broadcast per sender (typically 1 sender in a DIRECT conversation)
+        for (const [senderId, msgIds] of bySender) {
+          for (const messageId of msgIds) {
+            await this.broadcaster.broadcastReceiptUpdate(senderId, {
+              messageId,
+              conversationId: dto.conversationId,
+              userId,
+              type: 'seen',
+              timestamp: new Date(),
+            });
+          }
+        }
+
+        this.logger.debug(
+          `Broadcasted seen receipts for ${updatedIds.length} actually-updated messages in ${dto.conversationId}`,
+        );
       }
+    } else {
+      // ─── GROUP: Update ConversationMember.lastReadMessageId + batch increment seenCount
+      const latestMessageId =
+        messageIds.length > 0
+          ? messageIds.reduce((a, b) => (a > b ? a : b))
+          : null;
+
+      if (latestMessageId) {
+        await this.receiptService.markGroupConversationRead(
+          userId,
+          dto.conversationId,
+          latestMessageId,
+        );
+      }
+      await this.resetUnreadCount(dto.conversationId, userId);
+
+      // Emit conversation:read event for group (lightweight — no per-message detail)
+      await this.broadcaster.broadcastConversationRead(dto.conversationId, {
+        userId,
+        conversationId: dto.conversationId,
+        messageId: latestMessageId?.toString() ?? null,
+        timestamp: new Date(),
+      });
     }
   }
 
@@ -297,6 +343,11 @@ export class MessageRealtimeService {
     emitToUser: EmitToUserFn,
     isUserOnline: (userId: string) => Promise<boolean>,
   ): Promise<void> {
+    // Determine conversation type to use correct receipt method
+    const convoType =
+      await this.receiptService.getConversationType(message.conversationId);
+    const isDirect = convoType === ConversationType.DIRECT;
+
     for (const recipientId of recipientIds) {
       const online = await isUserOnline(recipientId);
 
@@ -306,12 +357,19 @@ export class MessageRealtimeService {
           conversationId: message.conversationId,
         });
 
-        await this.receiptService.markAsDelivered(message.id, recipientId);
+        if (isDirect) {
+          await this.receiptService.markDirectDelivered(
+            message.id,
+            recipientId,
+          );
+        }
+        // For group: no per-message delivered tracking needed
 
         await this.broadcaster.broadcastReceiptUpdate(senderId, {
           messageId: message.id,
+          conversationId: message.conversationId,
           userId: recipientId,
-          status: ReceiptStatus.DELIVERED,
+          type: 'delivered',
           timestamp: new Date(),
         });
 

@@ -153,8 +153,8 @@ directReceipts?: Record<string, { delivered: string | null; seen: string | null 
 
 // Group Chat:
 - seenCount === totalRecipients → "✓✓ Tất cả đã xem"
-- seenCount > 0 → "✓✓ N/M đã xem"
-- deliveredCount > 0 → "✓✓ N/M đã nhận"
+- seenCount > 0 → "✓✓ đã xem"
+- deliveredCount > 0 → "✓✓ đã nhận"
 - 0 → "✓ Đang gửi"
 ```
 
@@ -217,7 +217,6 @@ directReceipts?: Record<string, { delivered: string | null; seen: string | null 
 | A.1 | Thêm 4 columns vào Message model (Prisma schema) |
 | A.2 | Tạo Prisma migration |
 | A.3 | Viết backfill script (SQL hoặc Node.js) |
-| A.4 | Test migration trên dev DB |
 
 ### Phase B: Backend Refactor (2-3 ngày)
 

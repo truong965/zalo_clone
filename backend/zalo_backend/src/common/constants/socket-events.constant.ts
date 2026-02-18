@@ -43,6 +43,7 @@ export const SocketEvents = {
   MESSAGE_NEW: 'message:new', // New incoming message
   MESSAGE_SENT_ACK: 'message:sent', // Server confirms send
   MESSAGE_RECEIPT_UPDATE: 'message:receipt', // Delivery/seen status change
+  CONVERSATION_READ: 'conversation:read', // Group member read conversation
   TYPING_STATUS: 'typing:status', // Someone is typing
 
   // Sync events

@@ -39,7 +39,6 @@ async function cleanDatabase() {
   console.log('🗑️  Cleaning database...');
 
   await prisma.$transaction([
-    prisma.messageReceipt.deleteMany(),
     prisma.message.deleteMany(),
     prisma.groupJoinRequest.deleteMany(),
     prisma.conversationMember.deleteMany(),

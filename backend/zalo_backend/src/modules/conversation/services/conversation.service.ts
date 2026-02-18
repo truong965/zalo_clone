@@ -137,8 +137,12 @@ export class ConversationService {
         where: {
           type: ConversationType.DIRECT,
           AND: [
-            { members: { some: { userId: user1, status: MemberStatus.ACTIVE } } },
-            { members: { some: { userId: user2, status: MemberStatus.ACTIVE } } },
+            {
+              members: { some: { userId: user1, status: MemberStatus.ACTIVE } },
+            },
+            {
+              members: { some: { userId: user2, status: MemberStatus.ACTIVE } },
+            },
           ],
         },
         select: { id: true },
@@ -325,14 +329,15 @@ export class ConversationService {
       new Set(
         conversations
           .filter((c) => c.type === ConversationType.DIRECT)
-          .map((c) =>
-            c.members.find((m) => m.userId !== userId)?.user?.id ?? null,
+          .map(
+            (c) => c.members.find((m) => m.userId !== userId)?.user?.id ?? null,
           )
           .filter((id): id is string => !!id),
       ),
     );
 
-    const privacyMap = await this.privacyService.getManySettings(directOtherUserIds);
+    const privacyMap =
+      await this.privacyService.getManySettings(directOtherUserIds);
     await Promise.all(
       directOtherUserIds.map(async (otherId) => {
         const settings = privacyMap.get(otherId);
@@ -448,9 +453,7 @@ export class ConversationService {
     const onlineMap = new Map<string, boolean>();
 
     if (conversation.type === ConversationType.DIRECT) {
-      const otherMember = conversation.members.find(
-        (m) => m.userId !== userId,
-      );
+      const otherMember = conversation.members.find((m) => m.userId !== userId);
       if (otherMember?.user) {
         const otherId = otherMember.user.id;
         const privacyMap = await this.privacyService.getManySettings([otherId]);
@@ -507,7 +510,12 @@ export class ConversationService {
     userId: string,
     conversationId: string,
   ): Promise<
-    { id: string; displayName: string; avatarUrl: string | null; role: string }[]
+    {
+      id: string;
+      displayName: string;
+      avatarUrl: string | null;
+      role: string;
+    }[]
   > {
     const conversation = await this.prisma.conversation.findFirst({
       where: {
@@ -558,7 +566,9 @@ export class ConversationService {
         type: ConversationType.GROUP,
         members: { some: { userId, status: MemberStatus.ACTIVE } },
         deletedAt: null,
-        ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+        ...(search
+          ? { name: { contains: search, mode: 'insensitive' as const } }
+          : {}),
       },
       ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
       orderBy: { lastMessageAt: 'desc' },

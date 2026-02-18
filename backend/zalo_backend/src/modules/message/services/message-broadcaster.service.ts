@@ -13,8 +13,16 @@ export interface NewMessagePayload {
 
 export interface ReceiptUpdatePayload {
   messageId: bigint;
+  conversationId: string;
   userId: string;
-  status: 'DELIVERED' | 'SEEN';
+  type: 'delivered' | 'seen';
+  timestamp: Date;
+}
+
+export interface ConversationReadPayload {
+  userId: string;
+  conversationId: string;
+  messageId: string | null;
   timestamp: Date;
 }
 
@@ -28,7 +36,7 @@ export interface TypingStatusPayload {
 export class MessageBroadcasterService implements OnModuleInit {
   private readonly logger = new Logger(MessageBroadcasterService.name);
 
-  constructor(private readonly redisPubSub: RedisPubSubService) {}
+  constructor(private readonly redisPubSub: RedisPubSubService) { }
 
   onModuleInit() {
     this.logger.log('Message Broadcaster Service initialized');
@@ -65,11 +73,36 @@ export class MessageBroadcasterService implements OnModuleInit {
       await this.redisPubSub.publish(channel, payload);
 
       this.logger.debug(
-        `Broadcasted ${payload.status} receipt for message ${payload.messageId} to sender ${senderId}`,
+        `Broadcasted ${payload.type} receipt for message ${payload.messageId} to sender ${senderId}`,
       );
     } catch (error) {
       this.logger.error(
         'Failed to broadcast receipt update',
+        (error as Error).stack,
+      );
+    }
+  }
+
+  /**
+   * Broadcast a group conversation:read event to all members of the conversation.
+   */
+  async broadcastConversationRead(
+    conversationId: string,
+    payload: ConversationReadPayload,
+  ): Promise<void> {
+    try {
+      const channel = RedisKeyBuilder.channels.newMessage(conversationId);
+      await this.redisPubSub.publish(channel, {
+        _type: 'conversation:read',
+        ...payload,
+      });
+
+      this.logger.debug(
+        `Broadcasted conversation:read for ${conversationId} by user ${payload.userId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        'Failed to broadcast conversation read',
         (error as Error).stack,
       );
     }

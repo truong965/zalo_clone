@@ -95,13 +95,8 @@ enum MessageType {
   @@map("message_type")
 }
 
-enum ReceiptStatus {
-  SENT // Server confirmed receipt
-  DELIVERED // Reached recipient's device
-  SEEN // User viewed the message
-
-  @@map("receipt_status")
-}
+// ReceiptStatus enum removed — receipt data now lives on Message model
+// 1v1: directReceipts JSONB  |  Group: deliveredCount/seenCount counters
 
 // --- Media ---
 enum MediaType {
@@ -704,6 +699,14 @@ model Message {
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
+  // 🆕 Receipt counters (group conversations)
+  deliveredCount  Int   @default(0) @map("delivered_count")
+  seenCount       Int   @default(0) @map("seen_count")
+  totalRecipients Int   @default(0) @map("total_recipients")
+
+  // 🆕 JSONB receipt (1v1/DIRECT conversations only)
+  directReceipts  Json? @map("direct_receipts") @db.JsonB
+
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User?        @relation(fields: [senderId], references: [id])
@@ -713,7 +716,6 @@ model Message {
   replies       Message[] @relation("Reply")
 
   mediaAttachments MediaAttachment[]
-  receipts         MessageReceipt[]
 
   @@index([conversationId, createdAt(sort: Desc)])
   @@index([senderId, createdAt(sort: Desc)])
@@ -723,23 +725,9 @@ model Message {
   @@map("messages")
 }
 
-/**
- * Model: MessageReceipt
- * Tracks Sent/Delivered/Seen status per user per message.
- */
-model MessageReceipt {
-  messageId BigInt        @map("message_id")
-  userId    String        @map("user_id") @db.Uuid
-  status    ReceiptStatus
-  timestamp DateTime      @default(now()) @db.Timestamptz
-
-  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@id([messageId, userId])
-  @@index([userId, status, timestamp])
-  @@index([messageId, status])
-  @@map("message_receipts")
-}
+// MessageReceipt model removed — receipt data now embedded in Message model
+// 1v1: directReceipts JSONB { [userId]: { delivered: ISO|null, seen: ISO|null } }
+// Group: deliveredCount / seenCount / totalRecipients counters
 
 // ============================================================================
 // 6. MEDIA MODULE

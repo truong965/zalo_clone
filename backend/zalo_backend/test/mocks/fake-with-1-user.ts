@@ -10,7 +10,6 @@ import {
   FriendshipStatus,
   ConversationType,
   MessageType,
-  ReceiptStatus,
   PrivacyLevel,
   Gender,
   MediaType,
@@ -45,7 +44,6 @@ const CONFIG = {
 async function cleanDatabase() {
   console.log('🗑️  Cleaning database...');
   // Xóa theo thứ tự phụ thuộc khóa ngoại ngược
-  await prisma.messageReceipt.deleteMany();
   await prisma.mediaAttachment.deleteMany();
   await prisma.message.deleteMany();
   await prisma.groupJoinRequest.deleteMany();
@@ -293,7 +291,6 @@ async function seedDetailedMessagesForConversation(
   });
 
   const mediaData: Prisma.MediaAttachmentCreateManyInput[] = [];
-  const receiptsData: Prisma.MessageReceiptCreateManyInput[] = [];
   const updates: any[] = []; // Promises for updating replies
 
   for (let i = 0; i < createdMessages.length; i++) {
@@ -346,7 +343,7 @@ async function seedDetailedMessagesForConversation(
   await Promise.all(updates);
 
 
-  // --- E. Receipts & Unread Logic (Giữ nguyên logic cũ nhưng mapping lại status) ---
+  // --- E. Unread Logic (receipts removed in hybrid approach) ---
   for (const participant of participants) {
     const isUpToDate = faker.datatype.boolean(0.8);
     let lastReadIndex = createdMessages.length - 1;
@@ -358,25 +355,10 @@ async function seedDetailedMessagesForConversation(
 
     for (let i = 0; i < createdMessages.length; i++) {
       const msg = createdMessages[i];
-      let status: ReceiptStatus = ReceiptStatus.SENT;
 
-      if (msg.senderId === participant.id) {
-        status = ReceiptStatus.SEEN;
-      } else {
-        if (i <= lastReadIndex) {
-          status = ReceiptStatus.SEEN;
-        } else {
-          status = ReceiptStatus.DELIVERED;
-          unreadCount++;
-        }
+      if (msg.senderId !== participant.id && i > lastReadIndex) {
+        unreadCount++;
       }
-
-      receiptsData.push({
-        messageId: msg.id,
-        userId: participant.id,
-        status,
-        timestamp: new Date(msg.createdAt.getTime() + 1000),
-      });
 
       if (i === lastReadIndex) {
         lastReadMessageId = msg.id;
@@ -397,10 +379,6 @@ async function seedDetailedMessagesForConversation(
         isMuted: faker.datatype.boolean(0.1), // 10% muted
       },
     });
-  }
-
-  if (receiptsData.length > 0) {
-    await prisma.messageReceipt.createMany({ data: receiptsData, skipDuplicates: true });
   }
 
   // Update Last Message

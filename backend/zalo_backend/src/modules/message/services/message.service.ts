@@ -175,6 +175,30 @@ export class MessageService {
 
     let message: Message;
 
+    // Compute receipt fields for hybrid approach
+    const isDirect = targetUserId !== null;
+    let totalRecipients: number;
+    let directReceipts: Record<string, { delivered: null; seen: null }> | null;
+
+    if (isDirect) {
+      // 1v1: totalRecipients = 1, initialize JSONB with recipient entry
+      totalRecipients = 1;
+      directReceipts = {
+        [targetUserId]: { delivered: null, seen: null },
+      };
+    } else {
+      // Group: totalRecipients = memberCount - 1 (excluding sender)
+      const memberCount = await this.prisma.conversationMember.count({
+        where: {
+          conversationId: dto.conversationId,
+          status: MemberStatus.ACTIVE,
+          userId: { not: senderId },
+        },
+      });
+      totalRecipients = memberCount;
+      directReceipts = null;
+    }
+
     try {
       message = await this.prisma.$transaction(async (tx) => {
         const msg = await tx.message.create({
@@ -186,6 +210,8 @@ export class MessageService {
             metadata: dto.metadata || {},
             clientMessageId: dto.clientMessageId,
             replyToId: replyToId,
+            totalRecipients,
+            directReceipts: directReceipts ?? undefined,
           },
         });
 
@@ -427,13 +453,6 @@ export class MessageService {
             senderId: true,
           },
         },
-        receipts: {
-          select: {
-            userId: true,
-            status: true,
-            timestamp: true,
-          },
-        },
         mediaAttachments: {
           select: {
             id: true,
@@ -514,9 +533,6 @@ export class MessageService {
       },
       parentMessage: {
         select: { id: true, content: true, senderId: true },
-      },
-      receipts: {
-        select: { userId: true, status: true, timestamp: true },
       },
       mediaAttachments: {
         select: {

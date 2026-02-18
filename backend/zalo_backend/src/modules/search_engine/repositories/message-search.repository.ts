@@ -141,7 +141,7 @@ export class MessageSearchRepository {
         ) as preview_snippet,
         ts_rank(m.search_vector, plainto_tsquery('english', unaccent($1::text))) as rank_score,
         (SELECT COUNT(*) FROM messages WHERE reply_to_message_id = m.id AND deleted_at IS NULL) as reply_count,
-        (SELECT COUNT(*) FROM message_receipts WHERE message_id = m.id AND status = 'SEEN') as seen_count
+        m.seen_count as seen_count
       FROM messages m
       JOIN conversation_members cm 
         ON m.conversation_id = cm.conversation_id
@@ -363,7 +363,7 @@ export class MessageSearchRepository {
         ) as preview_snippet,
         ts_rank(m.search_vector, plainto_tsquery('english', unaccent($1::text))) as rank_score,
         (SELECT COUNT(*) FROM messages WHERE reply_to_message_id = m.id AND deleted_at IS NULL) as reply_count,
-        (SELECT COUNT(*) FROM message_receipts WHERE message_id = m.id AND status = 'SEEN') as seen_count
+        m.seen_count as seen_count
       FROM messages m
       JOIN conversations c ON m.conversation_id = c.id
       LEFT JOIN users u ON m.sender_id = u.id
