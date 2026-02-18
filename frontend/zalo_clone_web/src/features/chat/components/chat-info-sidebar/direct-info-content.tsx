@@ -2,19 +2,22 @@
  * DirectInfoContent — DIRECT conversation info sidebar content.
  * Extracted from the original static ChatInfoSidebar UI.
  */
-import { Avatar, Button, Typography, Collapse, Switch } from 'antd';
+import { useState } from 'react';
+import { Avatar, Button, Typography, Collapse, Switch, Modal } from 'antd';
 import {
       EditOutlined,
       RightOutlined,
       ClockCircleOutlined,
-      WarningOutlined,
       DeleteOutlined,
       EyeInvisibleOutlined,
       BellOutlined,
       PushpinOutlined,
       UsergroupAddOutlined,
+      StopOutlined,
+      ExclamationCircleFilled,
 } from '@ant-design/icons';
 import type { ConversationUI } from '@/features/conversation/types/conversation';
+import { useBlockUser } from '@/features/contacts/hooks/use-block';
 
 const { Title } = Typography;
 
@@ -23,6 +26,21 @@ interface DirectInfoContentProps {
 }
 
 export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
+      const blockMutation = useBlockUser();
+      const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+
+      // In a DIRECT conversation, the other user is whoever isn't us
+      const otherUserId = conversation.otherUserId ?? null;
+      const otherUserName = conversation.name ?? 'người dùng này';
+
+      const handleBlockConfirm = () => {
+            if (!otherUserId) return;
+            blockMutation.mutate(
+                  { targetUserId: otherUserId },
+                  { onSettled: () => setIsBlockModalOpen(false) },
+            );
+      };
+
       const items = [
             {
                   key: '1',
@@ -56,13 +74,19 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
                   label: <span className="font-medium">Thiết lập bảo mật</span>,
                   children: (
                         <div className="flex flex-col gap-3">
-                              <div className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                                    <ClockCircleOutlined className="text-gray-500" />
+                              <button
+                                    type="button"
+                                    onClick={() => setIsBlockModalOpen(true)}
+                                    disabled={!otherUserId || blockMutation.isPending}
+                                    className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-1 rounded w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                    <StopOutlined className="text-red-500" />
                                     <div className="flex-1">
-                                          <div className="text-sm">Tin nhắn tự xóa</div>
-                                          <div className="text-xs text-gray-400">Không bao giờ</div>
+                                          <div className="text-sm text-red-600">
+                                                {blockMutation.isPending ? 'Đang chặn...' : 'Chặn người dùng'}
+                                          </div>
                                     </div>
-                              </div>
+                              </button>
                               <div className="flex items-center justify-between p-1">
                                     <div className="flex items-center gap-3">
                                           <EyeInvisibleOutlined className="text-gray-500" />
@@ -160,6 +184,31 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
                               </Button>
                         </div>
                   </div>
+
+                  {/* Block confirmation modal */}
+                  <Modal
+                        title={
+                              <span className="flex items-center gap-2">
+                                    <ExclamationCircleFilled className="text-red-500" />
+                                    Chặn {otherUserName}?
+                              </span>
+                        }
+                        open={isBlockModalOpen}
+                        onOk={handleBlockConfirm}
+                        onCancel={() => setIsBlockModalOpen(false)}
+                        okText="Chặn"
+                        cancelText="Hủy"
+                        okButtonProps={{
+                              danger: true,
+                              loading: blockMutation.isPending,
+                        }}
+                  >
+                        <p className="text-gray-600">
+                              Sau khi chặn, bạn sẽ không thể gửi hoặc nhận tin nhắn từ
+                              {' '}<strong>{otherUserName}</strong>.
+                              Người này sẽ không được thông báo.
+                        </p>
+                  </Modal>
             </>
       );
 }

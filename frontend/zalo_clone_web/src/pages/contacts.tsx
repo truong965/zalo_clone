@@ -7,7 +7,7 @@
  * Block tab shows basic placeholder UI (no logic implemented).
  */
 
-import { Badge, Empty, Typography } from 'antd';
+import { Badge, Typography } from 'antd';
 import {
   TeamOutlined,
   UserAddOutlined,
@@ -20,6 +20,7 @@ import { FriendList } from '@/features/contacts/components/friend-list';
 import { FriendRequestList } from '@/features/contacts/components/friend-request-list';
 import { useFriendshipStore } from '@/features/contacts/stores/friendship.store';
 import { GroupList } from '@/features/conversation/components/group-list';
+import { BlockedList } from '@/features/contacts/components/blocked-list';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
 
 const { Text } = Typography;
@@ -112,36 +113,13 @@ export function ContactsPage() {
             <GroupList />
           </ErrorBoundary>
         )}
-        {activeTab === 'blocked' && <BlockedPlaceholder />}
+        {activeTab === 'blocked' && (
+          <ErrorBoundary>
+            <BlockedList />
+          </ErrorBoundary>
+        )}
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Placeholder tabs — basic UI only, no logic
-// ---------------------------------------------------------------------------
-
-function BlockedPlaceholder() {
-  return (
-    <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">Người dùng bị chặn</Text>
-      </div>
-      <div className="flex-1 flex items-center justify-center">
-        <Empty
-          image={<StopOutlined className="text-5xl text-gray-300" />}
-          description={
-            <div className="space-y-1">
-              <Text type="secondary">Tính năng chặn đang được phát triển</Text>
-              <br />
-              <Text type="secondary" className="text-xs">
-                Bạn sẽ sớm có thể quản lý danh sách chặn tại đây.
-              </Text>
-            </div>
-          }
-        />
-      </div>
-    </div>
-  );
-}

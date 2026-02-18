@@ -389,6 +389,16 @@ export interface Block {
   createdAt: string;
 }
 
+/** Item returned by GET /block/blocked (cursor paginated) */
+export interface BlockedUserItem {
+  blockId: string;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  blockedAt: string;
+  reason?: string;
+}
+
 export interface UserContact {
   id: string;
   ownerId: string;
