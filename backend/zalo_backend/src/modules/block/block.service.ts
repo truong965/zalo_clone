@@ -63,7 +63,7 @@ export class BlockService {
     private readonly blockRepository: IBlockRepository,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) {}
+  ) { }
 
   /**
    * Block a user (Idempotent)
@@ -373,9 +373,8 @@ export class BlockService {
     const blocks = await this.prisma.block.findMany({
       where: {
         blockerId: userId,
-        ...(cursor && { id: { lt: cursor } }), // Cursor pagination
       },
-      take: limit + 1, // Fetch one extra to check hasNextPage
+      ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
       orderBy: { createdAt: 'desc' },
       include: {
         blocked: {
