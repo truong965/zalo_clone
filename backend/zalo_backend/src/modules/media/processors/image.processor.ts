@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { S3Service } from '../services/s3.service';
 import * as path from 'path';
 import sharp, { OutputInfo } from 'sharp';
+import { ImageProcessingJob } from '../queues/media-queue.interface';
 export interface ImageProcessingResult {
   thumbnail: {
     s3Key: string;
@@ -18,16 +19,9 @@ export interface ImageProcessingResult {
   };
 }
 
-export interface ImageProcessingJob {
-  mediaId: string;
-  s3Key: string;
-  originalWidth: number;
-  originalHeight: number;
-}
-
 @Injectable()
-export class ImageProcessorService {
-  private readonly logger = new Logger(ImageProcessorService.name);
+export class ImageProcessor {
+  private readonly logger = new Logger(ImageProcessor.name);
 
   // Thumbnail sizes (responsive breakpoints)
   private readonly THUMBNAIL_SIZES = {
@@ -74,8 +68,8 @@ export class ImageProcessorService {
       // 3. Generate optimized version if original is too large
       let optimized: ImageProcessingResult['optimized'] = undefined;
       const needsOptimization =
-        originalWidth > this.MAX_OPTIMIZED_DIMENSION ||
-        originalHeight > this.MAX_OPTIMIZED_DIMENSION;
+        (originalWidth ?? 0) > this.MAX_OPTIMIZED_DIMENSION ||
+        (originalHeight ?? 0) > this.MAX_OPTIMIZED_DIMENSION;
 
       if (needsOptimization) {
         const optimizedKey = this.generateProcessedKey(

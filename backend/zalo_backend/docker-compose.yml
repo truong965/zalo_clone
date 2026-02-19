@@ -6,7 +6,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1234
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
       POSTGRES_DB: zalo_clone_db
       POSTGRES_EXTENSIONS: pgcrypto,uuid-ossp
     ports:
@@ -26,7 +26,7 @@ services:
     ports:
       - "6379:6379"
     # Lệnh này để bật Redis mà không cần file config, có password
-    command: redis-server --requirepass password123
+    command: redis-server --requirepass ${REDIS_PASSWORD:-password123}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -41,8 +41,8 @@ services:
       - "9000:9000" # API
       - "9001:9001" # Console UI
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data

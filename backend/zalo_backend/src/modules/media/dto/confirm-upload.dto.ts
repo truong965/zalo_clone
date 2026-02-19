@@ -6,9 +6,3 @@ export class ConfirmUploadDto {
   @Length(20, 36) // CUID length range
   uploadId: string;
 }
-//     required: false,
-//   })
-//   @IsString()
-//   @IsOptional()
-//   checksum?: string;
-// }

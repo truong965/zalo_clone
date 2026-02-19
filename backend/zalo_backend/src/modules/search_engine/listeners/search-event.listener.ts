@@ -17,7 +17,7 @@ import type {
 } from '@shared/events/contracts';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
-import type { MediaDeletedEvent } from 'src/common/constants/media.constant';
+import type { MediaDeletedEvent } from 'src/modules/media/events/media.events';
 
 /**
  * SearchEventListener (Phase A: Refactored)

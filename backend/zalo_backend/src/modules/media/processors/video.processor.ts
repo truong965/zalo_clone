@@ -10,6 +10,7 @@ import * as os from 'os';
 import { randomUUID } from 'crypto';
 import { promisify } from 'util';
 import uploadConfig from 'src/config/upload.config';
+import { VideoProcessingJob } from '../queues/media-queue.interface';
 
 const mkdir = promisify(fs.mkdir);
 const readdir = promisify(fs.readdir);
@@ -28,17 +29,9 @@ export interface VideoProcessingResult {
   };
 }
 
-export interface VideoProcessingJob {
-  mediaId: string;
-  s3Key: string;
-  duration: number;
-  width: number;
-  height: number;
-}
-
 @Injectable()
-export class VideoProcessorService implements OnModuleInit {
-  private readonly logger = new Logger(VideoProcessorService.name);
+export class VideoProcessor implements OnModuleInit {
+  private readonly logger = new Logger(VideoProcessor.name);
 
   /**
    * MVP: HLS transcoding is disabled.
@@ -140,15 +133,15 @@ export class VideoProcessorService implements OnModuleInit {
       // 4. Transcode to HLS — disabled for MVP (TRANSCODING_ENABLED = false)
       let hls: VideoProcessingResult['hls'] = undefined;
       const shouldTranscode =
-        this.TRANSCODING_ENABLED && (duration > 30 || width > 1280);
+        this.TRANSCODING_ENABLED && ((duration ?? 0) > 30 || (width ?? 0) > 1280);
 
       if (shouldTranscode) {
         hls = await this.transcodeToHLS(
           localVideoPath,
           s3Key,
           tempDir,
-          width,
-          height,
+          width ?? 0,
+          height ?? 0,
         );
       }
 

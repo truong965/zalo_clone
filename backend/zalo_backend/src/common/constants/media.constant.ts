@@ -24,18 +24,6 @@ export const MIME_TO_EXTENSION: Record<string, string> = {
   'text/plain': 'txt',
 };
 
-// Cấu hình Retry cho DB và S3 Check
-export const RETRY_CONFIG = {
-  DB_FETCH: {
-    MAX_ATTEMPTS: 5,
-    BASE_DELAY_MS: 500,
-  },
-  S3_CHECK: {
-    MAX_ATTEMPTS: 5,
-    RETRY_DELAY_MS: 300,
-  },
-};
-
 // Các mẫu nhận diện file độc hại
 export const SECURITY_PATTERNS = {
   SCRIPTS: [
@@ -88,30 +76,3 @@ export const MEDIA_EVENTS = {
   DELETED: 'media.deleted',
 } as const;
 
-export interface MediaUploadedEvent {
-  mediaId: string;
-  uploadId: string;
-  userId: string;
-  mimeType: string;
-  mediaType: string;
-}
-
-export interface MediaProcessedEvent {
-  mediaId: string;
-  uploadId: string;
-  userId: string;
-  thumbnailUrl: string | null;
-  cdnUrl: string | null;
-}
-
-export interface MediaFailedEvent {
-  mediaId: string;
-  uploadId: string;
-  userId: string;
-  reason: string;
-}
-
-export interface MediaDeletedEvent {
-  mediaId: string;
-  userId: string;
-}

@@ -37,7 +37,7 @@ import { SearchEngineModule } from './modules/search_engine/search_engine.module
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import socketConfig from './config/socket.config';
-import s3Config from './config/s3.config.ts';
+import s3Config from './config/s3.config';
 import uploadConfig from './config/upload.config';
 import queueConfig from './config/queue.config';
 import socialConfig from './config/social.config';

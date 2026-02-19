@@ -1,4 +1,4 @@
-// src/modules/media/controllers/media-upload.controller.ts
+// src/modules/media/media.controller.ts
 import {
   Controller,
   Post,
@@ -19,7 +19,7 @@ import { ConfirmUploadDto } from './dto/confirm-upload.dto';
 
 @Controller('media')
 @UseGuards(JwtAuthGuard)
-export class MediaUploadController {
+export class MediaController {
   constructor(private readonly mediaUploadService: MediaUploadService) { }
 
   /**

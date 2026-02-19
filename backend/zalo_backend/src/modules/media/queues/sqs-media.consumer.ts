@@ -9,8 +9,11 @@ import {
       Logger,
       OnModuleInit,
       OnModuleDestroy,
+      Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { ConfigType } from '@nestjs/config';
+import uploadConfig from 'src/config/upload.config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
       SQSClient,
@@ -19,13 +22,15 @@ import {
 } from '@aws-sdk/client-sqs';
 import { PrismaService } from 'src/database/prisma.service';
 import {
-      ImageProcessingJob,
-      ImageProcessorService,
+      ImageProcessor,
 } from '../processors/image.processor';
 import {
-      VideoProcessingJob,
-      VideoProcessorService,
+      VideoProcessor,
 } from '../processors/video.processor';
+import {
+      ImageProcessingJob,
+      VideoProcessingJob,
+} from './media-queue.interface';
 import { MediaProgressGateway } from '../gateways/media-progress.gateway';
 import {
       MediaAttachment,
@@ -41,10 +46,11 @@ import { writeFile, unlink } from 'fs/promises';
 import {
       ERROR_MESSAGES,
       MEDIA_EVENTS,
-      RETRY_CONFIG,
-      type MediaProcessedEvent,
-      type MediaFailedEvent,
 } from 'src/common/constants/media.constant';
+import type {
+      MediaProcessedEvent,
+      MediaFailedEvent,
+} from '../events/media.events';
 import { MediaJobData, FileProcessingJob } from './media-queue.interface';
 import * as os from 'os';
 import * as path from 'path';
@@ -73,10 +79,12 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
             private readonly prisma: PrismaService,
             private readonly s3Service: S3Service,
             private readonly fileValidation: FileValidationService,
-            private readonly imageProcessor: ImageProcessorService,
-            private readonly videoProcessor: VideoProcessorService,
+            private readonly imageProcessor: ImageProcessor,
+            private readonly videoProcessor: VideoProcessor,
             private readonly progressGateway: MediaProgressGateway,
             private readonly eventEmitter: EventEmitter2,
+            @Inject(uploadConfig.KEY)
+            private readonly config: ConfigType<typeof uploadConfig>,
       ) {
             const region = this.configService.get<string>('queue.sqs.region', 'ap-southeast-1');
             const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID') ??
@@ -391,22 +399,23 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
 
       private async fetchMediaWithRetry(mediaId: string): Promise<MediaAttachment> {
             let retries = 0;
-            const { MAX_ATTEMPTS, BASE_DELAY_MS } = RETRY_CONFIG.DB_FETCH;
+            const maxAttempts = this.config.retry.dbFetchMaxAttempts;
+            const baseDelayMs = this.config.retry.dbFetchBaseDelayMs;
 
-            while (retries < MAX_ATTEMPTS) {
+            while (retries < maxAttempts) {
                   try {
                         const media = await this.prisma.mediaAttachment.findUnique({
                               where: { id: mediaId },
                         });
                         if (media) return media;
                         retries++;
-                        if (retries < MAX_ATTEMPTS) {
-                              await sleep(BASE_DELAY_MS * Math.pow(2, retries - 1));
+                        if (retries < maxAttempts) {
+                              await sleep(baseDelayMs * Math.pow(2, retries - 1));
                         }
                   } catch (error) {
                         retries++;
-                        if (retries >= MAX_ATTEMPTS) throw error;
-                        await sleep(BASE_DELAY_MS);
+                        if (retries >= maxAttempts) throw error;
+                        await sleep(baseDelayMs);
                   }
             }
             throw new Error(`${ERROR_MESSAGES.MEDIA_NOT_FOUND}: ${mediaId}`);

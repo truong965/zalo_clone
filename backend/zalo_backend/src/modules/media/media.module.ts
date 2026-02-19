@@ -4,21 +4,21 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { JwtModule } from '@nestjs/jwt';
-import { MediaUploadController } from './media.controller';
+import { MediaController } from './media.controller';
 import { MediaUploadService } from './services/media-upload.service';
 import { S3Service } from './services/s3.service';
 import { FileValidationService } from './services/file-validation.service';
-import { S3CleanupService } from './services/s3.cleanup.service';
+import { S3CleanupService } from './services/s3-cleanup.service';
 
-import s3Config from 'src/config/s3.config.ts';
+import s3Config from 'src/config/s3.config';
 import uploadConfig from '../../config/upload.config';
 import jwtConfig from 'src/config/jwt.config';
 import queueConfig from 'src/config/queue.config';
 import { BullModule } from '@nestjs/bull';
 import { PrismaService } from 'src/database/prisma.service';
 import { MetricsService } from './services/metrics.service';
-import { ImageProcessorService } from './processors/image.processor';
-import { VideoProcessorService } from './processors/video.processor';
+import { ImageProcessor } from './processors/image.processor';
+import { VideoProcessor } from './processors/video.processor';
 import {
   MEDIA_QUEUE_NAME,
   MediaQueueService,
@@ -68,7 +68,7 @@ const IS_TEST = process.env.TEST_MODE === 'e2e_client';
         }),
       ]),
   ],
-  controllers: [MediaUploadController],
+  controllers: [MediaController],
   providers: [
     // Database
     PrismaService,
@@ -81,8 +81,8 @@ const IS_TEST = process.env.TEST_MODE === 'e2e_client';
     S3CleanupService,
 
     // Processors
-    ImageProcessorService,
-    VideoProcessorService,
+    ImageProcessor,
+    VideoProcessor,
 
     // Queue provider — abstract token used by MediaUploadService
     {

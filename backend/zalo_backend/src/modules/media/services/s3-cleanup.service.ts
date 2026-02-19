@@ -1,6 +1,8 @@
 // src/modules/media/services/s3-cleanup.service.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import type { ConfigType } from '@nestjs/config';
+import uploadConfig from 'src/config/upload.config';
 import { S3Service } from './s3.service';
 import { PrismaService } from 'src/database/prisma.service';
 import {
@@ -22,19 +24,12 @@ interface CleanupResult {
 export class S3CleanupService {
   private readonly logger = new Logger(S3CleanupService.name);
 
-  // Thresholds
-  private readonly TEMP_FILE_MAX_AGE_HOURS = 24; // File PENDING quá 24h coi là rác
-  private readonly FAILED_UPLOAD_MAX_AGE_DAYS = 7; // File FAILED giữ 7 ngày để debug rồi xóa
-  private readonly SOFT_DELETED_MAX_AGE_DAYS = 30; // File đã xóa mềm sau 30 ngày sẽ xóa vật lý
-
-  // Batch processing
-  private readonly BATCH_SIZE = 100;
-  private readonly CONCURRENT_BATCHES = 5;
-
   constructor(
     private readonly s3Service: S3Service,
     private readonly prisma: PrismaService,
-  ) {}
+    @Inject(uploadConfig.KEY)
+    private readonly config: ConfigType<typeof uploadConfig>,
+  ) { }
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async scheduledCleanup(): Promise<void> {
@@ -85,7 +80,7 @@ export class S3CleanupService {
   private async cleanupStalePendingUploads(): Promise<number> {
     try {
       const threshold = new Date(
-        Date.now() - this.TEMP_FILE_MAX_AGE_HOURS * 60 * 60 * 1000,
+        Date.now() - this.config.cleanup.tempFileMaxAgeHours * 60 * 60 * 1000,
       );
 
       const staleUploads = await this.prisma.mediaAttachment.findMany({
@@ -97,7 +92,7 @@ export class S3CleanupService {
           s3KeyTemp: { not: null }, // Chỉ quan tâm cái nào có key
         },
         select: { id: true, s3KeyTemp: true, uploadId: true },
-        take: this.BATCH_SIZE, // Batch size để tránh overload
+        take: this.config.cleanup.batchSize, // Batch size để tránh overload
       });
 
       let deletedCount = 0;
@@ -144,7 +139,7 @@ export class S3CleanupService {
   private async cleanFailedUploads(): Promise<number> {
     try {
       const threshold = new Date(
-        Date.now() - this.FAILED_UPLOAD_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+        Date.now() - this.config.cleanup.failedUploadMaxAgeDays * 24 * 60 * 60 * 1000,
       );
 
       const failedUploads = await this.prisma.mediaAttachment.findMany({
@@ -154,7 +149,7 @@ export class S3CleanupService {
           // Lấy những bản ghi vẫn còn giữ key rác
           OR: [{ s3KeyTemp: { not: null } }, { s3Key: { not: null } }],
         },
-        take: this.BATCH_SIZE,
+        take: this.config.cleanup.batchSize,
       });
 
       let deletedCount = 0;
@@ -197,14 +192,14 @@ export class S3CleanupService {
   private async cleanupSoftDeletedMedia(): Promise<number> {
     try {
       const threshold = new Date(
-        Date.now() - this.SOFT_DELETED_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+        Date.now() - this.config.cleanup.softDeletedMaxAgeDays * 24 * 60 * 60 * 1000,
       );
 
       const softDeletedMedia = await this.prisma.mediaAttachment.findMany({
         where: {
           deletedAt: { lt: threshold },
         },
-        take: this.BATCH_SIZE,
+        take: this.config.cleanup.batchSize,
       });
 
       let deletedCount = 0;

@@ -16,7 +16,7 @@ import {
   AbortMultipartUploadCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import s3Config from 'src/config/s3.config.ts';
+import s3Config from 'src/config/s3.config';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,7 +26,10 @@ import { randomUUID } from 'crypto';
 import * as os from 'os';
 
 import { Upload } from '@aws-sdk/lib-storage';
-import { AwsError } from './media-upload.service';
+
+export interface AwsError extends Error {
+  $metadata?: { httpStatusCode?: number };
+}
 
 const pipeline = promisify(stream.pipeline);
 
@@ -534,7 +537,7 @@ export class S3Service {
       return tempFilePath;
     } catch (error) {
       if (fs.existsSync(tempFilePath)) {
-        await fs.promises.unlink(tempFilePath).catch(() => {});
+        await fs.promises.unlink(tempFilePath).catch(() => { });
       }
       this.logger.error(`Failed to download to temp file: ${key}`, error);
       throw error;

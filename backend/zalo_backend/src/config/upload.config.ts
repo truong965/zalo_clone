@@ -15,11 +15,25 @@ export default registerAs('upload', () => ({
       process.env.MAX_AUDIO_DURATION_SECONDS || '600',
       10,
     ), // 10 minutes
-    // Stream threshold: 100MB
-    streamThresholdBytes: 100 * 1024 * 1024,
+    // Stream threshold: default 100 MB
+    streamThresholdBytes:
+      parseInt(process.env.STREAM_THRESHOLD_MB || '100', 10) * 1024 * 1024,
     // Deep validation limits (Pixel)
-    maxImageDimension: 8192,
-    maxVideoDimension: 4096, // 4K
+    maxImageDimension: parseInt(process.env.MAX_IMAGE_DIMENSION || '8192', 10),
+    maxVideoDimension: parseInt(process.env.MAX_VIDEO_DIMENSION || '4096', 10), // 4K
+  },
+  retry: {
+    dbFetchMaxAttempts: parseInt(process.env.RETRY_DB_MAX_ATTEMPTS || '5', 10),
+    dbFetchBaseDelayMs: parseInt(process.env.RETRY_DB_BASE_DELAY_MS || '500', 10),
+    s3CheckMaxAttempts: parseInt(process.env.RETRY_S3_MAX_ATTEMPTS || '5', 10),
+    s3CheckRetryDelayMs: parseInt(process.env.RETRY_S3_RETRY_DELAY_MS || '300', 10),
+  },
+  cleanup: {
+    tempFileMaxAgeHours: parseInt(process.env.CLEANUP_TEMP_MAX_AGE_HOURS || '24', 10),
+    failedUploadMaxAgeDays: parseInt(process.env.CLEANUP_FAILED_MAX_AGE_DAYS || '7', 10),
+    softDeletedMaxAgeDays: parseInt(process.env.CLEANUP_SOFT_DELETE_MAX_AGE_DAYS || '30', 10),
+    batchSize: parseInt(process.env.CLEANUP_BATCH_SIZE || '100', 10),
+    concurrentBatches: parseInt(process.env.CLEANUP_CONCURRENT_BATCHES || '5', 10),
   },
   rateLimit: {
     uploadsPerMinute: parseInt(

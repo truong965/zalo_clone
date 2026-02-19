@@ -5,19 +5,21 @@ import {
   OnQueueCompleted,
   OnQueueFailed,
 } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { ConfigType } from '@nestjs/config';
+import uploadConfig from 'src/config/upload.config';
 import type { Job } from 'bull';
 import { PrismaService } from 'src/database/prisma.service';
 import {
-  ImageProcessingJob,
-  ImageProcessorService,
+  ImageProcessor,
 } from '../processors/image.processor';
 import {
-  VideoProcessingJob,
-  VideoProcessorService,
+  VideoProcessor,
 } from '../processors/video.processor';
 import {
+  ImageProcessingJob,
+  VideoProcessingJob,
   MediaJobData,
   MEDIA_QUEUE_NAME,
   FileProcessingJob,
@@ -37,10 +39,11 @@ import { writeFile, unlink } from 'fs/promises';
 import {
   ERROR_MESSAGES,
   MEDIA_EVENTS,
+} from 'src/common/constants/media.constant';
+import type {
   MediaProcessedEvent,
   MediaFailedEvent,
-  RETRY_CONFIG,
-} from 'src/common/constants/media.constant';
+} from '../events/media.events';
 
 import * as os from 'os';
 import * as path from 'path';
@@ -52,10 +55,12 @@ export class MediaConsumer {
     private readonly prisma: PrismaService,
     private readonly s3Service: S3Service,
     private readonly fileValidation: FileValidationService,
-    private readonly imageProcessor: ImageProcessorService,
-    private readonly videoProcessor: VideoProcessorService,
+    private readonly imageProcessor: ImageProcessor,
+    private readonly videoProcessor: VideoProcessor,
     private readonly progressGateway: MediaProgressGateway,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(uploadConfig.KEY)
+    private readonly config: ConfigType<typeof uploadConfig>,
   ) { }
 
   @Process()
@@ -143,9 +148,10 @@ export class MediaConsumer {
    */
   private async fetchMediaWithRetry(mediaId: string): Promise<MediaAttachment> {
     let retries = 0;
-    const { MAX_ATTEMPTS, BASE_DELAY_MS } = RETRY_CONFIG.DB_FETCH;
+    const maxAttempts = this.config.retry.dbFetchMaxAttempts;
+    const baseDelayMs = this.config.retry.dbFetchBaseDelayMs;
 
-    while (retries < MAX_ATTEMPTS) {
+    while (retries < maxAttempts) {
       try {
         const media = await this.prisma.mediaAttachment.findUnique({
           where: { id: mediaId },
@@ -154,17 +160,17 @@ export class MediaConsumer {
 
         // Exponential Backoff
         retries++;
-        if (retries < MAX_ATTEMPTS) {
-          const delay = BASE_DELAY_MS * Math.pow(2, retries - 1);
+        if (retries < maxAttempts) {
+          const delay = baseDelayMs * Math.pow(2, retries - 1);
           this.logger.debug(
-            `Media ${mediaId} missing, retry ${retries}/${MAX_ATTEMPTS} in ${delay}ms`,
+            `Media ${mediaId} missing, retry ${retries}/${maxAttempts} in ${delay}ms`,
           );
           await new Promise((r) => setTimeout(r, delay));
         }
       } catch (error) {
         retries++;
-        if (retries >= MAX_ATTEMPTS) throw error;
-        await new Promise((r) => setTimeout(r, BASE_DELAY_MS));
+        if (retries >= maxAttempts) throw error;
+        await new Promise((r) => setTimeout(r, baseDelayMs));
       }
     }
     throw new Error(`${ERROR_MESSAGES.MEDIA_NOT_FOUND}: ${mediaId}`);

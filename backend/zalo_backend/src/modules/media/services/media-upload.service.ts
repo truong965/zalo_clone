@@ -27,16 +27,9 @@ import {
 import { MediaResponseDto } from '../dto/media-response.dto';
 import { MEDIA_QUEUE_PROVIDER } from '../queues/media-queue.interface';
 import type { IMediaQueueService } from '../queues/media-queue.interface';
-import {
-  RETRY_CONFIG,
-  MEDIA_EVENTS,
-  MediaUploadedEvent,
-  MediaDeletedEvent,
-} from 'src/common/constants/media.constant';
-
-export interface AwsError extends Error {
-  $metadata?: { httpStatusCode?: number };
-}
+import { MEDIA_EVENTS } from 'src/common/constants/media.constant';
+import type { MediaUploadedEvent, MediaDeletedEvent } from '../events/media.events';
+import { AwsError } from './s3.service';
 
 @Injectable()
 export class MediaUploadService {
@@ -165,8 +158,8 @@ export class MediaUploadService {
       const fileCheck = await this.s3Service.verifyFileExists(
         media.s3KeyTemp!,
         {
-          maxRetries: RETRY_CONFIG.S3_CHECK.MAX_ATTEMPTS,
-          retryDelay: RETRY_CONFIG.S3_CHECK.RETRY_DELAY_MS,
+          maxRetries: this.config.retry.s3CheckMaxAttempts,
+          retryDelay: this.config.retry.s3CheckRetryDelayMs,
           checkMultipart: true,
         },
       );
