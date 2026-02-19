@@ -74,9 +74,10 @@ export class MediaQueueService implements IMediaQueueService {
     const result = await this.mediaQueue.add(
       { type: mediaType, payload },
       {
-        attempts: 3,
-        backoff: { type: 'exponential' as const, delay: 2000 },
-        removeOnComplete: true,
+        attempts: this.config.retry.attempts,
+        backoff: this.config.retry.backoff,
+        removeOnComplete: this.config.jobRetention.completed,
+        removeOnFail: this.config.jobRetention.failed,
       },
     );
     return String(result.id);

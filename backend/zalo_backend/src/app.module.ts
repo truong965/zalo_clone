@@ -10,6 +10,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { RedisModule } from './modules/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './socket/socket.module';
@@ -70,6 +71,9 @@ import socialConfig from './config/social.config';
       maxListeners: 20,
       verboseMemoryLeak: true,
     }),
+
+    // Global rate-limiting (10req/min default; per-endpoint @Throttle overrides apply)
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
 
     // Async Queue — Bull (Redis) for local dev, skipped when QUEUE_PROVIDER=sqs
     ...(process.env.QUEUE_PROVIDER !== 'sqs'
@@ -142,6 +146,10 @@ import socialConfig from './config/social.config';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

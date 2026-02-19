@@ -16,7 +16,6 @@ import type { ConfigType } from '@nestjs/config';
 import uploadConfig from 'src/config/upload.config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
-      SQSClient,
       ReceiveMessageCommand,
       DeleteMessageCommand,
 } from '@aws-sdk/client-sqs';
@@ -31,7 +30,8 @@ import {
       ImageProcessingJob,
       VideoProcessingJob,
 } from './media-queue.interface';
-import { MediaProgressGateway } from '../gateways/media-progress.gateway';
+import { SqsClientFactory } from './sqs-client.factory';
+import { SocketGateway } from 'src/socket/socket.gateway';
 import {
       MediaAttachment,
       MediaProcessingStatus,
@@ -64,7 +64,6 @@ interface SqsMessage {
 @Injectable()
 export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
       private readonly logger = new Logger(SqsMediaConsumer.name);
-      private readonly client: SQSClient;
       private readonly imageQueueUrl: string;
       private readonly videoQueueUrl: string;
       private readonly waitTimeSeconds: number;
@@ -81,23 +80,12 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
             private readonly fileValidation: FileValidationService,
             private readonly imageProcessor: ImageProcessor,
             private readonly videoProcessor: VideoProcessor,
-            private readonly progressGateway: MediaProgressGateway,
+            private readonly sqsFactory: SqsClientFactory,
+            private readonly socketGateway: SocketGateway,
             private readonly eventEmitter: EventEmitter2,
             @Inject(uploadConfig.KEY)
             private readonly config: ConfigType<typeof uploadConfig>,
       ) {
-            const region = this.configService.get<string>('queue.sqs.region', 'ap-southeast-1');
-            const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID') ??
-                  process.env.AWS_ACCESS_KEY_ID;
-            const secretAccessKey = this.configService.get<string>('AWS_SECRET_ACCESS_KEY') ??
-                  process.env.AWS_SECRET_ACCESS_KEY;
-
-            this.client = new SQSClient({
-                  region,
-                  ...(accessKeyId && secretAccessKey
-                        ? { credentials: { accessKeyId, secretAccessKey } }
-                        : {}),
-            });
             this.imageQueueUrl = this.configService.getOrThrow<string>(
                   'queue.sqs.imageQueueUrl',
             );
@@ -128,7 +116,6 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
 
       onModuleDestroy() {
             this.running = false;
-            this.client.destroy();
             this.logger.log('SQS consumer stopped');
       }
 
@@ -143,7 +130,7 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
       ): Promise<void> {
             while (this.running) {
                   try {
-                        const res = await this.client.send(
+                        const res = await this.sqsFactory.client.send(
                               new ReceiveMessageCommand({
                                     QueueUrl: queueUrl,
                                     MaxNumberOfMessages: 1,
@@ -276,11 +263,7 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
                         select: { id: true, uploadId: true, uploadedBy: true, retryCount: true },
                   });
 
-                  this.progressGateway.sendProgress(
-                        mediaId,
-                        { status: 'failed', progress: 0, error: 'Processing failed' },
-                        media.uploadedBy,
-                  );
+                  void this.socketGateway.emitToUser(media.uploadedBy, `progress:${mediaId}`, { status: 'failed', progress: 0, error: 'Processing failed' });
 
                   if (media.retryCount >= MAX_ATTEMPTS) {
                         // All retries exhausted — delete from queue (SQS DLQ handles this via maxReceiveCount)
@@ -308,7 +291,7 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
       private async processImage(payload: ImageProcessingJob, userId: string): Promise<void> {
             const { mediaId } = payload;
             await this.updateMediaStatus(mediaId, MediaProcessingStatus.PROCESSING);
-            this.progressGateway.sendProgress(mediaId, { status: 'processing', progress: 0 }, userId);
+            void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, { status: 'processing', progress: 0 });
 
             const result = await this.imageProcessor.processImage(payload);
 
@@ -323,11 +306,11 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
                   },
             });
 
-            this.progressGateway.sendProgress(mediaId, {
+            void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
                   status: 'completed',
                   progress: 100,
                   thumbnailUrl: this.buildCdnUrl(result.thumbnail.s3Key),
-            }, userId);
+            });
 
             const media = await this.prisma.mediaAttachment.findUnique({
                   where: { id: mediaId },
@@ -347,7 +330,7 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
       private async processVideo(payload: VideoProcessingJob, userId: string): Promise<void> {
             const { mediaId } = payload;
             await this.updateMediaStatus(mediaId, MediaProcessingStatus.PROCESSING);
-            this.progressGateway.sendProgress(mediaId, { status: 'processing', progress: 0 }, userId);
+            void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, { status: 'processing', progress: 0 });
 
             const result = await this.videoProcessor.processVideo(payload);
 
@@ -360,12 +343,12 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
                   },
             });
 
-            this.progressGateway.sendProgress(mediaId, {
+            void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
                   status: 'completed',
                   progress: 100,
                   thumbnailUrl: this.buildCdnUrl(result.thumbnail.s3Key),
                   hlsPlaylistUrl: result.hls ? this.buildCdnUrl(result.hls.playlistKey) : undefined,
-            }, userId);
+            });
 
             const media = await this.prisma.mediaAttachment.findUnique({
                   where: { id: mediaId },
@@ -442,7 +425,7 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
             uploadId: string,
             userId: string,
       ): Promise<string> {
-            this.progressGateway.sendProgress(mediaId, { status: 'processing', progress: 5 }, userId);
+            void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, { status: 'processing', progress: 5 });
 
             let tempFilePath: string | null = null;
             try {
@@ -499,7 +482,7 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
       }
 
       private async deleteMessage(queueUrl: string, receiptHandle: string): Promise<void> {
-            await this.client.send(
+            await this.sqsFactory.client.send(
                   new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: receiptHandle }),
             );
       }

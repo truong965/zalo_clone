@@ -10,7 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/common/decorator/customize';
 import { MediaUploadService } from './services/media-upload.service';
@@ -27,7 +27,6 @@ export class MediaController {
    * Rate limit: 10 requests per minute per user
    */
   @Post('upload/initiate')
-  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10/min
   @HttpCode(HttpStatus.OK)
   async initiateUpload(

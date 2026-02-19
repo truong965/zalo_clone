@@ -24,7 +24,7 @@ import {
   MEDIA_QUEUE_NAME,
   FileProcessingJob,
 } from './media-queue.service';
-import { MediaProgressGateway } from '../gateways/media-progress.gateway';
+import { SocketGateway } from 'src/socket/socket.gateway';
 import {
   MediaAttachment,
   MediaProcessingStatus,
@@ -57,7 +57,7 @@ export class MediaConsumer {
     private readonly fileValidation: FileValidationService,
     private readonly imageProcessor: ImageProcessor,
     private readonly videoProcessor: VideoProcessor,
-    private readonly progressGateway: MediaProgressGateway,
+    private readonly socketGateway: SocketGateway,
     private readonly eventEmitter: EventEmitter2,
     @Inject(uploadConfig.KEY)
     private readonly config: ConfigType<typeof uploadConfig>,
@@ -240,10 +240,10 @@ export class MediaConsumer {
     uploadId: string,
     userId: string,
   ): Promise<string> {
-    this.progressGateway.sendProgress(mediaId, {
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
       status: 'processing',
       progress: 5,
-    }, userId);
+    });
 
     let tempFilePath: string | null = null;
     try {
@@ -293,10 +293,10 @@ export class MediaConsumer {
     // ... logic cũ ...
     const { mediaId } = payload;
     await this.updateMediaStatus(mediaId, MediaProcessingStatus.PROCESSING);
-    this.progressGateway.sendProgress(mediaId, {
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
       status: 'processing',
       progress: 0,
-    }, userId);
+    });
 
     const result = await this.imageProcessor.processImage(payload);
     await job.progress(100);
@@ -312,11 +312,11 @@ export class MediaConsumer {
       },
     });
 
-    this.progressGateway.sendProgress(mediaId, {
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
       status: 'completed',
       progress: 100,
       thumbnailUrl: this.buildCdnUrl(result.thumbnail.s3Key),
-    }, userId);
+    });
 
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { id: mediaId },
@@ -341,10 +341,10 @@ export class MediaConsumer {
     // ... logic cũ ...
     const { mediaId } = payload;
     await this.updateMediaStatus(mediaId, MediaProcessingStatus.PROCESSING);
-    this.progressGateway.sendProgress(mediaId, {
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
       status: 'processing',
       progress: 0,
-    }, userId);
+    });
 
     const result = await this.videoProcessor.processVideo(payload);
     await job.progress(100);
@@ -360,14 +360,14 @@ export class MediaConsumer {
       },
     });
 
-    this.progressGateway.sendProgress(mediaId, {
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
       status: 'completed',
       progress: 100,
       thumbnailUrl: this.buildCdnUrl(result.thumbnail.s3Key),
       hlsPlaylistUrl: result.hls
         ? this.buildCdnUrl(result.hls.playlistKey)
         : undefined,
-    }, userId);
+    });
 
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { id: mediaId },
@@ -452,10 +452,10 @@ export class MediaConsumer {
         return null;
       });
 
-    this.progressGateway.sendProgress(
-      payload.mediaId,
+    void this.socketGateway.emitToUser(
+      media?.uploadedBy ?? payload.mediaId,
+      `progress:${payload.mediaId}`,
       { status: 'failed', progress: 0, error: 'Failed' },
-      media?.uploadedBy ?? payload.mediaId, // fallback to mediaId prevents crash; room won't match any user
     );
 
     // Emit domain event on final failure (all attempts exhausted)

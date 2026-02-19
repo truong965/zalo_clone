@@ -60,7 +60,7 @@ export class MetricsService {
   /**
    * Collect metrics every 5 minutes
    */
-  @Cron('0 */5 * * * *')
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async collectMetrics(): Promise<void> {
     try {
       const queueStats = await this.queueService.getQueueStats();

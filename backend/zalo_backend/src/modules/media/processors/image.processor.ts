@@ -1,9 +1,11 @@
 // src/modules/media/processors/image.processor.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import { S3Service } from '../services/s3.service';
 import * as path from 'path';
 import sharp, { OutputInfo } from 'sharp';
 import { ImageProcessingJob } from '../queues/media-queue.interface';
+import uploadConfig from 'src/config/upload.config';
 export interface ImageProcessingResult {
   thumbnail: {
     s3Key: string;
@@ -23,19 +25,13 @@ export interface ImageProcessingResult {
 export class ImageProcessor {
   private readonly logger = new Logger(ImageProcessor.name);
 
-  // Thumbnail sizes (responsive breakpoints)
-  private readonly THUMBNAIL_SIZES = {
-    small: { width: 150, height: 150 }, // Chat preview
-    medium: { width: 480, height: 480 }, // Mobile view
-    large: { width: 1024, height: 1024 }, // Desktop lightbox
-  };
-
-  // Max dimension for optimized version
-  private readonly MAX_OPTIMIZED_DIMENSION = 2048;
-
-  constructor(private readonly s3Service: S3Service) {
+  constructor(
+    private readonly s3Service: S3Service,
+    @Inject(uploadConfig.KEY)
+    private readonly config: ConfigType<typeof uploadConfig>,
+  ) {
     sharp.cache(false); // ✅ Tắt cache để tránh leak RAM trong container
-    sharp.simd(true); // ✅ Bật SIMD để xử lý nhanh hơn
+    sharp.simd(true);  // ✅ Bật SIMD để xử lý nhanh hơn
   }
 
   /**
@@ -58,8 +54,8 @@ export class ImageProcessor {
         s3Key,
         thumbnailKey,
         {
-          width: this.THUMBNAIL_SIZES.small.width,
-          height: this.THUMBNAIL_SIZES.small.height,
+          width: this.config.processing.thumbnailSmallWidth,
+          height: this.config.processing.thumbnailSmallHeight,
           fit: 'cover', // Thumbnail thì crop cho đẹp
           quality: 80,
         },
@@ -68,8 +64,8 @@ export class ImageProcessor {
       // 3. Generate optimized version if original is too large
       let optimized: ImageProcessingResult['optimized'] = undefined;
       const needsOptimization =
-        (originalWidth ?? 0) > this.MAX_OPTIMIZED_DIMENSION ||
-        (originalHeight ?? 0) > this.MAX_OPTIMIZED_DIMENSION;
+        (originalWidth ?? 0) > this.config.processing.maxOptimizedDimension ||
+        (originalHeight ?? 0) > this.config.processing.maxOptimizedDimension;
 
       if (needsOptimization) {
         const optimizedKey = this.generateProcessedKey(
@@ -82,8 +78,8 @@ export class ImageProcessor {
           s3Key,
           optimizedKey,
           {
-            width: this.MAX_OPTIMIZED_DIMENSION,
-            height: this.MAX_OPTIMIZED_DIMENSION,
+            width: this.config.processing.maxOptimizedDimension,
+            height: this.config.processing.maxOptimizedDimension,
             fit: 'inside', // Optimized thì giữ nguyên tỷ lệ
             quality: 85,
           },

@@ -2,6 +2,16 @@
 // Event payload interfaces for the media module.
 // Emitted via EventEmitter2 using the MEDIA_EVENTS keys from media.constant.ts.
 
+/** Real-time progress update pushed to the uploading user via SocketGateway. */
+export interface ProgressUpdate {
+  status: 'processing' | 'completed' | 'failed';
+  /** Completion percentage 0-100 */
+  progress: number;
+  thumbnailUrl?: string;
+  hlsPlaylistUrl?: string;
+  error?: string;
+}
+
 export interface MediaUploadedEvent {
       mediaId: string;
       uploadId: string;

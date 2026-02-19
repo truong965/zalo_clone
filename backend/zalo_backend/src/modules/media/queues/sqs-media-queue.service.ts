@@ -1,8 +1,7 @@
 // src/modules/media/queues/sqs-media-queue.service.ts
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import {
-      SQSClient,
       SendMessageCommand,
       GetQueueAttributesCommand,
       QueueAttributeName,
@@ -15,40 +14,22 @@ import {
       VideoProcessingJob,
       MediaJobData,
 } from './media-queue.interface';
+import { SqsClientFactory } from './sqs-client.factory';
+import queueConfig from 'src/config/queue.config';
 
 @Injectable()
-export class SqsMediaQueueService
-      implements IMediaQueueService, OnModuleDestroy {
+export class SqsMediaQueueService implements IMediaQueueService {
       private readonly logger = new Logger(SqsMediaQueueService.name);
-      private readonly client: SQSClient;
       private readonly imageQueueUrl: string;
       private readonly videoQueueUrl: string;
 
-      constructor(private readonly configService: ConfigService) {
-            const region = this.configService.get<string>('queue.sqs.region', 'ap-southeast-1');
-            // Use explicit credentials if provided (local dev / CI);
-            // on EC2 with IAM Instance Profile, credentials are resolved automatically.
-            const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID') ??
-                  process.env.AWS_ACCESS_KEY_ID;
-            const secretAccessKey = this.configService.get<string>('AWS_SECRET_ACCESS_KEY') ??
-                  process.env.AWS_SECRET_ACCESS_KEY;
-
-            this.client = new SQSClient({
-                  region,
-                  ...(accessKeyId && secretAccessKey
-                        ? { credentials: { accessKeyId, secretAccessKey } }
-                        : {}),
-            });
-            this.imageQueueUrl = this.configService.getOrThrow<string>(
-                  'queue.sqs.imageQueueUrl',
-            );
-            this.videoQueueUrl = this.configService.getOrThrow<string>(
-                  'queue.sqs.videoQueueUrl',
-            );
-      }
-
-      onModuleDestroy() {
-            this.client.destroy();
+      constructor(
+            private readonly sqsFactory: SqsClientFactory,
+            @Inject(queueConfig.KEY)
+            private readonly queueCfg: ConfigType<typeof queueConfig>,
+      ) {
+            this.imageQueueUrl = this.queueCfg.sqs.imageQueueUrl;
+            this.videoQueueUrl = this.queueCfg.sqs.videoQueueUrl;
       }
 
       // -------------------------------------------------------------------------
@@ -135,7 +116,7 @@ export class SqsMediaQueueService
                         : {}),
             });
 
-            const result = await this.client.send(command);
+            const result = await this.sqsFactory.client.send(command);
             this.logger.debug(
                   `SQS enqueued ${body.type} job for media ${body.payload.mediaId}: ${result.MessageId}`,
             );
@@ -147,7 +128,7 @@ export class SqsMediaQueueService
             attributeNames: QueueAttributeName[],
       ) {
             try {
-                  const res = await this.client.send(
+                  const res = await this.sqsFactory.client.send(
                         new GetQueueAttributesCommand({ QueueUrl: queueUrl, AttributeNames: attributeNames }),
                   );
                   const a = res.Attributes ?? {};

@@ -35,6 +35,14 @@ export default registerAs('upload', () => ({
     batchSize: parseInt(process.env.CLEANUP_BATCH_SIZE || '100', 10),
     concurrentBatches: parseInt(process.env.CLEANUP_CONCURRENT_BATCHES || '5', 10),
   },
+  // Image processing quality settings
+  processing: {
+    // Thumbnail size for chat previews (only 'small' is actively used)
+    thumbnailSmallWidth: parseInt(process.env.THUMBNAIL_SMALL_WIDTH || '150', 10),
+    thumbnailSmallHeight: parseInt(process.env.THUMBNAIL_SMALL_HEIGHT || '150', 10),
+    // Max dimension before generating an optimized WebP variant
+    maxOptimizedDimension: parseInt(process.env.MAX_OPTIMIZED_DIMENSION || '2048', 10),
+  },
   rateLimit: {
     uploadsPerMinute: parseInt(
       process.env.UPLOAD_RATE_LIMIT_PER_MINUTE || '10',

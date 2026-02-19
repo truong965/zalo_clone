@@ -1,9 +1,6 @@
 // src/modules/media/media.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { EventEmitterModule } from '@nestjs/event-emitter';
-import { JwtModule } from '@nestjs/jwt';
 import { MediaController } from './media.controller';
 import { MediaUploadService } from './services/media-upload.service';
 import { S3Service } from './services/s3.service';
@@ -12,10 +9,8 @@ import { S3CleanupService } from './services/s3-cleanup.service';
 
 import s3Config from 'src/config/s3.config';
 import uploadConfig from '../../config/upload.config';
-import jwtConfig from 'src/config/jwt.config';
 import queueConfig from 'src/config/queue.config';
 import { BullModule } from '@nestjs/bull';
-import { PrismaService } from 'src/database/prisma.service';
 import { MetricsService } from './services/metrics.service';
 import { ImageProcessor } from './processors/image.processor';
 import { VideoProcessor } from './processors/video.processor';
@@ -24,28 +19,20 @@ import {
   MediaQueueService,
 } from './queues/media-queue.service';
 import { SqsMediaQueueService } from './queues/sqs-media-queue.service';
+import { SqsClientFactory } from './queues/sqs-client.factory';
 import { MediaConsumer } from './queues/media.consumer';
 import { SqsMediaConsumer } from './queues/sqs-media.consumer';
-import { MediaProgressGateway } from './gateways/media-progress.gateway';
 import { MEDIA_QUEUE_PROVIDER } from './queues/media-queue.interface';
+import { SocketModule } from 'src/socket/socket.module';
 
 const IS_SQS = process.env.QUEUE_PROVIDER === 'sqs';
-const IS_TEST = process.env.TEST_MODE === 'e2e_client';
 
 @Module({
   imports: [
     ConfigModule.forFeature(s3Config),
     ConfigModule.forFeature(uploadConfig),
-    ConfigModule.forFeature(jwtConfig),
     ConfigModule.forFeature(queueConfig),
-    EventEmitterModule, // Global module — re-imported here for explicit documentation
-    JwtModule.register({}), // secret injected per-call via jwtConfig
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 1 minute
-        limit: 10, // 10 requests
-      },
-    ]),
+    SocketModule, // Provides SocketGateway for real-time progress events
     // Bull queue registration — skipped entirely when using SQS
     ...(IS_SQS
       ? []
@@ -70,9 +57,6 @@ const IS_TEST = process.env.TEST_MODE === 'e2e_client';
   ],
   controllers: [MediaController],
   providers: [
-    // Database
-    PrismaService,
-
     // Core Services
     MediaUploadService,
     S3Service,
@@ -84,6 +68,9 @@ const IS_TEST = process.env.TEST_MODE === 'e2e_client';
     ImageProcessor,
     VideoProcessor,
 
+    // Shared SQS client (no-op when using Bull)
+    SqsClientFactory,
+
     // Queue provider — abstract token used by MediaUploadService
     {
       provide: MEDIA_QUEUE_PROVIDER,
@@ -92,22 +79,13 @@ const IS_TEST = process.env.TEST_MODE === 'e2e_client';
     // Concrete class also registered so MetricsService (Bull-only) can inject it
     ...(IS_SQS ? [SqsMediaQueueService] : [MediaQueueService]),
 
-    // WebSocket
-    MediaProgressGateway,
-
-    // Consumer — Bull or SQS, skipped in e2e test client mode
-    ...(IS_TEST
-      ? []
-      : IS_SQS
-        ? [SqsMediaConsumer]
-        : [MediaConsumer]),
+    // Consumer — Bull or SQS
+    ...(IS_SQS ? [SqsMediaConsumer] : [MediaConsumer]),
   ],
   exports: [
     MediaUploadService,
     S3Service,
     MEDIA_QUEUE_PROVIDER,
-    // Export concrete class too so callers can use strongly-typed injection
-    ...(IS_SQS ? [SqsMediaQueueService] : [MediaQueueService]),
   ],
 })
 export class MediaModule { }

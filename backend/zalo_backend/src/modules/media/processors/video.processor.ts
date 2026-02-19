@@ -41,15 +41,6 @@ export class VideoProcessor implements OnModuleInit {
    */
   private readonly TRANSCODING_ENABLED = false;
 
-  // HLS segment duration (seconds) — kept for future use
-  private readonly HLS_SEGMENT_DURATION = 6;
-
-  // Video quality presets (adaptive bitrate) — kept for future use
-  private readonly VIDEO_PRESETS = [
-    { name: '480p', width: 854, height: 480, bitrate: '1000k' },
-    { name: '720p', width: 1280, height: 720, bitrate: '2500k' },
-  ];
-
   constructor(
     private readonly s3Service: S3Service,
     @Inject(uploadConfig.KEY)
@@ -227,11 +218,18 @@ export class VideoProcessor implements OnModuleInit {
 
     const playlistPath = path.join(hlsDir, 'master.m3u8');
 
+    // Quality presets (adaptive bitrate)
+    const VIDEO_PRESETS = [
+      { name: '480p', width: 854, height: 480, bitrate: '1000k' },
+      { name: '720p', width: 1280, height: 720, bitrate: '2500k' },
+    ];
+    const HLS_SEGMENT_DURATION = 6;
+
     // Select appropriate quality preset (don't upscale)
     const quality =
       originalHeight >= 720
-        ? this.VIDEO_PRESETS[1] // 720p
-        : this.VIDEO_PRESETS[0]; // 480p
+        ? VIDEO_PRESETS[1] // 720p
+        : VIDEO_PRESETS[0]; // 480p
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg(videoPath)
@@ -242,7 +240,7 @@ export class VideoProcessor implements OnModuleInit {
           '-b:a 128k', // Audio bitrate
           `-vf scale=${quality.width}:${quality.height}`, // Resize
           '-preset fast', // Encoding speed
-          '-hls_time ' + this.HLS_SEGMENT_DURATION, // Segment duration
+          '-hls_time ' + HLS_SEGMENT_DURATION, // Segment duration
           '-hls_playlist_type vod', // Video on demand
           '-hls_segment_filename ' + path.join(hlsDir, 'segment%03d.ts'),
         ])
