@@ -6,6 +6,7 @@ import {
   OnQueueFailed,
 } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Job } from 'bull';
 import { PrismaService } from 'src/database/prisma.service';
 import {
@@ -35,6 +36,9 @@ import fs from 'fs';
 import { writeFile, unlink } from 'fs/promises';
 import {
   ERROR_MESSAGES,
+  MEDIA_EVENTS,
+  MediaProcessedEvent,
+  MediaFailedEvent,
   RETRY_CONFIG,
 } from 'src/common/constants/media.constant';
 
@@ -51,7 +55,8 @@ export class MediaConsumer {
     private readonly imageProcessor: ImageProcessorService,
     private readonly videoProcessor: VideoProcessorService,
     private readonly progressGateway: MediaProgressGateway,
-  ) {}
+    private readonly eventEmitter: EventEmitter2,
+  ) { }
 
   @Process()
   async handleJob(job: Job<MediaJobData>): Promise<void> {
@@ -63,10 +68,11 @@ export class MediaConsumer {
     // 1. Fetch Media Record (With Retry Logic Extracted)
     // Giảm thiểu code lặp, xử lý race condition
     const media = await this.fetchMediaWithRetry(payload.mediaId);
+    const userId = media.uploadedBy;
 
     // 2. Resolve S3 Key Consistency
     // Đảm bảo file nằm đúng chỗ (temp hoặc permanent) trước khi xử lý
-    await this.ensureMediaConsistency(media, payload);
+    await this.ensureMediaConsistency(media, payload, userId);
 
     const tempFilePath = path.join(
       os.tmpdir(),
@@ -74,9 +80,9 @@ export class MediaConsumer {
     );
 
     try {
-      this.logger.log(`📥 Downloading for validation: ${payload.s3Key}`);
+      this.logger.log(`📥 Downloading file once for validation: ${payload.s3Key}`);
 
-      // 3. Download & Validate (Standard Security Check)
+      // 3. Download ONCE — reuse buffer for validation and any subsequent processing
       const fileBuffer = await this.s3Service.downloadFile(payload.s3Key);
       await writeFile(tempFilePath, fileBuffer);
 
@@ -96,19 +102,18 @@ export class MediaConsumer {
       }
 
       // 4. Routing Processing based on Type
-      // Sử dụng switch-case rõ ràng hơn if-else
       switch (type) {
         case MediaType.IMAGE:
-          await this.processImage(job, payload as ImageProcessingJob);
+          await this.processImage(job, payload as ImageProcessingJob, userId);
           break;
 
         case MediaType.VIDEO:
-          await this.processVideo(job, payload as VideoProcessingJob);
+          await this.processVideo(job, payload as VideoProcessingJob, userId);
           break;
 
         case MediaType.AUDIO:
         case MediaType.DOCUMENT:
-          // Audio/Doc không cần transcode, chỉ cần move và update DB
+          // Audio/Doc don't need transcoding — upload clean buffer to permanent location
           await this.processDirectFile(
             payload.mediaId,
             media.mimeType,
@@ -125,7 +130,7 @@ export class MediaConsumer {
     } finally {
       // Clean up temp file (Always run)
       if (fs.existsSync(tempFilePath)) {
-        await unlink(tempFilePath).catch(() => {});
+        await unlink(tempFilePath).catch(() => { });
       }
     }
   }
@@ -172,6 +177,7 @@ export class MediaConsumer {
   private async ensureMediaConsistency(
     media: MediaAttachment,
     payload: ImageProcessingJob | VideoProcessingJob | FileProcessingJob,
+    userId: string,
   ) {
     if (media.s3KeyTemp) {
       // Nếu file vẫn ở temp (chưa ai move), worker tự move
@@ -179,6 +185,7 @@ export class MediaConsumer {
         media.id,
         media.s3KeyTemp,
         media.uploadId!,
+        userId,
       );
 
       // Re-fetch để lấy permanent key mới nhất
@@ -225,14 +232,16 @@ export class MediaConsumer {
     mediaId: string,
     tempKey: string,
     uploadId: string,
+    userId: string,
   ): Promise<string> {
     this.progressGateway.sendProgress(mediaId, {
       status: 'processing',
       progress: 5,
-    });
+    }, userId);
 
     let tempFilePath: string | null = null;
     try {
+      // Download once — used for validation and the permanence move check
       tempFilePath = await this.s3Service.downloadToLocalTemp(tempKey);
 
       const validation =
@@ -261,10 +270,10 @@ export class MediaConsumer {
 
       return permanentKey;
     } catch (error) {
-      await this.s3Service.deleteFile(tempKey).catch(() => {}); // Cleanup S3
+      await this.s3Service.deleteFile(tempKey).catch(() => { }); // Cleanup S3
       throw error;
     } finally {
-      if (tempFilePath) await unlink(tempFilePath).catch(() => {}); // Cleanup Local
+      if (tempFilePath) await unlink(tempFilePath).catch(() => { }); // Cleanup Local
     }
   }
 
@@ -273,6 +282,7 @@ export class MediaConsumer {
   private async processImage(
     job: Job,
     payload: ImageProcessingJob,
+    userId: string,
   ): Promise<void> {
     // ... logic cũ ...
     const { mediaId } = payload;
@@ -280,7 +290,7 @@ export class MediaConsumer {
     this.progressGateway.sendProgress(mediaId, {
       status: 'processing',
       progress: 0,
-    });
+    }, userId);
 
     const result = await this.imageProcessor.processImage(payload);
     await job.progress(100);
@@ -300,12 +310,27 @@ export class MediaConsumer {
       status: 'completed',
       progress: 100,
       thumbnailUrl: this.buildCdnUrl(result.thumbnail.s3Key),
+    }, userId);
+
+    const media = await this.prisma.mediaAttachment.findUnique({
+      where: { id: mediaId },
+      select: { id: true, uploadId: true, uploadedBy: true, thumbnailUrl: true, cdnUrl: true },
     });
+    if (media) {
+      this.eventEmitter.emit(MEDIA_EVENTS.PROCESSED, {
+        mediaId: media.id,
+        uploadId: media.uploadId || '',
+        userId: media.uploadedBy,
+        thumbnailUrl: media.thumbnailUrl ?? null,
+        cdnUrl: media.cdnUrl ?? null,
+      } satisfies MediaProcessedEvent);
+    }
   }
 
   private async processVideo(
     job: Job,
     payload: VideoProcessingJob,
+    userId: string,
   ): Promise<void> {
     // ... logic cũ ...
     const { mediaId } = payload;
@@ -313,7 +338,7 @@ export class MediaConsumer {
     this.progressGateway.sendProgress(mediaId, {
       status: 'processing',
       progress: 0,
-    });
+    }, userId);
 
     const result = await this.videoProcessor.processVideo(payload);
     await job.progress(100);
@@ -336,7 +361,21 @@ export class MediaConsumer {
       hlsPlaylistUrl: result.hls
         ? this.buildCdnUrl(result.hls.playlistKey)
         : undefined,
+    }, userId);
+
+    const media = await this.prisma.mediaAttachment.findUnique({
+      where: { id: mediaId },
+      select: { id: true, uploadId: true, uploadedBy: true, thumbnailUrl: true, cdnUrl: true },
     });
+    if (media) {
+      this.eventEmitter.emit(MEDIA_EVENTS.PROCESSED, {
+        mediaId: media.id,
+        uploadId: media.uploadId || '',
+        userId: media.uploadedBy,
+        thumbnailUrl: media.thumbnailUrl ?? null,
+        cdnUrl: media.cdnUrl ?? null,
+      } satisfies MediaProcessedEvent);
+    }
   }
 
   // ... (OnQueue events giữ nguyên)
@@ -391,9 +430,8 @@ export class MediaConsumer {
   @OnQueueFailed()
   async onFailed(job: Job<MediaJobData>, error: Error) {
     this.logger.error(`Job ${job.id} failed`, error);
-    // ... logic failed cũ (update DB failed, send socket) ...
     const { payload } = job.data;
-    await this.prisma.mediaAttachment
+    const media = await this.prisma.mediaAttachment
       .update({
         where: { id: payload.mediaId },
         data: {
@@ -401,15 +439,27 @@ export class MediaConsumer {
           processingError: error.message,
           retryCount: job.attemptsMade,
         },
+        select: { id: true, uploadId: true, uploadedBy: true },
       })
-      .catch((e) =>
-        this.logger.warn(`Fail update error: ${(e as Error).message}`),
-      );
+      .catch((e) => {
+        this.logger.warn(`Fail update error: ${(e as Error).message}`);
+        return null;
+      });
 
-    this.progressGateway.sendProgress(payload.mediaId, {
-      status: 'failed',
-      progress: 0,
-      error: 'Failed',
-    });
+    this.progressGateway.sendProgress(
+      payload.mediaId,
+      { status: 'failed', progress: 0, error: 'Failed' },
+      media?.uploadedBy ?? payload.mediaId, // fallback to mediaId prevents crash; room won't match any user
+    );
+
+    // Emit domain event on final failure (all attempts exhausted)
+    if (media && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+      this.eventEmitter.emit(MEDIA_EVENTS.FAILED, {
+        mediaId: media.id,
+        uploadId: media.uploadId || '',
+        userId: media.uploadedBy,
+        reason: error.message,
+      } satisfies MediaFailedEvent);
+    }
   }
 }

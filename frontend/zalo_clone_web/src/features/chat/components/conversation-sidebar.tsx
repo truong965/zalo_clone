@@ -100,12 +100,12 @@ export function ConversationSidebar({
                               </span>
                         </div>
                         <div className="flex items-center gap-1 text-gray-500">
-                              <Dropdown menu={{ items: globalMenuItems }} placement="bottomLeft" trigger={['click']}>
+                              {/* <Dropdown menu={{ items: globalMenuItems }} placement="bottomLeft" trigger={['click']}>
                                     <div className="flex items-center gap-1 cursor-pointer hover:text-blue-600">
                                           <span className="text-xs">Phân loại</span>
                                           <DownOutlined className="text-[10px]" />
                                     </div>
-                              </Dropdown>
+                              </Dropdown> */}
                               <Dropdown menu={{ items: globalMenuItems }} placement="bottomLeft" trigger={['click']}>
                                     <Button
                                           type="text"

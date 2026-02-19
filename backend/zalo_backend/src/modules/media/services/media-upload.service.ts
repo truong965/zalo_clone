@@ -8,6 +8,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { S3Service } from './s3.service';
 import { FileValidationService } from './file-validation.service';
@@ -24,8 +25,14 @@ import {
   InitiateUploadResponse,
 } from '../dto/initiate-upload.dto';
 import { MediaResponseDto } from '../dto/media-response.dto';
-import { MediaQueueService } from '../queues/media-queue.service';
-import { RETRY_CONFIG } from 'src/common/constants/media.constant';
+import { MEDIA_QUEUE_PROVIDER } from '../queues/media-queue.interface';
+import type { IMediaQueueService } from '../queues/media-queue.interface';
+import {
+  RETRY_CONFIG,
+  MEDIA_EVENTS,
+  MediaUploadedEvent,
+  MediaDeletedEvent,
+} from 'src/common/constants/media.constant';
 
 export interface AwsError extends Error {
   $metadata?: { httpStatusCode?: number };
@@ -39,10 +46,49 @@ export class MediaUploadService {
     private readonly prisma: PrismaService,
     private readonly s3Service: S3Service,
     private readonly fileValidation: FileValidationService,
-    private readonly mediaQueue: MediaQueueService,
+    @Inject(MEDIA_QUEUE_PROVIDER) private readonly mediaQueue: IMediaQueueService,
+    private readonly eventEmitter: EventEmitter2,
     @Inject(uploadConfig.KEY)
     private readonly config: ConfigType<typeof uploadConfig>,
-  ) {}
+  ) { }
+
+  async getMediaById(userId: string, mediaId: string): Promise<MediaResponseDto> {
+    const media = await this.prisma.mediaAttachment.findUnique({
+      where: { id: mediaId },
+    });
+    if (!media) throw new NotFoundException(`Media not found: ${mediaId}`);
+    if (media.uploadedBy !== userId)
+      throw new ForbiddenException('Access denied');
+    return this.formatMediaResponse(media);
+  }
+
+  async deleteMedia(userId: string, mediaId: string): Promise<void> {
+    const media = await this.prisma.mediaAttachment.findUnique({
+      where: { id: mediaId },
+    });
+    if (!media) throw new NotFoundException(`Media not found: ${mediaId}`);
+    if (media.uploadedBy !== userId)
+      throw new ForbiddenException('Access denied');
+    // Guard: already soft-deleted
+    if (media.deletedAt) return;
+
+    // Soft-delete — physical S3 cleanup handled by S3CleanupService cron (@EVERY_DAY_AT_2AM)
+    // which deletes files with deletedAt older than SOFT_DELETED_MAX_AGE_DAYS (30 days).
+    await this.prisma.mediaAttachment.update({
+      where: { id: mediaId },
+      data: {
+        deletedAt: new Date(),
+        deletedById: userId,
+      },
+    });
+
+    this.eventEmitter.emit(MEDIA_EVENTS.DELETED, {
+      mediaId,
+      userId,
+    } satisfies MediaDeletedEvent);
+
+    this.logger.log(`Media soft-deleted: ${mediaId} by user ${userId}`);
+  }
 
   async initiateUpload(
     userId: string,
@@ -152,6 +198,15 @@ export class MediaUploadService {
       });
 
       await this.enqueueProcessing(updated);
+
+      this.eventEmitter.emit(MEDIA_EVENTS.UPLOADED, {
+        mediaId: updated.id,
+        uploadId: updated.uploadId || '',
+        userId,
+        mimeType: updated.mimeType,
+        mediaType: updated.mediaType,
+      } satisfies MediaUploadedEvent);
+
       return this.formatMediaResponse(updated);
     } catch (error) {
       const awsError = error as AwsError;
@@ -241,10 +296,28 @@ export class MediaUploadService {
       this.logger.log(
         `${media.mediaType} processed inline successfully: ${media.uploadId}`,
       );
+
+      this.eventEmitter.emit(MEDIA_EVENTS.UPLOADED, {
+        mediaId: updated.id,
+        uploadId: updated.uploadId || '',
+        userId: updated.uploadedBy,
+        mimeType: updated.mimeType,
+        mediaType: updated.mediaType,
+      } satisfies MediaUploadedEvent);
+
+      // Inline processing = immediate READY, so also emit processed
+      this.eventEmitter.emit(MEDIA_EVENTS.PROCESSED, {
+        mediaId: updated.id,
+        uploadId: updated.uploadId || '',
+        userId: updated.uploadedBy,
+        thumbnailUrl: updated.thumbnailUrl ?? null,
+        cdnUrl: updated.cdnUrl ?? null,
+      });
+
       return this.formatMediaResponse(updated);
     } catch (error) {
       // Cleanup S3 temp file on failure
-      await this.s3Service.deleteFile(media.s3KeyTemp!).catch(() => {});
+      await this.s3Service.deleteFile(media.s3KeyTemp!).catch(() => { });
 
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await this.markAsFailed(media.id, msg);
@@ -256,7 +329,7 @@ export class MediaUploadService {
       if (tempFilePath) {
         await import('fs')
           .then((fs) => fs.promises.unlink(tempFilePath!))
-          .catch(() => {});
+          .catch(() => { });
       }
     }
   }
@@ -289,7 +362,7 @@ export class MediaUploadService {
         await this.mediaQueue.enqueueFileProcessing(
           {
             ...jobPayload,
-            fileSize: Number(media.size),
+            size: Number(media.size),
             mimeType: media.mimeType,
           },
           media.mediaType,
@@ -328,9 +401,16 @@ export class MediaUploadService {
       size: media.size.toString(),
       s3Key: media.s3Key,
       cdnUrl: media.cdnUrl,
+      thumbnailUrl: (media as MediaAttachment & { thumbnailUrl?: string | null }).thumbnailUrl ?? null,
+      optimizedUrl: (media as MediaAttachment & { optimizedUrl?: string | null }).optimizedUrl ?? null,
+      hlsPlaylistUrl: (media as MediaAttachment & { hlsPlaylistUrl?: string | null }).hlsPlaylistUrl ?? null,
+      duration: (media as MediaAttachment & { duration?: number | null }).duration ?? null,
+      width: (media as MediaAttachment & { width?: number | null }).width ?? null,
+      height: (media as MediaAttachment & { height?: number | null }).height ?? null,
       processingStatus: media.processingStatus,
+      processingError: (media as MediaAttachment & { processingError?: string | null }).processingError ?? null,
       createdAt: media.createdAt,
-      updatedAt: media.updatedAt || undefined,
+      updatedAt: media.updatedAt ?? null,
     });
   }
 

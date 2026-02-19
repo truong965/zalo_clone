@@ -29,12 +29,11 @@ COPY --from=builder /app/package.json ./package.json
 EXPOSE 3000
 CMD ["node", "dist/src/main.js"]
 
-# 5. Worker Stage (Target dành riêng cho Media Worker)
-# Đây là cái docker-compose.workers.yml đang tìm kiếm (target: worker)
+# 5. Worker Stage (Target for Media Worker — used by docker-compose.workers.yml when scaled out)
+# For MVP, workers run in-process in the main app. This stage is kept for future use.
+# ffmpeg-static npm package provides ffprobe/ffmpeg binaries — no system install needed.
+# HLS transcoding is disabled for MVP, so the system ffmpeg package is not required.
 FROM base AS worker
-
-# ✅ QUAN TRỌNG: Cài FFmpeg để xử lý Video
-RUN apk add --no-cache ffmpeg
 
 # Copy source đã build
 COPY --from=builder /app/node_modules ./node_modules

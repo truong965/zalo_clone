@@ -71,17 +71,21 @@ import socialConfig from './config/social.config';
       verboseMemoryLeak: true,
     }),
 
-    // Async Queue (Redis-based)
-    BullModule.forRootAsync({
-      useFactory: (configService: ConfigService) => ({
-        redis: {
-          host: configService.get('queue.redis.host'),
-          port: configService.get('queue.redis.port'),
-          password: configService.get('queue.redis.password'),
-        },
-      }),
-      inject: [ConfigService],
-    }),
+    // Async Queue — Bull (Redis) for local dev, skipped when QUEUE_PROVIDER=sqs
+    ...(process.env.QUEUE_PROVIDER !== 'sqs'
+      ? [
+        BullModule.forRootAsync({
+          useFactory: (configService: ConfigService) => ({
+            redis: {
+              host: configService.get('queue.redis.host'),
+              port: configService.get('queue.redis.port'),
+              password: configService.get('queue.redis.password'),
+            },
+          }),
+          inject: [ConfigService],
+        }),
+      ]
+      : []),
 
     // Cron Jobs
     ScheduleModule.forRoot(),
@@ -141,4 +145,4 @@ import socialConfig from './config/social.config';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

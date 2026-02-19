@@ -1,4 +1,3 @@
-
 services:
   # 1. Database PostgreSQL
   postgres:
@@ -15,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user"]
+      test: [ "CMD-SHELL", "pg_isready -U user" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,7 +30,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -39,8 +38,8 @@ services:
   minio:
     image: minio/minio:latest
     ports:
-      - "9000:9000"   # API
-      - "9001:9001"   # Console UI
+      - "9000:9000" # API
+      - "9001:9001" # Console UI
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -49,7 +48,7 @@ services:
       - minio_data:/data
       - ./mc-config:/root/.mc
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -60,34 +59,8 @@ services:
     depends_on:
       - minio
     entrypoint: >
-      /bin/sh -c "
-      echo 'Waiting for MinIO to start...';
-      sleep 5;
-      mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      mc mb myminio/zalo-clone-media-dev --ignore-existing;
-      mc anonymous set none myminio/zalo-clone-media-dev;
-      mc ilm add --expiry-days 1 myminio/zalo-clone-media-dev --prefix 'temp/';
-      echo 'MinIO bucket initialized with lifecycle rule';
-      "
+      /bin/sh -c " echo 'Waiting for MinIO to start...'; sleep 5; mc alias set myminio http://minio:9000 minioadmin minioadmin; mc mb myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set none myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1 myminio/zalo-clone-media-dev --prefix 'temp/'; echo 'MinIO bucket initialized with lifecycle rule'; "
 
-  # Thêm service ClamAV
-  clamav:
-    image: clamav/clamav:latest
-    container_name: zalo_clamav
-    restart: unless-stopped
-    ports:
-      - "3310:3310"
-    healthcheck:
-      test: ["CMD", "clamdscan", "--ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    # Tốn RAM, nên limit nếu máy yếu
-    deploy:
-      resources:
-        limits:
-          memory: 1.5G
-          
 volumes:
   postgres_data:
   redis_data:

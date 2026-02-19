@@ -54,20 +54,20 @@ export function ConversationItem({ data, isSelected, onClick }: ConversationItem
                   label: data.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại',
                   icon: <PushpinOutlined />,
             },
-            {
-                  key: 'mark-unread',
-                  label: 'Đánh dấu chưa đọc',
-                  icon: <CheckCircleOutlined />,
-            },
-            {
-                  key: 'classify',
-                  label: 'Phân loại',
-                  icon: <TagsOutlined />,
-                  children: [
-                        { key: 'work', label: 'Công việc' },
-                        { key: 'family', label: 'Gia đình' },
-                  ]
-            },
+            // {
+            //       key: 'mark-unread',
+            //       label: 'Đánh dấu chưa đọc',
+            //       icon: <CheckCircleOutlined />,
+            // },
+            // {
+            //       key: 'classify',
+            //       label: 'Phân loại',
+            //       icon: <TagsOutlined />,
+            //       children: [
+            //             { key: 'work', label: 'Công việc' },
+            //             { key: 'family', label: 'Gia đình' },
+            //       ]
+            // },
             { type: 'divider' },
             {
                   key: 'delete',

@@ -72,3 +72,46 @@ export const ERROR_MESSAGES = {
   SECURITY_VIOLATION: 'Security Violation',
   S3_KEY_MISSING: 'S3_KEY_MISSING',
 };
+
+/**
+ * Domain events emitted by the Media module.
+ * Other modules (messaging, notifications) listen to these via EventEmitter2.
+ */
+export const MEDIA_EVENTS = {
+  /** Fired after a presigned upload is confirmed and the DB record exists */
+  UPLOADED: 'media.uploaded',
+  /** Fired after the worker finishes processing (thumbnail/metadata done) */
+  PROCESSED: 'media.processed',
+  /** Fired after a job exhausts all retries and is marked FAILED */
+  FAILED: 'media.failed',
+  /** Fired after a media record is soft-deleted by the owner */
+  DELETED: 'media.deleted',
+} as const;
+
+export interface MediaUploadedEvent {
+  mediaId: string;
+  uploadId: string;
+  userId: string;
+  mimeType: string;
+  mediaType: string;
+}
+
+export interface MediaProcessedEvent {
+  mediaId: string;
+  uploadId: string;
+  userId: string;
+  thumbnailUrl: string | null;
+  cdnUrl: string | null;
+}
+
+export interface MediaFailedEvent {
+  mediaId: string;
+  uploadId: string;
+  userId: string;
+  reason: string;
+}
+
+export interface MediaDeletedEvent {
+  mediaId: string;
+  userId: string;
+}

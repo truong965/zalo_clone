@@ -74,12 +74,12 @@ export function ChatHeader({
                   </div>
 
                   <div className="flex gap-1">
-                        <Button
+                        {/* <Button
                               icon={<UsergroupAddOutlined />}
                               type="text"
                               className="text-gray-500 hover:bg-gray-100"
                               title="Thêm thành viên"
-                        />
+                        /> */}
                         <Button
                               icon={<VideoCameraOutlined />}
                               type="text"

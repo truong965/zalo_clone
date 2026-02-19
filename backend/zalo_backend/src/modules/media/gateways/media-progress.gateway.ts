@@ -6,8 +6,12 @@ import {
   OnGatewayDisconnect,
   SubscribeMessage,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import type { ConfigType } from '@nestjs/config';
 import { Server, Socket } from 'socket.io';
+import { JwtPayload } from 'src/modules/auth/interfaces/jwt-payload.interface';
+import jwtConfig from 'src/config/jwt.config';
 
 export interface ProgressUpdate {
   status: 'processing' | 'completed' | 'failed';
@@ -19,94 +23,62 @@ export interface ProgressUpdate {
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    origin: process.env.CORS_ORIGINS?.split(',') || 'http://localhost:5173',
     credentials: true,
   },
   namespace: '/media-progress',
 })
 export class MediaProgressGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   private readonly logger = new Logger(MediaProgressGateway.name);
 
-  // Track user subscriptions: userId -> Set<socketId>
-  private userSockets = new Map<string, Set<string>>();
+  constructor(
+    private readonly jwtService: JwtService,
+    @Inject(jwtConfig.KEY)
+    private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
+  ) { }
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
+  async handleConnection(client: Socket) {
+    try {
+      const userId = await this.authenticateClient(client);
+      if (!userId) {
+        this.logger.warn(`Unauthenticated connection rejected: ${client.id}`);
+        client.disconnect(true);
+        return;
+      }
+
+      // Join user-specific room so sendProgress can target by userId
+      await client.join(`user:${userId}`);
+      // Store userId on socket data for disconnect cleanup
+      client.data.userId = userId as string;
+
+      this.logger.log(`Media WS connected: ${client.id} → user:${userId}`);
+      client.emit('connected', { message: 'Media progress connected' });
+    } catch {
+      client.disconnect(true);
+    }
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
-
-    // Remove from all user subscriptions
-    for (const [userId, socketSet] of this.userSockets.entries()) {
-      socketSet.delete(client.id);
-      if (socketSet.size === 0) {
-        this.userSockets.delete(userId);
-      }
-    }
-  }
-
-  /**
-   * Client subscribes to updates for their uploads
-   */
-  @SubscribeMessage('subscribe')
-  handleSubscribe(client: Socket, payload: { userId: string }): void {
-    const { userId } = payload;
-
-    if (!this.userSockets.has(userId)) {
-      this.userSockets.set(userId, new Set());
-    }
-
-    this.userSockets.get(userId)!.add(client.id);
-
-    this.logger.debug(`User ${userId} subscribed via socket ${client.id}`);
-
-    client.emit('subscribed', {
-      message: 'Subscribed to media progress updates',
-    });
-  }
-
-  /**
-   * Send progress update to specific user
-   * Called by MediaConsumer during job processing
-   */
-  sendProgress(mediaId: string, update: ProgressUpdate): void {
-    // Note: In production, you'd need to look up userId from mediaId
-    // For now, emit to all connected clients (simplification)
-    this.server.emit(`progress:${mediaId}`, update);
-
-    this.logger.debug(`Progress update sent for media ${mediaId}`, update);
-  }
-
-  /**
-   * Send progress to specific user only
-   */
-  sendProgressToUser(
-    userId: string,
-    mediaId: string,
-    update: ProgressUpdate,
-  ): void {
-    const socketIds = this.userSockets.get(userId);
-
-    if (!socketIds || socketIds.size === 0) {
-      this.logger.warn(`No active sockets for user ${userId}`);
-      return;
-    }
-
-    // Emit to all user's connected sockets
-    socketIds.forEach((socketId) => {
-      this.server.to(socketId).emit(`progress:${mediaId}`, update);
-    });
-
-    this.logger.debug(
-      `Progress sent to user ${userId} for media ${mediaId}`,
-      update,
+    this.logger.log(
+      `Media WS disconnected: ${client.id} (user:${client.data.userId ?? 'unknown'})`,
     );
+  }
+
+  /**
+   * Send progress update exclusively to the user who owns the media.
+   * Uses a per-user Socket.IO room — no other client receives this event.
+   *
+   * @param mediaId  - ID of the MediaAttachment being processed
+   * @param update   - Progress payload
+   * @param userId   - Owner's user ID (from media.uploadedBy); REQUIRED.
+   */
+  sendProgress(mediaId: string, update: ProgressUpdate, userId: string): void {
+    this.server.to(`user:${userId}`).emit(`progress:${mediaId}`, update);
+    this.logger.debug(`Progress → user:${userId} media:${mediaId}`, update);
   }
 
   /**
@@ -115,5 +87,29 @@ export class MediaProgressGateway
   @SubscribeMessage('ping')
   handlePing(client: Socket): void {
     client.emit('pong', { timestamp: Date.now() });
+  }
+
+  // --- PRIVATE ---
+
+  private async authenticateClient(client: Socket): Promise<string | null> {
+    try {
+      const token =
+        (client.handshake.auth?.token as string | undefined) ||
+        (client.handshake.headers?.authorization as string | undefined)
+          ?.replace('Bearer ', '')
+          .trim();
+
+      if (!token) return null;
+
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
+        secret: this.jwtConfiguration.accessToken.secret,
+      });
+
+      if (payload.type !== 'access' || !payload.sub) return null;
+
+      return payload.sub;
+    } catch {
+      return null;
+    }
   }
 }

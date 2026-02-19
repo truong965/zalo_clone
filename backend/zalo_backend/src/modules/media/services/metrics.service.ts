@@ -1,7 +1,8 @@
 // src/modules/media/services/metrics.service.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { MediaQueueService } from '../queues/media-queue.service';
+import { MEDIA_QUEUE_PROVIDER } from '../queues/media-queue.interface';
+import type { IMediaQueueService } from '../queues/media-queue.interface';
 import { PrismaService } from 'src/database/prisma.service';
 import { MediaProcessingStatus, MediaType } from '@prisma/client';
 
@@ -52,14 +53,14 @@ export class MetricsService {
   };
 
   constructor(
-    private readonly queueService: MediaQueueService,
+    @Inject(MEDIA_QUEUE_PROVIDER) private readonly queueService: IMediaQueueService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   /**
-   * Collect metrics every minute
+   * Collect metrics every 5 minutes
    */
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron('0 */5 * * * *')
   async collectMetrics(): Promise<void> {
     try {
       const queueStats = await this.queueService.getQueueStats();
@@ -217,7 +218,7 @@ export class MetricsService {
    */
   @Cron(CronExpression.EVERY_WEEK)
   async cleanOldJobs(): Promise<void> {
-    await this.queueService.cleanOldJobs();
+    await this.queueService.cleanOldJobs?.();
     this.logger.log('Old jobs cleaned');
   }
 

@@ -17,6 +17,7 @@ import type {
 } from '@shared/events/contracts';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
+import type { MediaDeletedEvent } from 'src/common/constants/media.constant';
 
 /**
  * SearchEventListener (Phase A: Refactored)
@@ -655,6 +656,57 @@ export class SearchEventListener extends IdempotentListener {
         } catch (error) {
           this.logger.error(
             `[SearchEvent] Failed to process user.profile.updated: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+        }
+      },
+    );
+  }
+
+  /**
+   * Handle MEDIA_DELETED event (soft delete of a media attachment)
+   * Invalidate relevant search/media caches so deleted media no longer appears.
+   *
+   * Event emitter: MediaUploadService.deleteMedia()
+   */
+  @OnEvent('media.deleted')
+  async handleMediaDeleted(event: MediaDeletedEvent): Promise<void> {
+    return this.withIdempotency(
+      `media-deleted-${event.mediaId}`,
+      async () => {
+        this.logger.debug(
+          `[SearchEvent] Processing media.deleted: ${event.mediaId} by user ${event.userId}`,
+        );
+
+        try {
+          // Fetch the mediaAttachment to find which conversation it belongs to
+          const media = await this.prisma.mediaAttachment.findUnique({
+            where: { id: event.mediaId },
+            select: {
+              message: {
+                select: { conversationId: true },
+              },
+            },
+          });
+
+          if (media?.message?.conversationId) {
+            // Invalidate conversation-level search cache
+            await this.searchCacheService.invalidateConversationCache(
+              media.message.conversationId,
+            );
+          }
+
+          // Invalidate global search cache for the deleting user
+          await this.searchCacheService.delByPattern(
+            `search:global:${event.userId}:*`,
+          );
+
+          this.logger.debug(
+            `[SearchEvent] Invalidated caches for media.deleted: ${event.mediaId}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `[SearchEvent] Failed to process media.deleted: ${error instanceof Error ? error.message : 'Unknown error'
+            }`,
           );
         }
       },

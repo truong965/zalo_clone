@@ -40,21 +40,28 @@ export interface VideoProcessingJob {
 export class VideoProcessorService implements OnModuleInit {
   private readonly logger = new Logger(VideoProcessorService.name);
 
-  // HLS segment duration (seconds)
+  /**
+   * MVP: HLS transcoding is disabled.
+   * EC2 t3.medium has insufficient RAM for concurrent ffmpeg forks,
+   * and there is no HLS player on the frontend yet.
+   * When this is re-enabled, set to true and implement frontend HLS player.
+   */
+  private readonly TRANSCODING_ENABLED = false;
+
+  // HLS segment duration (seconds) — kept for future use
   private readonly HLS_SEGMENT_DURATION = 6;
 
-  // Video quality presets (adaptive bitrate)
+  // Video quality presets (adaptive bitrate) — kept for future use
   private readonly VIDEO_PRESETS = [
     { name: '480p', width: 854, height: 480, bitrate: '1000k' },
     { name: '720p', width: 1280, height: 720, bitrate: '2500k' },
-    // Add 1080p only if original is HD
   ];
 
   constructor(
     private readonly s3Service: S3Service,
     @Inject(uploadConfig.KEY)
     private readonly config: ConfigType<typeof uploadConfig>,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     // Configure FFmpeg paths from ffprobe-static
@@ -130,9 +137,10 @@ export class VideoProcessorService implements OnModuleInit {
         tempDir,
       );
 
-      // 4. Transcode to HLS (if video duration > 30s or size is large)
+      // 4. Transcode to HLS — disabled for MVP (TRANSCODING_ENABLED = false)
       let hls: VideoProcessingResult['hls'] = undefined;
-      const shouldTranscode = duration > 30 || width > 1280;
+      const shouldTranscode =
+        this.TRANSCODING_ENABLED && (duration > 30 || width > 1280);
 
       if (shouldTranscode) {
         hls = await this.transcodeToHLS(
@@ -156,12 +164,12 @@ export class VideoProcessorService implements OnModuleInit {
     } finally {
       // Cleanup
       if (localVideoPath && fs.existsSync(localVideoPath)) {
-        await fs.promises.unlink(localVideoPath).catch(() => {});
+        await fs.promises.unlink(localVideoPath).catch(() => { });
       }
       if (tempDir && fs.existsSync(tempDir)) {
         await fs.promises
           .rm(tempDir, { recursive: true, force: true })
-          .catch(() => {});
+          .catch(() => { });
       }
     }
   }
