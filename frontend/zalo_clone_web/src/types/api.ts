@@ -530,14 +530,18 @@ export type DirectReceipts = Record<string, DirectReceiptEntry>;
 export interface MessageMediaAttachmentItem {
   id: string;
   mediaType: MediaType;
+  mimeType?: string;
   cdnUrl?: string | null;
   thumbnailUrl?: string | null;
+  optimizedUrl?: string | null;
+  originalName: string;
+  size: number;
   width?: number | null;
   height?: number | null;
   duration?: number | null;
   processingStatus: MediaProcessingStatus;
-  originalName: string;
-  size: number;
+  /** Client-only: Object URL for local preview before server CDN is available */
+  _localUrl?: string;
 }
 
 export interface MessageListItem extends Message {

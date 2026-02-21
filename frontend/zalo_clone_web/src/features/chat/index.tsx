@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ConversationSidebar } from './components/conversation-sidebar';
 import { ChatHeader } from './components/chat-header';
 import { ChatInput } from './components/chat-input';
+import type { SendPayload } from './components/chat-input';
 import { ChatSearchSidebar } from './components/chat-search-sidebar';
 import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
@@ -22,7 +23,8 @@ import { notification } from 'antd';
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
 import { useChatMessages } from './hooks/use-chat-messages';
-import type { MessageListItem, MessageType } from '@/types/api';
+import { useMediaProgress } from './hooks/use-media-progress';
+import type { MessageListItem, MessageType, MediaProcessingStatus } from '@/types/api';
 import type { MessagesInfiniteData, MessagesPage } from '@/hooks/use-message-socket';
 import { useChatConversationRealtime } from './hooks/use-chat-conversation-realtime';
 
@@ -261,6 +263,27 @@ export function ChatFeature() {
 
       const typingText = typingUserIds.length > 0 ? 'Đang nhập...' : null;
 
+      // ── Phase 7: Track media processing via WebSocket ──────────────────
+      // Collect mediaIds from current messages that are not yet READY/FAILED
+      const pendingMediaIds = useMemo(() => {
+            const DONE_STATUSES = new Set(['READY', 'FAILED']);
+            const ids: string[] = [];
+            for (const msg of messages) {
+                  if (!msg.mediaAttachments) continue;
+                  for (const a of msg.mediaAttachments) {
+                        if (!DONE_STATUSES.has(a.processingStatus)) {
+                              ids.push(a.id);
+                        }
+                  }
+            }
+            return ids;
+      }, [messages]);
+
+      useMediaProgress({
+            messagesQueryKey,
+            mediaIds: pendingMediaIds,
+      });
+
       const resetConversationUnread = useCallback((conversationId: string, lastReadMessageId?: string) => {
             queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
                   conversationsQueryKey,
@@ -326,20 +349,43 @@ export function ChatFeature() {
             // The seenMessageIdsRef guard prevents re-emitting for messages already processed.
       }, [selectedId, isMsgSocketConnected, messages, currentUserId, emitMarkAsSeen, resetConversationUnread]);
 
-      const handleSendText = useCallback(async (text: string) => {
+      const handleSendMessage = useCallback(async (payload: SendPayload) => {
             if (!selectedId) return;
-            const trimmed = text.trim();
-            if (!trimmed) return;
+
+            const { type, content, mediaIds, _localFiles } = payload;
+            const trimmed = content?.trim();
+
+            // Text-only: must have content
+            if (type === 'TEXT' && !trimmed) return;
 
             const clientMessageId = crypto.randomUUID();
             const nowIso = new Date().toISOString();
+
+            // Build optimistic mediaAttachments from _localFiles
+            const optimisticAttachments = _localFiles?.map((lf) => ({
+                  id: lf.mediaId,
+                  mediaType: lf.mediaType,
+                  mimeType: lf.mimeType,
+                  // Use the cdnUrl already available for inline-processed media (AUDIO/DOCUMENT).
+                  cdnUrl: lf.cdnUrl ?? null,
+                  thumbnailUrl: null,
+                  optimizedUrl: null,
+                  originalName: lf.originalName,
+                  size: lf.size,
+                  width: null,
+                  height: null,
+                  duration: null,
+                  // Use the real status from confirmUpload — READY for inline media, CONFIRMED for queue-processed.
+                  processingStatus: (lf.processingStatus ?? 'CONFIRMED') as MediaProcessingStatus,
+                  _localUrl: lf.localUrl,
+            })) ?? [];
 
             const optimistic: MessageListItem = {
                   id: clientMessageId,
                   conversationId: selectedId,
                   senderId: currentUserId ?? undefined,
-                  type: 'TEXT' as MessageType,
-                  content: trimmed,
+                  type: type as MessageType,
+                  content: trimmed ?? undefined,
                   metadata: { sendStatus: 'SENDING' },
                   clientMessageId,
                   createdAt: nowIso,
@@ -352,7 +398,7 @@ export function ChatFeature() {
                   seenCount: 0,
                   totalRecipients: 0,
                   directReceipts: null,
-                  mediaAttachments: [],
+                  mediaAttachments: optimisticAttachments,
             };
 
             queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
@@ -368,13 +414,16 @@ export function ChatFeature() {
                   return { ...prev, pages };
             });
 
+            const sendDto = {
+                  conversationId: selectedId,
+                  clientMessageId,
+                  type: type as MessageType,
+                  ...(trimmed ? { content: trimmed } : {}),
+                  ...(mediaIds?.length ? { mediaIds } : {}),
+            };
+
             if (isMsgSocketConnected) {
-                  emitSendMessage({
-                        conversationId: selectedId,
-                        clientMessageId,
-                        type: 'TEXT',
-                        content: trimmed,
-                  }, (ack) => {
+                  emitSendMessage(sendDto, (ack) => {
                         if (!ack || !('error' in ack) || !ack.error) return;
                         queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
                               if (!prev) return prev;
@@ -395,12 +444,7 @@ export function ChatFeature() {
             }
 
             try {
-                  await messageService.sendMessage({
-                        conversationId: selectedId,
-                        clientMessageId,
-                        type: 'TEXT' as MessageType,
-                        content: trimmed,
-                  });
+                  await messageService.sendMessage(sendDto);
             } catch {
                   queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
                         if (!prev) return prev;
@@ -619,7 +663,7 @@ export function ChatFeature() {
 
                                           <ChatInput
                                                 conversationId={selectedId}
-                                                onSend={handleSendText}
+                                                onSend={handleSendMessage}
                                                 onTypingChange={(isTyping) => {
                                                       if (!selectedId) return;
                                                       if (!isMsgSocketConnected) return;

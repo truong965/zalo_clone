@@ -2,7 +2,7 @@
  * Validate and export environment variables
  */
 
-const requiredEnvVars = ['VITE_BACKEND_URL'] as const;
+const requiredEnvVars = ['VITE_BACKEND_URL', 'VITE_SOCKET_URL'] as const;
 
 function validateEnv() {
       const missing = requiredEnvVars.filter((key) => !import.meta.env[key]);

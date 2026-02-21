@@ -88,6 +88,9 @@ export const API_ENDPOINTS = {
   // Media Upload
   MEDIA: {
     UPLOAD: '/api/v1/media/upload',
+    INITIATE: '/api/v1/media/upload/initiate',
+    CONFIRM: '/api/v1/media/upload/confirm',
+    GET: (id: string) => `/api/v1/media/${id}`,
     DELETE: (id: string) => `/api/v1/media/${id}`,
   },
 

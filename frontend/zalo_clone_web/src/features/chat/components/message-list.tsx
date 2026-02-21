@@ -1,7 +1,8 @@
+import { Fragment } from 'react';
 import { Button, Empty, Spin } from 'antd';
 import type { ChatMessage } from '../types';
-import { MessageType } from '@/types/api';
 import type { DirectReceipts } from '@/types/api';
+import { ImageAttachment, VideoAttachment, AudioAttachment, DocumentAttachment } from './attachments';
 
 interface MessageListProps {
       messages: ChatMessage[];
@@ -22,58 +23,114 @@ interface MessageListProps {
       isDirect?: boolean;
 }
 
+// ── Date-divider helpers ──
+
+function formatDateLabel(isoString: string): string {
+      const msgDate = new Date(isoString);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+
+      const sameDay = (a: Date, b: Date) =>
+            a.getFullYear() === b.getFullYear() &&
+            a.getMonth() === b.getMonth() &&
+            a.getDate() === b.getDate();
+
+      if (sameDay(msgDate, today)) return 'Hôm nay';
+      if (sameDay(msgDate, yesterday)) return 'Hôm qua';
+
+      const dd = String(msgDate.getDate()).padStart(2, '0');
+      const mm = String(msgDate.getMonth() + 1).padStart(2, '0');
+      const yyyy = msgDate.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+}
+
+function DateDivider({ label }: { label: string }) {
+      return (
+            <div className="flex items-center gap-3 my-1 px-2">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap select-none">{label}</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+            </div>
+      );
+}
+
 function renderMessageBody(msg: ChatMessage) {
       const attachments = msg.mediaAttachments ?? [];
 
       if (attachments.length > 0) {
             const images = attachments.filter((a) => a.mediaType === 'IMAGE');
-            const nonImages = attachments.filter((a) => a.mediaType !== 'IMAGE');
+            const videos = attachments.filter((a) => a.mediaType === 'VIDEO');
+            const audios = attachments.filter((a) => a.mediaType === 'AUDIO');
+            const documents = attachments.filter((a) => a.mediaType === 'DOCUMENT');
 
             return (
                   <div className="space-y-2">
                         {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
 
-                        {images.length > 0 && (
+                        {/* Image grid
+                             - 1 image  : natural size (no forced h-32 / full-width)
+                             - 2+ images: 2-col grid; last item spans both cols when count is odd
+                        */}
+                        {images.length === 1 && (
+                              <ImageAttachment
+                                    attachment={images[0]}
+                                    isSingle
+                              />
+                        )}
+                        {images.length > 1 && (
                               <div className="grid grid-cols-2 gap-2">
-                                    {images.map((a) => (
-                                          <a
+                                    {images.map((a, idx) => (
+                                          <ImageAttachment
                                                 key={a.id}
-                                                href={a.cdnUrl ?? undefined}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block overflow-hidden rounded-lg bg-gray-100"
-                                          >
-                                                <img
-                                                      src={a.thumbnailUrl ?? a.cdnUrl ?? undefined}
-                                                      alt={a.originalName}
-                                                      className="w-full h-32 object-cover"
-                                                />
-                                          </a>
+                                                attachment={a}
+                                                className={
+                                                      images.length % 2 !== 0 && idx === images.length - 1
+                                                            ? 'col-span-2'
+                                                            : undefined
+                                                }
+                                          />
                                     ))}
                               </div>
                         )}
 
-                        {nonImages.length > 0 && (
-                              <div className="space-y-1">
-                                    {nonImages.map((a) => (
-                                          <a
+                        {/* Video attachments */}
+                        {videos.length > 0 && (
+                              <div className="space-y-2">
+                                    {videos.map((a) => (
+                                          <VideoAttachment
                                                 key={a.id}
-                                                href={a.cdnUrl ?? undefined}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block text-sm underline text-gray-700"
-                                          >
-                                                {a.originalName}
-                                          </a>
+                                                attachment={a}
+                                          />
+                                    ))}
+                              </div>
+                        )}
+
+                        {/* Audio attachments — native HTML5 player */}
+                        {audios.length > 0 && (
+                              <div className="space-y-2">
+                                    {audios.map((a) => (
+                                          <AudioAttachment
+                                                key={a.id}
+                                                attachment={a}
+                                          />
+                                    ))}
+                              </div>
+                        )}
+
+                        {/* Document/file attachments */}
+                        {documents.length > 0 && (
+                              <div className="space-y-2">
+                                    {documents.map((a) => (
+                                          <DocumentAttachment
+                                                key={a.id}
+                                                attachment={a}
+                                          />
                                     ))}
                               </div>
                         )}
                   </div>
             );
-      }
-
-      if (msg.type !== MessageType.TEXT) {
-            return <div className="whitespace-pre-wrap">{msg.content ?? ''}</div>;
       }
 
       return <div className="whitespace-pre-wrap">{msg.content ?? ''}</div>;
@@ -215,65 +272,73 @@ export function MessageList({
 
                   {messages.length > 0 ? (
                         <div className="space-y-3">
-                              {messages.map((msg) => {
+                              {messages.map((msg, idx) => {
+                                    const dateLabel = formatDateLabel(msg.createdAt);
+                                    const prevDateLabel = idx > 0
+                                          ? formatDateLabel(messages[idx - 1].createdAt)
+                                          : '';
+                                    const showDivider = dateLabel !== prevDateLabel;
                                     const isHighlighted = highlightedMessageId === msg.id;
                                     const isLatestMyMessage = msg.id === latestMyMessageId;
                                     return (
-                                          <div key={msg.id} data-message-id={msg.id} className={`flex ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}>
-                                                {msg.senderSide !== 'me' && (
-                                                      <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center mr-2 text-xs flex-shrink-0">
-                                                            {msg.sender?.displayName?.[0]?.toUpperCase() ?? 'U'}
-                                                      </div>
-                                                )}
-                                                <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 
-                                                      ${msg.senderSide === 'me'
-                                                            ? 'bg-[#E5EFFF] text-gray-800 border border-[#c7e0ff]'
-                                                            : 'bg-white text-gray-800 border border-gray-200'
-                                                      }
-                                                      ${isHighlighted
-                                                            ? 'ring-2 ring-blue-400 ring-offset-2 bg-blue-50 transition-all duration-1000 ease-out'
-                                                            : ''
-                                                      }
-                                                `}>
-                                                      {renderMessageBody(msg)}
-                                                      {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
-                                                            <div className="mt-2 flex items-center justify-end gap-2">
-                                                                  <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
-                                                                  <Button
-                                                                        size="small"
-                                                                        type="link"
-                                                                        className="!p-0 !h-auto"
-                                                                        onClick={() => onRetry?.(msg)}
-                                                                  >
-                                                                        Gửi lại
-                                                                  </Button>
+                                          <Fragment key={msg.id}>
+                                                {showDivider && <DateDivider label={dateLabel} />}
+                                                <div data-message-id={msg.id} className={`flex ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}>
+                                                      {msg.senderSide !== 'me' && (
+                                                            <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center mr-2 text-xs flex-shrink-0">
+                                                                  {msg.sender?.displayName?.[0]?.toUpperCase() ?? 'U'}
                                                             </div>
                                                       )}
-                                                      <div className="text-[10px] opacity-60 text-right mt-1 flex items-center justify-end gap-1.5">
-                                                            {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
-                                                                  <span className="inline-flex items-center gap-1">
-                                                                        <Spin size="small" />
-                                                                        <span>Đang gửi...</span>
-                                                                  </span>
+                                                      <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 
+                                                      ${msg.senderSide === 'me'
+                                                                  ? 'bg-[#E5EFFF] text-gray-800 border border-[#c7e0ff]'
+                                                                  : 'bg-white text-gray-800 border border-gray-200'
+                                                            }
+                                                      ${isHighlighted
+                                                                  ? 'ring-2 ring-blue-400 ring-offset-2 bg-blue-50 transition-all duration-1000 ease-out'
+                                                                  : ''
+                                                            }
+                                                `}>
+                                                            {renderMessageBody(msg)}
+                                                            {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
+                                                                  <div className="mt-2 flex items-center justify-end gap-2">
+                                                                        <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
+                                                                        <Button
+                                                                              size="small"
+                                                                              type="link"
+                                                                              className="!p-0 !h-auto"
+                                                                              onClick={() => onRetry?.(msg)}
+                                                                        >
+                                                                              Gửi lại
+                                                                        </Button>
+                                                                  </div>
                                                             )}
-                                                            <span>{msg.displayTimestamp}</span>
-                                                            {/* Receipt status only on the latest message sent by me */}
-                                                            {isLatestMyMessage && msg.senderSide === 'me' && (() => {
-                                                                  const state = getReceiptDisplayState(msg, isDirect);
-                                                                  if (state === 'none') return null;
-                                                                  return (
+                                                            <div className="text-[10px] opacity-60 text-right mt-1 flex items-center justify-end gap-1.5">
+                                                                  {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
                                                                         <span className="inline-flex items-center gap-1">
-                                                                              <ReceiptTick state={state} />
-                                                                              <span className={state === 'seen' ? 'text-blue-500' : 'text-gray-400'}>
-                                                                                    {getReceiptText(state)}
-                                                                              </span>
-                                                                              {!isDirect && <GroupSeenCounter msg={msg} />}
+                                                                              <Spin size="small" />
+                                                                              <span>Đang gửi...</span>
                                                                         </span>
-                                                                  );
-                                                            })()}
+                                                                  )}
+                                                                  <span>{msg.displayTimestamp}</span>
+                                                                  {/* Receipt status only on the latest message sent by me */}
+                                                                  {isLatestMyMessage && msg.senderSide === 'me' && (() => {
+                                                                        const state = getReceiptDisplayState(msg, isDirect);
+                                                                        if (state === 'none') return null;
+                                                                        return (
+                                                                              <span className="inline-flex items-center gap-1">
+                                                                                    <ReceiptTick state={state} />
+                                                                                    <span className={state === 'seen' ? 'text-blue-500' : 'text-gray-400'}>
+                                                                                          {getReceiptText(state)}
+                                                                                    </span>
+                                                                                    {!isDirect && <GroupSeenCounter msg={msg} />}
+                                                                              </span>
+                                                                        );
+                                                                  })()}
+                                                            </div>
                                                       </div>
                                                 </div>
-                                          </div>
+                                          </Fragment>
                                     );
                               })}
                         </div>
