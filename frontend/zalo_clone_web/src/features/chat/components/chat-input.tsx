@@ -20,6 +20,7 @@ import {
       LoadingOutlined,
 } from '@ant-design/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
 import { FilePreviewPanel } from './file-preview-panel';
 import { useMediaUpload } from '../hooks/use-media-upload';
 import { batchFilesByType } from '../utils/batch-files';
@@ -85,9 +86,12 @@ interface ChatInputProps {
 export function ChatInput({ conversationId, onSend, onTypingChange }: ChatInputProps) {
       const [message, setMessage] = useState('');
       const [isSending, setIsSending] = useState(false);
+      const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
       const isTypingRef = useRef(false);
       const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const emojiPickerRef = useRef<HTMLDivElement>(null);
+      const emojiButtonRef = useRef<HTMLButtonElement>(null);
 
       // Hidden file inputs
       const imageVideoInputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +116,24 @@ export function ChatInput({ conversationId, onSend, onTypingChange }: ChatInputP
                   if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
             };
       }, []);
+
+      // ── Close emoji picker on outside click ──────────────────────────────
+      useEffect(() => {
+            if (!showEmojiPicker) return;
+            const handleClickOutside = (e: MouseEvent) => {
+                  const target = e.target as Node;
+                  if (
+                        emojiPickerRef.current &&
+                        !emojiPickerRef.current.contains(target) &&
+                        emojiButtonRef.current &&
+                        !emojiButtonRef.current.contains(target)
+                  ) {
+                        setShowEmojiPicker(false);
+                  }
+            };
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, [showEmojiPicker]);
 
       // ── Typing indicator logic ────────────────────────────────────────────
       const emitTypingStart = useCallback(() => {
@@ -374,13 +396,41 @@ export function ChatInput({ conversationId, onSend, onTypingChange }: ChatInputP
                         {/* Action Buttons Right Side */}
                         <div className="flex items-center gap-2 pb-1">
                               {/* Biểu cảm */}
-                              <Tooltip title="Biểu cảm">
-                                    <Button
-                                          type="text"
-                                          icon={<SmileOutlined className="text-xl text-gray-500" />}
-                                          className="hover:bg-gray-100 hover:text-yellow-500 rounded-full w-8 h-8 flex items-center justify-center"
-                                    />
-                              </Tooltip>
+                              <div className="relative">
+                                    <Tooltip title="Biểu cảm" open={showEmojiPicker ? false : undefined}>
+                                          <Button
+                                                ref={emojiButtonRef}
+                                                type="text"
+                                                icon={
+                                                      <SmileOutlined
+                                                            className={`text-xl transition-colors ${showEmojiPicker ? 'text-yellow-500' : 'text-gray-500'
+                                                                  }`}
+                                                      />
+                                                }
+                                                className="hover:bg-gray-100 hover:text-yellow-500 rounded-full w-8 h-8 flex items-center justify-center"
+                                                disabled={isDisabled}
+                                                onClick={() => setShowEmojiPicker((prev) => !prev)}
+                                          />
+                                    </Tooltip>
+
+                                    {showEmojiPicker && (
+                                          <div
+                                                ref={emojiPickerRef}
+                                                className="absolute bottom-10 right-0 z-50 shadow-xl rounded-xl overflow-hidden"
+                                          >
+                                                <EmojiPicker
+                                                      onEmojiClick={(emojiData: EmojiClickData) => {
+                                                            setMessage((prev) => prev + emojiData.emoji);
+                                                      }}
+                                                      theme={Theme.LIGHT}
+                                                      lazyLoadEmojis
+                                                      searchPlaceHolder="Tìm emoji..."
+                                                      width={320}
+                                                      height={400}
+                                                />
+                                          </div>
+                                    )}
+                              </div>
 
                               {/* Send button */}
                               <div className="border-l border-gray-200 pl-2">
