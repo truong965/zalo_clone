@@ -18,6 +18,7 @@ import {
 import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
+import { WsJwtGuard } from 'src/socket/guards/ws-jwt.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
 import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
@@ -39,7 +40,7 @@ import { TypingIndicatorDto } from './dto/typing-indicator.dto';
   cors: { origin: '*', credentials: true },
   namespace: '/socket.io',
 })
-@UseGuards(WsThrottleGuard)
+@UseGuards(WsJwtGuard, WsThrottleGuard)
 @UsePipes(new ValidationPipe({ transform: true }))
 @UseInterceptors(WsTransformInterceptor)
 @UseFilters(WsExceptionFilter)

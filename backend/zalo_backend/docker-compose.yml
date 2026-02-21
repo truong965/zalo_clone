@@ -59,7 +59,7 @@ services:
     depends_on:
       - minio
     entrypoint: >
-      /bin/sh -c " echo 'Waiting for MinIO to start...'; sleep 5; mc alias set myminio http://minio:9000 minioadmin minioadmin; mc mb myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set none myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1 myminio/zalo-clone-media-dev --prefix 'temp/'; echo 'MinIO bucket initialized with lifecycle rule'; "
+      /bin/sh -c " echo 'Waiting for MinIO to start...'; sleep 5; mc alias set myminio http://minio:9000 minioadmin minioadmin; mc mb myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set download myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1 myminio/zalo-clone-media-dev --prefix 'temp/'; echo 'MinIO bucket initialized with lifecycle rule (anonymous download enabled for dev)'; "
 
 volumes:
   postgres_data:

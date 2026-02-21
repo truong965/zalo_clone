@@ -9,6 +9,7 @@ export const MESSAGE_LIMITS = {
   FILE_MAX: 5,
   VIDEO_MAX: 1,
   VOICE_MAX: 1,
+  AUDIO_MAX: 5,
 };
 
 export class MessageValidator {
@@ -72,6 +73,11 @@ export class MessageValidator {
             'AUDIO message must have at least 1 audio file',
           );
         }
+        if (mediaCount > MESSAGE_LIMITS.AUDIO_MAX) {
+          throw new BadRequestException(
+            `AUDIO message can have max ${MESSAGE_LIMITS.AUDIO_MAX} audio files`,
+          );
+        }
         break;
 
       case MessageType.VOICE:
@@ -116,7 +122,7 @@ export class MessageValidator {
       if (!expectedMediaTypes.includes(media.mediaType)) {
         throw new BadRequestException(
           `${messageType} message cannot contain ${media.mediaType} files. ` +
-            `Expected: ${expectedMediaTypes.join(' or ')}`,
+          `Expected: ${expectedMediaTypes.join(' or ')}`,
         );
       }
     }

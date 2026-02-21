@@ -27,6 +27,7 @@ import {
 import { SocketGateway } from 'src/socket/socket.gateway';
 import {
   MediaAttachment,
+  MemberStatus,
   MediaProcessingStatus,
   MediaType,
   Prisma,
@@ -123,6 +124,7 @@ export class MediaConsumer {
             payload.mediaId,
             media.mimeType,
             fileBuffer,
+            userId,
           );
           break;
 
@@ -212,11 +214,19 @@ export class MediaConsumer {
 
   /**
    * Helper: Process Audio/Document (Direct Move, No Transcoding)
+   *
+   * FIX (Bug 2): emit socket `progress:${mediaId}` completed event and the
+   * MEDIA_EVENTS.PROCESSED domain event so that:
+   *  - the sender's useMediaProgress hook can update the attachment in cache, and
+   *  - downstream listeners (e.g. message module) are notified.
+   * Previously these were omitted, leaving the attachment in PROCESSING state
+   * in the sender's UI indefinitely when this queue path is executed.
    */
   private async processDirectFile(
     mediaId: string,
     mimeType: string,
     buffer: Buffer,
+    userId: string,
   ) {
     const permanentKey = this.generatePermanentKey(mediaId, mimeType);
 
@@ -229,6 +239,34 @@ export class MediaConsumer {
       MediaProcessingStatus.READY,
       permanentKey,
     );
+
+    // Fetch the updated media record to get cdnUrl and messageId for broadcast.
+    const media = await this.prisma.mediaAttachment.findUnique({
+      where: { id: mediaId },
+      select: { id: true, uploadId: true, uploadedBy: true, cdnUrl: true, messageId: true },
+    });
+
+    const completedDirectPayload = {
+      status: 'completed' as const,
+      progress: 100,
+      cdnUrl: media?.cdnUrl ?? undefined,
+    };
+
+    // Notify the sender that processing completed
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, completedDirectPayload);
+
+    if (media) {
+      this.eventEmitter.emit(MEDIA_EVENTS.PROCESSED, {
+        mediaId: media.id,
+        uploadId: media.uploadId || '',
+        userId: media.uploadedBy,
+        thumbnailUrl: null,
+        cdnUrl: media.cdnUrl ?? null,
+      } satisfies MediaProcessedEvent);
+      // Broadcast to conversation members so recipients (user B) update their UI.
+      void this.broadcastProgressToConversationMembers(mediaId, userId, completedDirectPayload, media.messageId);
+    }
+
     this.logger.log(`Direct file processed: ${mediaId}`);
   }
 
@@ -312,15 +350,16 @@ export class MediaConsumer {
       },
     });
 
-    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
-      status: 'completed',
+    const completedImagePayload = {
+      status: 'completed' as const,
       progress: 100,
       thumbnailUrl: this.buildCdnUrl(result.thumbnail.s3Key),
-    });
+    };
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, completedImagePayload);
 
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { id: mediaId },
-      select: { id: true, uploadId: true, uploadedBy: true, thumbnailUrl: true, cdnUrl: true },
+      select: { id: true, uploadId: true, uploadedBy: true, thumbnailUrl: true, cdnUrl: true, messageId: true },
     });
     if (media) {
       this.eventEmitter.emit(MEDIA_EVENTS.PROCESSED, {
@@ -330,6 +369,12 @@ export class MediaConsumer {
         thumbnailUrl: media.thumbnailUrl ?? null,
         cdnUrl: media.cdnUrl ?? null,
       } satisfies MediaProcessedEvent);
+      // Broadcast to conversation members so recipients (user B) update their UI.
+      void this.broadcastProgressToConversationMembers(
+        mediaId, userId,
+        { ...completedImagePayload, cdnUrl: media.cdnUrl ?? undefined },
+        media.messageId,
+      );
     }
   }
 
@@ -360,18 +405,17 @@ export class MediaConsumer {
       },
     });
 
-    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, {
-      status: 'completed',
+    const completedVideoPayload = {
+      status: 'completed' as const,
       progress: 100,
       thumbnailUrl: this.buildCdnUrl(result.thumbnail.s3Key),
-      hlsPlaylistUrl: result.hls
-        ? this.buildCdnUrl(result.hls.playlistKey)
-        : undefined,
-    });
+      hlsPlaylistUrl: result.hls ? this.buildCdnUrl(result.hls.playlistKey) : undefined,
+    };
+    void this.socketGateway.emitToUser(userId, `progress:${mediaId}`, completedVideoPayload);
 
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { id: mediaId },
-      select: { id: true, uploadId: true, uploadedBy: true, thumbnailUrl: true, cdnUrl: true },
+      select: { id: true, uploadId: true, uploadedBy: true, thumbnailUrl: true, cdnUrl: true, messageId: true },
     });
     if (media) {
       this.eventEmitter.emit(MEDIA_EVENTS.PROCESSED, {
@@ -381,10 +425,54 @@ export class MediaConsumer {
         thumbnailUrl: media.thumbnailUrl ?? null,
         cdnUrl: media.cdnUrl ?? null,
       } satisfies MediaProcessedEvent);
+      void this.broadcastProgressToConversationMembers(
+        mediaId, userId,
+        { ...completedVideoPayload, cdnUrl: media.cdnUrl ?? undefined },
+        media.messageId,
+      );
     }
   }
 
   // ... (OnQueue events giữ nguyên)
+
+  /**
+   * Broadcast a `progress:{mediaId}` event to all active conversation members
+   * except the uploader. This is the fix for user B being stuck at "đang xử lý":
+   * `emitToUser(userId, ...)` only reaches the uploader; everyone else must
+   * receive the event via this broadcast.
+   */
+  private async broadcastProgressToConversationMembers(
+    mediaId: string,
+    uploaderId: string,
+    payload: object,
+    messageId: bigint | null | undefined,
+  ): Promise<void> {
+    if (!messageId) return;
+    try {
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: { conversationId: true },
+      });
+      if (!message) return;
+
+      const members = await this.prisma.conversationMember.findMany({
+        where: {
+          conversationId: message.conversationId,
+          userId: { not: uploaderId },
+          status: MemberStatus.ACTIVE,
+        },
+        select: { userId: true },
+      });
+
+      for (const member of members) {
+        void this.socketGateway.emitToUser(member.userId, `progress:${mediaId}`, payload);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Failed to broadcast media progress to conversation members: ${(e as Error).message}`,
+      );
+    }
+  }
 
   private generatePermanentKey(uploadId: string, extension: string): string {
     const now = new Date();
@@ -445,17 +533,25 @@ export class MediaConsumer {
           processingError: error.message,
           retryCount: job.attemptsMade,
         },
-        select: { id: true, uploadId: true, uploadedBy: true },
+        // Include messageId so the frontend can identify which message is affected
+        select: { id: true, uploadId: true, uploadedBy: true, messageId: true },
       })
       .catch((e) => {
         this.logger.warn(`Fail update error: ${(e as Error).message}`);
         return null;
       });
 
+    // Bug 3 fix: pass the actual error reason (not the generic 'Failed' string)
+    // and include messageId so the sender's UI can mark the right message as broken.
     void this.socketGateway.emitToUser(
       media?.uploadedBy ?? payload.mediaId,
       `progress:${payload.mediaId}`,
-      { status: 'failed', progress: 0, error: 'Failed' },
+      {
+        status: 'failed',
+        progress: 0,
+        error: error.message,
+        messageId: media?.messageId?.toString() ?? null,
+      },
     );
 
     // Emit domain event on final failure (all attempts exhausted)

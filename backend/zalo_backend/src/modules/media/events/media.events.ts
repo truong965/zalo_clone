@@ -4,12 +4,12 @@
 
 /** Real-time progress update pushed to the uploading user via SocketGateway. */
 export interface ProgressUpdate {
-  status: 'processing' | 'completed' | 'failed';
-  /** Completion percentage 0-100 */
-  progress: number;
-  thumbnailUrl?: string;
-  hlsPlaylistUrl?: string;
-  error?: string;
+      status: 'processing' | 'completed' | 'failed';
+      /** Completion percentage 0-100 */
+      progress: number;
+      thumbnailUrl?: string;
+      hlsPlaylistUrl?: string;
+      error?: string;
 }
 
 export interface MediaUploadedEvent {

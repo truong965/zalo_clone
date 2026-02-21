@@ -51,7 +51,7 @@ import { PrismaService } from 'src/database/prisma.service';
     },
     credentials: true,
   },
-  namespace: '/ws',
+  namespace: '/socket.io',
   transports: ['websocket', 'polling'],
   pingInterval: process.env.PING_INTERVAL
     ? parseInt(process.env.PING_INTERVAL, 10)

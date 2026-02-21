@@ -15,6 +15,7 @@ import { FileValidationService } from './file-validation.service';
 import {
   MediaProcessingStatus,
   MediaType,
+  MemberStatus,
   MediaAttachment,
 } from '@prisma/client';
 import { createHash } from 'crypto';
@@ -48,11 +49,73 @@ export class MediaUploadService {
   async getMediaById(userId: string, mediaId: string): Promise<MediaResponseDto> {
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { id: mediaId },
+      include: {
+        message: { select: { conversationId: true } },
+      },
     });
     if (!media) throw new NotFoundException(`Media not found: ${mediaId}`);
-    if (media.uploadedBy !== userId)
-      throw new ForbiddenException('Access denied');
+
+    // Allow access if: (1) the requester is the uploader, OR
+    // (2) the media is linked to a message in a conversation the requester is a member of.
+    // This lets conversation partners poll processing status without a 403.
+    if (media.uploadedBy !== userId) {
+      const conversationId = media.message?.conversationId;
+      if (!conversationId) throw new ForbiddenException('Access denied');
+
+      const membership = await this.prisma.conversationMember.findFirst({
+        where: { conversationId, userId, status: MemberStatus.ACTIVE },
+        select: { userId: true },
+      });
+      if (!membership) throw new ForbiddenException('Access denied');
+    }
+
     return this.formatMediaResponse(media);
+  }
+
+  /**
+   * Get a viewable URL for a media item, used by the public serve endpoint.
+   * Returns CloudFront URL when configured, otherwise presigned GET URL.
+   */
+  async getServeUrl(
+    mediaId: string,
+    variant: 'original' | 'thumbnail' | 'optimized' = 'original',
+  ): Promise<string> {
+    const media = await this.prisma.mediaAttachment.findUnique({
+      where: { id: mediaId, deletedAt: null },
+      select: {
+        s3Key: true,
+        thumbnailS3Key: true,
+        optimizedS3Key: true,
+        cdnUrl: true,
+        thumbnailUrl: true,
+        optimizedUrl: true,
+      },
+    });
+    if (!media) throw new NotFoundException(`Media not found: ${mediaId}`);
+
+    // Pick the S3 key for the requested variant (fallback chain)
+    let key: string | null = null;
+    switch (variant) {
+      case 'thumbnail':
+        key = media.thumbnailS3Key ?? media.optimizedS3Key ?? media.s3Key;
+        break;
+      case 'optimized':
+        key = media.optimizedS3Key ?? media.s3Key;
+        break;
+      default:
+        key = media.s3Key;
+        break;
+    }
+
+    if (!key) {
+      // Fallback to stored URL if no S3 key (edge case)
+      const fallback = media.cdnUrl ?? media.thumbnailUrl ?? media.optimizedUrl;
+      if (fallback) return fallback;
+      throw new NotFoundException('Media file not available');
+    }
+
+    // Generate a presigned GET URL (works for both MinIO and S3 private buckets)
+    return this.s3Service.generatePresignedGetUrl(key, 3600);
   }
 
   async deleteMedia(userId: string, mediaId: string): Promise<void> {

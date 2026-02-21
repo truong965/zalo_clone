@@ -5,6 +5,7 @@ import { SocketGateway } from './socket.gateway';
 import { SocketAuthService } from './services/socket-auth.service';
 import { SocketStateService } from './services/socket-state.service';
 import { WsJwtGuard } from './guards/ws-jwt.guard';
+import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { RedisModule } from 'src/modules/redis/redis.module';
 import socketConfig from 'src/config/socket.config';
 import { DatabaseModule } from 'src/database/prisma.module';
@@ -59,6 +60,7 @@ import { PrivacyModule } from 'src/modules/privacy/privacy.module';
     SocketAuthService,
     SocketStateService,
     WsJwtGuard,
+    WsThrottleGuard,
     SocketConnectionLoggerService,
     SocketCleanupJob,
 
@@ -66,6 +68,12 @@ import { PrivacyModule } from 'src/modules/privacy/privacy.module';
     SocketNotificationListener,
     FriendshipNotificationListener,
   ],
-  exports: [SocketGateway, SocketStateService],
+  exports: [
+    SocketGateway,
+    SocketStateService,
+    SocketAuthService,
+    WsJwtGuard,
+    WsThrottleGuard,
+  ],
 })
 export class SocketModule { }

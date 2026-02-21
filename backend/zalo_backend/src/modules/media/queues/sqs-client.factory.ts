@@ -12,32 +12,32 @@ import queueConfig from 'src/config/queue.config';
 
 @Injectable()
 export class SqsClientFactory implements OnModuleDestroy {
-  private readonly logger = new Logger(SqsClientFactory.name);
-  readonly client: SQSClient;
+      private readonly logger = new Logger(SqsClientFactory.name);
+      readonly client: SQSClient;
 
-  constructor(
-    @Inject(s3Config.KEY)
-    private readonly s3Cfg: ConfigType<typeof s3Config>,
-    @Inject(queueConfig.KEY)
-    private readonly queueCfg: ConfigType<typeof queueConfig>,
-  ) {
-    const { accessKeyId, secretAccessKey } = this.s3Cfg.credentials;
-    const region = this.queueCfg.sqs.region;
+      constructor(
+            @Inject(s3Config.KEY)
+            private readonly s3Cfg: ConfigType<typeof s3Config>,
+            @Inject(queueConfig.KEY)
+            private readonly queueCfg: ConfigType<typeof queueConfig>,
+      ) {
+            const { accessKeyId, secretAccessKey } = this.s3Cfg.credentials;
+            const region = this.queueCfg.sqs.region;
 
-    this.client = new SQSClient({
-      region,
-      // On EC2 with IAM Instance Profile, omit explicit credentials so the
-      // SDK resolves them from the instance metadata endpoint automatically.
-      ...(accessKeyId && secretAccessKey
-        ? { credentials: { accessKeyId, secretAccessKey } }
-        : {}),
-    });
+            this.client = new SQSClient({
+                  region,
+                  // On EC2 with IAM Instance Profile, omit explicit credentials so the
+                  // SDK resolves them from the instance metadata endpoint automatically.
+                  ...(accessKeyId && secretAccessKey
+                        ? { credentials: { accessKeyId, secretAccessKey } }
+                        : {}),
+            });
 
-    this.logger.log(`SqsClientFactory initialised (region=${region})`);
-  }
+            this.logger.log(`SqsClientFactory initialised (region=${region})`);
+      }
 
-  onModuleDestroy() {
-    this.client.destroy();
-    this.logger.log('SQS client destroyed');
-  }
+      onModuleDestroy() {
+            this.client.destroy();
+            this.logger.log('SQS client destroyed');
+      }
 }

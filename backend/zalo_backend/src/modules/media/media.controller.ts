@@ -6,13 +6,16 @@ import {
   Delete,
   Body,
   Param,
+  Query,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from 'src/common/decorator/customize';
+import { CurrentUser, Public } from 'src/common/decorator/customize';
 import { MediaUploadService } from './services/media-upload.service';
 import { InitiateUploadDto } from './dto/initiate-upload.dto';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
@@ -46,6 +49,25 @@ export class MediaController {
     @Body() dto: ConfirmUploadDto,
   ) {
     return this.mediaUploadService.confirmUpload(userId, dto.uploadId);
+  }
+
+  /**
+   * Serve media file via presigned URL redirect.
+   * Public endpoint — used as <img src> / <video src> / <a href> in the browser.
+   * @param variant  "original" | "thumbnail" | "optimized" (default: original)
+   */
+  @Public()
+  @Get('serve/:id')
+  async serveMedia(
+    @Param('id') mediaId: string,
+    @Query('v') variant: string = 'original',
+    @Res() res: Response,
+  ): Promise<void> {
+    const url = await this.mediaUploadService.getServeUrl(
+      mediaId,
+      variant as 'original' | 'thumbnail' | 'optimized',
+    );
+    res.redirect(302, url);
   }
 
   /**

@@ -159,7 +159,30 @@ export class VideoProcessor implements OnModuleInit {
   }
 
   /**
-   * Extract thumbnail from video at specific timestamp
+   * Probe the actual duration of a local video file.
+   * Returns 0 on any error so that callers can fall back safely.
+   */
+  private getVideoDuration(videoPath: string): Promise<number> {
+    return new Promise((resolve) => {
+      ffmpeg.ffprobe(videoPath, (err, metadata) => {
+        if (err) {
+          resolve(0);
+          return;
+        }
+        resolve(metadata.format?.duration ?? 0);
+      });
+    });
+  }
+
+  /**
+   * Extract thumbnail from video at a safe timestamp.
+   *
+   * FIX: Using a fixed timestamp of '1' second fails for videos shorter than
+   * ~1 s — FFmpeg fires the 'end' event but writes no file, causing ENOENT
+   * when we try to read the output.  We now probe the actual duration first
+   * and capture at 10 % of it (minimum 0.001 s = first decodeable frame).
+   * After ffmpeg reports 'end' we verify the file was actually written before
+   * resolving, and fall back to the very first frame on any failure.
    */
   private async extractThumbnail(
     videoPath: string,
@@ -168,17 +191,49 @@ export class VideoProcessor implements OnModuleInit {
   ): Promise<VideoProcessingResult['thumbnail']> {
     const outputPath = path.join(tempDir, 'thumbnail.jpg');
 
-    await new Promise<void>((resolve, reject) => {
-      ffmpeg(videoPath)
-        .screenshots({
-          timestamps: ['1'], // 1 second
-          filename: 'thumbnail.jpg',
-          folder: tempDir,
-          size: '480x?', // Width 480, maintain aspect ratio
-        })
-        .on('end', () => resolve())
-        .on('error', (err) => reject(err));
-    });
+    // Pick a safe seek position: 10 % of duration, minimum 0.001 s
+    const duration = await this.getVideoDuration(videoPath);
+    const seekSec = duration > 0
+      ? Math.max(0.001, duration * 0.1)
+      : 0.001;
+    const seekStr = seekSec.toFixed(3); // e.g. "0.100"
+
+    const attemptScreenshot = (timestamp: string): Promise<void> =>
+      new Promise<void>((resolve, reject) => {
+        // Remove stale output from a previous attempt
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+
+        ffmpeg(videoPath)
+          .screenshots({
+            timestamps: [timestamp],
+            filename: 'thumbnail.jpg',
+            folder: tempDir,
+            size: '480x?', // Width 480, maintain aspect ratio
+          })
+          .on('end', () => {
+            // FFmpeg may succeed without writing a file (e.g. seek out of range)
+            if (!fs.existsSync(outputPath)) {
+              reject(new Error(
+                `FFmpeg completed but did not write thumbnail for timestamp=${timestamp}`,
+              ));
+            } else {
+              resolve();
+            }
+          })
+          .on('error', (err) => reject(err));
+      });
+
+    try {
+      await attemptScreenshot(seekStr);
+    } catch (firstErr) {
+      this.logger.warn(
+        `Thumbnail at ${seekStr}s failed (${(firstErr as Error).message}), retrying at first frame`,
+      );
+      // Fall back to the very first decodeable frame
+      await attemptScreenshot('0.001');
+    }
 
     // Read generated thumbnail
     const buffer = await fs.promises.readFile(outputPath);

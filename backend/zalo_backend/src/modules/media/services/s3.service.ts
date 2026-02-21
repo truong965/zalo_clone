@@ -103,6 +103,29 @@ export class S3Service {
   }
 
   /**
+   * Generate a presigned GET URL for reading/downloading an object.
+   * Used for serving media from private buckets without CloudFront.
+   */
+  async generatePresignedGetUrl(
+    key: string,
+    expiresIn: number = 3600,
+  ): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+    });
+
+    const url = await getSignedUrl(this.s3Client, command, { expiresIn });
+
+    this.logger.debug('Presigned GET URL generated', {
+      key,
+      expiresIn,
+    });
+
+    return url;
+  }
+
+  /**
    * ✅ FIXED: Robust file existence check with detailed result
    * Handles eventual consistency, multipart uploads, and error context
    */
