@@ -4,8 +4,6 @@
 
 import type { User } from '@/types';
 
-export type { User };
-
 export interface ProfileState {
       profile: User | null;
       isLoading: boolean;

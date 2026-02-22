@@ -4,23 +4,17 @@
  */
 
 import type {
-  ConversationLastMessage,
+  ConversationUI,
   ConversationListItem,
   ConversationMember,
   MessageType,
   MessageListItem,
 } from '@/types/api';
-import type { ConversationUI } from '@/features/conversation/types/conversation';
+export type { ConversationUI } from '@/types/api';
 
 // ============================================================================
 // UI-SPECIFIC TYPES (Extend API types with UI fields)
 // ============================================================================
-
-/**
- * Conversation type for UI display
- * Extends API Conversation with UI-friendly fields for list rendering
- */
-export type ChatConversation = ConversationUI;
 
 export type ChatConversationListItem = Omit<ConversationListItem, 'unreadCount'> & {
   unreadCount?: number;
@@ -76,7 +70,7 @@ export interface TypingRequest {
 // ============================================================================
 
 export interface ChatState {
-  conversations: ChatConversation[];
+  conversations: ConversationUI[];
   selectedConversationId: string | null;
   messages: ChatMessage[];
   members: ConversationMember[];

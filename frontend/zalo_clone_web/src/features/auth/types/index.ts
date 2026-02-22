@@ -2,9 +2,7 @@
  * Types cho Auth module
  */
 
-import type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types';
-
-export type { User, LoginRequest, RegisterRequest, AuthResponse };
+import type { User } from '@/types';
 
 export interface AuthState {
   user: User | null;

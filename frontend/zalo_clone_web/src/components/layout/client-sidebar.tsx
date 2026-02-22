@@ -13,6 +13,7 @@ import { useAuthStore } from '@/features/auth';
 import { useState } from 'react';
 import { UserProfileModal } from '@/features/profile/components/user-profile-modal';
 import { useFriendshipStore } from '@/features/contacts/stores/friendship.store';
+import { ROUTES } from '@/config/routes';
 
 const { Sider } = Layout;
 
@@ -56,12 +57,8 @@ export function ClientSidebar() {
   // State quản lý Modal
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false); // Thêm state cho Settings Popover
   // --- XỬ LÝ LOGOUT ---
   const handleLogout = () => {
-    // Đóng popover setting lại cho gọn
-    setSettingsPopoverOpen(false);
-
     // [3] Hiện Modal xác nhận
     Modal.confirm({
       title: 'Đăng xuất',
@@ -74,11 +71,11 @@ export function ClientSidebar() {
       onOk: async () => {
         try {
           await logout(); // Gọi action logout trong store (xóa token, clear state)
-          navigate('/login'); // Chuyển hướng về trang login
+          navigate(ROUTES.LOGIN); // Chuyển hướng về trang login
         } catch (error) {
           console.error("Logout failed:", error);
           // Vẫn force chuyển về login nếu lỗi để tránh kẹt user
-          navigate('/login');
+          navigate(ROUTES.LOGIN);
         }
       },
     });
@@ -162,15 +159,15 @@ export function ClientSidebar() {
               <SidebarIcon
                 icon={<MessageOutlined />}
                 label="Tin nhắn"
-                isActive={location.pathname.startsWith('/chat')}
-                onClick={() => navigate('/chat')}
+                isActive={location.pathname.startsWith(ROUTES.CHAT)}
+                onClick={() => navigate(ROUTES.CHAT)}
               />
 
               <SidebarIcon
                 icon={<ContainerOutlined />}
                 label="Danh bạ"
-                isActive={location.pathname.startsWith('/contacts')}
-                onClick={() => navigate('/contacts')}
+                isActive={location.pathname.startsWith(ROUTES.CONTACTS)}
+                onClick={() => navigate(ROUTES.CONTACTS)}
                 badgeCount={pendingReceivedCount}
               />
             </div>

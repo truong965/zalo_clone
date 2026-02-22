@@ -12,7 +12,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { RedisModule } from './modules/redis/redis.module';
-import { HealthModule } from './modules/health/health.module';
 import { SocketModule } from './socket/socket.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { MessageModule } from './modules/message/message.module';
@@ -27,10 +26,8 @@ import { SharedModule } from './shared/shared.module';
 // Feature Modules (Refactored)
 import { BlockModule } from './modules/block/block.module';
 import { AuthorizationModule } from './modules/authorization/authorization.module';
-import { CallModule } from './modules/call/call.module';
 import { PrivacyModule } from './modules/privacy/privacy.module';
 import { FriendshipModule } from './modules/friendship/friendship.module';
-import { ContactModule } from './modules/contact/contact.module';
 import { EventPersistenceModule } from './common/events/event-persistence.module';
 import { SearchEngineModule } from './modules/search_engine/search_engine.module';
 
@@ -137,7 +134,6 @@ import socialConfig from './config/social.config';
     PrivacyModule, SearchEngineModule, // Privacy settings & permissions (Independent)
 
     // Utilities
-    // HealthModule,
     // ContactModule,
   ],
   controllers: [AppController],

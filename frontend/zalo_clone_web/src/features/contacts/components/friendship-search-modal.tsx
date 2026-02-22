@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useSearch } from '@/features/search/hooks/use-search';
 import { UserInfoView } from '@/features/profile/components/user-info-view';
-import { conversationService } from '@/services/conversation.service';
+import { conversationService } from '@/features/conversation';
 import { useSendFriendRequest, useCancelRequest, useAcceptRequest } from '../api/friendship.api';
 import type { ContactSearchResult } from '@/features/search/types';
 import type { User } from '@/types/api';

@@ -16,11 +16,8 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { useState } from 'react';
-import { FriendList } from '@/features/contacts/components/friend-list';
-import { FriendRequestList } from '@/features/contacts/components/friend-request-list';
-import { useFriendshipStore } from '@/features/contacts/stores/friendship.store';
-import { GroupList } from '@/features/conversation/components/group-list';
-import { BlockedList } from '@/features/contacts/components/blocked-list';
+import { FriendList, FriendRequestList, useFriendshipStore, BlockedList } from '@/features/contacts';
+import { GroupList } from '@/features/conversation';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
 
 const { Text } = Typography;

@@ -7,7 +7,8 @@ import { Form, Input, Button, Card, Space, Typography, Divider, notification, Se
 import { UserOutlined, LockOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useAuth } from '@/features/auth/hooks/use-auth';
+import { useAuth } from '@/features/auth';
+import { ROUTES } from '@/config/routes';
 import type { RegisterRequest } from '@/types';
 
 const { Title, Text } = Typography;
@@ -21,7 +22,7 @@ export function RegisterPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/chat');
+      navigate(ROUTES.CHAT);
     }
   }, [isAuthenticated, navigate]);
 
@@ -41,7 +42,7 @@ export function RegisterPage() {
         placement: 'bottomRight',
         duration: 5,
       });
-      setTimeout(() => navigate('/login'), 1500);
+      setTimeout(() => navigate(ROUTES.LOGIN), 1500);
     } catch (err: any) {
       api.error({
         message: 'Đăng ký thất bại',

@@ -2,9 +2,16 @@
  * Types cho Notification module
  */
 
-import type { Notification } from '@/types';
-
-export type { Notification };
+export interface Notification {
+      id: string;
+      userId: string;
+      type: string;
+      title: string;
+      body: string;
+      isRead: boolean;
+      data?: Record<string, unknown>;
+      createdAt: string;
+}
 
 export interface NotificationState {
       notifications: Notification[];

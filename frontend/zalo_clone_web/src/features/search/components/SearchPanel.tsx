@@ -16,11 +16,10 @@ import { useSearch } from '../hooks/use-search';
 import { SearchBar } from './SearchBar';
 import { SearchResults } from './SearchResults';
 import { SearchEmpty } from './SearchEmpty';
-import { FriendRequestModal } from '@/features/contacts/components/friend-request-modal';
-import { conversationService } from '@/services/conversation.service';
+import { FriendRequestModal, useAcceptRequest, useCancelRequest } from '@/features/contacts';
+import { conversationService } from '@/features/conversation';
 import { searchService } from '../api/search.service';
 import { handleInteractionError } from '@/utils/interaction-error';
-import { useAcceptRequest, useCancelRequest } from '@/features/contacts/api/friendship.api';
 import type {
       ConversationMessageGroup,
       ContactSearchResult,
@@ -317,8 +316,8 @@ export function SearchPanel({
                               onMediaClick={handleMediaClick}
                               onSendMessage={handleSendMessage}
                               onAddFriend={handleAddFriend}
-                              onAcceptRequest={(requestId, contactId) => handleAcceptFriendRequest(contactId)}
-                              onCancelRequest={(requestId, contactId) => handleCancelFriendRequest(contactId)}
+                              onAcceptRequest={(_requestId, contactId) => handleAcceptFriendRequest(contactId)}
+                              onCancelRequest={(_requestId, contactId) => handleCancelFriendRequest(contactId)}
                         />
                   ) : (
                         <SearchEmpty />

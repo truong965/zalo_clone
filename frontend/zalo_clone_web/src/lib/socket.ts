@@ -2,8 +2,14 @@
 import { env } from '@/config/env';
 import { io, Socket } from 'socket.io-client';
 import { SocketEvents } from '@/constants/socket-events';
-import { authService } from '@/features/auth/api/auth.service';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { STORAGE_KEYS } from '@/constants/storage-keys';
+
+interface SocketAuthCallbacks {
+  getToken: () => string | null;
+  refreshToken: () => Promise<void>;
+  onLogout: () => Promise<void>;
+  onReset: () => void;
+}
 
 class SocketManager {
   private socket: Socket | null = null;
@@ -13,6 +19,23 @@ class SocketManager {
 
   private isRefreshingAuth = false;
   private refreshedOnceForThisSocket = false;
+
+  // DI callbacks — set via init() before first connect()
+  private getTokenFn: () => string | null = () => localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+  private refreshTokenFn: () => Promise<void> = async () => { };
+  private onLogoutFn: () => Promise<void> = async () => { };
+  private onResetFn: () => void = () => { };
+
+  /**
+   * Inject auth callbacks so this class never imports from @/features/auth.
+   * Call this once during application bootstrap (e.g. in use-socket.ts).
+   */
+  init(callbacks: SocketAuthCallbacks): void {
+    this.getTokenFn = callbacks.getToken;
+    this.refreshTokenFn = callbacks.refreshToken;
+    this.onLogoutFn = callbacks.onLogout;
+    this.onResetFn = callbacks.onReset;
+  }
 
   private ensureSocket(): Socket {
     if (this.socket) return this.socket;
@@ -76,9 +99,9 @@ class SocketManager {
     if (this.isRefreshingAuth) return;
     if (this.refreshedOnceForThisSocket) {
       try {
-        await useAuthStore.getState().logout();
+        await this.onLogoutFn();
       } catch {
-        useAuthStore.getState().reset();
+        this.onResetFn();
       }
       this.disconnect();
       return;
@@ -87,13 +110,13 @@ class SocketManager {
     this.isRefreshingAuth = true;
     this.refreshedOnceForThisSocket = true;
     try {
-      await authService.refresh();
-      const newToken = localStorage.getItem('accessToken');
+      await this.refreshTokenFn();
+      const newToken = this.getTokenFn();
       if (!newToken) {
         try {
-          await useAuthStore.getState().logout();
+          await this.onLogoutFn();
         } catch {
-          useAuthStore.getState().reset();
+          this.onResetFn();
         }
         this.disconnect();
         return;
@@ -101,9 +124,9 @@ class SocketManager {
       this.connect(newToken);
     } catch {
       try {
-        await useAuthStore.getState().logout();
+        await this.onLogoutFn();
       } catch {
-        useAuthStore.getState().reset();
+        this.onResetFn();
       }
       this.disconnect();
     } finally {

@@ -2,9 +2,15 @@
  * Types cho Call module
  */
 
-import type { Call } from '@/types';
-
-export type { Call };
+export interface Call {
+  id: string;
+  callerId: string;
+  calleeId: string;
+  type: 'audio' | 'video';
+  status: 'RINGING' | 'ACTIVE' | 'ENDED' | 'REJECTED' | 'MISSED';
+  startedAt?: string;
+  endedAt?: string;
+}
 
 export interface CallState {
   activeCall: Call | null;

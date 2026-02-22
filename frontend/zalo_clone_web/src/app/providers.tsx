@@ -5,7 +5,6 @@
 import type { ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider } from 'antd';
-import { Toaster } from 'sonner';
 import { useAppStore } from '@/stores/use-app-store';
 import { queryClient } from '@/lib/query-client';
 import viVN from 'antd/locale/vi_VN';
@@ -34,7 +33,6 @@ export function AppProviders({ children }: AppProvidersProps) {
         }}
       >
         {children}
-        <Toaster position="top-center" />
       </ConfigProvider>
     </QueryClientProvider>
   );

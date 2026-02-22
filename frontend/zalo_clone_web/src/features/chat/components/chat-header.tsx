@@ -1,7 +1,6 @@
 import { Avatar, Button, Typography } from 'antd';
 import {
       SearchOutlined,
-      UsergroupAddOutlined,
       VideoCameraOutlined,
       LayoutOutlined,
 } from '@ant-design/icons';

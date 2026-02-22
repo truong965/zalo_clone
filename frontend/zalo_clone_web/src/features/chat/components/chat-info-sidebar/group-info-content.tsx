@@ -15,13 +15,13 @@
  * - R6: User kicked while sidebar open → close sidebar + navigate away
  */
 import { useState, useCallback, useEffect } from 'react';
-import { Collapse, Modal, Spin, Result } from 'antd';
+import { Collapse, Modal, Spin, Result, message } from 'antd';
 import {
       RightOutlined,
       ClockCircleOutlined,
       ExclamationCircleOutlined,
 } from '@ant-design/icons';
-import type { ConversationUI } from '@/features/conversation/types/conversation';
+import type { ConversationUI } from '@/types/api';
 import {
       useConversationMembers,
       useInvalidateConversations,
@@ -92,7 +92,7 @@ export function GroupInfoContent({
       } = useConversationSocket({
             // R6: Handle being removed
             onGroupYouWereRemoved: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               // Notification handled by use-group-notifications
                               onClose();
@@ -102,7 +102,7 @@ export function GroupInfoContent({
                   [conversationId, onClose, onLeaveGroup],
             ),
             onGroupDissolved: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               // Notification handled by use-group-notifications
                               onClose();
@@ -113,7 +113,7 @@ export function GroupInfoContent({
             ),
             // Realtime member updates → invalidate queries
             onGroupMembersAdded: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               invalidateMembers(conversationId);
                         }
@@ -121,7 +121,7 @@ export function GroupInfoContent({
                   [conversationId, invalidateMembers],
             ),
             onGroupMemberRemoved: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               invalidateMembers(conversationId);
                         }
@@ -129,7 +129,7 @@ export function GroupInfoContent({
                   [conversationId, invalidateMembers],
             ),
             onGroupMemberLeft: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               invalidateMembers(conversationId);
                         }
@@ -137,7 +137,7 @@ export function GroupInfoContent({
                   [conversationId, invalidateMembers],
             ),
             onGroupUpdated: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               invalidateDetail(conversationId);
                         }
@@ -145,7 +145,7 @@ export function GroupInfoContent({
                   [conversationId, invalidateDetail],
             ),
             onGroupMemberJoined: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               invalidateMembers(conversationId);
                         }
@@ -154,7 +154,7 @@ export function GroupInfoContent({
             ),
             // D.1: Admin transferred → refresh roles
             onGroupAdminTransferred: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               invalidateMembers(conversationId);
                               invalidateDetail(conversationId);
@@ -164,7 +164,7 @@ export function GroupInfoContent({
             ),
             // D.1: New join request arrived → bump refresh trigger
             onGroupJoinRequestReceived: useCallback(
-                  (data) => {
+                  (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               setJoinRequestRefreshTrigger((n) => n + 1);
                         }

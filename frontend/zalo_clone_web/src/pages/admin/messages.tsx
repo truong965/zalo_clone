@@ -73,7 +73,7 @@ export function AdminMessagesPage() {
             {
                   title: 'Actions',
                   key: 'actions',
-                  render: (record: Message) => (
+                  render: (_record: Message) => (
                         <Space>
                               <Button icon={<EyeOutlined />} size="small">View</Button>
                               <Button danger icon={<DeleteOutlined />} size="small">Delete</Button>

@@ -1,7 +1,16 @@
 // src/hooks/use-socket.ts
 import { useEffect, useState } from 'react';
 import { socketManager, type Socket } from '@/lib/socket';
-import { useAuthStore } from '@/features/auth';
+import { authService, useAuthStore } from '@/features/auth';
+import { STORAGE_KEYS } from '@/constants/storage-keys';
+
+// Inject auth callbacks once at module load so SocketManager never imports feature modules.
+socketManager.init({
+      getToken: () => localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN),
+      refreshToken: async () => { await authService.refresh(); },
+      onLogout: () => useAuthStore.getState().logout(),
+      onReset: () => useAuthStore.getState().reset(),
+});
 
 export function useSocket() {
       const [socket, setSocket] = useState<Socket | null>(null);
@@ -10,7 +19,7 @@ export function useSocket() {
       const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
       useEffect(() => {
-            const accessToken = localStorage.getItem('accessToken');
+            const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
             if (!isAuthenticated || !accessToken) {
                   socketManager.disconnect();
                   queueMicrotask(() => {

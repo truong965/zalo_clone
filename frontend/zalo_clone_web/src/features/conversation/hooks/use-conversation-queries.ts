@@ -13,7 +13,7 @@ import {
 } from '@tanstack/react-query';
 import { conversationApi } from '../api/conversation.api';
 import type { ConversationMemberInfo } from '../api/conversation.api';
-import type { ConversationUI } from '@/features/conversation/types/conversation';
+import type { ConversationUI } from '@/types/api';
 
 // ============================================================================
 // Query Keys

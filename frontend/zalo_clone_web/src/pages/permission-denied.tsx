@@ -4,6 +4,7 @@
 
 import { Result, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '@/config/routes';
 
 export function PermissionDeniedPage() {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ export function PermissionDeniedPage() {
         title="403"
         subTitle="You don't have permission to access this page."
         extra={
-          <Button type="primary" onClick={() => navigate('/chat')}>
+          <Button type="primary" onClick={() => navigate(ROUTES.CHAT)}>
             Back to Home
           </Button>
         }

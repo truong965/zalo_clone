@@ -21,7 +21,7 @@ import { useEffect, useRef } from 'react';
 import { notification } from 'antd';
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useSocket } from '@/hooks/use-socket';
-import type { MessagesInfiniteData } from '@/hooks/use-message-socket';
+import type { MessagesInfiniteData } from '../utils/message-cache-helpers';
 import { mediaService } from '@/services/media.service';
 
 // ============================================================================

@@ -11,6 +11,8 @@ import axios from 'axios';
 import type { AxiosError } from 'axios';
 import { env } from '@/config/env';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
+import { STORAGE_KEYS } from '@/constants/storage-keys';
+import { ROUTES } from '@/config/routes';
 
 // ============================================================================
 // AXIOS INSTANCE CONFIGURATION
@@ -31,7 +33,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -107,8 +109,8 @@ api.interceptors.response.use(
         const { accessToken, expiresIn } = response.data.data;
 
         // Cập nhật access token
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('expiresIn', expiresIn.toString());
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+        localStorage.setItem(STORAGE_KEYS.EXPIRES_IN, expiresIn.toString());
 
         // ✅ Refresh token mới được set như httpOnly cookie bởi server
         // (không cần xử lý ở client)
@@ -125,8 +127,8 @@ api.interceptors.response.use(
         // ============================================
 
         // Clear tokens
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('expiresIn');
+        localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+        localStorage.removeItem(STORAGE_KEYS.EXPIRES_IN);
 
         // Redirect to login
         redirectToLogin();
@@ -150,11 +152,11 @@ api.interceptors.response.use(
  */
 const redirectToLogin = () => {
   // Clear auth data
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('expiresIn');
+  localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.EXPIRES_IN);
 
   // Redirect
-  window.location.href = '/login';
+  window.location.href = ROUTES.LOGIN;
 };
 
 export default api;

@@ -8,9 +8,9 @@
  * Notifications are handled globally by useGroupNotifications at ClientLayout level.
  */
 
-import { useConversationSocket } from '@/hooks/use-conversation-socket';
+import { useConversationSocket } from '@/features/conversation';
 import { useInvalidateConversations } from '@/features/conversation/hooks/use-conversation-queries';
-import type { ConversationUI } from '@/features/conversation/types/conversation';
+import type { ConversationUI } from '@/types/api';
 
 interface Params {
       prependConversation: (item: ConversationUI) => void;

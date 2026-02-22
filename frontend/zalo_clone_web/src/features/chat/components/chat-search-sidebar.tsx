@@ -24,7 +24,7 @@ import {
       RealtimeBanner,
 } from '@/features/search';
 import type { MessageSearchResult } from '@/features/search';
-import { conversationService } from '@/services/conversation.service';
+import { conversationService } from '@/features/conversation';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;

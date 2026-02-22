@@ -9,7 +9,8 @@ import { Form, Input, Button, Card, Space, Typography, Divider, notification } f
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useAuth } from '@/features/auth/hooks/use-auth';
+import { useAuth } from '@/features/auth';
+import { ROUTES } from '@/config/routes';
 
 const { Title, Text } = Typography;
 
@@ -29,7 +30,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/chat');
+      navigate(ROUTES.CHAT);
     }
   }, [isAuthenticated, navigate]);
 

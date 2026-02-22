@@ -8,7 +8,12 @@ function validateEnv() {
       const missing = requiredEnvVars.filter((key) => !import.meta.env[key]);
 
       if (missing.length > 0) {
-            console.warn(`Missing environment variables: ${missing.join(', ')}`);
+            const message = `Missing required environment variables: ${missing.join(', ')}`;
+            if (import.meta.env.PROD) {
+                  throw new Error(message);
+            } else {
+                  console.warn(`[env] ${message}`);
+            }
       }
 
       return {

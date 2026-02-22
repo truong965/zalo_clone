@@ -6,7 +6,7 @@
  */
 
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
-import type { ConversationUI } from '@/features/conversation/types/conversation';
+import type { ConversationUI } from '@/types/api';
 import apiClient from '@/lib/axios';
 import type {
       ApiResponse,

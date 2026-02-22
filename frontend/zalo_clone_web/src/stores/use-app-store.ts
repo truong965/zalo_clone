@@ -3,18 +3,12 @@
  */
 
 import { create } from 'zustand';
-import type { User } from '@/types';
+import { STORAGE_KEYS } from '@/constants/storage-keys';
 
 interface AppState {
   // Theme
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
-
-  // Auth
-  user: User | null;
-  setUser: (user: User | null) => void;
-  isAuthenticated: boolean;
-  setIsAuthenticated: (value: boolean) => void;
 
   // UI
   sidebarOpen: boolean;
@@ -27,26 +21,20 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   // Theme
-  theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'light',
+  theme: (localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark') || 'light',
   setTheme: (theme) => {
-    localStorage.setItem('theme', theme);
+    localStorage.setItem(STORAGE_KEYS.THEME, theme);
     set({ theme });
   },
-
-  // Auth
-  user: null,
-  setUser: (user) => set({ user }),
-  isAuthenticated: !!localStorage.getItem('accessToken'),
-  setIsAuthenticated: (value) => set({ isAuthenticated: value }),
 
   // UI
   sidebarOpen: true,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   // Settings
-  language: localStorage.getItem('language') || 'vi',
+  language: localStorage.getItem(STORAGE_KEYS.LANGUAGE) || 'vi',
   setLanguage: (lang) => {
-    localStorage.setItem('language', lang);
+    localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
     set({ language: lang });
   },
 }));

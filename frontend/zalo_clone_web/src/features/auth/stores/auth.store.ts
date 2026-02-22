@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { authService, type AuthResponseData, type SessionInfo } from '../api/auth.service';
+import { STORAGE_KEYS } from '@/constants/storage-keys';
 import type { User } from '@/types/api';
 
 // ============================================================================
@@ -68,7 +69,7 @@ export const useAuthStore = create<AuthState>()(
 
                         // ========== AUTH OPERATIONS ==========
                         initializeAuth: async () => {
-                              const token = localStorage.getItem('accessToken');
+                              const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
                               if (!token) {
                                     set({ isInitializing: false, isAuthenticated: false, user: null });
                                     return;
@@ -204,7 +205,7 @@ export const useAuthStore = create<AuthState>()(
                         }),
                   }),
                   {
-                        name: 'auth-store', // localStorage key
+                        name: STORAGE_KEYS.AUTH_STORE, // localStorage key
                         partialize: (state) => ({
                               // Only persist specific fields
                               user: state.user,

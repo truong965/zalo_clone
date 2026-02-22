@@ -13,7 +13,7 @@
  */
 
 import { useMemo } from 'react';
-import { useFriendsList } from '@/features/contacts/api/friendship.api';
+import { useFriendsList } from '@/features/contacts';
 import { useContactSearch } from './use-conversation-queries';
 import { useCreateGroupStore } from '../stores/create-group.store';
 

@@ -4,6 +4,7 @@
  */
 
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
+import { STORAGE_KEYS } from '@/constants/storage-keys';
 import api from '@/lib/axios';
 import type { LoginRequest, RegisterRequest, User } from '@/types/api';
 
@@ -55,8 +56,8 @@ export const authService = {
             const data = response.data.data as AuthResponseData;
 
             // Store access token (Refresh token is httpOnly, managed by browser)
-            localStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('expiresIn', data.expiresIn.toString());
+            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.accessToken);
+            localStorage.setItem(STORAGE_KEYS.EXPIRES_IN, data.expiresIn.toString());
 
             return data;
       },
@@ -71,8 +72,8 @@ export const authService = {
             const data = response.data.data as Omit<AuthResponseData, 'user'>;
 
             // Update stored access token
-            localStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('expiresIn', data.expiresIn.toString());
+            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.accessToken);
+            localStorage.setItem(STORAGE_KEYS.EXPIRES_IN, data.expiresIn.toString());
 
             return data;
       },
@@ -103,8 +104,8 @@ export const authService = {
                   await api.post(API_ENDPOINTS.AUTH.LOGOUT, {});
             } finally {
                   // Clear tokens from localStorage
-                  localStorage.removeItem('accessToken');
-                  localStorage.removeItem('expiresIn');
+                  localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+                  localStorage.removeItem(STORAGE_KEYS.EXPIRES_IN);
                   // Refresh token cookie is cleared by server (httpOnly)
             }
       },
@@ -120,21 +121,21 @@ export const authService = {
        * Check if user is authenticated
        */
       isAuthenticated(): boolean {
-            return !!localStorage.getItem('accessToken');
+            return !!localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       },
 
       /**
        * Get stored access token
        */
       getAccessToken(): string | null {
-            return localStorage.getItem('accessToken');
+            return localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       },
 
       /**
        * Validate access token expiry
        */
       isTokenExpired(): boolean {
-            const expiresIn = localStorage.getItem('expiresIn');
+            const expiresIn = localStorage.getItem(STORAGE_KEYS.EXPIRES_IN);
             if (!expiresIn) return true;
 
             // In real implementation, you'd check the JWT exp claim
@@ -146,7 +147,7 @@ export const authService = {
        * Clear all auth data (logout)
        */
       clearAuthData() {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('expiresIn');
+            localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+            localStorage.removeItem(STORAGE_KEYS.EXPIRES_IN);
       },
 };

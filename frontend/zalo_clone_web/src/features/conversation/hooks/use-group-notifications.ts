@@ -26,6 +26,7 @@ import { notification } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useConversationSocket } from './use-conversation-socket';
 import { useInvalidateConversations } from './use-conversation-queries';
+import { ROUTES } from '@/config/routes';
 
 export function useGroupNotifications() {
       const { invalidateAll, invalidateGroups, invalidateDetail, invalidateMembers, removeFromCache } =
@@ -148,7 +149,7 @@ export function useGroupNotifications() {
                   // If user is currently viewing this conversation, redirect
                   const currentPath = locationRef.current.pathname + locationRef.current.search;
                   if (currentPath.includes(data.conversationId)) {
-                        navigate('/chat');
+                        navigate(ROUTES.CHAT);
                   }
 
                   // Remove from cache first to prevent stale 400 errors
@@ -172,7 +173,7 @@ export function useGroupNotifications() {
                   // If user is currently viewing this conversation, redirect
                   const currentPath = locationRef.current.pathname + locationRef.current.search;
                   if (currentPath.includes(data.conversationId)) {
-                        navigate('/chat');
+                        navigate(ROUTES.CHAT);
                   }
 
                   // Remove from cache first to prevent stale 400 errors

@@ -4,7 +4,7 @@ import { ArrowLeftOutlined, CloseOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import { UserInfoView } from './user-info-view';
 import { UserEditForm } from './user-edit-form';
-import { useAuthStore } from '@/features/auth/stores/auth.store'; //
+import { useAuthStore } from '@/features/auth';
 
 interface UserProfileModalProps {
       open: boolean;

@@ -2,13 +2,13 @@
  * Types cho Contacts module
  */
 
-import type { User, Friend, Block } from '@/types';
+import type { User, Block, FriendshipStatus, CursorPaginatedResponse } from '@/types';
 
-export type { User, Friend, Block };
+export type { User, Block, FriendshipStatus, CursorPaginatedResponse };
 
 export interface ContactsState {
   contacts: User[];
-  friends: Friend[];
+  friends: FriendWithUserDto[];
   blockedUsers: Block[];
   isLoading: boolean;
   error: string | null;
@@ -16,8 +16,6 @@ export interface ContactsState {
 }
 
 // --- Friend Request types ---
-
-export type FriendshipStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED';
 
 export interface FriendRequestUser {
   userId: string;
@@ -50,17 +48,6 @@ export interface MutualFriendDto {
   userId: string;
   displayName: string;
   avatarUrl?: string;
-}
-
-/** Cursor-paginated response wrapper — matches backend CursorPaginationHelper.buildResult() */
-export interface CursorPaginatedResponse<T> {
-  data: T[];
-  meta: {
-    nextCursor?: string;
-    hasNextPage: boolean;
-    limit: number;
-    total?: number;
-  };
 }
 
 /** Send friend request body */

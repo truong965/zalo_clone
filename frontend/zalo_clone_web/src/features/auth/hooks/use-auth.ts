@@ -5,8 +5,8 @@
 
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '@/config/routes';
 import { useAuthStore } from '../stores/auth.store';
-import type { LoginPayload, RegisterPayload } from '../api/auth.service';
 import type { LoginRequest, RegisterRequest } from '@/types';
 
 export function useAuth() {
@@ -42,7 +42,7 @@ export function useAuth() {
                   try {
                         await storeLogin(payload);
                         // Navigate after successful login
-                        navigate('/chat');
+                        navigate(ROUTES.CHAT);
                   } catch (error: any) {
                         // Error is already set in store
                         throw error;
@@ -60,7 +60,7 @@ export function useAuth() {
                   try {
                         await storeRegister(payload);
                         // Navigate to login after successful registration
-                        navigate('/login');
+                        navigate(ROUTES.LOGIN);
                   } catch (error: any) {
                         // Error is already set in store
                         throw error;
@@ -75,7 +75,7 @@ export function useAuth() {
       const logout = useCallback(async () => {
             try {
                   await storeLogout();
-                  navigate('/login');
+                  navigate(ROUTES.LOGIN);
             } catch (error: any) {
                   // Error is already set in store
                   throw error;

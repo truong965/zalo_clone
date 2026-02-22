@@ -3,13 +3,13 @@ import { useState } from 'react';
 import { Input, Button, Dropdown, Spin, type MenuProps } from 'antd';
 import {
       SearchOutlined, UserAddOutlined, UsergroupAddOutlined,
-      MoreOutlined, CheckCircleOutlined, DownOutlined
+      MoreOutlined, CheckCircleOutlined
 } from '@ant-design/icons';
 import { ConversationItem } from './conversation-item';
-import type { ChatConversation, ConversationFilterTab } from '../types';
+import type { ConversationUI, ConversationFilterTab } from '../types';
 
 interface ConversationSidebarProps {
-      conversations: ChatConversation[];
+      conversations: ConversationUI[];
       selectedId: string | null;
       onSelect: (id: string) => void;
       loadMoreRef: (node?: Element | null) => void; // ✅ NEW

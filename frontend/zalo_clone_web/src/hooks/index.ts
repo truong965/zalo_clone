@@ -5,7 +5,7 @@
 // Re-export useAuth from auth feature for convenience
 export { useAuth } from '@/features/auth/hooks/use-auth';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Hook để detect mobile view
@@ -43,14 +43,12 @@ export function useDebounce<T>(value: T, delay: number): T {
 }
 
 /**
- * Hook để tracking previous value
+ * Hook để tracking previous value.
+ * Dùng useRef thay vì useState để tránh trigger re-render thừa.
  */
 export function usePrevious<T>(value: T): T | undefined {
-  const [previous, setPrevious] = useState<T | undefined>();
-
-  useEffect(() => {
-    setPrevious(value);
-  }, [value]);
-
+  const ref = useRef<T | undefined>(undefined);
+  const previous = ref.current;
+  ref.current = value;
   return previous;
 }

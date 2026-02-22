@@ -1,20 +1,20 @@
 import { Avatar, Typography, Badge, Dropdown, Button, type MenuProps } from 'antd';
 import {
-      PushpinOutlined, MoreOutlined, CheckCircleOutlined,
-      DeleteOutlined, TagsOutlined, TeamOutlined
+      PushpinOutlined, MoreOutlined,
+      DeleteOutlined, TeamOutlined
 } from '@ant-design/icons';
-import type { ChatConversation } from '../types';
+import type { ConversationUI } from '../types';
 import { MessageType } from '@/types/api';
 
 const { Text } = Typography;
 
 interface ConversationItemProps {
-      data: ChatConversation;
+      data: ConversationUI;
       isSelected: boolean;
       onClick: () => void;
 }
 
-function getLastMessagePreview(data: ChatConversation): string {
+function getLastMessagePreview(data: ConversationUI): string {
       const msg = data.lastMessageObj;
       // Nếu lastMessageObj null thì fallback về string cũ (nếu có)
       if (!msg) return data.lastMessage || '';

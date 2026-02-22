@@ -1,197 +1,86 @@
 // src/features/chat/index.tsx
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+//
+// Thin composition shell — all business logic lives in extracted hooks.
+// This component wires hooks together and renders the layout.
+
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { notification } from 'antd';
+import { useQueryClient } from '@tanstack/react-query';
+import { useInView } from 'react-intersection-observer';
+
+// ── Feature-internal components ──────────────────────────────────────────
 import { ConversationSidebar } from './components/conversation-sidebar';
 import { ChatHeader } from './components/chat-header';
 import { ChatInput } from './components/chat-input';
-import type { SendPayload } from './components/chat-input';
 import { ChatSearchSidebar } from './components/chat-search-sidebar';
 import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
-import { FriendshipSearchModal } from '@/features/contacts/components/friendship-search-modal';
-import { CreateGroupModal } from '@/features/conversation/components/create-group-modal';
-import { useCreateGroupStore } from '@/features/conversation/stores/create-group.store';
+
+// ── Cross-feature components (rendered by page-level host) ───────────────
+import { FriendshipSearchModal } from '@/features/contacts';
+import { CreateGroupModal, useCreateGroupStore } from '@/features/conversation';
 import { SearchPanel } from '@/features/search/components/SearchPanel';
-import type { ChatConversation, RightSidebarState } from './types';
-import { conversationService } from '@/services/conversation.service';
-import { useMessageSocket } from '@/hooks/use-message-socket';
-import { useConversationListRealtime } from '@/hooks/use-conversation-list-realtime';
+
+// ── Cross-feature hooks ──────────────────────────────────────────────────
+import { useConversationListRealtime } from '@/features/conversation';
+import { useAuthStore } from '@/features/auth';
 import { useSocket } from '@/hooks/use-socket';
-import { messageService } from '@/services/message.service';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { notification } from 'antd';
-import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { useInView } from 'react-intersection-observer';
+
+// ── Feature-internal hooks ───────────────────────────────────────────────
 import { useChatMessages } from './hooks/use-chat-messages';
+import { useMessageSocket } from './hooks/use-message-socket';
 import { useMediaProgress } from './hooks/use-media-progress';
-import type { MessageListItem, MessageType, MediaProcessingStatus } from '@/types/api';
-import type { MessagesInfiniteData, MessagesPage } from '@/hooks/use-message-socket';
 import { useChatConversationRealtime } from './hooks/use-chat-conversation-realtime';
+import { useChatSelection } from './hooks/use-chat-selection';
+import { useSendMessage } from './hooks/use-send-message';
+import { useMarkAsSeen } from './hooks/use-mark-as-seen';
+import { useTypingIndicator, useHandleTypingChange } from './hooks/use-typing-indicator';
+import { useConversationListMutations } from './hooks/use-conversation-list-mutations';
+import { useConversationLoader } from './hooks/use-conversation-loader';
+
+// ── Store ────────────────────────────────────────────────────────────────
+import { useChatStore } from './stores/chat.store';
 
 export function ChatFeature() {
-      const [api, contextHolder] = notification.useNotification();
+      const [, contextHolder] = notification.useNotification();
       const queryClient = useQueryClient();
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
       const { isConnected: isSocketConnected, connectionNonce } = useSocket();
 
-      const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
-
-      // --- STATE: UI ---
-      const [searchParams, setSearchParams] = useSearchParams();
-      const [selectedId, setSelectedId] = useState<string | null>(
-            () => searchParams.get('conversationId') ?? sessionStorage.getItem('chat_selectedId') ?? null,
-      );
-      const [rightSidebar, setRightSidebar] = useState<RightSidebarState>('none');
-      const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
-      const [isFriendSearchOpen, setIsFriendSearchOpen] = useState(false);
-      const [prefillSearchKeyword, setPrefillSearchKeyword] = useState<string | undefined>(undefined);
-
-      // Sync selectedId when URL query param changes (e.g. navigating from /contacts)
-      useEffect(() => {
-            const urlConversationId = searchParams.get('conversationId');
-            if (urlConversationId && urlConversationId !== selectedId) {
-                  setSelectedId(urlConversationId);
-                  // Clean up the query param to keep URL tidy
-                  setSearchParams((prev) => {
-                        const next = new URLSearchParams(prev);
-                        next.delete('conversationId');
-                        return next;
-                  }, { replace: true });
-            }
-      }, [searchParams, selectedId, setSearchParams]);
-
-      // Persist selectedId to sessionStorage so F5 reload preserves it
-      useEffect(() => {
-            if (selectedId) {
-                  sessionStorage.setItem('chat_selectedId', selectedId);
-            } else {
-                  sessionStorage.removeItem('chat_selectedId');
-            }
-      }, [selectedId]);
-
-      // --- REFS ---
+      // ── Refs ─────────────────────────────────────────────────────────────
       const messagesEndRef = useRef<HTMLDivElement>(null);
       const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-      // ============================================================================
-      // 1. CONVERSATIONS LIST (Infinite Scroll - Forward)
-      // ============================================================================
+      // ── Store selectors ──────────────────────────────────────────────────
+      const rightSidebar = useChatStore((s) => s.rightSidebar);
+      const setRightSidebar = useChatStore((s) => s.setRightSidebar);
+      const isGlobalSearchOpen = useChatStore((s) => s.isGlobalSearchOpen);
+      const setIsGlobalSearchOpen = useChatStore((s) => s.setIsGlobalSearchOpen);
+      const isFriendSearchOpen = useChatStore((s) => s.isFriendSearchOpen);
+      const setIsFriendSearchOpen = useChatStore((s) => s.setIsFriendSearchOpen);
+      const prefillSearchKeyword = useChatStore((s) => s.prefillSearchKeyword);
+      const setPrefillSearchKeyword = useChatStore((s) => s.setPrefillSearchKeyword);
 
-      const conversationsLimit = 20;
-      const conversationsQueryKey = useMemo(
-            () => ['conversations', { limit: conversationsLimit }] as const,
-            [conversationsLimit],
-      );
+      // ── Hook: selection / URL sync ───────────────────────────────────────
+      const { selectedId, setSelectedId, handleSelectConversation } = useChatSelection();
 
-      type ConversationsPage = Awaited<ReturnType<typeof conversationService.getConversations>>;
+      // ── Hook: conversation list (query + cache mutations) ────────────────
+      const {
+            conversations,
+            conversationsQueryKey,
+            isLoadingConv,
+            convHasMore,
+            convLoadMoreRef,
+            prependConversation,
+            updateConversation,
+            removeConversation,
+      } = useConversationListMutations();
 
-      const conversationsQuery = useInfiniteQuery({
-            queryKey: conversationsQueryKey,
-            initialPageParam: undefined as string | undefined,
-            queryFn: async ({ pageParam }) => {
-                  return conversationService.getConversations({
-                        cursor: pageParam,
-                        limit: conversationsLimit,
-                  });
-            },
-            getNextPageParam: (lastPage) => {
-                  return lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined;
-            },
-      });
-
+      // ── Realtime: conversation list ──────────────────────────────────────
       useConversationListRealtime({
             conversationsQueryKey,
             selectedConversationId: selectedId,
       });
-
-      const conversations = (conversationsQuery.data?.pages ?? []).flatMap((p) => p.data);
-      const isLoadingConv = conversationsQuery.isLoading || conversationsQuery.isFetchingNextPage;
-      const convHasMore = conversationsQuery.hasNextPage;
-
-      const { ref: convLoadMoreRef, inView: convInView } = useInView({
-            threshold: 0.1,
-            rootMargin: '100px',
-      });
-
-      // Ref to access latest query state without re-creating callback
-      const convQueryRef = useRef(conversationsQuery);
-      convQueryRef.current = conversationsQuery;
-      const convFetchingRef = useRef(false);
-
-      const loadMoreConversations = useCallback(async () => {
-            if (convFetchingRef.current) return;
-            const q = convQueryRef.current;
-            if (!q.hasNextPage || q.isFetchingNextPage) return;
-            convFetchingRef.current = true;
-            try {
-                  await q.fetchNextPage();
-            } finally {
-                  convFetchingRef.current = false;
-            }
-      }, []);
-
-      useEffect(() => {
-            if (!convInView) return;
-            void loadMoreConversations();
-      }, [convInView, loadMoreConversations]);
-
-      const prependConversation = useCallback((item: ChatConversation) => {
-            queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
-                  conversationsQueryKey,
-                  (prev) => {
-                        if (!prev) {
-                              return {
-                                    pages: [{ data: [item], meta: { limit: conversationsLimit, hasNextPage: false } }],
-                                    pageParams: [undefined],
-                              };
-                        }
-
-                        // Remove from ALL pages to avoid duplicates (conversation may exist in page 2+)
-                        const cleaned = prev.pages.map((page) => ({
-                              ...page,
-                              data: page.data.filter((c) => c.id !== item.id),
-                        }));
-
-                        // Prepend to first page
-                        cleaned[0] = {
-                              ...cleaned[0],
-                              data: [item, ...cleaned[0].data],
-                        };
-                        return { ...prev, pages: cleaned };
-                  });
-      }, [queryClient, conversationsQueryKey]);
-
-      const updateConversation = useCallback((conversationId: string, updates: Partial<ChatConversation>) => {
-            queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
-                  conversationsQueryKey,
-                  (prev) => {
-                        if (!prev) return prev;
-                        const pages = prev.pages.map((page) => ({
-                              ...page,
-                              data: page.data.map((c) => (c.id === conversationId ? { ...c, ...updates } : c)),
-                        }));
-                        return { ...prev, pages };
-                  });
-      }, [queryClient, conversationsQueryKey]);
-
-      const removeConversation = useCallback((conversationId: string) => {
-            queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
-                  conversationsQueryKey,
-                  (prev) => {
-                        if (!prev) return prev;
-
-                        const nextPages = prev.pages.map((page) => ({
-                              ...page,
-                              data: page.data.filter((c) => c.id !== conversationId),
-                        }));
-
-                        return { ...prev, pages: nextPages };
-                  });
-      }, [queryClient, conversationsQueryKey]);
-
-      // ============================================================================
-      // WebSocket - Realtime Events
-      // ============================================================================
 
       useChatConversationRealtime({
             prependConversation,
@@ -201,10 +90,7 @@ export function ChatFeature() {
             setSelectedId,
       });
 
-      // ============================================================================
-      // 2. MESSAGES LIST (Infinite Scroll - Backward/Reverse)
-      // ============================================================================
-
+      // ── Hook: messages ───────────────────────────────────────────────────
       const {
             messages,
             query: messagesQuery,
@@ -229,6 +115,7 @@ export function ChatFeature() {
             messagesContainerRef,
       });
 
+      // ── Invalidate on reconnect ──────────────────────────────────────────
       useEffect(() => {
             if (!isSocketConnected) return;
             void queryClient.invalidateQueries({ queryKey: conversationsQueryKey });
@@ -237,6 +124,10 @@ export function ChatFeature() {
             }
       }, [isSocketConnected, connectionNonce, queryClient, conversationsQueryKey, selectedId, messagesQueryKey]);
 
+      // ── Hook: typing indicator (no socket dependency → safe before useMessageSocket)
+      const { typingText, onTypingStatus } = useTypingIndicator({ currentUserId });
+
+      // ── Hook: message socket (single call with typing wired in) ──────────
       const {
             isConnected: isMsgSocketConnected,
             emitSendMessage,
@@ -248,23 +139,37 @@ export function ChatFeature() {
             messagesQueryKey,
             isJumpingRef,
             jumpBufferRef,
-            onTypingStatus: (payload) => {
-                  const myId = currentUserId;
-                  if (myId && payload.userId === myId) return;
-                  setTypingUserIds((prev) => {
-                        if (payload.isTyping) {
-                              if (prev.includes(payload.userId)) return prev;
-                              return [...prev, payload.userId];
-                        }
-                        return prev.filter((id) => id !== payload.userId);
-                  });
-            },
+            onTypingStatus,
       });
 
-      const typingText = typingUserIds.length > 0 ? 'Đang nhập...' : null;
+      // ── Hook: typing change handler (needs socket emitters → after useMessageSocket)
+      const { handleTypingChange } = useHandleTypingChange({
+            selectedId,
+            isMsgSocketConnected,
+            emitTypingStart,
+            emitTypingStop,
+      });
 
-      // ── Phase 7: Track media processing via WebSocket ──────────────────
-      // Collect mediaIds from current messages that are not yet READY/FAILED
+      // ── Hook: send message ───────────────────────────────────────────────
+      const { handleSendMessage, handleRetryMessage } = useSendMessage({
+            selectedId,
+            currentUserId,
+            messagesQueryKey,
+            isMsgSocketConnected,
+            emitSendMessage,
+      });
+
+      // ── Hook: mark as seen ───────────────────────────────────────────────
+      useMarkAsSeen({
+            selectedId,
+            currentUserId,
+            messages,
+            isMsgSocketConnected,
+            emitMarkAsSeen,
+            conversationsQueryKey,
+      });
+
+      // ── Phase 7: Track pending media via WebSocket ───────────────────────
       const pendingMediaIds = useMemo(() => {
             const DONE_STATUSES = new Set(['READY', 'FAILED']);
             const ids: string[] = [];
@@ -279,235 +184,16 @@ export function ChatFeature() {
             return ids;
       }, [messages]);
 
-      useMediaProgress({
-            messagesQueryKey,
-            mediaIds: pendingMediaIds,
+      useMediaProgress({ messagesQueryKey, mediaIds: pendingMediaIds });
+
+      // ── Hook: conversation loader (search result / deep link) ────────────
+      const { selectedConversation, ensureConversationLoaded } = useConversationLoader({
+            selectedId,
+            conversations,
+            prependConversation,
       });
 
-      const resetConversationUnread = useCallback((conversationId: string, lastReadMessageId?: string) => {
-            queryClient.setQueryData<InfiniteData<ConversationsPage, string | undefined>>(
-                  conversationsQueryKey,
-                  (prev) => {
-                        if (!prev) return prev;
-                        const pages = prev.pages.map((page) => ({
-                              ...page,
-                              data: page.data.map((c) => {
-                                    if (c.id !== conversationId) return c;
-                                    return {
-                                          ...c,
-                                          unreadCount: 0,
-                                          unread: 0,
-                                          ...(lastReadMessageId ? { lastReadMessageId } : {}),
-                                    };
-                              }),
-                        }));
-                        return { ...prev, pages };
-                  });
-      }, [queryClient, conversationsQueryKey]);
-
-      // Track which messages have already been marked as seen to avoid re-emitting
-      const seenMessageIdsRef = useRef(new Set<string>());
-
-      // Reset seen tracking when conversation changes
-      useEffect(() => {
-            seenMessageIdsRef.current = new Set<string>();
-      }, [selectedId]);
-
-      // Use a ref to access current messages without adding it as a dependency
-      const messagesRef = useRef(messages);
-      useEffect(() => {
-            messagesRef.current = messages;
-      }, [messages]);
-
-      useEffect(() => {
-            if (!selectedId) return;
-            if (!isMsgSocketConnected) return;
-            if (messages.length === 0) return;
-
-            const latestMessageId = messages[messages.length - 1]?.id;
-            resetConversationUnread(selectedId, latestMessageId);
-
-            // Only emit seen for messages NOT yet tracked in our local set
-            const unseenMessageIds = messages
-                  .filter((m) => (m.senderId ?? null) !== (currentUserId ?? null))
-                  .filter((m) => !seenMessageIdsRef.current.has(m.id))
-                  .slice(-50)
-                  .map((m) => m.id);
-
-            if (unseenMessageIds.length === 0) return;
-
-            // Track these IDs so we never re-emit for them
-            for (const id of unseenMessageIds) {
-                  seenMessageIdsRef.current.add(id);
-            }
-
-            emitMarkAsSeen({
-                  conversationId: selectedId,
-                  messageIds: unseenMessageIds,
-            });
-            // NOTE: `messages` is intentionally kept as dependency so we catch NEW messages arriving.
-            // The seenMessageIdsRef guard prevents re-emitting for messages already processed.
-      }, [selectedId, isMsgSocketConnected, messages, currentUserId, emitMarkAsSeen, resetConversationUnread]);
-
-      const handleSendMessage = useCallback(async (payload: SendPayload) => {
-            if (!selectedId) return;
-
-            const { type, content, mediaIds, _localFiles } = payload;
-            const trimmed = content?.trim();
-
-            // Text-only: must have content
-            if (type === 'TEXT' && !trimmed) return;
-
-            const clientMessageId = crypto.randomUUID();
-            const nowIso = new Date().toISOString();
-
-            // Build optimistic mediaAttachments from _localFiles
-            const optimisticAttachments = _localFiles?.map((lf) => ({
-                  id: lf.mediaId,
-                  mediaType: lf.mediaType,
-                  mimeType: lf.mimeType,
-                  // Use the cdnUrl already available for inline-processed media (AUDIO/DOCUMENT).
-                  cdnUrl: lf.cdnUrl ?? null,
-                  thumbnailUrl: null,
-                  optimizedUrl: null,
-                  originalName: lf.originalName,
-                  size: lf.size,
-                  width: null,
-                  height: null,
-                  duration: null,
-                  // Use the real status from confirmUpload — READY for inline media, CONFIRMED for queue-processed.
-                  processingStatus: (lf.processingStatus ?? 'CONFIRMED') as MediaProcessingStatus,
-                  _localUrl: lf.localUrl,
-            })) ?? [];
-
-            const optimistic: MessageListItem = {
-                  id: clientMessageId,
-                  conversationId: selectedId,
-                  senderId: currentUserId ?? undefined,
-                  type: type as MessageType,
-                  content: trimmed ?? undefined,
-                  metadata: { sendStatus: 'SENDING' },
-                  clientMessageId,
-                  createdAt: nowIso,
-                  updatedAt: nowIso,
-                  sender: currentUserId
-                        ? { id: currentUserId, displayName: 'Bạn', avatarUrl: null }
-                        : null,
-                  parentMessage: null,
-                  deliveredCount: 0,
-                  seenCount: 0,
-                  totalRecipients: 0,
-                  directReceipts: null,
-                  mediaAttachments: optimisticAttachments,
-            };
-
-            queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
-                  if (!prev) {
-                        return {
-                              pages: [{ data: [optimistic], meta: { limit: 50, hasNextPage: false } } as MessagesPage],
-                              pageParams: [undefined],
-                        };
-                  }
-                  const pages = [...prev.pages];
-                  const first = pages[0];
-                  pages[0] = { ...first, data: [optimistic, ...first.data] };
-                  return { ...prev, pages };
-            });
-
-            const sendDto = {
-                  conversationId: selectedId,
-                  clientMessageId,
-                  type: type as MessageType,
-                  ...(trimmed ? { content: trimmed } : {}),
-                  ...(mediaIds?.length ? { mediaIds } : {}),
-            };
-
-            if (isMsgSocketConnected) {
-                  emitSendMessage(sendDto, (ack) => {
-                        if (!ack || !('error' in ack) || !ack.error) return;
-                        queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
-                              if (!prev) return prev;
-                              const pages = prev.pages.map((p) => ({
-                                    ...p,
-                                    data: p.data.map((m) => {
-                                          if (m.clientMessageId !== clientMessageId) return m;
-                                          return {
-                                                ...m,
-                                                metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: ack.error },
-                                          };
-                                    }),
-                              }));
-                              return { ...prev, pages };
-                        });
-                  });
-                  return;
-            }
-
-            try {
-                  await messageService.sendMessage(sendDto);
-            } catch {
-                  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
-                        if (!prev) return prev;
-                        const pages = prev.pages.map((p) => ({
-                              ...p,
-                              data: p.data.map((m) => {
-                                    if (m.clientMessageId !== clientMessageId) return m;
-                                    return {
-                                          ...m,
-                                          metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: 'Send failed' },
-                                    };
-                              }),
-                        }));
-                        return { ...prev, pages };
-                  });
-                  api.error({ message: 'Gửi tin nhắn thất bại', placement: 'topRight' });
-            }
-      }, [selectedId, currentUserId, queryClient, messagesQueryKey, isMsgSocketConnected, emitSendMessage, api]);
-
-      const handleRetryMessage = useCallback((msg: MessageListItem) => {
-            if (!selectedId) return;
-            if (!isMsgSocketConnected) return;
-            if (!msg.clientMessageId) return;
-
-            queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
-                  if (!prev) return prev;
-                  const pages = prev.pages.map((p) => ({
-                        ...p,
-                        data: p.data.map((m) => {
-                              if (m.clientMessageId !== msg.clientMessageId) return m;
-                              return {
-                                    ...m,
-                                    metadata: { ...(m.metadata ?? {}), sendStatus: 'SENDING' },
-                              };
-                        }),
-                  }));
-                  return { ...prev, pages };
-            });
-
-            emitSendMessage({
-                  conversationId: selectedId,
-                  clientMessageId: msg.clientMessageId,
-                  type: msg.type,
-                  content: msg.content,
-            }, (ack) => {
-                  if (!ack || !('error' in ack) || !ack.error) return;
-                  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
-                        if (!prev) return prev;
-                        const pages = prev.pages.map((p) => ({
-                              ...p,
-                              data: p.data.map((m) => {
-                                    if (m.clientMessageId !== msg.clientMessageId) return m;
-                                    return {
-                                          ...m,
-                                          metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: ack.error },
-                                    };
-                              }),
-                        }));
-                        return { ...prev, pages };
-                  });
-            });
-      }, [selectedId, isMsgSocketConnected, queryClient, messagesQueryKey, emitSendMessage]);
-
+      // ── Messages infinite scroll (older + newer) ────────────────────────
       const msgHasMore = messagesQuery.hasNextPage;
       const isLoadingMsg = messagesQuery.isLoading || messagesQuery.isFetchingNextPage;
 
@@ -522,17 +208,17 @@ export function ChatFeature() {
       }, [msgInView, loadOlder]);
 
       const [isLoadingNewer, setIsLoadingNewer] = useState(false);
-
-      // Use ref to always access latest loadNewer without re-creating callback
       const loadNewerRef = useRef(loadNewer);
       loadNewerRef.current = loadNewer;
 
-      const handleNewerInView = useCallback((inView: boolean) => {
-            if (!inView) return;
-            if (!isJumpedAway) return;
-            if (isFetchingNewerRef.current) return;
-            setIsLoadingNewer(true);
-            void loadNewerRef.current().finally(() => setIsLoadingNewer(false));
+      const handleNewerInView = useMemo(() => {
+            return (inView: boolean) => {
+                  if (!inView) return;
+                  if (!isJumpedAway) return;
+                  if (isFetchingNewerRef.current) return;
+                  setIsLoadingNewer(true);
+                  void loadNewerRef.current().finally(() => setIsLoadingNewer(false));
+            };
       }, [isJumpedAway, isFetchingNewerRef]);
 
       const { ref: msgLoadNewerRef } = useInView({
@@ -541,48 +227,9 @@ export function ChatFeature() {
             onChange: handleNewerInView,
       });
 
-      const handleSelectConversation = useCallback((id: string) => {
-            if (id === selectedId) return;
-            setSelectedId(id);
-            setTypingUserIds([]);
-      }, [selectedId]);
-
-      const fetchedSearchConvIds = useRef(new Set<string>());
-      const [searchConvMap, setSearchConvMap] = useState<Record<string, ChatConversation>>({});
-
-      // Ref to always access latest conversations without stale closures
-      const conversationsRef = useRef(conversations);
-      conversationsRef.current = conversations;
-
-      const ensureConversationLoaded = useCallback(async (id: string): Promise<void> => {
-            // Already in the paginated list → no fetch needed
-            if (conversationsRef.current.some((c) => c.id === id)) return;
-            // Already fetched before (might still be prepending) → skip duplicate fetch
-            if (fetchedSearchConvIds.current.has(id)) return;
-
-            fetchedSearchConvIds.current.add(id);
-            try {
-                  const conv = await conversationService.getConversationById(id);
-                  prependConversation(conv);
-                  // Also store in local state as fallback (setQueryData on infinite queries
-                  // may not always trigger useInfiniteQuery re-render)
-                  setSearchConvMap((prev) => ({ ...prev, [id]: conv }));
-            } catch (error) {
-                  console.error(`[ensureConversationLoaded] Failed to load conversation ${id}:`, error);
-                  fetchedSearchConvIds.current.delete(id); // Allow retry on next attempt
-            }
-      }, [prependConversation]);
-
-      // Trigger fetch when selectedId changes and conversation isn't loaded yet
-      useEffect(() => {
-            if (!selectedId) return;
-            void ensureConversationLoaded(selectedId);
-      }, [selectedId, ensureConversationLoaded]);
-
-      const selectedConversation = (
-            conversations.find((c) => c.id === selectedId)
-            ?? (selectedId ? searchConvMap[selectedId] : undefined)
-      ) as ChatConversation | undefined;
+      // ════════════════════════════════════════════════════════════════════════
+      // RENDER
+      // ════════════════════════════════════════════════════════════════════════
 
       return (
             <>
@@ -632,10 +279,10 @@ export function ChatFeature() {
                                                 lastSeenAt={selectedConversation.type === 'DIRECT' ? selectedConversation.lastSeenAt ?? null : null}
                                                 typingText={typingText}
                                                 onToggleSearch={() => {
-                                                      setRightSidebar(prev => prev === 'search' ? 'none' : 'search');
+                                                      setRightSidebar((prev) => prev === 'search' ? 'none' : 'search');
                                                       setIsGlobalSearchOpen(false);
                                                 }}
-                                                onToggleInfo={() => setRightSidebar(prev => prev === 'info' ? 'none' : 'info')}
+                                                onToggleInfo={() => setRightSidebar((prev) => prev === 'info' ? 'none' : 'info')}
                                           />
 
                                           <ChatContent
@@ -664,15 +311,7 @@ export function ChatFeature() {
                                           <ChatInput
                                                 conversationId={selectedId}
                                                 onSend={handleSendMessage}
-                                                onTypingChange={(isTyping) => {
-                                                      if (!selectedId) return;
-                                                      if (!isMsgSocketConnected) return;
-                                                      if (isTyping) {
-                                                            emitTypingStart({ conversationId: selectedId });
-                                                            return;
-                                                      }
-                                                      emitTypingStop({ conversationId: selectedId });
-                                                }}
+                                                onTypingChange={handleTypingChange}
                                           />
                                     </>
                               ) : selectedId ? (

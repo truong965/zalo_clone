@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/hooks/use-socket';
 import { SocketEvents } from '@/constants/socket-events';
 import type { ConversationLastMessage } from '@/types/api';
-import type { ChatConversation } from '@/features/chat/types';
+import type { ConversationUI } from '@/types/api';
 
 type ConversationListItemUpdatedPayload = {
       conversationId: string;
@@ -25,7 +25,7 @@ type FriendPresencePayload = {
       timestamp: string;
 };
 
-type ConversationsPage = { data: ChatConversation[]; meta: { limit: number; hasNextPage: boolean; nextCursor?: string } };
+type ConversationsPage = { data: ConversationUI[]; meta: { limit: number; hasNextPage: boolean; nextCursor?: string } };
 
 type ConversationsInfiniteData = InfiniteData<ConversationsPage, string | undefined>;
 
@@ -88,9 +88,9 @@ export function useConversationListRealtime(params: {
                                     const isActive =
                                           currentSelectedId && payload.conversationId === currentSelectedId;
 
-                                    let found: ChatConversation | undefined;
+                                    let found: ConversationUI | undefined;
                                     const nextPages = prev.pages.map((page) => {
-                                          const nextData: ChatConversation[] = [];
+                                          const nextData: ConversationUI[] = [];
 
                                           for (const c of page.data) {
                                                 if (c.id !== payload.conversationId) {
@@ -113,7 +113,7 @@ export function useConversationListRealtime(params: {
                                           (isActive ? 0 : payload.unreadCountDelta),
                                     );
 
-                                    const updated: ChatConversation = {
+                                    const updated: ConversationUI = {
                                           ...found,
                                           updatedAt: payload.lastMessageAt,
                                           lastMessageAt: payload.lastMessageAt,

@@ -15,7 +15,7 @@ import {
       UserAddOutlined,
       TeamOutlined,
 } from '@ant-design/icons';
-import type { ConversationUI } from '@/features/conversation/types/conversation';
+import type { ConversationUI } from '@/types/api';
 
 interface GroupProfileHeaderProps {
       conversation: ConversationUI;

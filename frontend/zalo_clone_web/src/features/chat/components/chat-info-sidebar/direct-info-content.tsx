@@ -16,7 +16,7 @@ import {
       StopOutlined,
       ExclamationCircleFilled,
 } from '@ant-design/icons';
-import type { ConversationUI } from '@/features/conversation/types/conversation';
+import type { ConversationUI } from '@/types/api';
 import { useBlockUser } from '@/features/contacts/hooks/use-block';
 
 const { Title } = Typography;

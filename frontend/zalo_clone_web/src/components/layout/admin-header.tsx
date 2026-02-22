@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '@/hooks';
 import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '@/config/routes';
 
 const { Header } = Layout;
 
@@ -20,7 +21,7 @@ export function AdminHeader() {
 
       const handleLogout = () => {
             logout();
-            navigate('/login');
+            navigate(ROUTES.LOGIN);
       };
 
       const userMenuItems = [
@@ -28,10 +29,11 @@ export function AdminHeader() {
                   key: 'settings',
                   icon: <SettingOutlined />,
                   label: 'Admin Settings',
-                  onClick: () => navigate('/admin/settings'),
+                  onClick: () => navigate(ROUTES.ADMIN_SETTINGS),
             },
+
             {
-                  type: 'divider',
+                  type: 'divider' as const,
             },
             {
                   key: 'logout',
@@ -44,7 +46,7 @@ export function AdminHeader() {
 
       return (
             <Header className="bg-gradient-to-r from-blue-600 to-blue-800 shadow-md flex items-center justify-between px-6">
-                  <div className="text-2xl font-bold text-white cursor-pointer" onClick={() => navigate('/admin')}>
+                  <div className="text-2xl font-bold text-white cursor-pointer" onClick={() => navigate(ROUTES.ADMIN)}>
                         ⚙️ Admin Dashboard
                   </div>
 
@@ -56,14 +58,14 @@ export function AdminHeader() {
                               />
                         </Badge>
 
-                        <Dropdown menu={{ items: userMenuItems as Record<string, any>[] }} trigger={['click']}>
+                        <Dropdown menu={{ items: userMenuItems }} trigger={['click']}>
                               <Button type="text">
                                     <Avatar
                                           icon={<UserOutlined />}
-                                          src={user?.avatar}
+                                          src={user?.avatarUrl}
                                           style={{ backgroundColor: '#f56a00' }}
                                     />
-                                    <span className="ml-2 text-white">{user?.firstName}</span>
+                                    <span className="ml-2 text-white">{user?.displayName}</span>
                               </Button>
                         </Dropdown>
                   </Space>
