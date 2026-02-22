@@ -6,6 +6,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import { PrivateRoute } from '@/components/private-route';
 import { ClientLayout } from '@/components/layout/client-layout';
 import { AdminLayout } from '@/components/layout/admin-layout';
+import { ErrorBoundary } from '@/components/shared/error-boundary';
 
 // Auth Pages
 import { LoginPage } from '@/pages/login';
@@ -33,11 +34,11 @@ export const router = createBrowserRouter([
       // Auth Routes
       {
             path: '/login',
-            element: <LoginPage />,
+            element: <ErrorBoundary><LoginPage /></ErrorBoundary>,
       },
       {
             path: '/register',
-            element: <RegisterPage />,
+            element: <ErrorBoundary><RegisterPage /></ErrorBoundary>,
       },
 
       // Client Routes
@@ -45,33 +46,33 @@ export const router = createBrowserRouter([
             path: '/',
             element: (
                   <PrivateRoute>
-                  <ClientLayout />
-                   </PrivateRoute>
+                        <ClientLayout />
+                  </PrivateRoute>
             ),
             children: [
                   {
                         path: 'chat',
-                        element: <ChatPage />,
+                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>,
                   },
                   {
                         path: 'chat/:conversationId',
-                        element: <ChatPage />,
+                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>,
                   },
                   {
                         path: 'chat/new',
-                        element: <ChatPage />,
+                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>,
                   },
                   {
                         path: 'contacts',
-                        element: <ContactsPage />,
+                        element: <ErrorBoundary><ContactsPage /></ErrorBoundary>,
                   },
                   {
                         path: 'calls',
-                        element: <CallsPage />,
+                        element: <ErrorBoundary><CallsPage /></ErrorBoundary>,
                   },
                   {
                         path: 'profile',
-                        element: <ProfilePage />,
+                        element: <ErrorBoundary><ProfilePage /></ErrorBoundary>,
                   },
                   {
                         path: 'notifications',
@@ -83,7 +84,7 @@ export const router = createBrowserRouter([
                   },
                   {
                         index: true,
-                        element: <ChatPage />, // Default to chat
+                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>, // Default to chat
                   },
             ],
       },
@@ -92,9 +93,9 @@ export const router = createBrowserRouter([
       {
             path: '/admin',
             element: (
-                   <PrivateRoute requireAdmin>
-                  <AdminLayout />
-                    </PrivateRoute>
+                  <PrivateRoute requireAdmin>
+                        <AdminLayout />
+                  </PrivateRoute>
             ),
             children: [
                   {

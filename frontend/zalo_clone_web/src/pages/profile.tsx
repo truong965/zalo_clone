@@ -2,7 +2,7 @@
  * Profile Page
  */
 
-import { Card, Avatar, Form, Input, Button, Typography, Space, message, Descriptions } from 'antd';
+import { Card, Avatar, Form, Input, Button, Typography, Space, notification, Descriptions } from 'antd';
 import { UserOutlined, CameraOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 
@@ -23,13 +23,13 @@ export function ProfilePage() {
             createdAt: '2024-01-15',
       });
 
-const onFinish = async (values: Record<string, string>) => {
-    setLoading(true);
-    try {
-      // TODO: Call update profile API
-      console.log('Update profile:', values);
-      message.success('Profile updated successfully!');
-      setEditing(false);
+      const onFinish = async (values: Record<string, string>) => {
+            setLoading(true);
+            try {
+                  // TODO: Call update profile API
+                  console.log('Update profile:', values);
+                  notification.success({ message: 'Profile updated successfully!' });
+                  setEditing(false);
             } finally {
                   setLoading(false);
             }

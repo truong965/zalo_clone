@@ -13,6 +13,7 @@ import { env } from '@/config/env';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import { ROUTES } from '@/config/routes';
+import { ApiError } from './api-error';
 
 // ============================================================================
 // AXIOS INSTANCE CONFIGURATION
@@ -75,7 +76,7 @@ api.interceptors.response.use(
         originalRequest.url?.includes('/auth/refresh')
       ) {
         redirectToLogin();
-        return Promise.reject(error);
+        return Promise.reject(ApiError.from(error));
       }
 
       try {
@@ -121,7 +122,7 @@ api.interceptors.response.use(
         // Retry original request với token mới
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
-      } catch (refreshError: any) {
+      } catch (refreshError: unknown) {
         // ============================================
         // REFRESH FAILED - CẦN LOGIN LẠI
         // ============================================
@@ -133,13 +134,13 @@ api.interceptors.response.use(
         // Redirect to login
         redirectToLogin();
 
-        return Promise.reject(refreshError);
+        return Promise.reject(ApiError.from(refreshError));
       } finally {
         isRefreshing = false;
       }
     }
 
-    return Promise.reject(error);
+    return Promise.reject(ApiError.from(error));
   },
 );
 

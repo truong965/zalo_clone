@@ -8,6 +8,7 @@
 import { Modal, Button, Avatar, notification } from 'antd';
 import { UserAddOutlined } from '@ant-design/icons';
 import { useSendFriendRequest } from '../api/friendship.api';
+import { ApiError } from '@/lib/api-error';
 
 interface FriendRequestModalProps {
       visible: boolean;
@@ -33,8 +34,7 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
                         onClose();
                   },
                   onError: (error: unknown) => {
-                        const axiosErr = error as { response?: { data?: { message?: string } } };
-                        const msg = axiosErr?.response?.data?.message || 'Không thể gửi lời mời kết bạn';
+                        const msg = ApiError.from(error).message || 'Không thể gửi lời mời kết bạn';
                         notification.error({ message: msg });
                   },
             });

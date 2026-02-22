@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Input, Button, Alert, Spin, notification } from 'antd';
+import { ApiError } from '@/lib/api-error';
 import {
       SearchOutlined,
       MessageOutlined,
@@ -150,17 +151,17 @@ export function FriendshipSearchModal({
                   },
                   onError: (error: unknown) => {
                         // Bug 1: Handle 409 Conflict (duplicate request)
-                        const axiosErr = error as { response?: { status?: number; data?: { message?: string } } };
-                        if (axiosErr?.response?.status === 409) {
+                        const apiErr = ApiError.from(error);
+                        if (apiErr.status === 409) {
                               notification.warning({
                                     message: 'Đã gửi lời mời trước đó',
-                                    description: axiosErr.response.data?.message || 'Bạn đã gửi lời mời kết bạn cho người này rồi.',
+                                    description: apiErr.message || 'Bạn đã gửi lời mời kết bạn cho người này rồi.',
                               });
                               // Re-search to update status
                               triggerSearch(normalizedInput);
                               onClose();
                         } else {
-                              const msg = axiosErr?.response?.data?.message || 'Không thể gửi lời mời kết bạn';
+                              const msg = apiErr.message || 'Không thể gửi lời mời kết bạn';
                               notification.error({ message: msg });
                         }
                   },

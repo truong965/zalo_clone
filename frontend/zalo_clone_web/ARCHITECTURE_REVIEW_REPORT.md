@@ -570,7 +570,7 @@ src/
 
 2. Wrap all API calls through a `handleApiError()` utility that returns `ApiError`.
 
-3. Standardize notification strategy: pick ONE (recommend sonner or antd notification — not both).
+3. Standardize notification strategy: antd notification 
 
 4. Wrap ALL page-level feature components in `<ErrorBoundary>` consistently.
 

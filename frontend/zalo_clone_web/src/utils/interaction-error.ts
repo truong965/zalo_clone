@@ -9,6 +9,7 @@
  */
 
 import { notification } from 'antd';
+import { ApiError } from '@/lib/api-error';
 
 export interface InteractionErrorContext {
       /** Target user info for friend request modal */
@@ -31,18 +32,13 @@ export interface InteractionErrorResult {
 }
 
 /**
- * Extract HTTP status and message from an Axios error
+ * Extract HTTP status and message from an ApiError (or fallback to raw Axios shape)
  */
-function parseAxiosError(error: unknown): { status?: number; message?: string } {
-      const err = error as {
-            response?: {
-                  status?: number;
-                  data?: { message?: string };
-            };
-      };
+function parseApiError(error: unknown): { status?: number; message?: string } {
+      const apiErr = ApiError.from(error);
       return {
-            status: err?.response?.status,
-            message: err?.response?.data?.message,
+            status: apiErr.status || undefined,
+            message: apiErr.message || undefined,
       };
 }
 
@@ -71,7 +67,7 @@ export function handleInteractionError(
       error: unknown,
       context?: InteractionErrorContext,
 ): InteractionErrorResult {
-      const { status, message: serverMessage } = parseAxiosError(error);
+      const { status, message: serverMessage } = parseApiError(error);
 
       if (status === 403) {
             const lowerMsg = (serverMessage ?? '').toLowerCase();

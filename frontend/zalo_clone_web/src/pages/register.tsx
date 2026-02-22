@@ -9,6 +9,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuth } from '@/features/auth';
 import { ROUTES } from '@/config/routes';
+import { ApiError } from '@/lib/api-error';
 import type { RegisterRequest } from '@/types';
 
 const { Title, Text } = Typography;
@@ -43,10 +44,10 @@ export function RegisterPage() {
         duration: 5,
       });
       setTimeout(() => navigate(ROUTES.LOGIN), 1500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       api.error({
         message: 'Đăng ký thất bại',
-        description: err?.response?.data?.message || 'Vui lòng kiểm tra lại thông tin.',
+        description: ApiError.from(err).message || 'Vui lòng kiểm tra lại thông tin.',
         placement: 'bottomRight',
       });
     }

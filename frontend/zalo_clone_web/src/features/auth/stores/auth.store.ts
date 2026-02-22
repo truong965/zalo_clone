@@ -8,6 +8,7 @@ import { devtools, persist } from 'zustand/middleware';
 import { authService, type AuthResponseData, type SessionInfo } from '../api/auth.service';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import type { User } from '@/types/api';
+import { ApiError } from '@/lib/api-error';
 
 // ============================================================================
 // TYPES
@@ -94,8 +95,8 @@ export const useAuthStore = create<AuthState>()(
                                     set({ isLoading: true, error: null });
                                     const user = await authService.register(payload);
                                     set({ user, isAuthenticated: true, isLoading: false });
-                              } catch (error: any) {
-                                    const errorMsg = error?.response?.data?.message || 'Registration failed';
+                              } catch (error: unknown) {
+                                    const errorMsg = ApiError.from(error).message || 'Registration failed';
                                     set({ error: errorMsg, isLoading: false });
                                     throw error;
                               }
@@ -110,8 +111,8 @@ export const useAuthStore = create<AuthState>()(
                                     const data = await authService.login(payload);
                                     set({ user: data.user, isAuthenticated: true, isLoading: false });
                                     return data;
-                              } catch (error: any) {
-                                    const errorMsg = error?.response?.data?.message || 'Login failed';
+                              } catch (error: unknown) {
+                                    const errorMsg = ApiError.from(error).message || 'Login failed';
                                     set({ error: errorMsg, isLoading: false });
                                     throw error;
                               }
@@ -125,8 +126,8 @@ export const useAuthStore = create<AuthState>()(
                                     set({ isLoading: true });
                                     await authService.logout();
                                     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
-                              } catch (error: any) {
-                                    const errorMsg = error?.response?.data?.message || 'Logout failed';
+                              } catch (error: unknown) {
+                                    const errorMsg = ApiError.from(error).message || 'Logout failed';
                                     set({ error: errorMsg, isLoading: false });
                                     throw error;
                               }
@@ -153,8 +154,8 @@ export const useAuthStore = create<AuthState>()(
                                     set({ isLoading: true, error: null });
                                     const user = await authService.getProfile();
                                     set({ user, isLoading: false });
-                              } catch (error: any) {
-                                    const errorMsg = error?.response?.data?.message || 'Failed to fetch profile';
+                              } catch (error: unknown) {
+                                    const errorMsg = ApiError.from(error).message || 'Failed to fetch profile';
                                     set({ error: errorMsg, isLoading: false });
                                     throw error;
                               }
@@ -168,8 +169,8 @@ export const useAuthStore = create<AuthState>()(
                                     set({ isLoading: true, error: null });
                                     const sessions = await authService.getSessions();
                                     set({ sessions, isLoading: false });
-                              } catch (error: any) {
-                                    const errorMsg = error?.response?.data?.message || 'Failed to fetch sessions';
+                              } catch (error: unknown) {
+                                    const errorMsg = ApiError.from(error).message || 'Failed to fetch sessions';
                                     set({ error: errorMsg, isLoading: false });
                                     throw error;
                               }
@@ -184,8 +185,8 @@ export const useAuthStore = create<AuthState>()(
                                     // Refresh sessions list
                                     const sessions = await authService.getSessions();
                                     set({ sessions });
-                              } catch (error: any) {
-                                    const errorMsg = error?.response?.data?.message || 'Failed to revoke session';
+                              } catch (error: unknown) {
+                                    const errorMsg = ApiError.from(error).message || 'Failed to revoke session';
                                     set({ error: errorMsg });
                                     throw error;
                               }

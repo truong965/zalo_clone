@@ -11,6 +11,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuth } from '@/features/auth';
 import { ROUTES } from '@/config/routes';
+import { ApiError } from '@/lib/api-error';
 
 const { Title, Text } = Typography;
 
@@ -47,11 +48,11 @@ export function LoginPage() {
         description: 'Đăng nhập thành công!',
         placement: 'bottomRight',
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       // [THAY ĐỔI 4]: Sử dụng notification error ở góc dưới phải
       api.error({
         message: 'Đăng nhập thất bại',
-        description: err?.response?.data?.message || 'Vui lòng kiểm tra lại thông tin.',
+        description: ApiError.from(err).message || 'Vui lòng kiểm tra lại thông tin.',
         placement: 'bottomRight', // Vị trí hiển thị
         duration: 4.5, // Thời gian hiển thị (giây)
       });

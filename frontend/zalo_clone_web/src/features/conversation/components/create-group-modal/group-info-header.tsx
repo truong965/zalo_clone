@@ -6,7 +6,7 @@
  */
 
 import { useRef } from 'react';
-import { Input, Avatar, message } from 'antd';
+import { Input, Avatar, notification } from 'antd';
 import { CameraOutlined, TeamOutlined } from '@ant-design/icons';
 import { useCreateGroupStore } from '../../stores/create-group.store';
 
@@ -31,12 +31,12 @@ export function GroupInfoHeader() {
             if (!file) return;
 
             if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-                  void message.error('Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP');
+                  notification.warning({ message: 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP' });
                   return;
             }
 
             if (file.size > MAX_FILE_SIZE) {
-                  void message.error('Kích thước ảnh tối đa 5MB');
+                  notification.warning({ message: 'Kích thước ảnh tối đa 5MB' });
                   return;
             }
 

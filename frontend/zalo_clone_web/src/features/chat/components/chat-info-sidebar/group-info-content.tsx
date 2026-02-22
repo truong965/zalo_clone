@@ -15,7 +15,7 @@
  * - R6: User kicked while sidebar open → close sidebar + navigate away
  */
 import { useState, useCallback, useEffect } from 'react';
-import { Collapse, Modal, Spin, Result, message } from 'antd';
+import { Collapse, Modal, Spin, Result, notification } from 'antd';
 import {
       RightOutlined,
       ClockCircleOutlined,
@@ -373,7 +373,7 @@ export function GroupInfoContent({
                               memberCount={members.length}
                               onLeaveGroup={handleLeaveGroup}
                               onDeleteHistory={() => {
-                                    message.info('Chức năng đang phát triển');
+                                    notification.info({ message: 'Chức năng đang phát triển' });
                               }}
                         />
                   </div>
