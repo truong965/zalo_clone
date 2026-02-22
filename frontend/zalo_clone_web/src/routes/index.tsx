@@ -17,6 +17,7 @@ import { ChatPage } from '@/pages/chat';
 import { ContactsPage } from '@/pages/contacts';
 import { CallsPage } from '@/pages/calls';
 import { ProfilePage } from '@/pages/profile';
+import { SettingsPage } from '@/pages/settings';
 
 // Admin Pages
 import { AdminDashboardPage } from '@/pages/admin/dashboard';
@@ -80,7 +81,7 @@ export const router = createBrowserRouter([
                   },
                   {
                         path: 'settings',
-                        element: <div className="p-4">Settings Page (Coming soon)</div>,
+                        element: <ErrorBoundary><SettingsPage /></ErrorBoundary>,
                   },
                   {
                         index: true,

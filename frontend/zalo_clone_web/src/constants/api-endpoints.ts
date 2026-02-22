@@ -102,4 +102,10 @@ export const API_ENDPOINTS = {
     TRENDING: '/api/v1/search/analytics/trending',
     TRACK_CLICK: '/api/v1/search/analytics/track-click',
   },
+
+  // Privacy Settings
+  PRIVACY: {
+    GET: '/api/v1/privacy',
+    UPDATE: '/api/v1/privacy',
+  },
 };

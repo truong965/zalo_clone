@@ -1,6 +1,7 @@
-import { Controller, Get, Patch, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '@common/decorator/customize';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { PrivacyService } from './services/privacy.service';
 import type { User } from '@prisma/client';
 import { UpdatePrivacySettingsDto } from './dto/privacy.dto';
@@ -9,13 +10,15 @@ import { UpdatePrivacySettingsDto } from './dto/privacy.dto';
  * Privacy Controller - Handle privacy settings endpoints
  *
  * PHASE 1: Basic CRUD operations
- * - GET /api/privacy: Get my privacy settings
- * - PATCH /api/privacy: Update my privacy settings
+ * - GET /api/v1/privacy: Get my privacy settings
+ * - PATCH /api/v1/privacy: Update my privacy settings
  */
 @ApiTags('Privacy')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('privacy')
 export class PrivacyController {
-  constructor(private readonly privacyService: PrivacyService) {}
+  constructor(private readonly privacyService: PrivacyService) { }
 
   /**
    * Get privacy settings for current user

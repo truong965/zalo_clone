@@ -104,10 +104,6 @@ export function ClientSidebar() {
 
   const settingsContent = (
     <div className="w-48">
-      <Button type="text" block className="text-left mb-1" onClick={() => navigate('/settings')}>
-        Cài đặt chung
-      </Button>
-      <div className="border-t border-gray-100 my-1" />
       <Button
         type="text"
         danger
@@ -196,13 +192,19 @@ export function ClientSidebar() {
             onClick={() => { }}
           /> */}
 
+            <SidebarIcon
+              icon={<SettingOutlined />}
+              label="Cài đặt"
+              isBottom={true}
+              isActive={location.pathname.startsWith(ROUTES.SETTINGS)}
+              onClick={() => navigate(ROUTES.SETTINGS)}
+            />
             <Popover content={settingsContent} trigger="click" placement="rightBottom" arrow={false}>
               <div>
                 <SidebarIcon
-                  icon={<SettingOutlined />}
-                  label="Cài đặt"
+                  icon={<LogoutOutlined />}
+                  label="Đăng xuất"
                   isBottom={true}
-                  isActive={location.pathname.startsWith('/settings')}
                 />
               </div>
             </Popover>
