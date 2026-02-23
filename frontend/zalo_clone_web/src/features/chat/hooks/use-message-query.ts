@@ -17,7 +17,7 @@ function formatTime(iso: string): string {
 
 function mapMessageToUI(m: MessageListItem, currentUserId: string | null): ChatMessage {
       const senderSide = currentUserId && m.senderId === currentUserId ? 'me' : 'other';
-      const senderName = m.sender?.displayName;
+      const senderName = m.sender?.resolvedDisplayName ?? m.sender?.displayName;
       const avatar = m.sender?.avatarUrl ?? undefined;
       const displayTimestamp = m.createdAt ? formatTime(m.createdAt) : undefined;
 

@@ -6,6 +6,14 @@ import type { User, Block, FriendshipStatus, CursorPaginatedResponse } from '@/t
 
 export type { User, Block, FriendshipStatus, CursorPaginatedResponse };
 
+// Phone-book contact types
+export type {
+  ContactSource,
+  ContactCheckResult,
+  ContactResponseDto,
+  UpdateAliasBody,
+} from './contact.types';
+
 export interface ContactsState {
   contacts: User[];
   friends: FriendWithUserDto[];
@@ -38,6 +46,11 @@ export interface FriendWithUserDto {
   friendshipId: string;
   userId: string;
   displayName: string;
+  /** aliasName ?? phoneBookName ?? displayName (resolved by backend) */
+  resolvedDisplayName: string;
+  aliasName?: string;
+  phoneBookName?: string;
+  isContact: boolean;
   avatarUrl?: string;
   status: FriendshipStatus;
   createdAt: string;

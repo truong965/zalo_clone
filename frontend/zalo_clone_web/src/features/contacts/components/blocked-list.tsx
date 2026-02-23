@@ -6,11 +6,12 @@
  * Infinite scroll via intersection observer.
  */
 
-import { useCallback } from 'react';
-import { Avatar, Button, Spin, Empty, Typography, Popconfirm } from 'antd';
-import { StopOutlined } from '@ant-design/icons';
+import { useCallback, useState } from 'react';
+import { Avatar, Button, Spin, Empty, Typography, Popconfirm, Input } from 'antd';
+import { StopOutlined, SearchOutlined } from '@ant-design/icons';
 import { useInView } from 'react-intersection-observer';
 import { useBlockedList, useUnblockUser } from '../hooks/use-block';
+import { useDebounce } from '@/hooks';
 import type { BlockedUserItem } from '@/types/api';
 
 const { Text } = Typography;
@@ -79,6 +80,9 @@ function BlockedUserCard({
 }
 
 export function BlockedList() {
+      const [search, setSearch] = useState('');
+      const debouncedSearch = useDebounce(search, 350);
+
       const {
             data,
             isLoading,
@@ -86,7 +90,7 @@ export function BlockedList() {
             isFetchingNextPage,
             hasNextPage,
             fetchNextPage,
-      } = useBlockedList({ limit: 20 });
+      } = useBlockedList({ limit: 20, search: debouncedSearch || undefined });
 
       const unblockMutation = useUnblockUser();
 
@@ -134,11 +138,21 @@ export function BlockedList() {
       return (
             <div className="h-full flex flex-col">
                   {/* Header */}
-                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                        <Text className="text-sm text-gray-500">
-                              Người dùng bị chặn
-                              {totalCount !== undefined && ` (${totalCount})`}
-                        </Text>
+                  <div className="px-4 py-3 border-b border-gray-100 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                              <Text className="text-sm text-gray-500">
+                                    Người dùng bị chặn
+                                    {totalCount !== undefined && ` (${totalCount})`}
+                              </Text>
+                        </div>
+                        <Input
+                              prefix={<SearchOutlined className="text-gray-400" />}
+                              placeholder="Tìm kiếm người bị chặn"
+                              value={search}
+                              onChange={(e) => setSearch(e.target.value)}
+                              allowClear
+                              size="small"
+                        />
                   </div>
 
                   {/* List */}

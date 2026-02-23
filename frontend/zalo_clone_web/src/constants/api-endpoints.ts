@@ -108,4 +108,13 @@ export const API_ENDPOINTS = {
     GET: '/api/v1/privacy',
     UPDATE: '/api/v1/privacy',
   },
+
+  // Contacts (phone book contacts — separate from friendships)
+  CONTACTS: {
+    GET_ALL: '/api/v1/contacts',
+    SYNC: '/api/v1/contacts/sync',
+    REMOVE: (contactUserId: string) => `/api/v1/contacts/${contactUserId}`,
+    CHECK: (targetUserId: string) => `/api/v1/contacts/check/${targetUserId}`,
+    UPDATE_ALIAS: (contactUserId: string) => `/api/v1/contacts/${contactUserId}/alias`,
+  },
 };

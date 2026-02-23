@@ -278,6 +278,7 @@ export function ChatFeature() {
                                                 isOnline={selectedConversation.type === 'DIRECT' ? selectedConversation.isOnline ?? false : false}
                                                 lastSeenAt={selectedConversation.type === 'DIRECT' ? selectedConversation.lastSeenAt ?? null : null}
                                                 typingText={typingText}
+                                                otherUserId={selectedConversation.type === 'DIRECT' ? selectedConversation.otherUserId ?? null : null}
                                                 onToggleSearch={() => {
                                                       setRightSidebar((prev) => prev === 'search' ? 'none' : 'search');
                                                       setIsGlobalSearchOpen(false);

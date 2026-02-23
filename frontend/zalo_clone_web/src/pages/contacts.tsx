@@ -14,15 +14,16 @@ import {
   UsergroupAddOutlined,
   StopOutlined,
   UserOutlined,
+  PhoneOutlined,
 } from '@ant-design/icons';
 import { useState } from 'react';
-import { FriendList, FriendRequestList, useFriendshipStore, BlockedList } from '@/features/contacts';
+import { FriendList, FriendRequestList, useFriendshipStore, BlockedList, ContactList } from '@/features/contacts';
 import { GroupList } from '@/features/conversation';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
 
 const { Text } = Typography;
 
-type ContactTab = 'friends' | 'requests' | 'groups' | 'blocked';
+type ContactTab = 'friends' | 'requests' | 'groups' | 'blocked' | 'contacts';
 
 interface TabConfig {
   key: ContactTab;
@@ -46,6 +47,11 @@ export function ContactsPage() {
       label: 'Lời mời kết bạn',
       icon: <UserAddOutlined />,
       badge: pendingReceivedCount,
+    },
+    {
+      key: 'contacts',
+      label: 'Gợi ý từ danh bạ',
+      icon: <PhoneOutlined />,
     },
     {
       key: 'groups',
@@ -105,6 +111,11 @@ export function ContactsPage() {
       >
         {activeTab === 'friends' && <FriendList />}
         {activeTab === 'requests' && <FriendRequestList />}
+        {activeTab === 'contacts' && (
+          <ErrorBoundary>
+            <ContactList />
+          </ErrorBoundary>
+        )}
         {activeTab === 'groups' && (
           <ErrorBoundary>
             <GroupList />

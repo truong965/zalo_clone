@@ -104,6 +104,8 @@ export function useFriendshipSocket() {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.count(),
                   });
+                  // P1-D: Cross-invalidate contacts (excludeFriends filter depends on friend list)
+                  void queryClient.invalidateQueries({ queryKey: ['contacts', 'list'] });
                   notification.success({
                         message: 'Lời mời kết bạn được chấp nhận',
                         description: 'Lời mời kết bạn của bạn đã được chấp nhận.',
@@ -156,6 +158,8 @@ export function useFriendshipSocket() {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.count(),
                   });
+                  // P1-D: Cross-invalidate contacts (excludeFriends filter depends on friend list)
+                  void queryClient.invalidateQueries({ queryKey: ['contacts', 'list'] });
 
                   if (payload?.initiatedBy) {
                         void queryClient.invalidateQueries({

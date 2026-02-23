@@ -21,6 +21,7 @@ import type {
       CursorPaginatedResponse,
       SendFriendRequestBody,
 } from '../types';
+import { contactKeys } from '../hooks/use-contact-check';
 
 // ============================================================================
 // Query Keys
@@ -246,6 +247,8 @@ export function useAcceptRequest() {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.count(),
                   });
+                  // P1-D: Cross-invalidate contacts (friend moved out of excludeFriends list)
+                  void queryClient.invalidateQueries({ queryKey: contactKeys.all });
             },
       });
 }
@@ -297,6 +300,8 @@ export function useUnfriend() {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.count(),
                   });
+                  // P1-D: Cross-invalidate contacts (user re-appears in excludeFriends list)
+                  void queryClient.invalidateQueries({ queryKey: contactKeys.all });
             },
       });
 }

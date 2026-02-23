@@ -83,7 +83,8 @@ export function useFriendSearch(params?: FriendSearchParams) {
                         .filter((f) => !excludeSet.has(f.userId))
                         .map((f) => ({
                               id: f.userId,
-                              displayName: f.displayName,
+                              // Follow alias rule: aliasName > phoneBookName > displayName
+                              displayName: f.resolvedDisplayName ?? f.displayName,
                               avatarUrl: f.avatarUrl ?? undefined,
                               subtitle: undefined,
                               disabled: false,

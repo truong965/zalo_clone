@@ -22,7 +22,7 @@ import { notification } from 'antd';
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useSocket } from '@/hooks/use-socket';
 import type { MessagesInfiniteData } from '../utils/message-cache-helpers';
-import { mediaService } from '@/services/media.service';
+import { mediaService } from '@/features/chat/api/media.service';
 
 // ============================================================================
 // TYPES

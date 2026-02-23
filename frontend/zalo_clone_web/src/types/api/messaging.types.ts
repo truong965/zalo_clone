@@ -55,6 +55,8 @@ export interface Message {
 export interface MessageSender {
       id: string;
       displayName: string;
+      /** Resolved display name with contact priority: aliasName > phoneBookName > displayName */
+      resolvedDisplayName?: string;
       avatarUrl?: string | null;
 }
 

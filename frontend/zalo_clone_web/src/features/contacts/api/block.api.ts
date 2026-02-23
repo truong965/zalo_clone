@@ -42,10 +42,11 @@ async function unblockUser(targetUserId: string): Promise<void> {
 async function getBlockedList(params?: {
       cursor?: string;
       limit?: number;
+      search?: string;
 }): Promise<CursorPaginatedResponse<BlockedUserItem>> {
       const response = await apiClient.get<ApiResponse<CursorPaginatedResponse<BlockedUserItem>>>(
             API_ENDPOINTS.BLOCK.GET_BLOCKED_LIST,
-            { params: { cursor: params?.cursor, limit: params?.limit ?? 20 } },
+            { params: { cursor: params?.cursor, limit: params?.limit ?? 20, search: params?.search } },
       );
       return response.data.data;
 }

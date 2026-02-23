@@ -6,6 +6,7 @@ import { Outlet } from 'react-router-dom';
 import { Layout } from 'antd';
 import { ClientSidebar } from './client-sidebar';
 import { useFriendshipSocket } from '@/features/contacts/hooks/use-friendship-socket';
+import { useContactSocket } from '@/features/contacts/hooks/use-contact-socket';
 import { useGroupNotifications } from '@/features/conversation/hooks/use-group-notifications';
 
 const { Content } = Layout;
@@ -14,6 +15,9 @@ export function ClientLayout() {
       // Mount friendship socket listener at top-level so realtime
       // notifications work regardless of which page the user is on
       useFriendshipSocket();
+
+      // Mount contact socket listener for realtime alias update invalidation
+      useContactSocket();
 
       // Mount group notification listener at top-level so group
       // events (created, dissolved, removed) notify the user on any page

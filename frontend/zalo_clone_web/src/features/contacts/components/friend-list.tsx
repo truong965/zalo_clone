@@ -2,21 +2,24 @@
  * FriendList — Infinite-scroll friends list with inline search
  *
  * Uses `useFriendsList()` (useInfiniteQuery + cursor pagination) for data.
- * Each friend renders via FriendCard with "Nhắn tin" / "Hủy kết bạn" actions.
- * Virtualized via @tanstack/react-virtual to avoid rendering all rows.
+ * Each friend renders via FriendCard + Context Menu Dropdown (Nhắn tin /
+ * Đặt tên gợi nhớ / Hủy kết bạn). Virtualized via @tanstack/react-virtual.
  */
 
-import { useRef, useCallback, useState, useEffect, type ChangeEvent } from 'react';
-import { Input, Button, Spin, Empty, Typography, Popconfirm } from 'antd';
+import { useRef, useCallback, useState, useEffect, useMemo, type ChangeEvent } from 'react';
+import { Input, Button, Spin, Empty, Typography, Dropdown, Popconfirm } from 'antd';
 import {
       SearchOutlined,
       MessageOutlined,
       UserDeleteOutlined,
+      MoreOutlined,
+      EditOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFriendsList, useUnfriend, useFriendCount, friendshipKeys } from '../api/friendship.api';
 import { FriendCard } from './friend-card';
+import { AliasEditModal } from './alias-edit-modal';
 import type { FriendWithUserDto } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -151,7 +154,7 @@ export function FriendList() {
 }
 
 // ---------------------------------------------------------------------------
-// FriendItem — individual friend card with actions
+// FriendItem — individual friend row: avatar + name + context menu
 // ---------------------------------------------------------------------------
 
 function FriendItem({
@@ -163,54 +166,88 @@ function FriendItem({
 }) {
       const queryClient = useQueryClient();
       const unfriend = useUnfriend();
+      const [aliasModalOpen, setAliasModalOpen] = useState(false);
+      const [unfriendPending, setUnfriendPending] = useState(false);
 
       const optimisticallyRemoveFriend = useCallback(() => {
-            // Invalidate all friends list variants (any search) and count
             void queryClient.invalidateQueries({ queryKey: friendshipKeys.all, exact: false });
             void queryClient.invalidateQueries({ queryKey: friendshipKeys.count() });
       }, [queryClient]);
 
+      const menuItems = useMemo(() => [
+            {
+                  key: 'message',
+                  label: 'Nhắn tin',
+                  icon: <MessageOutlined />,
+            },
+            {
+                  key: 'set-alias',
+                  label: 'Đặt tên gợi nhớ',
+                  icon: <EditOutlined />,
+            },
+            { type: 'divider' as const },
+            {
+                  key: 'unfriend',
+                  label: <span className="text-red-500">Hủy kết bạn</span>,
+                  icon: <UserDeleteOutlined className="text-red-500" />,
+            },
+      ], []);
+
+      const handleMenuClick = useCallback(({ key }: { key: string }) => {
+            if (key === 'message') onMessage();
+            if (key === 'set-alias') setAliasModalOpen(true);
+            if (key === 'unfriend') setUnfriendPending(true);
+      }, [onMessage]);
+
       return (
-            <FriendCard
-                  user={{
-                        userId: friend.userId,
-                        displayName: friend.displayName,
-                        avatarUrl: friend.avatarUrl,
-                  }}
-                  onClick={onMessage}
-                  actions={
-                        <>
-                              <Button
-                                    type="primary"
-                                    size="small"
-                                    icon={<MessageOutlined />}
-                                    onClick={onMessage}
-                              >
-                                    Nhắn tin
-                              </Button>
+            <>
+                  <FriendCard
+                        user={{
+                              userId: friend.userId,
+                              displayName: friend.resolvedDisplayName ?? friend.displayName,
+                              avatarUrl: friend.avatarUrl,
+                        }}
+                        onClick={onMessage}
+                        actions={
                               <Popconfirm
                                     title="Hủy kết bạn"
-                                    description={`Bạn có chắc muốn hủy kết bạn với ${friend.displayName}?`}
+                                    description={`Xác nhận hủy kết bạn với ${friend.resolvedDisplayName ?? friend.displayName}?`}
+                                    open={unfriendPending}
                                     okText="Xác nhận"
                                     cancelText="Hủy"
                                     okButtonProps={{ danger: true }}
-                                    onConfirm={() =>
+                                    onConfirm={() => {
                                           unfriend.mutate(friend.userId, {
                                                 onSuccess: () => {
                                                       optimisticallyRemoveFriend();
+                                                      setUnfriendPending(false);
                                                 },
-                                          })
-                                    }
+                                          });
+                                    }}
+                                    onCancel={() => setUnfriendPending(false)}
                               >
-                                    <Button
-                                          size="small"
-                                          danger
-                                          icon={<UserDeleteOutlined />}
-                                          loading={unfriend.isPending}
-                                    />
+                                    <Dropdown
+                                          menu={{ items: menuItems, onClick: handleMenuClick }}
+                                          trigger={['click']}
+                                          placement="bottomRight"
+                                    >
+                                          <Button
+                                                icon={<MoreOutlined />}
+                                                size="small"
+                                                type="text"
+                                                className="text-gray-500 hover:bg-gray-100"
+                                          />
+                                    </Dropdown>
                               </Popconfirm>
-                        </>
-                  }
-            />
+                        }
+                  />
+                  <AliasEditModal
+                        open={aliasModalOpen}
+                        contactUserId={friend.userId}
+                        contactDisplayName={friend.resolvedDisplayName ?? friend.displayName}
+                        currentAlias={friend.aliasName ?? null}
+                        onClose={() => setAliasModalOpen(false)}
+                  />
+            </>
       );
 }

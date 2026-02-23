@@ -20,7 +20,7 @@ import { handleInteractionError } from '@/utils/interaction-error';
 
 export const blockKeys = {
       all: ['blocks'] as const,
-      blockedList: (params?: { limit?: number }) =>
+      blockedList: (params?: { limit?: number; search?: string }) =>
             [...blockKeys.all, 'list', params] as const,
 } as const;
 
@@ -31,14 +31,15 @@ export const blockKeys = {
 /**
  * Infinite query for the current user's blocked list.
  */
-export function useBlockedList(params?: { limit?: number }) {
+export function useBlockedList(params?: { limit?: number; search?: string }) {
       const limit = params?.limit ?? 20;
+      const search = params?.search;
 
       return useInfiniteQuery({
-            queryKey: blockKeys.blockedList({ limit }),
+            queryKey: blockKeys.blockedList({ limit, search }),
             initialPageParam: undefined as string | undefined,
             queryFn: ({ pageParam }) =>
-                  blockApi.getBlockedList({ cursor: pageParam, limit }),
+                  blockApi.getBlockedList({ cursor: pageParam, limit, search }),
             getNextPageParam: (lastPage) =>
                   lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
             staleTime: 30_000,

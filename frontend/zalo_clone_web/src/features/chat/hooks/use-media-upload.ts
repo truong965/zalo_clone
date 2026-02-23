@@ -25,8 +25,8 @@ import {
       sanitizeFileName,
       inferMediaTypeFromMime,
       MAX_FILES_PER_SEND,
-} from '@/services/media.service';
-import type { MediaResponseDto } from '@/services/media.service';
+} from '@/features/chat/api/media.service';
+import type { MediaResponseDto } from '@/features/chat/api/media.service';
 import type { MediaType, MessageType } from '@/types/api';
 
 // ============================================================================
