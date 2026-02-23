@@ -146,10 +146,10 @@ export class ContactSearchService {
   }
 
   /**
-   * Search contacts by alias only
+   * Search contacts by alias or phone-book name
    * Faster search when user has saved contacts
    */
-  async searchByAlias(
+  async searchByContactName(
     userId: string,
     keyword: string,
     limit = 50,
@@ -159,7 +159,7 @@ export class ContactSearchService {
       await this.validationService.validateUserExists(userId);
 
       // Cache key
-      const cacheKey = `search:contacts:alias:${userId}:${keyword}`;
+      const cacheKey = `search:contacts:contactName:${userId}:${keyword}`;
 
       // Check cache
       const cached =
@@ -169,7 +169,7 @@ export class ContactSearchService {
       }
 
       // Execute search
-      const rawContacts = await this.contactSearchRepository.searchByAlias(
+      const rawContacts = await this.contactSearchRepository.searchByContactName(
         userId,
         keyword,
         limit,

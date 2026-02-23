@@ -5,6 +5,7 @@ import { DatabaseModule } from 'src/database/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EventsModule } from '@shared/events';
+import { SharedModule } from '@shared/shared.module';
 import { AuthorizationModule } from '@modules/authorization/authorization.module';
 import { SocketModule } from 'src/socket/socket.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
@@ -45,7 +46,8 @@ import { ConversationGateway } from './conversation.gateway';
     RedisModule,
     EventEmitterModule,
     EventsModule,
-    AuthorizationModule,
+    SharedModule,
+    AuthorizationModule, // Provides InteractionGuard used in ConversationController
     PrivacyModule,
     forwardRef(() => SocketModule),
     IdempotencyModule,

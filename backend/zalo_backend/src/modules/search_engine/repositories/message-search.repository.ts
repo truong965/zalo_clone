@@ -125,7 +125,7 @@ export class MessageSearchRepository {
         m.id,
         m.conversation_id,
         m.sender_id,
-        u.display_name as sender_name,
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as sender_name,
         u.avatar_url as sender_avatar_url,
         c.type as conversation_type,
         c.name as conversation_name,
@@ -133,13 +133,14 @@ export class MessageSearchRepository {
         m.content,
         m.created_at,
         -- FIX: Dùng placeholder thay vì <mark> HTML trực tiếp
+        -- FIX-VIET: 'simple' config (no stemming) + phraseto_tsquery (adjacent tokens) for Vietnamese phrase matching
         ts_headline(
-          'english',
-          COALESCE(m.content, ''),
-          plainto_tsquery('english', unaccent($1::text)),
+          'simple',
+          COALESCE(unaccent(m.content), ''),
+          phraseto_tsquery('simple', unaccent($1::text)),
           'StartSel=[[HL]], StopSel=[[/HL]], MaxWords=15, MinWords=5, HighlightAll=false'
         ) as preview_snippet,
-        ts_rank(m.search_vector, plainto_tsquery('english', unaccent($1::text))) as rank_score,
+        ts_rank(m.search_vector, phraseto_tsquery('simple', unaccent($1::text))) as rank_score,
         (SELECT COUNT(*) FROM messages WHERE reply_to_message_id = m.id AND deleted_at IS NULL) as reply_count,
         m.seen_count as seen_count
       FROM messages m
@@ -147,12 +148,13 @@ export class MessageSearchRepository {
         ON m.conversation_id = cm.conversation_id
       JOIN conversations c ON m.conversation_id = c.id
       LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN user_contacts uc ON uc.owner_id = $3::uuid AND uc.contact_user_id = m.sender_id
       WHERE m.conversation_id = $4::uuid
         AND m.deleted_at IS NULL
         AND cm.user_id = $3::uuid 
         AND cm.status = 'ACTIVE'
         AND (
-          m.search_vector @@ plainto_tsquery('english', unaccent($1::text))
+          m.search_vector @@ phraseto_tsquery('simple', unaccent($1::text))
           OR unaccent(m.content) ILIKE unaccent(concat('%', $1::text, '%'))
         )
         ${additionalConditions}
@@ -218,7 +220,7 @@ export class MessageSearchRepository {
         m.id,
         m.conversation_id,
         m.sender_id,
-        u.display_name as sender_name,
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as sender_name,
         u.avatar_url as sender_avatar_url,
         c.type as conversation_type,
         c.name as conversation_name,
@@ -229,6 +231,7 @@ export class MessageSearchRepository {
       FROM messages m
       JOIN conversations c ON m.conversation_id = c.id
       LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN user_contacts uc ON uc.owner_id = $5::uuid AND uc.contact_user_id = m.sender_id
       WHERE m.conversation_id = $1::uuid
         AND m.deleted_at IS NULL
         AND (m.created_at < $2::timestamptz OR (m.created_at = $2::timestamptz AND m.id < $3::bigint))
@@ -241,7 +244,7 @@ export class MessageSearchRepository {
         m.id,
         m.conversation_id,
         m.sender_id,
-        u.display_name as sender_name,
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as sender_name,
         u.avatar_url as sender_avatar_url,
         c.type as conversation_type,
         c.name as conversation_name,
@@ -252,6 +255,7 @@ export class MessageSearchRepository {
       FROM messages m
       JOIN conversations c ON m.conversation_id = c.id
       LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN user_contacts uc ON uc.owner_id = $5::uuid AND uc.contact_user_id = m.sender_id
       WHERE m.conversation_id = $1::uuid
         AND m.deleted_at IS NULL
         AND (m.created_at > $2::timestamptz OR (m.created_at = $2::timestamptz AND m.id > $3::bigint))
@@ -264,7 +268,7 @@ export class MessageSearchRepository {
         m.id,
         m.conversation_id,
         m.sender_id,
-        u.display_name as sender_name,
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as sender_name,
         u.avatar_url as sender_avatar_url,
         c.type as conversation_type,
         c.name as conversation_name,
@@ -275,6 +279,7 @@ export class MessageSearchRepository {
       FROM messages m
       JOIN conversations c ON m.conversation_id = c.id
       LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN user_contacts uc ON uc.owner_id = $3::uuid AND uc.contact_user_id = m.sender_id
       WHERE m.id = $1::bigint AND m.conversation_id = $2::uuid AND m.deleted_at IS NULL
     `;
 
@@ -285,6 +290,7 @@ export class MessageSearchRepository {
         targetMsg.createdAt.toISOString(),
         targetMessageId,
         before,
+        userId,
       ),
       this.prisma.$queryRawUnsafe<RawMessageContextResult[]>(
         afterQuery,
@@ -292,11 +298,13 @@ export class MessageSearchRepository {
         targetMsg.createdAt.toISOString(),
         targetMessageId,
         after,
+        userId,
       ),
       this.prisma.$queryRawUnsafe<RawMessageContextResult[]>(
         targetQuery,
         targetMessageId,
         conversationId,
+        userId,
       ),
     ]);
 
@@ -325,10 +333,11 @@ export class MessageSearchRepository {
     const normalizedLimit = PaginationUtil.normalizeLimit(limit, 50);
 
     let conversationFilter = '';
-    const params: any[] = [keyword, normalizedLimit];
+    // Always place userId at $3 for user_contacts JOIN
+    const params: any[] = [keyword, normalizedLimit, userId];
 
     if (conversationIds && conversationIds.length > 0) {
-      conversationFilter = `AND m.conversation_id = ANY($3::uuid[])`;
+      conversationFilter = `AND m.conversation_id = ANY($4::uuid[])`;
       params.push(conversationIds);
     } else {
       conversationFilter = `
@@ -338,16 +347,16 @@ export class MessageSearchRepository {
           WHERE user_id = $3::uuid AND status = 'ACTIVE'
         )
       `;
-      params.push(userId);
     }
 
     // FIX: Dùng placeholder [[HL]] / [[/HL]] thay vì <mark> / </mark>
+    // FIX-VIET: 'simple' config + phraseto_tsquery for Vietnamese phrase matching
     const query = `
       SELECT 
         m.id,
         m.conversation_id,
         m.sender_id,
-        u.display_name as sender_name,
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as sender_name,
         u.avatar_url as sender_avatar_url,
         c.type as conversation_type,
         c.name as conversation_name,
@@ -356,20 +365,21 @@ export class MessageSearchRepository {
         m.created_at,
         -- FIX: Dùng placeholder thay vì <mark> HTML trực tiếp
         ts_headline(
-          'english',
-          COALESCE(m.content, ''),
-          plainto_tsquery('english', unaccent($1::text)),
+          'simple',
+          COALESCE(unaccent(m.content), ''),
+          phraseto_tsquery('simple', unaccent($1::text)),
           'StartSel=[[HL]], StopSel=[[/HL]], MaxWords=15, MinWords=5, HighlightAll=false'
         ) as preview_snippet,
-        ts_rank(m.search_vector, plainto_tsquery('english', unaccent($1::text))) as rank_score,
+        ts_rank(m.search_vector, phraseto_tsquery('simple', unaccent($1::text))) as rank_score,
         (SELECT COUNT(*) FROM messages WHERE reply_to_message_id = m.id AND deleted_at IS NULL) as reply_count,
         m.seen_count as seen_count
       FROM messages m
       JOIN conversations c ON m.conversation_id = c.id
       LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN user_contacts uc ON uc.owner_id = $3::uuid AND uc.contact_user_id = m.sender_id
       WHERE m.deleted_at IS NULL
         AND (
-          m.search_vector @@ plainto_tsquery('english', unaccent($1::text))
+          m.search_vector @@ phraseto_tsquery('simple', unaccent($1::text))
           OR unaccent(m.content) ILIKE unaccent(concat('%', $1::text, '%'))
         )
         ${conversationFilter}
@@ -422,21 +432,22 @@ export class MessageSearchRepository {
           m.id,
           m.conversation_id,
           m.sender_id,
-          u.display_name as sender_name,
+          COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as sender_name,
           m.content,
           m.created_at,
           ts_headline(
-            'english',
-            COALESCE(m.content, ''),
-            plainto_tsquery('english', unaccent($1::text)),
+            'simple',
+            COALESCE(unaccent(m.content), ''),
+            phraseto_tsquery('simple', unaccent($1::text)),
             'StartSel=[[HL]], StopSel=[[/HL]], MaxWords=15, MinWords=5, HighlightAll=false'
           ) as preview_snippet,
-          ts_rank(m.search_vector, plainto_tsquery('english', unaccent($1::text))) as rank_score
+          ts_rank(m.search_vector, phraseto_tsquery('simple', unaccent($1::text))) as rank_score
         FROM messages m
         LEFT JOIN users u ON m.sender_id = u.id
+        LEFT JOIN user_contacts uc ON uc.owner_id = $3::uuid AND uc.contact_user_id = m.sender_id
         WHERE m.deleted_at IS NULL
           AND (
-            m.search_vector @@ plainto_tsquery('english', unaccent($1::text))
+            m.search_vector @@ phraseto_tsquery('simple', unaccent($1::text))
             OR unaccent(m.content) ILIKE unaccent(concat('%', $1::text, '%'))
           )
           ${conversationFilter}
@@ -453,9 +464,10 @@ export class MessageSearchRepository {
         cs.conversation_id,
         CASE
           WHEN c.type = 'DIRECT' THEN (
-            SELECT u2.display_name
+            SELECT COALESCE(uc2.alias_name, uc2.phone_book_name, u2.display_name)
             FROM conversation_members cm2
             JOIN users u2 ON cm2.user_id = u2.id
+            LEFT JOIN user_contacts uc2 ON uc2.owner_id = $3::uuid AND uc2.contact_user_id = u2.id
             WHERE cm2.conversation_id = c.id
               AND cm2.user_id != $3::uuid
               AND cm2.status = 'ACTIVE'

@@ -1,5 +1,6 @@
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CursorPaginationDto } from '@common/dto/cursor-pagination.dto';
 
 export enum BlockRelation {
   NONE = 'NONE',
@@ -42,4 +43,17 @@ export class BlockedUserDto {
   blockedAt: Date;
   @ApiPropertyOptional()
   reason?: string;
+}
+
+/**
+ * DTO for querying blocked list with optional search
+ */
+export class GetBlockedListQueryDto extends CursorPaginationDto {
+  @ApiPropertyOptional({
+    description: 'Tìm kiếm theo tên hiển thị (alias > phoneBook > displayName)',
+    example: 'Tuan',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

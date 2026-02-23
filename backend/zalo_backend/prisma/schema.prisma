@@ -216,6 +216,12 @@ enum EventType {
   @@map("event_type")
 }
 
+enum ContactSource {
+  PHONE_SYNC
+  MANUAL
+
+  @@map("contact_source")
+}
 // ============================================================================
 // 3. IAM MODULE (USER, AUTH, RBAC)
 // ============================================================================
@@ -545,6 +551,8 @@ model UserContact {
   // Quan trọng: Tên gợi nhớ đè lên DisplayName gốc khi hiển thị cho Owner
   aliasName String? @map("alias_name") @db.VarChar(100)
 
+  source        ContactSource @default(MANUAL) @map("source")
+  phoneBookName String?       @map("phone_book_name") @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

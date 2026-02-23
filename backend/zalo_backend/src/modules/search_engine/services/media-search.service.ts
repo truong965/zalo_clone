@@ -158,6 +158,7 @@ export class MediaSearchService {
 
       const rawResults =
         await this.mediaSearchRepository.searchMediaGroupedByConversation(
+          userId,
           keyword,
           conversationIds,
           limit,

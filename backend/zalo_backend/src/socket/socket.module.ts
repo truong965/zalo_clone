@@ -18,6 +18,7 @@ import { EventsModule } from '@shared/events';
 // PHASE 2: Event listener (instead of MessagingModule import)
 import { SocketNotificationListener } from './listeners/socket-notification.listener';
 import { FriendshipNotificationListener } from './listeners/friendship-notification.listener';
+import { ContactNotificationListener } from './listeners/contact-notification.listener';
 import { AuthModule } from 'src/modules/auth/auth.module';
 import { FriendshipModule } from 'src/modules/friendship/friendship.module';
 import { PrivacyModule } from 'src/modules/privacy/privacy.module';
@@ -67,6 +68,8 @@ import { PrivacyModule } from 'src/modules/privacy/privacy.module';
     // PHASE 2: Event listener (replaces forwardRef() to MessagingModule)
     SocketNotificationListener,
     FriendshipNotificationListener,
+    // PHASE 3: Contact domain event → Socket.IO notification
+    ContactNotificationListener,
   ],
   exports: [
     SocketGateway,

@@ -5,6 +5,7 @@ import { DatabaseModule } from 'src/database/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EventsModule } from '@shared/events';
+import { SharedModule } from '@shared/shared.module';
 import { AuthorizationModule } from '@modules/authorization/authorization.module';
 import { SocketModule } from 'src/socket/socket.module';
 
@@ -48,7 +49,8 @@ import { MessageGateway } from './message.gateway';
     RedisModule,
     EventEmitterModule,
     EventsModule,
-    AuthorizationModule,
+    SharedModule,
+    AuthorizationModule, // Provides InteractionAuthorizationService for sendMessage() DIRECT permission check
     forwardRef(() => SocketModule),
   ],
   controllers: [MessageController],
@@ -76,4 +78,4 @@ import { MessageGateway } from './message.gateway';
     MessageBroadcasterService,
   ],
 })
-export class MessageModule {}
+export class MessageModule { }

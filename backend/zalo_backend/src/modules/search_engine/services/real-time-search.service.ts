@@ -71,7 +71,7 @@ export class RealTimeSearchService implements OnModuleInit {
   private readonly BATCH_INTERVAL_MS = 100;
   private batchBuffer = new Map<
     string, // socketId
-    Array<{ keyword: string; message: MessageWithSearchContext }>
+    Array<{ keyword: string; userId: string; message: MessageWithSearchContext }>
   >();
   private batchTimer: NodeJS.Timeout | null = null;
 
@@ -634,7 +634,7 @@ export class RealTimeSearchService implements OnModuleInit {
       }
       this.batchBuffer
         .get(sub.socketId)!
-        .push({ keyword: sub.keyword, message });
+        .push({ keyword: sub.keyword, userId: sub.userId, message });
     }
 
     // Start batch timer if not already running
@@ -658,23 +658,18 @@ export class RealTimeSearchService implements OnModuleInit {
       if (entries.length === 0) continue;
 
       // Group by keyword to emit per-keyword batches
-      const byKeyword = new Map<string, MessageWithSearchContext[]>();
+      const byKeyword = new Map<string, { message: MessageWithSearchContext; userId: string }>();
 
       for (const entry of entries) {
-        if (!byKeyword.has(entry.keyword)) {
-          byKeyword.set(entry.keyword, []);
-        }
-        byKeyword.get(entry.keyword)!.push(entry.message);
+        // Keep the latest message per keyword
+        byKeyword.set(entry.keyword, { message: entry.message, userId: entry.userId });
       }
 
       // Emit one event per keyword-socketId pair (with the latest message)
-      for (const [keyword, messages] of byKeyword.entries()) {
-        // Emit only the most recent message per keyword to avoid flooding
-        const latestMessage = messages[messages.length - 1];
-
+      for (const [keyword, { message: latestMessage, userId }] of byKeyword.entries()) {
         this.eventEmitter.emit(SocketEvents.SEARCH_INTERNAL_NEW_MATCH, {
           message: latestMessage,
-          subscriptions: [{ socketId, keyword }],
+          subscriptions: [{ socketId, keyword, userId }],
         });
       }
     }
@@ -912,11 +907,15 @@ export class RealTimeSearchService implements OnModuleInit {
       return false;
     }
 
-    // 6. Multi-entity keyword matching (case-insensitive)
-    const keyword = subscription.keyword.toLowerCase();
+    // 6. Multi-entity keyword matching (diacritics-insensitive, case-insensitive)
+    // FIX-VIET: Strip Vietnamese diacritics to match behavior of SQL unaccent()
+    const normalizeText = (text: string) =>
+      text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+    const keyword = normalizeText(subscription.keyword);
 
     // 6a. Match message content
-    const content = (message.content || '').toLowerCase();
+    const content = normalizeText(message.content || '');
     if (content.includes(keyword)) {
       return true;
     }
@@ -924,7 +923,7 @@ export class RealTimeSearchService implements OnModuleInit {
     // 6b. B5: Match conversation/group name
     if (
       message.conversation?.name &&
-      message.conversation.name.toLowerCase().includes(keyword)
+      normalizeText(message.conversation.name).includes(keyword)
     ) {
       return true;
     }
@@ -932,7 +931,7 @@ export class RealTimeSearchService implements OnModuleInit {
     // 6c. B5: Match media attachment filenames
     if (message.mediaAttachments && message.mediaAttachments.length > 0) {
       for (const attachment of message.mediaAttachments) {
-        if (attachment.originalName.toLowerCase().includes(keyword)) {
+        if (normalizeText(attachment.originalName).includes(keyword)) {
           return true;
         }
       }

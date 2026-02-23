@@ -5,6 +5,7 @@ import { BlockController } from './block.controller';
 import { RedisModule } from '@modules/redis/redis.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import { EventsModule } from '@shared/events';
+import { SharedModule } from '@shared/shared.module';
 import { BlockCacheListener } from './listeners/block-cache.listener';
 import { CacheInvalidationListener } from './listeners/cache-invalidation.listener';
 import { BlockAuthorizationHelper } from './services/block-authorization.helper';
@@ -58,6 +59,7 @@ import { BlockCheckerService } from './services/block-checker.service';
     RedisModule,
     EventsModule,
     IdempotencyModule, // For event handler idempotency tracking
+    SharedModule, // Provides DisplayNameResolver for per-viewer name resolution
   ],
   controllers: [BlockController],
   providers: [
@@ -81,4 +83,4 @@ import { BlockCheckerService } from './services/block-checker.service';
     BLOCK_CHECKER, // For FriendshipModule & AuthorizationModule (avoid circular dep)
   ],
 })
-export class BlockModule {}
+export class BlockModule { }

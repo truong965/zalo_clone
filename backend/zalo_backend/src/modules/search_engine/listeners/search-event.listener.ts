@@ -18,6 +18,7 @@ import type {
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
 import type { MediaDeletedEvent } from 'src/modules/media/events/media.events';
+import type { ContactAliasUpdatedEvent } from '@modules/contact/events/contact.events';
 
 /**
  * SearchEventListener (Phase A: Refactored)
@@ -710,6 +711,53 @@ export class SearchEventListener extends IdempotentListener {
           );
         }
       },
+    );
+  }
+
+  /**
+   * GAP-4: Handle contact.alias.updated event.
+   *
+   * When a user changes their alias for a contact, all cached search results
+   * that contain resolved display names become stale (Phase 3 SQL queries
+   * use COALESCE(alias, phoneBook, displayName) and results are cached).
+   *
+   * Invalidates:
+   *   - Message search cache for the owner (sender names in results)
+   *   - Global search cache for the owner (grouped results contain resolved names)
+   *   - Contact search cache for the owner (contact names changed)
+   */
+  @OnEvent('contact.alias.updated')
+  async handleContactAliasUpdated(
+    event: ContactAliasUpdatedEvent,
+  ): Promise<void> {
+    const eventId =
+      event.eventId ?? `contact-alias-updated-${event.ownerId}-${event.contactUserId}-${Date.now()}`;
+
+    return this.withIdempotency(
+      eventId,
+      async () => {
+        this.logger.debug(
+          `[SearchEvent] Processing contact.alias.updated: owner=${event.ownerId} contact=${event.contactUserId}`,
+        );
+
+        try {
+          // Invalidate all search caches for the alias owner (their search results are per-viewer)
+          await Promise.all([
+            this.searchCacheService.invalidateMessageSearchCache(),
+            this.searchCacheService.invalidateGlobalSearchCache(event.ownerId),
+            this.searchCacheService.invalidateContactSearchCache(event.ownerId),
+          ]);
+
+          this.logger.debug(
+            `[SearchEvent] Invalidated search caches for contact.alias.updated: owner=${event.ownerId}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `[SearchEvent] Failed to process contact.alias.updated: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+        }
+      },
+      'SearchEventListener.handleContactAliasUpdated',
     );
   }
 }

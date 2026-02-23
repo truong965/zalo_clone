@@ -27,8 +27,7 @@ import { CurrentUser } from '@common/decorator/customize';
 import { BlockService } from './block.service';
 import type { User } from '@prisma/client';
 
-import { CursorPaginationDto } from '@common/dto/cursor-pagination.dto';
-import { BlockUserDto } from './dto/block.dto';
+import { BlockUserDto, GetBlockedListQueryDto } from './dto/block.dto';
 import { BlockAuthorizationHelper } from './services/block-authorization.helper';
 
 @ApiTags('Block Management')
@@ -38,7 +37,7 @@ export class BlockController {
   constructor(
     private readonly blockService: BlockService,
     private readonly authHelper: BlockAuthorizationHelper,
-  ) {}
+  ) { }
 
   // ==============================
   // 1. BLOCKING OPERATIONS
@@ -255,7 +254,7 @@ export class BlockController {
   })
   async getBlockedUsers(
     @CurrentUser() user: User,
-    @Query() query: CursorPaginationDto,
+    @Query() query: GetBlockedListQueryDto,
   ) {
     return await this.blockService.getBlockedList(user.id, query);
   }

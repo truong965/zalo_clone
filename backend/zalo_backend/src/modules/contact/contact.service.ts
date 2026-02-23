@@ -17,9 +17,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from 'src/modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Prisma, UserContact, UserStatus } from '@prisma/client';
-import { SyncContactsDto, ContactItemDto } from './dto/contact.dto';
+import { EventPublisher } from '@shared/events';
+import { ContactSource, Prisma, UserContact, UserStatus } from '@prisma/client';
+import {
+  ContactAliasUpdatedEvent,
+  ContactRemovedEvent,
+  ContactsSyncedEvent,
+} from './events/contact.events';
+import { SyncContactsDto, ContactItemDto, GetContactsQueryDto } from './dto/contact.dto';
 import { SelfActionException, RateLimitException } from 'src/shared/errors';
 import { FriendshipService } from '../friendship/service/friendship.service';
 import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
@@ -27,10 +32,9 @@ import * as crypto from 'crypto';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socialConfig from 'src/config/social.config';
 import type { ConfigType } from '@nestjs/config';
-import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
 import { ContactResponseDto } from './dto/contact.dto';
-type PrismaTx = Prisma.TransactionClient;
+import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 type MatchedUser = {
   id: string;
   displayName: string;
@@ -44,12 +48,12 @@ export class ContactService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventPublisher: EventPublisher,
     private readonly friendshipService: FriendshipService,
     private readonly privacyService: PrivacyService,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) {}
+  ) { }
 
   /**
    * Sync contacts from phone
@@ -81,7 +85,7 @@ export class ContactService {
     }
 
     // 3. Hash & Normalize (Prepare Data)
-    const { phoneHashes, aliasMap } = this.processInputContacts(dto.contacts); // Extract phone numbers and hash them
+    const { phoneHashes, phoneBookNameMap } = this.processInputContacts(dto.contacts); // Extract phone numbers and hash them
 
     // Find matching users (active only)
     const matchedUsers = await this.findUsersByPhoneHash(phoneHashes, ownerId);
@@ -90,21 +94,25 @@ export class ContactService {
     const visibleUsers = await this.filterByPrivacy(ownerId, matchedUsers);
 
     // [ACTION 5.1] Thay thế Transaction lớn bằng Bulk Insert + Batch Update
-    await this.bulkSaveContacts(ownerId, visibleUsers, aliasMap);
+    const contactInfoMap = await this.bulkSaveContacts(ownerId, visibleUsers, phoneBookNameMap);
     // Build response with friendship status
     const response = await this.buildContactResponse(
       ownerId,
       visibleUsers,
-      aliasMap,
+      phoneBookNameMap,
+      contactInfoMap,
     );
 
-    //Publish event
-    this.eventEmitter.emit('contacts.synced', {
-      ownerId,
-      totalContacts: dto.contacts.length,
-      matchedUsers: response.length,
-      duration: Date.now() - startTime,
-    });
+    //Publish event — typed, follows project convention
+    await this.eventPublisher.publish(
+      new ContactsSyncedEvent(
+        ownerId,
+        dto.contacts.length,
+        response.length,
+        Date.now() - startTime,
+      ),
+      { fireAndForget: true },
+    );
 
     this.logger.log(
       `Contacts synced for ${ownerId}: ${response.length}/${dto.contacts.length} matched`,
@@ -116,162 +124,113 @@ export class ContactService {
   /**
    * [ACTION 5.1 Implementation]
    * Bulk Save Strategy: Diff -> CreateMany -> Batch Update
+   *
+   * L3 fix: Phone sync NEVER overwrites aliasName (manually set by user).
+   * - New contacts: source=PHONE_SYNC, phoneBookName set, aliasName empty
+   * - Existing contacts: only phoneBookName updated, aliasName untouched
    */
   private async bulkSaveContacts(
     ownerId: string,
     visibleUsers: MatchedUser[],
-    aliasMap: Map<string, string>,
-  ): Promise<void> {
-    if (visibleUsers.length === 0) return;
+    phoneBookNameMap: Map<string, string>,
+  ): Promise<Map<string, { id: string; source: ContactSource }>> {
+    if (visibleUsers.length === 0) return new Map();
 
     const visibleUserIds = visibleUsers.map((u) => u.id);
 
-    // STEP 1: Fetch Existing Contacts (Để phân loại Insert vs Update)
-    const existingContacts = await this.prisma.userContact.findMany({
-      where: {
-        ownerId,
-        contactUserId: { in: visibleUserIds },
-      },
-      select: {
-        contactUserId: true,
-        aliasName: true,
-      },
+    // Build hash → userId lookup for resolving phoneBookName by userId
+    const hashByUserId = new Map<string, string>();
+    visibleUsers.forEach((u) => {
+      if (u.phoneNumberHash) hashByUserId.set(u.id, u.phoneNumberHash);
     });
 
-    // Tạo Map để tra cứu nhanh: ContactUserID -> Alias hiện tại
+    // STEP 1: Fetch Existing Contacts (phân loại Insert vs Update)
+    const existingContacts = await this.prisma.userContact.findMany({
+      where: { ownerId, contactUserId: { in: visibleUserIds } },
+      select: { contactUserId: true, phoneBookName: true },
+    });
+
+    // contactUserId → current phoneBookName
     const existingMap = new Map<string, string | null>();
-    existingContacts.forEach((c) =>
-      existingMap.set(c.contactUserId, c.aliasName),
-    );
+    existingContacts.forEach((c) => existingMap.set(c.contactUserId, c.phoneBookName));
 
     // STEP 2: Phân loại Data
     const toCreate: Prisma.UserContactCreateManyInput[] = [];
-    const toUpdate: { contactUserId: string; newAlias: string }[] = [];
+    const toUpdate: { contactUserId: string; newPhoneBookName: string }[] = [];
 
     for (const user of visibleUsers) {
-      // Lấy alias mới từ danh bạ (client gửi lên)
-      const hash = user.phoneNumberHash || '';
-      const newAlias = aliasMap.get(hash);
+      const hash = hashByUserId.get(user.id) ?? '';
+      const newPhoneBookName = phoneBookNameMap.get(hash);
 
-      // Nếu user này chưa có trong UserContact -> Thêm vào list Create
       if (!existingMap.has(user.id)) {
+        // NEW contact from phone sync — set phoneBookName + source; aliasName stays empty
         toCreate.push({
           ownerId,
           contactUserId: user.id,
-          aliasName: newAlias,
+          phoneBookName: newPhoneBookName ?? null,
+          source: ContactSource.PHONE_SYNC,
         });
       } else {
-        // Nếu đã có -> Check xem alias có thay đổi không
-        // Logic: Chỉ update nếu newAlias khác currentAlias
-        // (Lưu ý: Nếu client gửi alias rỗng, có thể ta muốn giữ alias cũ hoặc xóa tùy nghiệp vụ.
-        // Ở đây giả định danh bạ điện thoại là "Single Source of Truth", đè alias mới lên).
-        const currentAlias = existingMap.get(user.id);
-        if (newAlias !== undefined && newAlias !== currentAlias) {
-          toUpdate.push({
-            contactUserId: user.id,
-            newAlias: newAlias,
-          });
+        // EXISTING contact — only update phoneBookName if changed; NEVER touch aliasName
+        const currentPhoneBookName = existingMap.get(user.id);
+        if (
+          newPhoneBookName !== undefined &&
+          newPhoneBookName !== currentPhoneBookName
+        ) {
+          toUpdate.push({ contactUserId: user.id, newPhoneBookName });
         }
       }
     }
 
-    // STEP 3: Execute CREATE MANY (1 Query - High Performance)
+    // STEP 3: Execute CREATE MANY (1 Query)
     if (toCreate.length > 0) {
       await this.prisma.userContact.createMany({
         data: toCreate,
-        skipDuplicates: true, // Safety net
+        skipDuplicates: true,
       });
       this.logger.debug(`[Sync] Created ${toCreate.length} new contacts`);
     }
 
-    // STEP 4: Execute UPDATE (Batching)
-    // Prisma chưa hỗ trợ bulk update khác giá trị (CASE WHEN), nên ta update theo lô
+    // STEP 4: Execute UPDATE phoneBookName in batches
     if (toUpdate.length > 0) {
-      const BATCH_SIZE = 50; // Giới hạn số update đồng thời để tránh lock
-
-      // Chia mảng toUpdate thành các chunk
+      const BATCH_SIZE = 50;
       for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
         const batch = toUpdate.slice(i, i + BATCH_SIZE);
-
-        // Chạy song song trong batch nhưng bọc Transaction nhỏ để đảm bảo consistency
         await this.prisma.$transaction(
           batch.map((item) =>
             this.prisma.userContact.update({
-              where: {
-                ownerId_contactUserId: {
-                  ownerId,
-                  contactUserId: item.contactUserId,
-                },
-              },
-              data: {
-                aliasName: item.newAlias,
-              },
+              where: { ownerId_contactUserId: { ownerId, contactUserId: item.contactUserId } },
+              data: { phoneBookName: item.newPhoneBookName },
             }),
           ),
         );
       }
-      this.logger.debug(`[Sync] Updated ${toUpdate.length} aliases`);
+      this.logger.debug(`[Sync] Updated phoneBookName for ${toUpdate.length} contacts`);
 
-      // Invalidate cache cho những user bị đổi tên
-      // Ta làm việc này Async (không await) để response nhanh hơn nếu muốn
-      const invalidatePromises = toUpdate.map((u) =>
-        this.invalidateNameCache(ownerId, u.contactUserId),
+      // Invalidate display-name cache for updated contacts
+      await Promise.all(
+        toUpdate.map((u) => this.invalidateNameCache(ownerId, u.contactUserId)),
       );
-      await Promise.all(invalidatePromises);
     }
+
+    // Return contactUserId → { id, source } map (needed for cursor-based responses + correct source)
+    const savedContacts = await this.prisma.userContact.findMany({
+      where: { ownerId, contactUserId: { in: visibleUserIds } },
+      select: { id: true, contactUserId: true, source: true },
+    });
+    return new Map(savedContacts.map((c) => [c.contactUserId, { id: c.id, source: c.source }]));
   }
 
   private processInputContacts(contacts: ContactItemDto[]) {
-    const aliasMap = new Map<string, string>();
+    const phoneBookNameMap = new Map<string, string>();
     const phoneHashes = contacts.map((c) => {
       const normalized = this.normalizePhoneNumber(c.phoneNumber);
       const hash = this.hashPhoneNumber(normalized);
-      if (c.aliasName) aliasMap.set(hash, c.aliasName);
+      if (c.phoneBookName) phoneBookNameMap.set(hash, c.phoneBookName);
       return hash;
     });
-    return { phoneHashes, aliasMap };
+    return { phoneHashes, phoneBookNameMap };
   }
-  /**
-   * Add or update contact alias
-   */
-  async updateContactAlias(
-    ownerId: string,
-    contactUserId: string,
-    aliasName?: string,
-  ): Promise<UserContact> {
-    // Validation: Cannot add self as contact
-    if (ownerId === contactUserId) {
-      throw new SelfActionException('Cannot add yourself as contact');
-    }
-
-    // Upsert contact
-    const contact = await this.prisma.userContact.upsert({
-      where: {
-        ownerId_contactUserId: {
-          ownerId,
-          contactUserId,
-        },
-      },
-      create: {
-        ownerId,
-        contactUserId,
-        aliasName,
-      },
-      update: {
-        aliasName,
-      },
-    });
-
-    // Invalidate name resolution cache
-    await this.invalidateNameCache(ownerId, contactUserId);
-
-    this.logger.debug(
-      `Contact alias updated: ${ownerId} → ${contactUserId} = "${aliasName}"`,
-    );
-
-    return contact;
-  }
-
   /**
    * Remove contact
    */
@@ -283,31 +242,52 @@ export class ContactService {
       },
     });
 
-    // Invalidate cache
+    // Invalidate cache immediately (sync, before response)
     await this.invalidateNameCache(ownerId, contactUserId);
+
+    // Publish event — cache listener provides idempotent safety net
+    await this.eventPublisher.publish(
+      new ContactRemovedEvent(ownerId, contactUserId),
+      { fireAndForget: true },
+    );
 
     this.logger.debug(`Contact removed: ${ownerId} removed ${contactUserId}`);
   }
 
   /**
    * Get all contacts for a user (Cursor Pagination)
-   * Sử dụng CursorPaginatedResult chuẩn cho Infinity Scroll
+   * Supports search by name and excludeFriends filter.
    */
   async getContacts(
     ownerId: string,
-    query: CursorPaginationDto,
+    query: GetContactsQueryDto,
   ): Promise<CursorPaginatedResult<ContactResponseDto>> {
-    const { cursor, limit = 50 } = query;
+    const { cursor, limit = 50, search, excludeFriends } = query;
 
-    // 1. Thực hiện Query Prisma
+    // --- Build dynamic WHERE ---
+    const where: Prisma.UserContactWhereInput = { ownerId };
+
+    if (search) {
+      where.OR = [
+        { aliasName: { contains: search, mode: 'insensitive' } },
+        { phoneBookName: { contains: search, mode: 'insensitive' } },
+        { contactUser: { displayName: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    if (excludeFriends) {
+      const friendIds =
+        await this.friendshipService.getFriendIdsForPresence(ownerId);
+      if (friendIds.length > 0) {
+        where.contactUserId = { notIn: friendIds };
+      }
+    }
+
+    // 1. Query with cursor pagination
     const contacts = await this.prisma.userContact.findMany({
-      where: { ownerId },
-      // Lấy thừa 1 record để check xem có trang sau hay không
-      take: limit + 1,
-      // Logic Cursor chuẩn của Prisma
-      cursor: cursor ? { id: cursor } : undefined,
-      // skip: cursor ? 1 : 0, // Bỏ qua chính cursor đó
-      orderBy: { createdAt: 'desc' }, // Danh bạ mới sync sẽ hiện lên đầu
+      where,
+      ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
+      orderBy: { createdAt: 'desc' },
       include: {
         contactUser: {
           select: {
@@ -315,51 +295,40 @@ export class ContactService {
             displayName: true,
             avatarUrl: true,
             lastSeenAt: true,
-            // status: true, // Nếu cần check active
           },
         },
       },
     });
 
-    // 2. Xử lý Logic Phân trang
-    const hasNextPage = contacts.length > limit;
-    // Cắt bỏ item thừa (dùng để check next page)
-    const nodes = hasNextPage ? contacts.slice(0, -1) : contacts;
-    // Lấy ID của item cuối cùng làm cursor cho lần sau
-    const nextCursor = hasNextPage ? nodes[nodes.length - 1].id : undefined;
-
-    // 3. Map Data & Resolve Status
-    // Lưu ý: Dùng Promise.all để resolve status (Friend/Non-Friend) song song
-    const data: ContactResponseDto[] = await Promise.all(
-      nodes.map(async (contact) => {
-        const isFriend = await this.friendshipService.areFriends(
-          ownerId,
-          contact.contactUser.id,
-        );
-
-        return {
-          id: contact.id, // UserContact ID (dùng làm cursor)
-          contactUserId: contact.contactUser.id,
-          // Logic hiển thị tên: Ưu tiên Alias -> Tên thật
-          displayName: contact.aliasName || contact.contactUser.displayName,
-          aliasName: contact.aliasName ?? undefined,
-          avatarUrl: contact.contactUser.avatarUrl ?? undefined,
-          lastSeenAt: contact.contactUser.lastSeenAt ?? undefined,
-          isFriend,
-        };
-      }),
+    // 2. Batch friendship check — 1 query instead of N (no N+1)
+    const displayNodes = contacts.slice(0, limit);
+    const contactUserIds = displayNodes.map((c) => c.contactUser.id);
+    const friendSet = await this.friendshipService.getFriendIdsFromList(
+      ownerId,
+      contactUserIds,
     );
 
-    // 4. Trả về kết quả chuẩn Interface
-    return {
-      data,
-      meta: {
-        limit,
-        hasNextPage,
-        nextCursor,
-        // total: undefined, // Không count(*) để tối ưu hiệu năng
-      },
-    };
+    // 3. buildResult handles slice & nextCursor extraction
+    return CursorPaginationHelper.buildResult({
+      items: contacts,
+      limit,
+      getCursor: (c) => c.id,
+      mapToDto: (contact): ContactResponseDto => ({
+        id: contact.id,
+        contactUserId: contact.contactUser.id,
+        // 3-level fallback: aliasName > phoneBookName > displayName
+        displayName:
+          contact.aliasName ??
+          contact.phoneBookName ??
+          contact.contactUser.displayName,
+        aliasName: contact.aliasName ?? undefined,
+        phoneBookName: contact.phoneBookName ?? undefined,
+        source: contact.source,
+        avatarUrl: contact.contactUser.avatarUrl ?? undefined,
+        lastSeenAt: contact.contactUser.lastSeenAt ?? undefined,
+        isFriend: friendSet.has(contact.contactUser.id),
+      }),
+    });
   }
 
   /**
@@ -391,6 +360,7 @@ export class ContactService {
       },
       select: {
         aliasName: true,
+        phoneBookName: true,
         contactUser: {
           select: {
             displayName: true,
@@ -399,8 +369,12 @@ export class ContactService {
       },
     });
 
+    // L6 fix: 3-level fallback — aliasName > phoneBookName > displayName
     const displayName =
-      contact?.aliasName || contact?.contactUser.displayName || 'Unknown User';
+      contact?.aliasName ??
+      contact?.phoneBookName ??
+      contact?.contactUser.displayName ??
+      'Unknown User';
 
     // Cache result
     await this.redis.setex(
@@ -448,6 +422,7 @@ export class ContactService {
         select: {
           contactUserId: true,
           aliasName: true,
+          phoneBookName: true,
           contactUser: {
             select: {
               displayName: true,
@@ -459,8 +434,12 @@ export class ContactService {
       // Build map from query results
       const contactMap = new Map<string, string>();
       contacts.forEach((contact) => {
+        // L6 fix: 3-level fallback — aliasName > phoneBookName > displayName
         const name =
-          contact.aliasName || contact.contactUser.displayName || 'Unknown';
+          contact.aliasName ??
+          contact.phoneBookName ??
+          contact.contactUser.displayName ??
+          'Unknown';
         contactMap.set(contact.contactUserId, name);
       });
 
@@ -479,17 +458,22 @@ export class ContactService {
         });
       }
 
-      // Add to result and cache
+      // Add to result; collect entries for pipeline cache write
+      const toCache: Array<[string, string]> = [];
       for (const userId of missingUserIds) {
         const name = contactMap.get(userId) || 'Unknown User';
         result.set(userId, name);
+        toCache.push([userId, name]);
+      }
 
-        // Cache individual result
-        await this.redis.setex(
-          this.getNameCacheKey(ownerId, userId),
-          this.config.ttl.nameResolution,
-          name,
-        );
+      // P4.2: batch cache write via Redis pipeline (1 round-trip instead of N)
+      if (toCache.length > 0) {
+        const ttl = this.config.ttl.nameResolution;
+        const pipeline = this.redis.getClient().pipeline();
+        for (const [userId, name] of toCache) {
+          pipeline.setex(this.getNameCacheKey(ownerId, userId), ttl, name);
+        }
+        await pipeline.exec();
       }
     }
 
@@ -573,10 +557,6 @@ export class ContactService {
     });
   }
 
-  /**
-   * Helper: Filter users based on Privacy Settings
-   * [OPTIMIZED] Use Batch Queries instead of N+1 Loop
-   */
   /**
    * Helper: Filter users based on Privacy Settings
    * Logic:
@@ -669,9 +649,6 @@ export class ContactService {
 
     // 5. Final Filter
     return candidates.filter((user) => {
-      // Check lại block/nobody lần cuối
-      if (blockedUserIds.has(user.id)) return false;
-
       const settings = privacyMap.get(user.id);
       const privacyLevel = settings?.showProfile || 'EVERYONE';
 
@@ -683,59 +660,30 @@ export class ContactService {
       return true; // Default allow (EVERYONE)
     });
   }
-  /**
-   * Save contacts to database
-   */
-  private async saveContacts(
-    tx: PrismaTx,
-    ownerId: string,
-    matchedUsers: MatchedUser[],
-    aliasMap: Map<string, string>,
-  ): Promise<void> {
-    const upsertPromises = matchedUsers.map((user) => {
-      // Vì user.phoneNumberHash có thể null trong Type definition (dù logic find đã lọc)
-      // ta cần check an toàn
-      const hash = user.phoneNumberHash || '';
-      const aliasName = aliasMap.get(hash);
-
-      return tx.userContact.upsert({
-        where: {
-          ownerId_contactUserId: {
-            ownerId,
-            contactUserId: user.id,
-          },
-        },
-        create: {
-          ownerId,
-          contactUserId: user.id,
-          aliasName,
-        },
-        update: {
-          aliasName, // Cập nhật tên gợi nhớ nếu user đổi tên trong danh bạ
-        },
-      });
-    });
-
-    await Promise.all(upsertPromises);
-  }
 
   /**
-   * Build contact response with friendship status
+   * Build contact response with friendship status.
+   * B2 fix: Uses contactInfoMap to return UserContact.id (cursor) + correct source.
    */
   private async buildContactResponse(
     ownerId: string,
     users: MatchedUser[],
-    aliasMap: Map<string, string>,
+    phoneBookNameMap: Map<string, string>,
+    contactInfoMap: Map<string, { id: string; source: ContactSource }>,
   ): Promise<ContactResponseDto[]> {
     return Promise.all(
       users.map(async (user) => {
         const hash = user.phoneNumberHash || '';
+        const phoneBookName = phoneBookNameMap.get(hash);
+        const info = contactInfoMap.get(user.id);
         return {
-          id: user.id, // Lưu ý: ID này là UserID, không phải UserContactID (vì ta chưa query lại UserContact)
+          id: info?.id ?? user.id,
           contactUserId: user.id,
-          displayName: user.displayName,
+          // L6 fix: 3-level fallback (no aliasName on fresh sync response)
+          displayName: phoneBookName ?? user.displayName,
           avatarUrl: user.avatarUrl ?? undefined,
-          aliasName: aliasMap.get(hash),
+          phoneBookName,
+          source: info?.source ?? ContactSource.PHONE_SYNC,
           isFriend: await this.friendshipService.areFriends(ownerId, user.id),
         };
       }),
@@ -763,17 +711,50 @@ export class ContactService {
   async updateAlias(
     ownerId: string,
     contactUserId: string,
-    aliasName: string,
+    aliasName: string | null | undefined, // null/undefined = reset alias (L4 fix)
   ): Promise<UserContact> {
     if (ownerId === contactUserId) throw new SelfActionException();
 
+    const resolvedAlias = aliasName ?? null; // null → clear alias, string → set alias
+
     const contact = await this.prisma.userContact.upsert({
       where: { ownerId_contactUserId: { ownerId, contactUserId } },
-      create: { ownerId, contactUserId, aliasName },
-      update: { aliasName },
+      create: { ownerId, contactUserId, aliasName: resolvedAlias, source: ContactSource.MANUAL },
+      update: { aliasName: resolvedAlias },
     });
 
     await this.invalidateNameCache(ownerId, contactUserId);
+
+    // P3.2: Emit typed event — drives Socket.IO notification + idempotent cache invalidation
+    const resolvedDisplayName = await this.resolveDisplayName(ownerId, contactUserId);
+    await this.eventPublisher.publish(
+      new ContactAliasUpdatedEvent(ownerId, contactUserId, resolvedAlias, resolvedDisplayName),
+    );
+
+    this.logger.debug(
+      `Contact alias ${resolvedAlias ? 'set' : 'reset'}: ${ownerId} → ${contactUserId}${resolvedAlias ? ` = "${resolvedAlias}"` : ''}`,
+    );
     return contact;
+  }
+
+  /**
+   * Check if a user is saved as a contact.
+   * Used by frontend to render correct button in chat header (Add vs Edit alias).
+   */
+  async checkIsContact(
+    ownerId: string,
+    targetUserId: string,
+  ): Promise<{ isContact: boolean; aliasName?: string; phoneBookName?: string; source?: ContactSource }> {
+    const contact = await this.prisma.userContact.findUnique({
+      where: { ownerId_contactUserId: { ownerId, contactUserId: targetUserId } },
+      select: { id: true, aliasName: true, phoneBookName: true, source: true },
+    });
+    if (!contact) return { isContact: false };
+    return {
+      isContact: true,
+      aliasName: contact.aliasName ?? undefined,
+      phoneBookName: contact.phoneBookName ?? undefined,
+      source: contact.source,
+    };
   }
 }

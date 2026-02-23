@@ -54,7 +54,16 @@ export class FriendRequestWithUserDto {
 export class FriendWithUserDto {
   friendshipId: string;
   userId: string;
+  /** Raw display name from User table */
   displayName: string;
+  /** Resolved name: aliasName > phoneBookName > displayName */
+  resolvedDisplayName: string;
+  /** User-set alias from UserContact (if exists) */
+  aliasName?: string;
+  /** Phone-book name from sync (if exists) */
+  phoneBookName?: string;
+  /** Whether this friend is also in the owner's phone-book contacts */
+  isContact: boolean;
   avatarUrl?: string;
   status: FriendshipStatus;
   createdAt: Date;

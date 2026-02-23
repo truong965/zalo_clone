@@ -70,6 +70,7 @@ import { CursorPaginatedResult } from '@common/interfaces/paginated-result.inter
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
 import { EventPublisher } from '@shared/events';
+import { DisplayNameResolver } from '@shared/services';
 import {
   FriendRequestAcceptedEvent,
   FriendRequestCancelledEvent,
@@ -90,6 +91,7 @@ export class FriendshipService {
     private readonly lockService: DistributedLockService,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
+    private readonly displayNameResolver: DisplayNameResolver,
   ) { }
 
   /**
@@ -643,6 +645,38 @@ export class FriendshipService {
   }
 
   /**
+   * Batch-check friendship status between a user and a list of target users.
+   * Returns a Set of user IDs that are ACCEPTED friends with userId.
+   *
+   * P4.1 — Replaces N×areFriends() calls in getContacts() with a single query.
+   *
+   * @param userId - The user to check from
+   * @param targetIds - List of user IDs to check against
+   * @returns Set<string> of IDs from targetIds that are friends with userId
+   */
+  async getFriendIdsFromList(
+    userId: string,
+    targetIds: string[],
+  ): Promise<Set<string>> {
+    if (targetIds.length === 0) return new Set();
+
+    const friendships = await this.prisma.friendship.findMany({
+      where: {
+        status: FriendshipStatus.ACCEPTED,
+        OR: [
+          { user1Id: userId, user2Id: { in: targetIds } },
+          { user1Id: { in: targetIds }, user2Id: userId },
+        ],
+      },
+      select: { user1Id: true, user2Id: true },
+    });
+
+    return new Set(
+      friendships.map((f) => (f.user1Id === userId ? f.user2Id : f.user1Id)),
+    );
+  }
+
+  /**
    * Get paginated friend list (not search)
    */
   async getFriendsList(
@@ -664,23 +698,29 @@ export class FriendshipService {
     if (search) {
       searchCondition = {
         OR: [
-          // Case A: Mình là User1 -> Tìm User2 (Đối phương) khớp tên/sđt
+          // Case A: Mình là User1 -> Tìm User2 (Đối phương) khớp tên/sđt/alias/phoneBook
           {
             user1Id: userId,
             user2: {
               OR: [
                 { displayName: { contains: search, mode: 'insensitive' } },
                 { phoneNumber: { contains: search } },
+                // Alias name resolution: search aliasName & phoneBookName from viewer's contacts
+                { inContactsOf: { some: { ownerId: userId, aliasName: { contains: search, mode: 'insensitive' } } } },
+                { inContactsOf: { some: { ownerId: userId, phoneBookName: { contains: search, mode: 'insensitive' } } } },
               ],
             },
           },
-          // Case B: Mình là User2 -> Tìm User1 (Đối phương) khớp tên/sđt
+          // Case B: Mình là User2 -> Tìm User1 (Đối phương) khớp tên/sđt/alias/phoneBook
           {
             user2Id: userId,
             user1: {
               OR: [
                 { displayName: { contains: search, mode: 'insensitive' } },
                 { phoneNumber: { contains: search } },
+                // Alias name resolution: search aliasName & phoneBookName from viewer's contacts
+                { inContactsOf: { some: { ownerId: userId, aliasName: { contains: search, mode: 'insensitive' } } } },
+                { inContactsOf: { some: { ownerId: userId, phoneBookName: { contains: search, mode: 'insensitive' } } } },
               ],
             },
           },
@@ -731,6 +771,23 @@ export class FriendshipService {
       },
     });
 
+    // P1-A: Batch-resolve aliases via direct Prisma query (Option C — no ContactService dependency)
+    const displayFriendships = friendships.slice(0, limit);
+    const friendUserIds = displayFriendships.map((f) =>
+      f.user1Id === userId ? f.user2Id : f.user1Id,
+    );
+
+    const contactEntries = friendUserIds.length > 0
+      ? await this.prisma.userContact.findMany({
+        where: { ownerId: userId, contactUserId: { in: friendUserIds } },
+        select: { contactUserId: true, aliasName: true, phoneBookName: true },
+      })
+      : [];
+
+    const contactMap = new Map(
+      contactEntries.map((c) => [c.contactUserId, c]),
+    );
+
     return CursorPaginationHelper.buildResult({
       items: friendships,
       limit,
@@ -738,11 +795,17 @@ export class FriendshipService {
       mapToDto: (friendship) => {
         const friend =
           friendship.user1Id === userId ? friendship.user2 : friendship.user1;
+        const contactInfo = contactMap.get(friend.id);
 
         return {
           friendshipId: friendship.id,
           userId: friend.id,
           displayName: friend.displayName,
+          resolvedDisplayName:
+            contactInfo?.aliasName ?? contactInfo?.phoneBookName ?? friend.displayName,
+          aliasName: contactInfo?.aliasName ?? undefined,
+          phoneBookName: contactInfo?.phoneBookName ?? undefined,
+          isContact: contactMap.has(friend.id),
           avatarUrl: friend.avatarUrl ?? undefined,
           status: friendship.status,
           createdAt: friendship.createdAt,
@@ -772,6 +835,14 @@ export class FriendshipService {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Batch resolve display names for all users in received requests
+    const allUserIds = new Set<string>();
+    for (const f of friendships) {
+      allUserIds.add(f.user1.id);
+      allUserIds.add(f.user2.id);
+    }
+    const nameMap = await this.displayNameResolver.batchResolve(userId, [...allUserIds]);
+
     return friendships.map((friendship) => {
       const requester =
         friendship.requesterId === friendship.user1Id
@@ -789,12 +860,12 @@ export class FriendshipService {
         expiresAt: friendship.expiresAt ?? undefined,
         requester: {
           userId: requester.id,
-          displayName: requester.displayName,
+          displayName: nameMap.get(requester.id) ?? requester.displayName,
           avatarUrl: requester.avatarUrl ?? undefined,
         },
         target: {
           userId: target.id,
-          displayName: target.displayName,
+          displayName: nameMap.get(target.id) ?? target.displayName,
           avatarUrl: target.avatarUrl ?? undefined,
         },
       };
@@ -818,6 +889,14 @@ export class FriendshipService {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Batch resolve display names for all users in sent requests
+    const allTargetIds = new Set<string>();
+    for (const f of friendships) {
+      allTargetIds.add(f.user1.id);
+      allTargetIds.add(f.user2.id);
+    }
+    const nameMap = await this.displayNameResolver.batchResolve(userId, [...allTargetIds]);
+
     return friendships.map((friendship) => {
       const requester =
         friendship.requesterId === friendship.user1Id
@@ -835,12 +914,12 @@ export class FriendshipService {
         expiresAt: friendship.expiresAt ?? undefined,
         requester: {
           userId: requester.id,
-          displayName: requester.displayName,
+          displayName: nameMap.get(requester.id) ?? requester.displayName,
           avatarUrl: requester.avatarUrl ?? undefined,
         },
         target: {
           userId: target.id,
-          displayName: target.displayName,
+          displayName: nameMap.get(target.id) ?? target.displayName,
           avatarUrl: target.avatarUrl ?? undefined,
         },
       };
@@ -882,9 +961,13 @@ export class FriendshipService {
       },
     });
 
+    // Batch resolve display names per viewer
+    const userIds = users.map((u) => u.id);
+    const nameMap = await this.displayNameResolver.batchResolve(userId, userIds);
+
     return users.map((user) => ({
       userId: user.id,
-      displayName: user.displayName,
+      displayName: nameMap.get(user.id) ?? user.displayName,
       avatarUrl: user.avatarUrl ?? undefined,
     }));
   }

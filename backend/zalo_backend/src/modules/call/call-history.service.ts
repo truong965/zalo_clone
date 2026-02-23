@@ -29,6 +29,7 @@ import { CallStatus, Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
 import { SelfActionException } from 'src/shared/errors';
+import { DisplayNameResolver } from '@shared/services';
 import {
   ActiveCallSession,
   CallHistoryResponseDto,
@@ -70,7 +71,8 @@ export class CallHistoryService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly eventEmitter: EventEmitter2,
-  ) {}
+    private readonly displayNameResolver: DisplayNameResolver,
+  ) { }
 
   /**
    * Start tracking an active call (Redis only)
@@ -382,12 +384,19 @@ export class CallHistoryService {
     });
 
     // 2. [OPTIMIZATION] Batch Resolve Display Names
-    // TODO PHASE 3: Resolve display names from contact service
-    // Current approach: contactService.batchResolveDisplayNames() resolved custom aliases
-    // Event-driven approach: Cache user info + contact aliases separately
-    // For now, use user displayName from DB relations (already loaded)
-    const nameMap = new Map<string, string>();
-    // TODO: Populate from caller/callee user data instead of ContactService
+    // Resolve display names using contact-based priority:
+    // aliasName > phoneBookName > displayName
+    const otherUserIds = [
+      ...new Set(
+        calls
+          .flatMap((c) => [c.callerId, c.calleeId])
+          .filter((id) => id !== userId),
+      ),
+    ];
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      otherUserIds,
+    );
 
     // 4. Pagination Calculation
     const hasNextPage = calls.length > limit;
@@ -526,14 +535,14 @@ export class CallHistoryService {
       take: limit,
       ...callHistoryWithRelations,
     });
-    // [NEW] Cũng cần resolve name cho API này
-    // TODO PHASE 3: Resolve display names from contact service
-    // Event-driven approach: Use user displayName from DB relations
-    const otherUserIds = new Set<string>();
-    calls.forEach((call) => otherUserIds.add(call.callerId)); // Missed call thì người kia luôn là caller
-
-    const nameMap = new Map<string, string>();
-    // TODO: Populate from caller user data
+    // [NEW] Resolve display names for callers (missed calls = other person is always caller)
+    const otherUserIds = [
+      ...new Set(calls.map((call) => call.callerId)),
+    ];
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      otherUserIds,
+    );
 
     return calls.map((call) =>
       this.mapToResponseDto(call, userId, nameMap, viewedAt),
@@ -779,17 +788,17 @@ export class CallHistoryService {
 
       caller: call.caller
         ? {
-            id: call.caller.id,
-            displayName: resolveName(call.caller),
-            avatarUrl: call.caller.avatarUrl ?? undefined,
-          }
+          id: call.caller.id,
+          displayName: resolveName(call.caller),
+          avatarUrl: call.caller.avatarUrl ?? undefined,
+        }
         : undefined,
       callee: call.callee
         ? {
-            id: call.callee.id,
-            displayName: resolveName(call.callee),
-            avatarUrl: call.callee.avatarUrl ?? undefined,
-          }
+          id: call.callee.id,
+          displayName: resolveName(call.callee),
+          avatarUrl: call.callee.avatarUrl ?? undefined,
+        }
         : undefined,
     };
   }

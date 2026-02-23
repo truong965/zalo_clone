@@ -28,6 +28,7 @@ import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
 import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
 import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
 import { safeJSON } from 'src/common/utils/json.util';
+import { DisplayNameResolver } from '@shared/services';
 /**
  * SearchGateway (Phase B: TD-07 — Shared namespace)
  *
@@ -74,7 +75,10 @@ export class SearchGateway {
 
   private readonly logger = new Logger(SearchGateway.name);
 
-  constructor(private readonly realTimeSearchService: RealTimeSearchService) { }
+  constructor(
+    private readonly realTimeSearchService: RealTimeSearchService,
+    private readonly displayNameResolver: DisplayNameResolver,
+  ) { }
 
   // ============================================================================
   // Lifecycle: Cleanup on disconnect (delegated from SocketGateway via event)
@@ -321,19 +325,32 @@ export class SearchGateway {
     subscriptions: Array<{
       socketId: string;
       keyword: string;
+      userId?: string;
     }>;
   }): Promise<void> {
     try {
       const { message, subscriptions } = event;
 
       for (const subscription of subscriptions) {
+        // Resolve sender display name per viewer using contact aliases
+        let senderName = message.sender?.displayName || 'Unknown';
+        if (subscription.userId && message.senderId) {
+          const resolved = await this.displayNameResolver.resolve(
+            subscription.userId,
+            message.senderId,
+          );
+          if (resolved) {
+            senderName = resolved;
+          }
+        }
+
         const payload: SearchNewMatchPayload = {
           keyword: subscription.keyword,
           message: {
             id: message.id.toString(),
             conversationId: message.conversationId,
             senderId: message.senderId || '',
-            senderName: message.sender?.displayName || 'Unknown',
+            senderName,
             senderAvatarUrl: message.sender?.avatarUrl || undefined,
             content: message.content || '',
             type: message.type as any,

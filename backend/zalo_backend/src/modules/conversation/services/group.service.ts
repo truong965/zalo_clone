@@ -16,6 +16,7 @@ import { AddMembersDto } from '../dto/add-members.dto';
 import { RemoveMemberDto } from '../dto/remove-member.dto';
 import { TransferAdminDto } from '../dto/transfer-admin.dto';
 import { EventPublisher } from '@shared/events';
+import { DisplayNameResolver } from '@shared/services';
 import {
   ConversationCreatedEvent,
   ConversationMemberAddedEvent,
@@ -38,7 +39,8 @@ export class GroupService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
-  ) {}
+    private readonly displayNameResolver: DisplayNameResolver,
+  ) { }
 
   async createGroup(dto: CreateGroupDto, creatorId: string) {
     if (dto.memberIds.includes(creatorId)) {
@@ -272,9 +274,9 @@ export class GroupService {
           ...(isSelf
             ? { leftAt: new Date() }
             : {
-                kickedBy: requesterId,
-                kickedAt: new Date(),
-              }),
+              kickedBy: requesterId,
+              kickedAt: new Date(),
+            }),
         },
       });
     });
@@ -499,7 +501,7 @@ export class GroupService {
   async getGroupMembers(conversationId: string, userId: string) {
     await this.verifyMember(conversationId, userId);
 
-    return this.prisma.conversationMember.findMany({
+    const members = await this.prisma.conversationMember.findMany({
       where: {
         conversationId,
         status: MemberStatus.ACTIVE,
@@ -515,5 +517,17 @@ export class GroupService {
       },
       orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
     });
+
+    // Batch resolve display names per viewer
+    const memberIds = members.map((m) => m.user.id);
+    const nameMap = await this.displayNameResolver.batchResolve(userId, memberIds);
+
+    return members.map((m) => ({
+      ...m,
+      user: {
+        ...m.user,
+        displayName: nameMap.get(m.user.id) ?? m.user.displayName,
+      },
+    }));
   }
 }

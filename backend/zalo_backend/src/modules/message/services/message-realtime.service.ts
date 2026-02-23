@@ -4,6 +4,7 @@ import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.in
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { safeJSON } from 'src/common/utils/json.util';
 import { PrismaService } from 'src/database/prisma.service';
+import { DisplayNameResolver } from '@shared/services';
 
 import { MessageService } from './message.service';
 import { ReceiptService } from './receipt.service';
@@ -29,6 +30,7 @@ export class MessageRealtimeService {
     private readonly receiptService: ReceiptService,
     private readonly messageQueue: MessageQueueService,
     private readonly broadcaster: MessageBroadcasterService,
+    private readonly displayNameResolver: DisplayNameResolver,
   ) {
     return;
   }
@@ -55,8 +57,25 @@ export class MessageRealtimeService {
         return safeJSON(rawMsg);
       });
 
+      // GAP-2 fix: Resolve sender display names for this recipient
+      const senderIds = [
+        ...new Set(
+          offlineMessages
+            .map((qm) => (qm.data as Message).senderId)
+            .filter((id): id is string => !!id && id !== userId),
+        ),
+      ];
+      const senderNameMap =
+        senderIds.length > 0
+          ? await this.displayNameResolver.batchResolve(userId, senderIds)
+          : new Map<string, string>();
+
+      const enrichedMessages = sanitizedMessages.map((msg: any) =>
+        this.enrichMessageSender(msg, senderNameMap.get(msg?.senderId ?? msg?.sender?.id)),
+      );
+
       client.emit(SocketEvents.MESSAGES_SYNC, {
-        messages: sanitizedMessages,
+        messages: enrichedMessages,
         count: offlineMessages.length,
       });
 
@@ -323,9 +342,32 @@ export class MessageRealtimeService {
       throw new Error('Not a member of this conversation');
     }
 
+    // GAP-2 fix: Wrap onMessage to resolve sender display name per viewer
+    const wrappedOnMessage = async (payload: any) => {
+      try {
+        const senderId =
+          payload?.message?.sender?.id ?? payload?.message?.senderId;
+        if (senderId && senderId !== userId) {
+          const resolvedName = await this.displayNameResolver.resolve(
+            userId,
+            senderId,
+          );
+          payload = {
+            ...payload,
+            message: this.enrichMessageSender(payload.message, resolvedName),
+          };
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to resolve sender name in PubSub: ${(error as Error).message}`,
+        );
+      }
+      onMessage(payload);
+    };
+
     const unsubMessages = await this.broadcaster.subscribeToConversation(
       conversationId,
-      onMessage,
+      wrappedOnMessage,
     );
 
     const unsubTyping = await this.broadcaster.subscribeToTyping(
@@ -348,12 +390,24 @@ export class MessageRealtimeService {
       await this.receiptService.getConversationType(message.conversationId);
     const isDirect = convoType === ConversationType.DIRECT;
 
+    // GAP-2 fix: Resolve sender display name per recipient (each may have different alias)
+    const senderNameMap = senderId
+      ? await this.displayNameResolver.batchResolveForViewers(
+        recipientIds,
+        senderId,
+      )
+      : new Map<string, string>();
+
     for (const recipientId of recipientIds) {
       const online = await isUserOnline(recipientId);
 
       if (online) {
-        await emitToUser(recipientId, SocketEvents.MESSAGE_NEW, {
+        const enrichedMessage = this.enrichMessageSender(
           message,
+          senderNameMap.get(recipientId),
+        );
+        await emitToUser(recipientId, SocketEvents.MESSAGE_NEW, {
+          message: enrichedMessage,
           conversationId: message.conversationId,
         });
 
@@ -415,5 +469,21 @@ export class MessageRealtimeService {
       where: { conversationId_userId: { conversationId, userId } },
       data: { unreadCount: 0 },
     });
+  }
+
+  /**
+   * GAP-2 helper: Enrich a message's sender object with resolvedDisplayName.
+   * Returns a new object (does not mutate the original).
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private enrichMessageSender(message: any, resolvedDisplayName?: string): any {
+    if (!resolvedDisplayName || !message?.sender) return message;
+    return {
+      ...message,
+      sender: {
+        ...message.sender,
+        resolvedDisplayName,
+      },
+    };
   }
 }

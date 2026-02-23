@@ -30,6 +30,7 @@ import { InteractionAuthorizationService } from '@modules/authorization/services
 import { PermissionAction } from '@common/constants/permission-actions.constant';
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import type { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
+import { DisplayNameResolver } from '@shared/services';
 
 @Injectable()
 export class MessageService {
@@ -40,6 +41,7 @@ export class MessageService {
     private readonly redis: RedisService,
     private readonly eventPublisher: EventPublisher,
     private readonly interactionAuth: InteractionAuthorizationService,
+    private readonly displayNameResolver: DisplayNameResolver,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
   ) { }
@@ -488,11 +490,36 @@ export class MessageService {
       },
     });
 
+    // Batch resolve display names for senders
+    const senderIds = [
+      ...new Set(
+        messages
+          .map((m) => m.sender?.id)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      senderIds,
+    );
+
     const result = CursorPaginationHelper.buildResult({
       items: messages,
       limit,
       getCursor: (m) => m.id.toString(),
-      mapToDto: (m) => safeJSON(m),
+      mapToDto: (m) => {
+        const dto = safeJSON(m);
+        // Enrich sender with resolvedDisplayName
+        if (dto && typeof dto === 'object' && 'sender' in dto) {
+          const obj = dto as {
+            sender?: { id: string; resolvedDisplayName?: string };
+          };
+          if (obj.sender?.id) {
+            obj.sender.resolvedDisplayName = nameMap.get(obj.sender.id);
+          }
+        }
+        return dto;
+      },
     });
 
     // For 'newer' direction: query was ASC, reverse data to maintain DESC order
@@ -613,11 +640,36 @@ export class MessageService {
       ...beforeMsgs,           // already DESC order from query
     ];
 
+    // Batch resolve display names for senders
+    const senderIds = [
+      ...new Set(
+        allMessages
+          .map((m) => m.sender?.id)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      senderIds,
+    );
+
     const hasOlderMessages = beforeMsgs.length >= before;
     const hasNewerMessages = afterMsgs.length >= after;
 
     return {
-      data: allMessages.map((m) => safeJSON(m)),
+      data: allMessages.map((m) => {
+        const dto = safeJSON(m);
+        // Enrich sender with resolvedDisplayName
+        if (dto && typeof dto === 'object' && 'sender' in dto) {
+          const obj = dto as {
+            sender?: { id: string; resolvedDisplayName?: string };
+          };
+          if (obj.sender?.id) {
+            obj.sender.resolvedDisplayName = nameMap.get(obj.sender.id);
+          }
+        }
+        return dto;
+      }),
       targetMessageId: targetMessageId,
       hasOlderMessages,
       hasNewerMessages,

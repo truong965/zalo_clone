@@ -94,13 +94,17 @@ export interface RawContactSearchResult {
   phone_number: string;
   display_name: string;
   avatar_url: string | null;
-  /** COALESCE(alias, displayName) — the final displayed name */
+  /** COALESCE(alias, phoneBookName, displayName) — the final displayed name */
   display_name_final: string;
-  /** Priority: 1=alias, 2=friend, 3=request pending, 4=none */
+  /** Phone-book name from phone sync (may be null) */
+  phone_book_name?: string | null;
+  /** Contact source: PHONE_SYNC or MANUAL (may be null for non-contacts) */
+  source?: string | null;
+  /** Priority: 1=alias, 1.5=phoneBookName, 2=friend, 3=request pending, 4=none */
   relevance_score: number;
   /** Calculated relationship status */
   relationship_status: 'BLOCKED' | 'FRIEND' | 'REQUEST' | 'NONE';
-  /** Whether user has an alias set */
+  /** Whether user has an alias or phone-book name set */
   has_alias: boolean;
   /** Existing DIRECT conversation ID (null if never messaged) */
   existing_conversation_id: string | null;
@@ -114,16 +118,19 @@ export interface RawContactSearchResult {
 }
 
 /**
- * Raw result from alias-only search (searchByAlias).
+ * Raw result from contact-name search (searchByContactName).
+ * Searches alias_name and phone_book_name.
  * Subset of RawContactSearchResult.
  */
-export interface RawAliasSearchResult {
+export interface RawContactNameSearchResult {
   id: string;
   phone_number: string;
   display_name: string;
   avatar_url: string | null;
   display_name_final: string;
-  has_alias: true;
+  phone_book_name?: string | null;
+  source?: string | null;
+  has_alias: boolean;
   [key: string]: unknown;
 }
 

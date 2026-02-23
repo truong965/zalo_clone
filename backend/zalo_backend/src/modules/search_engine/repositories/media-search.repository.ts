@@ -34,38 +34,48 @@ export class MediaSearchRepository {
   ): Promise<RawMediaSearchResult[]> {
     const normalizedLimit = PaginationUtil.normalizeLimit(limit, 200);
 
-    // Build media type filter conditionally
-    const mediaTypeClause = mediaType
-      ? `AND ma.media_type = $4::media_type`
-      : '';
-
     // Decode cursor: { lastCreatedAt, lastId }
-    let cursorClause = '';
     const cursorParams: string[] = [];
-    const baseIdx = mediaType ? 5 : 4;
     if (cursor) {
       const decoded = PaginationUtil.decodeCursor(cursor);
       if (decoded) {
-        cursorClause = `
-          AND (
-            ma.created_at < $${baseIdx}::timestamptz
-            OR (ma.created_at = $${baseIdx}::timestamptz AND ma.id < $${baseIdx + 1}::uuid)
-          )
-        `;
         cursorParams.push(decoded.lastCreatedAt, decoded.lastId as string);
       }
     }
 
+    // userId at $4 for user_contacts JOIN
     const params: (string | number | string[])[] = [
       keyword,
       conversationIds,
       normalizedLimit + 1, // Fetch limit+1 to detect hasNextPage
+      userId,
     ];
 
     if (mediaType) {
       params.push(mediaType);
     }
     params.push(...cursorParams);
+
+    // Parameter positions: $1=keyword, $2=conversationIds, $3=limit, $4=userId
+    // mediaType at $5 (if present), cursor at $5/$6 or $6/$7
+    const mediaTypeClauseResolved = mediaType
+      ? `AND ma.media_type = $5::media_type`
+      : '';
+    const cursorBaseIdx = mediaType ? 6 : 5;
+
+    // Rebuild cursor clause with correct indices
+    let cursorClauseResolved = '';
+    if (cursor) {
+      const decoded = PaginationUtil.decodeCursor(cursor);
+      if (decoded) {
+        cursorClauseResolved = `
+          AND (
+            ma.created_at < $${cursorBaseIdx}::timestamptz
+            OR (ma.created_at = $${cursorBaseIdx}::timestamptz AND ma.id < $${cursorBaseIdx + 1}::uuid)
+          )
+        `;
+      }
+    }
 
     const query = `
       SELECT
@@ -78,7 +88,7 @@ export class MediaSearchRepository {
         ma.thumbnail_url,
         ma.cdn_url,
         ma.uploaded_by,
-        COALESCE(u.display_name, 'Unknown') AS uploaded_by_name,
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name, 'Unknown') AS uploaded_by_name,
         m.conversation_id,
         conv.name AS conversation_name,
         ma.created_at
@@ -86,18 +96,19 @@ export class MediaSearchRepository {
       JOIN messages m ON m.id = ma.message_id
       JOIN conversations conv ON conv.id = m.conversation_id
       LEFT JOIN users u ON u.id = ma.uploaded_by
+      LEFT JOIN user_contacts uc ON uc.owner_id = $4::uuid AND uc.contact_user_id = ma.uploaded_by
       WHERE
         ma.deleted_at IS NULL
         AND m.deleted_at IS NULL
         -- Scope: user's active conversations only
         AND m.conversation_id = ANY($2::uuid[])
-        ${mediaTypeClause}
+        ${mediaTypeClauseResolved}
         -- Keyword matching on file name
         AND (
           LOWER(unaccent(ma.original_name)) LIKE LOWER(unaccent(concat('%', $1::text, '%')))
           OR ma.original_name % $1::text
         )
-        ${cursorClause}
+        ${cursorClauseResolved}
       ORDER BY ma.created_at DESC, ma.id DESC
       LIMIT $3::int
     `;
@@ -112,6 +123,7 @@ export class MediaSearchRepository {
    * Returns one row per conversation with match count + latest match.
    */
   async searchMediaGroupedByConversation(
+    userId: string,
     keyword: string,
     conversationIds: string[],
     limit = 50,
@@ -130,11 +142,12 @@ export class MediaSearchRepository {
           ma.cdn_url,
           ma.created_at,
           m.conversation_id,
-          COALESCE(u.display_name, 'Unknown') AS uploaded_by_name,
+          COALESCE(uc.alias_name, uc.phone_book_name, u.display_name, 'Unknown') AS uploaded_by_name,
           ROW_NUMBER() OVER (PARTITION BY m.conversation_id ORDER BY ma.created_at DESC) AS rn
         FROM media_attachments ma
         JOIN messages m ON m.id = ma.message_id
         LEFT JOIN users u ON u.id = ma.uploaded_by
+        LEFT JOIN user_contacts uc ON uc.owner_id = $4::uuid AND uc.contact_user_id = ma.uploaded_by
         WHERE ma.deleted_at IS NULL AND m.deleted_at IS NULL
           AND m.conversation_id = ANY($2::uuid[])
           AND (
@@ -176,6 +189,7 @@ export class MediaSearchRepository {
       keyword,
       conversationIds,
       normalizedLimit,
+      userId,
     );
 
     return results as RawMediaGroupedResult[];

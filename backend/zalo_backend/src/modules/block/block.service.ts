@@ -33,6 +33,7 @@ import {
   BlockResponseDto,
   BlockedUserDto,
   BlockRelation,
+  GetBlockedListQueryDto,
 } from './dto/block.dto';
 import { SelfActionException } from '@shared/errors';
 import type {
@@ -42,7 +43,6 @@ import type {
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socialConfig from '@config/social.config';
 import type { ConfigType } from '@nestjs/config';
-import { CursorPaginationDto } from '@common/dto/cursor-pagination.dto';
 import { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import { PermissionActionType } from '@common/constants/permission-actions.constant';
@@ -50,6 +50,7 @@ import { EventIdGenerator } from '@common/utils/event-id-generator';
 import { v4 as uuidv4 } from 'uuid';
 import { EventPublisher } from '@shared/events';
 import { UserBlockedEvent, UserUnblockedEvent } from './events/block.events';
+import { DisplayNameResolver } from '@shared/services';
 
 @Injectable()
 export class BlockService {
@@ -63,6 +64,7 @@ export class BlockService {
     private readonly blockRepository: IBlockRepository,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
+    private readonly displayNameResolver: DisplayNameResolver,
   ) { }
 
   /**
@@ -366,14 +368,29 @@ export class BlockService {
    */
   async getBlockedList(
     userId: string,
-    query: CursorPaginationDto,
+    query: GetBlockedListQueryDto,
   ): Promise<CursorPaginatedResult<BlockedUserDto>> {
-    const { limit = 20, cursor } = query;
+    const { limit = 20, cursor, search } = query;
+
+    // Build where clause with optional search
+    const where: Prisma.BlockWhereInput = {
+      blockerId: userId,
+    };
+
+    // Search filter: alias > phoneBook > displayName (follows display name resolution rule)
+    if (search) {
+      where.blocked = {
+        OR: [
+          { displayName: { contains: search, mode: 'insensitive' } },
+          // Also search aliasName & phoneBookName from viewer's contacts
+          { inContactsOf: { some: { ownerId: userId, aliasName: { contains: search, mode: 'insensitive' } } } },
+          { inContactsOf: { some: { ownerId: userId, phoneBookName: { contains: search, mode: 'insensitive' } } } },
+        ],
+      };
+    }
 
     const blocks = await this.prisma.block.findMany({
-      where: {
-        blockerId: userId,
-      },
+      where,
       ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
       orderBy: { createdAt: 'desc' },
       include: {
@@ -387,6 +404,10 @@ export class BlockService {
       },
     });
 
+    // Batch resolve display names per viewer
+    const blockedIds = blocks.map((b) => b.blocked.id);
+    const nameMap = await this.displayNameResolver.batchResolve(userId, blockedIds);
+
     return CursorPaginationHelper.buildResult({
       items: blocks,
       limit,
@@ -395,7 +416,7 @@ export class BlockService {
         ({
           blockId: block.id,
           userId: block.blocked.id,
-          displayName: block.blocked.displayName,
+          displayName: nameMap.get(block.blocked.id) ?? block.blocked.displayName,
           avatarUrl: block.blocked.avatarUrl ?? undefined,
           blockedAt: block.createdAt,
           reason: block.reason ?? undefined,

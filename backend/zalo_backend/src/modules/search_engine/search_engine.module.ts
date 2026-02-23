@@ -10,6 +10,7 @@ import { DatabaseModule } from 'src/database/prisma.module';
 import { AuthorizationModule } from '@modules/authorization/authorization.module';
 import { BlockModule } from '@modules/block/block.module';
 import { PrivacyModule } from '@modules/privacy/privacy.module';
+import { SharedModule } from '@shared/shared.module';
 
 // Services
 import { MessageSearchService } from './services/message-search.service';
@@ -47,6 +48,7 @@ import searchConfig from './config/search.config';
     AuthorizationModule, // Provides InteractionAuthorizationService (cached canInteract)
     BlockModule, // Provides IBlockChecker (Redis read-through cache)
     PrivacyModule, // Provides PrivacyService (batch getManySettings, cached)
+    SharedModule, // Provides DisplayNameResolver for per-viewer name resolution
   ],
   controllers: [SearchEngineController],
   providers: [
@@ -87,4 +89,4 @@ import searchConfig from './config/search.config';
     RealTimeSearchService, // Phase 4: Export for other modules
   ],
 })
-export class SearchEngineModule {}
+export class SearchEngineModule { }

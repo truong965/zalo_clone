@@ -167,11 +167,15 @@ export class ContactSearchResultDto {
   displayName: string; // Alias or real name
   displayNameFinal: string; // Returned name to show
   avatarUrl?: string;
+  /** Phone-book name from phone sync */
+  phoneBookName?: string;
+  /** Contact source: PHONE_SYNC or MANUAL */
+  source?: 'PHONE_SYNC' | 'MANUAL';
   relationshipStatus: 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED';
   requestDirection?: 'OUTGOING' | 'INCOMING';
   pendingRequestId?: string;
   hasAlias: boolean;
-  aliasPriority: number; // 1=alias exists, 2=friend, 3=request, 4=none
+  aliasPriority: number; // 1=alias, 1.5=phoneBookName, 2=friend, 3=request, 4=none
   isBlocked?: boolean;
 
   // Phase 4: Privacy enforcement

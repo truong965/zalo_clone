@@ -30,6 +30,7 @@ import { PrivacyModule } from './modules/privacy/privacy.module';
 import { FriendshipModule } from './modules/friendship/friendship.module';
 import { EventPersistenceModule } from './common/events/event-persistence.module';
 import { SearchEngineModule } from './modules/search_engine/search_engine.module';
+import { ContactModule } from './modules/contact/contact.module';
 
 // Configs
 import jwtConfig from './config/jwt.config';
@@ -107,7 +108,7 @@ import socialConfig from './config/social.config';
     // ========================================================================
     // 3. SHARED SERVICES & GUARDS (Cross-Module Usage)
     // ========================================================================
-    SharedModule, // Authorization & Guards (InteractionAuthorizationService, NotBlockedGuard)
+    SharedModule, // DisplayNameResolver (cross-cutting utility; NotBlockedGuard + Auth now from AuthorizationModule)
 
     // ========================================================================
     // 4. FEATURE MODULES
@@ -134,7 +135,7 @@ import socialConfig from './config/social.config';
     PrivacyModule, SearchEngineModule, // Privacy settings & permissions (Independent)
 
     // Utilities
-    // ContactModule,
+    ContactModule,
   ],
   controllers: [AppController],
   providers: [

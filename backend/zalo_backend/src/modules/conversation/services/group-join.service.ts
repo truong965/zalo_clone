@@ -18,6 +18,7 @@ import {
 import { CreateJoinRequestDto } from '../dto/join-request.dto';
 import { ReviewJoinRequestDto } from '../dto/review-join-request.dto';
 import { EventPublisher } from '@shared/events';
+import { DisplayNameResolver } from '@shared/services';
 import { ConversationMemberAddedEvent } from '../events';
 
 @Injectable()
@@ -27,6 +28,7 @@ export class GroupJoinService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
+    private readonly displayNameResolver: DisplayNameResolver,
   ) { }
 
   async requestJoin(dto: CreateJoinRequestDto, userId: string) {
@@ -227,7 +229,7 @@ export class GroupJoinService {
   async getPendingRequests(conversationId: string, adminId: string) {
     await this.verifyAdmin(conversationId, adminId);
 
-    return this.prisma.groupJoinRequest.findMany({
+    const requests = await this.prisma.groupJoinRequest.findMany({
       where: {
         conversationId,
         status: JoinRequestStatus.PENDING,
@@ -243,6 +245,18 @@ export class GroupJoinService {
       },
       orderBy: { requestedAt: 'asc' },
     });
+
+    // Batch resolve display names per admin viewer
+    const userIds = requests.map((r) => r.user.id);
+    const nameMap = await this.displayNameResolver.batchResolve(adminId, userIds);
+
+    return requests.map((r) => ({
+      ...r,
+      user: {
+        ...r.user,
+        displayName: nameMap.get(r.user.id) ?? r.user.displayName,
+      },
+    }));
   }
 
   async cancelJoinRequest(conversationId: string, userId: string) {

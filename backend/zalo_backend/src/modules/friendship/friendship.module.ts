@@ -4,6 +4,7 @@ import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import { EventsModule } from '@shared/events';
 import { BlockModule } from '@modules/block/block.module';
 import { PrivacyModule } from '@modules/privacy/privacy.module';
+import { SharedModule } from '@shared/shared.module';
 
 // Services
 import { FriendshipService } from './service/friendship.service';
@@ -66,6 +67,7 @@ import { FriendshipBlockListener } from './listeners/friendship-block.listener';
     IdempotencyModule,
     BlockModule,
     PrivacyModule,
+    SharedModule, // Provides DisplayNameResolver for per-viewer name resolution
   ],
   controllers: [FriendshipsController, FriendRequestController],
   providers: [
@@ -84,4 +86,4 @@ import { FriendshipBlockListener } from './listeners/friendship-block.listener';
   ],
   exports: [FriendshipService],
 })
-export class FriendshipModule {}
+export class FriendshipModule { }

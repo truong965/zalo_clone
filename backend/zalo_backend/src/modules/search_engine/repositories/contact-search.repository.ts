@@ -4,7 +4,7 @@ import { ContactSearchResultDto } from '../dto/search.dto';
 import { PaginationUtil } from '../utils/pagination.util';
 import type {
   RawContactSearchResult,
-  RawAliasSearchResult,
+  RawContactNameSearchResult,
 } from '../interfaces/search-raw-result.interface';
 
 /**
@@ -54,27 +54,30 @@ export class ContactSearchRepository {
           AND (
             (CASE
               WHEN uc.alias_name IS NOT NULL THEN 1
-              WHEN f.status = 'ACCEPTED' THEN 2
-              WHEN f.status = 'PENDING' THEN 3
-              ELSE 4
+              WHEN uc.phone_book_name IS NOT NULL THEN 2
+              WHEN f.status = 'ACCEPTED' THEN 3
+              WHEN f.status = 'PENDING' THEN 4
+              ELSE 5
             END) > $${baseIdx}::int
             OR (
               (CASE
                 WHEN uc.alias_name IS NOT NULL THEN 1
-                WHEN f.status = 'ACCEPTED' THEN 2
-                WHEN f.status = 'PENDING' THEN 3
-                ELSE 4
+                WHEN uc.phone_book_name IS NOT NULL THEN 2
+                WHEN f.status = 'ACCEPTED' THEN 3
+                WHEN f.status = 'PENDING' THEN 4
+                ELSE 5
               END) = $${baseIdx}::int
-              AND LOWER(unaccent(COALESCE(uc.alias_name, u.display_name))) > $${baseIdx + 1}::text
+              AND LOWER(unaccent(COALESCE(uc.alias_name, uc.phone_book_name, u.display_name))) > $${baseIdx + 1}::text
             )
             OR (
               (CASE
                 WHEN uc.alias_name IS NOT NULL THEN 1
-                WHEN f.status = 'ACCEPTED' THEN 2
-                WHEN f.status = 'PENDING' THEN 3
-                ELSE 4
+                WHEN uc.phone_book_name IS NOT NULL THEN 2
+                WHEN f.status = 'ACCEPTED' THEN 3
+                WHEN f.status = 'PENDING' THEN 4
+                ELSE 5
               END) = $${baseIdx}::int
-              AND LOWER(unaccent(COALESCE(uc.alias_name, u.display_name))) = $${baseIdx + 1}::text
+              AND LOWER(unaccent(COALESCE(uc.alias_name, uc.phone_book_name, u.display_name))) = $${baseIdx + 1}::text
               AND u.id > $${baseIdx + 2}::uuid
             )
           )
@@ -104,14 +107,19 @@ export class ContactSearchRepository {
         u.phone_number,
         u.display_name,
         u.avatar_url,
-        -- Alias takes priority
-        COALESCE(uc.alias_name, u.display_name) as display_name_final,
-        -- Priority scoring for relevance
+        -- 3-level alias resolution: alias > phoneBookName > displayName
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as display_name_final,
+        -- Phone-book name from sync
+        uc.phone_book_name,
+        -- Contact source (PHONE_SYNC / MANUAL)
+        uc.source,
+        -- Priority scoring for relevance (S8: phone_book_name = 2)
         CASE 
-          WHEN uc.alias_name IS NOT NULL THEN 1::int  -- Alias exists (highest priority)
-          WHEN f.status = 'ACCEPTED' THEN 2::int       -- Friend
-          WHEN f.status = 'PENDING' THEN 3::int        -- Request pending
-          ELSE 4::int                                  -- No relationship (lowest)
+          WHEN uc.alias_name IS NOT NULL THEN 1::int      -- Alias exists (highest priority)
+          WHEN uc.phone_book_name IS NOT NULL THEN 2::int  -- Phone-book name (high priority)
+          WHEN f.status = 'ACCEPTED' THEN 3::int           -- Friend
+          WHEN f.status = 'PENDING' THEN 4::int            -- Request pending
+          ELSE 5::int                                      -- No relationship (lowest)
         END as relevance_score,
         -- Relationship status
         CASE 
@@ -127,8 +135,8 @@ export class ContactSearchRepository {
         -- Friendship context for pending requests
         f.id as friendship_id,
         f.requester_id,
-        -- Check if alias exists
-        CASE WHEN uc.alias_name IS NOT NULL THEN true ELSE false END as has_alias,
+        -- Check if alias or phone-book name exists
+        CASE WHEN uc.alias_name IS NOT NULL OR uc.phone_book_name IS NOT NULL THEN true ELSE false END as has_alias,
         -- Existing DIRECT conversation ID (null if never messaged)
         (
           SELECT c.id
@@ -141,7 +149,7 @@ export class ContactSearchRepository {
           LIMIT 1
         ) as existing_conversation_id,
         -- Sort key (must be in SELECT for DISTINCT + ORDER BY)
-        LOWER(unaccent(COALESCE(uc.alias_name, u.display_name))) as sort_name
+        LOWER(unaccent(COALESCE(uc.alias_name, uc.phone_book_name, u.display_name))) as sort_name
       FROM users u
       -- Optional alias lookup
       LEFT JOIN user_contacts uc 
@@ -209,13 +217,16 @@ export class ContactSearchRepository {
             -- Must be a friend or contact to be found by name
             (f.status = 'ACCEPTED' OR uc.contact_user_id IS NOT NULL)
             AND (
-              -- Match alias name or display name (substring)
-              LOWER(unaccent(COALESCE(uc.alias_name, u.display_name))) 
+              -- Match alias name, phone-book name, or display name (substring)
+              LOWER(unaccent(COALESCE(uc.alias_name, uc.phone_book_name, u.display_name))) 
+                LIKE LOWER(unaccent(concat('%', $2::text, '%')))
+              -- Also match phone_book_name directly (may differ from COALESCE result when alias exists)
+              OR LOWER(unaccent(uc.phone_book_name)) 
                 LIKE LOWER(unaccent(concat('%', $2::text, '%')))
               -- Trigram matching for fuzzy search (Vietnamese accents)
-              OR COALESCE(uc.alias_name, u.display_name) % $2::text
+              OR COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) % $2::text
               -- Starts with keyword (for quick lookups)
-              OR LOWER(unaccent(COALESCE(uc.alias_name, u.display_name))) 
+              OR LOWER(unaccent(COALESCE(uc.alias_name, uc.phone_book_name, u.display_name))) 
                 LIKE LOWER(unaccent(concat($2::text, '%')))
             )
           )
@@ -254,7 +265,7 @@ export class ContactSearchRepository {
         },
         myContacts: {
           where: { ownerId: userId },
-          select: { aliasName: true },
+          select: { aliasName: true, phoneBookName: true, source: true },
           take: 1,
         },
       },
@@ -264,15 +275,15 @@ export class ContactSearchRepository {
   }
 
   /**
-   * Search contacts by alias name only
-   * Used for quick contact lookup
+   * Search contacts by alias name or phone-book name
+   * Used for quick contact lookup by saved names
    * Uses parameterized queries for security
    */
-  async searchByAlias(
+  async searchByContactName(
     searcherId: string,
     keyword: string,
     limit = 50,
-  ): Promise<RawAliasSearchResult[]> {
+  ): Promise<RawContactNameSearchResult[]> {
     const normalizedLimit = PaginationUtil.normalizeLimit(limit, 100);
 
     const query = `
@@ -281,14 +292,23 @@ export class ContactSearchRepository {
         u.phone_number,
         u.display_name,
         u.avatar_url,
-        uc.alias_name as display_name_final,
-        true as has_alias,
-        LOWER(unaccent(uc.alias_name)) as sort_name
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as display_name_final,
+        uc.phone_book_name,
+        uc.source,
+        CASE 
+          WHEN uc.alias_name IS NOT NULL THEN true 
+          WHEN uc.phone_book_name IS NOT NULL THEN true
+          ELSE false 
+        END as has_alias,
+        LOWER(unaccent(COALESCE(uc.alias_name, uc.phone_book_name, u.display_name))) as sort_name
       FROM users u
       JOIN user_contacts uc 
         ON u.id = uc.contact_user_id AND uc.owner_id = $1::uuid
       WHERE 
-        LOWER(unaccent(uc.alias_name)) LIKE LOWER(unaccent(concat('%', $2::text, '%')))
+        (
+          LOWER(unaccent(uc.alias_name)) LIKE LOWER(unaccent(concat('%', $2::text, '%')))
+          OR LOWER(unaccent(uc.phone_book_name)) LIKE LOWER(unaccent(concat('%', $2::text, '%')))
+        )
         AND u.status = 'ACTIVE'
         AND NOT EXISTS (
           SELECT 1 FROM blocks 
@@ -306,7 +326,7 @@ export class ContactSearchRepository {
       normalizedLimit,
     );
 
-    return results as RawAliasSearchResult[];
+    return results as RawContactNameSearchResult[];
   }
 
   /**
@@ -334,10 +354,12 @@ export class ContactSearchRepository {
     return contacts.map((contact) => ({
       id: contact.contactUser.id,
       phoneNumber: contact.contactUser.phoneNumber,
-      displayName: contact.aliasName || contact.contactUser.displayName,
+      displayName: contact.aliasName || contact.phoneBookName || contact.contactUser.displayName,
       avatarUrl: contact.contactUser.avatarUrl,
       status: contact.contactUser.status,
-      hasAlias: !!contact.aliasName,
+      hasAlias: !!(contact.aliasName || contact.phoneBookName),
+      phoneBookName: contact.phoneBookName,
+      source: contact.source,
     }));
   }
 
@@ -395,9 +417,15 @@ export class ContactSearchRepository {
         avatarUrl:
           ((contact.avatar_url ?? contact.avatarUrl) as string | null) ??
           undefined,
+        phoneBookName:
+          ((contact.phone_book_name ?? contact.phoneBookName) as string | null) ??
+          undefined,
+        source:
+          ((contact.source) as 'PHONE_SYNC' | 'MANUAL' | null) ??
+          undefined,
         relationshipStatus,
         hasAlias: (contact.has_alias ?? contact.hasAlias ?? false) as boolean,
-        aliasPriority: (contact.relevance_score as number) || 4,
+        aliasPriority: (contact.relevance_score as number) || 5,
         isBlocked: relationshipStatus === 'BLOCKED',
         canMessage: effectiveCanMessage,
         isOnline: contact.isOnline as boolean | undefined,

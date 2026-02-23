@@ -120,6 +120,10 @@ export const SocketEvents = {
   FRIEND_REQUEST_DECLINED: 'friendship:requestDeclined',
   FRIEND_UNFRIENDED: 'friendship:unfriended',
 
+  // === CONTACT EVENTS (Server → Client) ===
+  /** Owner's alias for a contact was updated; only sent to the owner */
+  CONTACT_ALIAS_UPDATED: 'contact:aliasUpdated',
+
   // === SOCKET LIFECYCLE (internal EventEmitter events) ===
   USER_SOCKET_CONNECTED: 'user.socket.connected',
   USER_SOCKET_DISCONNECTED: 'user.socket.disconnected',

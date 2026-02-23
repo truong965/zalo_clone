@@ -4,6 +4,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
 import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
+import { DisplayNameResolver } from '@shared/services';
 import {
   ConversationType,
   MemberRole,
@@ -57,6 +58,7 @@ export class ConversationService {
     private readonly prisma: PrismaService,
     private readonly redisPresence: RedisPresenceService,
     private readonly privacyService: PrivacyService,
+    private readonly displayNameResolver: DisplayNameResolver,
   ) { }
 
   /**
@@ -336,8 +338,10 @@ export class ConversationService {
       ),
     );
 
-    const privacyMap =
-      await this.privacyService.getManySettings(directOtherUserIds);
+    const [privacyMap, nameMap] = await Promise.all([
+      this.privacyService.getManySettings(directOtherUserIds),
+      this.displayNameResolver.batchResolve(userId, directOtherUserIds),
+    ]);
     await Promise.all(
       directOtherUserIds.map(async (otherId) => {
         const settings = privacyMap.get(otherId);
@@ -360,6 +364,7 @@ export class ConversationService {
           userId,
           blockMap,
           onlineMap,
+          nameMap,
         ),
     });
   }
@@ -369,6 +374,7 @@ export class ConversationService {
     currentUserId: string,
     blockMap: Map<string, boolean>,
     onlineMap: Map<string, boolean>,
+    nameMap?: Map<string, string>,
   ) {
     const currentUserMember = conversation.members.find(
       (m) => m.userId === currentUserId,
@@ -385,7 +391,8 @@ export class ConversationService {
       );
 
       if (otherMember?.user) {
-        name = otherMember.user.displayName;
+        // Display name priority: aliasName > phoneBookName > displayName
+        name = nameMap?.get(otherMember.user.id) ?? otherMember.user.displayName;
         avatar = otherMember.user.avatarUrl;
         otherUserId = otherMember.user.id;
 
@@ -451,12 +458,17 @@ export class ConversationService {
     // Enrich with online/block status (same as getUserConversations)
     const blockMap = new Map<string, boolean>();
     const onlineMap = new Map<string, boolean>();
+    let nameMap: Map<string, string> | undefined;
 
     if (conversation.type === ConversationType.DIRECT) {
       const otherMember = conversation.members.find((m) => m.userId !== userId);
       if (otherMember?.user) {
         const otherId = otherMember.user.id;
-        const privacyMap = await this.privacyService.getManySettings([otherId]);
+        const [privacyMap, resolvedNames] = await Promise.all([
+          this.privacyService.getManySettings([otherId]),
+          this.displayNameResolver.batchResolve(userId, [otherId]),
+        ]);
+        nameMap = resolvedNames;
         const settings = privacyMap.get(otherId);
         if (settings && !settings.showOnlineStatus) {
           onlineMap.set(otherId, false);
@@ -472,6 +484,7 @@ export class ConversationService {
       userId,
       blockMap,
       onlineMap,
+      nameMap,
     );
   }
 
@@ -543,9 +556,13 @@ export class ConversationService {
       throw new BadRequestException('Conversation not found');
     }
 
+    // Batch resolve display names per viewer
+    const memberIds = conversation.members.map((m) => m.user.id);
+    const nameMap = await this.displayNameResolver.batchResolve(userId, memberIds);
+
     return conversation.members.map((m) => ({
       id: m.user.id,
-      displayName: m.user.displayName,
+      displayName: nameMap.get(m.user.id) ?? m.user.displayName,
       avatarUrl: m.user.avatarUrl,
       role: m.role,
     }));
@@ -604,6 +621,20 @@ export class ConversationService {
       },
     });
 
+    // Batch resolve all member display names across all groups
+    const allOtherMemberIds = new Set<string>();
+    for (const g of groups) {
+      for (const m of g.members) {
+        if (m.userId !== userId) {
+          allOtherMemberIds.add(m.user.id);
+        }
+      }
+    }
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      [...allOtherMemberIds],
+    );
+
     return CursorPaginationHelper.buildResult({
       items: groups,
       limit,
@@ -623,7 +654,8 @@ export class ConversationService {
           avatarUrl: g.avatarUrl,
           memberCount: g.members.length,
           membersPreview: otherMembers.map(
-            (m: { user: { displayName: string } }) => m.user.displayName,
+            (m: { user: { id: string; displayName: string } }) =>
+              nameMap.get(m.user.id) ?? m.user.displayName,
           ),
           lastMessageAt: g.lastMessageAt?.toISOString() ?? null,
           lastMessage: lastMsg

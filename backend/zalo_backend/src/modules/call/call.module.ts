@@ -3,6 +3,8 @@ import { CallHistoryController } from './call-history.controller';
 import { CallHistoryService } from './call-history.service';
 import { RedisModule } from '../redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { SharedModule } from '@shared/shared.module';
+import { AuthorizationModule } from '@modules/authorization/authorization.module';
 
 // PHASE 2: Listeners (instead of direct SocialModule import)
 import { CallContactLookupListener } from './listeners/call-contact-lookup.listener';
@@ -32,7 +34,7 @@ import { CallBlockListener } from './listeners/call-block.listener';
  * - Terminates active calls between blocked users
  */
 @Module({
-  imports: [RedisModule, EventEmitterModule],
+  imports: [RedisModule, EventEmitterModule, SharedModule, AuthorizationModule],
   controllers: [CallHistoryController],
   providers: [
     CallHistoryService,
@@ -44,4 +46,4 @@ import { CallBlockListener } from './listeners/call-block.listener';
   ],
   exports: [CallHistoryService],
 })
-export class CallModule {}
+export class CallModule { }

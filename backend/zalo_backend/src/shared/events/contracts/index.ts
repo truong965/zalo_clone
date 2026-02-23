@@ -26,3 +26,9 @@ export type {
 } from './friendship-events.contract';
 
 export type { PrivacySettingsUpdatedPayload } from './privacy-events.contract';
+
+export type {
+  ContactAliasUpdatedPayload,
+  ContactsSyncedPayload,
+  ContactRemovedPayload,
+} from './contact-events.contract';
