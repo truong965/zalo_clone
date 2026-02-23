@@ -5,6 +5,19 @@
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 
+/** Apply or remove the `dark` class on <html> for Tailwind dark mode */
+function applyThemeToDom(theme: 'light' | 'dark') {
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+}
+
+const storedTheme = (localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark') || 'light';
+// Apply immediately on module load so there's no flash
+applyThemeToDom(storedTheme);
+
 interface AppState {
   // Theme
   theme: 'light' | 'dark';
@@ -21,9 +34,10 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   // Theme
-  theme: (localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark') || 'light',
+  theme: storedTheme,
   setTheme: (theme) => {
     localStorage.setItem(STORAGE_KEYS.THEME, theme);
+    applyThemeToDom(theme);
     set({ theme });
   },
 

@@ -291,7 +291,7 @@ export function MessageList({
                                                       )}
                                                       <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 
                                                       ${msg.senderSide === 'me'
-                                                                  ? 'bg-[#E5EFFF] text-gray-800 border border-[#c7e0ff]'
+                                                                  ? 'bg-white text-gray-800 border border-gray-200'
                                                                   : 'bg-white text-gray-800 border border-gray-200'
                                                             }
                                                       ${isHighlighted

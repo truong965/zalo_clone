@@ -35,7 +35,7 @@ export function ChatInfoSidebar({
             <div className="w-[340px] h-full border-l border-gray-200 bg-white flex flex-col overflow-y-auto">
                   {/* Header */}
                   <div className="flex-none h-14 flex items-center justify-center border-b border-gray-100">
-                        <Title level={5} className="m-0 text-gray-700">
+                        <Title level={5} className="m-0 !text-gray-700">
                               {isGroup ? 'Thông tin nhóm' : 'Thông tin hội thoại'}
                         </Title>
                   </div>

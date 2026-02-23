@@ -56,7 +56,7 @@ export function ChatContent({
       return (
             <div
                   ref={messagesContainerRef}
-                  className="relative flex-1 overflow-y-auto px-4 py-4 bg-[#eef0f1]"
+                  className="relative flex-1 overflow-y-auto px-4 py-4 chat-bg"
             >
                   <MessageList
                         messages={messages}

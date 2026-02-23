@@ -1,13 +1,27 @@
 @import "tailwindcss";
 
-/* Prevent white flash on reload by keeping a persistent light background */
+/*
+  Tailwind CSS v4 — class-based dark mode.
+  Activates `dark:` utilities when `.dark` is on any ancestor.
+  useAppStore.setTheme() toggles document.documentElement.classList.
+*/
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Base: light ─────────────────────────────────────────────────── */
 html,
 body {
       height: 100%;
       width: 100%;
+      margin: 0;
       background-color: #f5f7fb;
       color: #0f172a;
-      margin: 0;
+}
+
+/* ─── Base: dark ──────────────────────────────────────────────────── */
+html.dark,
+html.dark body {
+      background-color: #0f172a;
+      color: #f1f5f9;
 }
 
 #root {
@@ -15,18 +29,245 @@ body {
       background-color: inherit;
 }
 
-/* Prevent global scroll */
-/* html,
-body {
-      height: 100%;
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
+/* ======================================================================
+   DARK MODE — GLOBAL UTILITY OVERRIDES  (Option B)
+
+   Eliminates the need to write `dark:` inline variants in every component.
+   Simply write normal Tailwind classes (bg-white, text-gray-700 …) and
+   they will flip automatically when <html class="dark"> is set.
+
+   Specificity of `html.dark .bg-white` = (0,1,2)
+   Specificity of Tailwind `.bg-white`  = (0,0,1)   → our rule wins ✓
+
+   Opt-out (when a white bg must stay white in dark mode):
+     Use Tailwind's `!` modifier → `!bg-white` → `!important` beats us.
+     Example: avatar ring, SVG overlays, thumbnail placeholders.
+   ====================================================================== */
+
+/* ── Surfaces: gray/white scale ──────────────────────────────────── */
+html.dark .bg-white {
+      background-color: #111827;
 }
 
-#root {
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
-} */
+/* gray-900   */
+html.dark .bg-gray-50 {
+      background-color: #0f172a;
+}
+
+/* slate-950  */
+html.dark .bg-gray-100 {
+      background-color: #1e293b;
+}
+
+/* slate-800  */
+html.dark .bg-gray-200 {
+      background-color: #334155;
+}
+
+/* slate-700  */
+
+/* ── Surfaces: colour-tinted ─────────────────────────────────────── */
+html.dark .bg-blue-50 {
+      background-color: #0d1b3e;
+}
+
+html.dark .bg-blue-100 {
+      background-color: #172554;
+}
+
+html.dark .bg-blue-200 {
+      background-color: #1e3a8a;
+}
+
+/* group avatar fallback bg */
+html.dark .bg-amber-50 {
+      background-color: #1c1400;
+}
+
+html.dark .bg-amber-100 {
+      background-color: #292000;
+}
+
+html.dark .bg-red-50 {
+      background-color: #1c0a0a;
+}
+
+html.dark .bg-red-100 {
+      background-color: #2d0f0f;
+}
+
+/* ── Surfaces: semi-transparent variants ─────────────────────────── */
+html.dark .bg-gray-50\/80 {
+      background-color: rgb(15 23 42 / 0.8);
+}
+
+html.dark .bg-gray-50\/50 {
+      background-color: rgb(15 23 42 / 0.5);
+}
+
+html.dark .bg-gray-100\/50 {
+      background-color: rgb(30 41 59 / 0.5);
+}
+
+/* ── Surfaces: custom hex colours used in chat ───────────────────── */
+html.dark .bg-\[#E5EFFF\] {
+      background-color: #1e3461;
+}
+
+/* "my" message bubble      */
+html.dark .bg-\[#F0F2F5\] {
+      background-color: #374151;
+}
+
+/* camera / action btn bg   */
+html.dark .bg-\[#f4f5f7\] {
+      background-color: #1e293b;
+}
+
+/* section divider bg       */
+html.dark .bg-\[#eef0f1\] {
+      background-color: #1a2234;
+}
+
+/* chat content area bg     */
+
+/* ── Custom semantic classes ─────────────────────────────────────── */
+.chat-bg {
+      background-color: #eef0f1;
+}
+
+html.dark .chat-bg {
+      background-color: #000000;
+}
+
+/* ── Hover surfaces ──────────────────────────────────────────────── */
+html.dark .hover\:bg-white:hover {
+      background-color: #1f2937;
+}
+
+html.dark .hover\:bg-gray-50:hover {
+      background-color: #1e293b;
+}
+
+html.dark .hover\:bg-gray-100:hover {
+      background-color: #334155;
+}
+
+html.dark .hover\:bg-gray-200:hover {
+      background-color: #475569;
+}
+
+html.dark .hover\:bg-gray-300:hover {
+      background-color: #64748b;
+}
+
+html.dark .hover\:bg-blue-50:hover {
+      background-color: #0d1b3e;
+}
+
+html.dark .hover\:bg-blue-100:hover {
+      background-color: #172554;
+}
+
+html.dark .hover\:bg-blue-200:hover {
+      background-color: #1e3a8a;
+}
+
+/* ── Group-hover surfaces ────────────────────────────────────────── */
+html.dark .group:hover .group-hover\:bg-blue-50 {
+      background-color: #0d1b3e;
+}
+
+/* ── Text: gray scale ────────────────────────────────────────────── */
+
+/*
+  Search highlight marks: bg-yellow-200 text-gray-900
+  In dark mode, text-gray-900 is overridden to near-white (#f9fafb).
+  Override bg-yellow-200 → dark amber so white text stays readable.
+  Using amber-800 (#92400e) → contrast with #f9fafb ≈ 6.5:1  ✓
+*/
+html.dark .bg-yellow-200 {
+      background-color: #92400e;
+}
+
+html.dark .text-gray-900 {
+      color: #f9fafb;
+}
+
+html.dark .text-gray-800 {
+      color: #f1f5f9;
+}
+
+html.dark .text-gray-700 {
+      color: #e2e8f0;
+}
+
+html.dark .text-gray-600 {
+      color: #cbd5e1;
+}
+
+html.dark .text-gray-500 {
+      color: #94a3b8;
+}
+
+html.dark .text-gray-400 {
+      color: #64748b;
+}
+
+html.dark .text-gray-300 {
+      color: #475569;
+}
+
+/* ── Borders: gray scale ─────────────────────────────────────────── */
+html.dark .border-gray-50 {
+      border-color: #1e293b;
+}
+
+html.dark .border-gray-100 {
+      border-color: #1e293b;
+}
+
+html.dark .border-gray-200 {
+      border-color: #334155;
+}
+
+html.dark .border-gray-300 {
+      border-color: #475569;
+}
+
+html.dark .border-white {
+      border-color: #111827;
+}
+
+/* avatar online ring      */
+
+/* ── Borders: colour-tinted ──────────────────────────────────────── */
+html.dark .border-blue-100 {
+      border-color: #1e3a8a;
+}
+
+html.dark .border-amber-100 {
+      border-color: #292000;
+}
+
+html.dark .border-red-200 {
+      border-color: #7f1d1d;
+}
+
+/* ── Borders: custom hex ─────────────────────────────────────────── */
+html.dark .border-\[#c7e0ff\] {
+      border-color: #1d3461;
+}
+
+/* "my" message bubble border */
+html.dark .border-b-\[#f4f5f7\] {
+      border-bottom-color: #1e293b;
+}
+
+html.dark .border-t-\[#f4f5f7\] {
+      border-top-color: #1e293b;
+}
+
+html.dark .border-\[#f4f5f7\] {
+      border-color: #1e293b;
+}

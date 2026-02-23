@@ -16,6 +16,7 @@ interface AppProvidersProps {
 
 export function AppProviders({ children }: AppProvidersProps) {
   const { theme, language } = useAppStore();
+  const isDark = theme === 'dark';
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -29,8 +30,26 @@ export function AppProviders({ children }: AppProvidersProps) {
             colorError: '#f5222d',
             colorInfo: '#1890ff',
             borderRadius: 8,
+            /* Dark-mode surface tokens — keeps AntD components (Select,
+               Input, Modal, Dropdown …) on the same dark palette as our
+               global Tailwind overrides, fixing the "hover bg white" bug. */
+            ...(isDark && {
+              colorBgContainer: '#111827',   /* matches html.dark .bg-white  */
+              colorBgElevated: '#1e293b',   /* dropdown / popover bg        */
+              colorBgLayout: '#0f172a',   /* page layout bg               */
+              colorBgSpotlight: '#334155',
+              colorBorder: '#334155',
+              colorBorderSecondary: '#1e293b',
+              colorText: '#f1f5f9',
+              colorTextSecondary: '#94a3b8',
+              colorTextTertiary: '#64748b',
+              colorFillSecondary: 'rgba(255,255,255,0.06)',
+              colorFill: 'rgba(255,255,255,0.09)',
+              colorFillTertiary: 'rgba(255,255,255,0.04)',
+              colorFillQuaternary: 'rgba(255,255,255,0.02)',
+            }),
           },
-          algorithm: theme === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+          algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         }}
       >
         {children}

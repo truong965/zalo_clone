@@ -131,7 +131,7 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
             <div className="w-[340px] h-full border-l border-gray-200 bg-white flex flex-col animate-slide-in-right">
                   {/* Header */}
                   <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
-                        <Title level={5} className="m-0 text-gray-700">Tìm kiếm trong trò chuyện</Title>
+                        <Title level={5} className="m-0 !text-gray-700">Tìm kiếm trong trò chuyện</Title>
                         <div className="flex items-center gap-1">
                               <Button
                                     type="text"

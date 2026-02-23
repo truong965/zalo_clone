@@ -111,7 +111,7 @@ export function ConversationItem({ data, isSelected, onClick }: ConversationItem
                               {/* Row 1: Name + Timestamp */}
                               <div className="flex justify-between items-baseline mb-0.5">
                                     <Text
-                                          strong={isUnread} // Bold tên nếu chưa đọc
+                                          strong={isUnread}
                                           className={`truncate text-[15px] mr-2 ${isUnread ? 'text-gray-900' : 'text-gray-800'}`}
                                     >
                                           {data.name || 'Người dùng ẩn danh'}

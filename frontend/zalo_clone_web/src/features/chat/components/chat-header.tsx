@@ -56,7 +56,7 @@ export function ChatHeader({
                               {conversationName?.[0]?.toUpperCase() ?? 'U'}
                         </Avatar>
                         <div>
-                              <Title level={5} className="mb-0 text-gray-800">{conversationName}</Title>
+                              <Title level={5} className="mb-0 !text-gray-800">{conversationName}</Title>
                               {typingText ? (
                                     <div className="flex items-center text-xs text-blue-600">
                                           {typingText}

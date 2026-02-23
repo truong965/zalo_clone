@@ -98,7 +98,7 @@ export function ContactsPage() {
 
       {/* Right content — active tab content */}
       <div
-        className="flex-1 h-full overflow-hidden"
+        className="flex-1 h-full overflow-hidden bg-white"
         role="tabpanel"
         id={`tabpanel-${activeTab}`}
         aria-labelledby={`tab-${activeTab}`}
