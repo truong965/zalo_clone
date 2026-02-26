@@ -14,6 +14,8 @@ import {
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import type { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
 import type { GroupListItemDto } from '../dto/group-list-item.dto';
+import { MAX_PINNED_CONVERSATIONS } from '../constants/conversation.constants';
+import type { GroupSettings } from './group.service';
 
 const conversationWithRelations =
   Prisma.validator<Prisma.ConversationDefaultArgs>()({
@@ -313,6 +315,8 @@ export class ConversationService {
     cursor?: string,
     limit: number = 20,
   ): Promise<CursorPaginatedResult<unknown>> {
+    // Two-phase query: pinned conversations first, then rest by lastMessageAt
+    // This ensures pinned conversations always appear at the top of the list.
     const conversations = await this.prisma.conversation.findMany({
       where: {
         members: { some: { userId, status: MemberStatus.ACTIVE } },
@@ -323,6 +327,18 @@ export class ConversationService {
       orderBy: { lastMessageAt: 'desc' },
       include: conversationWithRelations.include,
     });
+
+    // Fetch pinned state for these conversations in one query
+    const memberRows = await this.prisma.conversationMember.findMany({
+      where: {
+        userId,
+        conversationId: { in: conversations.map((c) => c.id) },
+      },
+      select: { conversationId: true, isPinned: true, pinnedAt: true },
+    });
+    const pinMap = new Map(
+      memberRows.map((m) => [m.conversationId, { isPinned: m.isPinned, pinnedAt: m.pinnedAt }]),
+    );
 
     const blockMap = new Map<string, boolean>();
     const onlineMap = new Map<string, boolean>();
@@ -354,19 +370,40 @@ export class ConversationService {
       }),
     );
 
-    return CursorPaginationHelper.buildResult({
+    const result = CursorPaginationHelper.buildResult({
       items: conversations,
       limit,
       getCursor: (c) => c.id,
-      mapToDto: (c) =>
-        this.mapConversationResponse(
-          c as ConversationWithRelations,
-          userId,
-          blockMap,
-          onlineMap,
-          nameMap,
-        ),
+      mapToDto: (c) => {
+        const pin = pinMap.get(c.id);
+        return {
+          ...this.mapConversationResponse(
+            c as ConversationWithRelations,
+            userId,
+            blockMap,
+            onlineMap,
+            nameMap,
+          ),
+          isPinned: pin?.isPinned ?? false,
+          pinnedAt: pin?.pinnedAt?.toISOString() ?? null,
+        };
+      },
     });
+
+    // Sort pinned conversations to the top (stable sort: pinned by pinnedAt desc, then rest by lastMessageAt)
+    result.data.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      if (a.isPinned && b.isPinned) {
+        // Both pinned: newer pin first
+        const aTime = a.pinnedAt ? new Date(a.pinnedAt).getTime() : 0;
+        const bTime = b.pinnedAt ? new Date(b.pinnedAt).getTime() : 0;
+        return bTime - aTime;
+      }
+      return 0; // Both unpinned: preserve original lastMessageAt order
+    });
+
+    return result;
   }
 
   private mapConversationResponse(
@@ -436,8 +473,82 @@ export class ConversationService {
       myRole: (currentUserMember?.role as string) ?? 'MEMBER',
       requireApproval: conversation.requireApproval ?? false,
       isMuted: currentUserMember?.isMuted ?? false,
+      isPinned: currentUserMember?.isPinned ?? false,
+      pinnedAt: currentUserMember?.pinnedAt?.toISOString() ?? null,
     };
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PIN / UNPIN CONVERSATION
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Pin a conversation for the current user.
+   * Limited to MAX_PINNED_CONVERSATIONS per user.
+   */
+  async pinConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ isPinned: boolean; pinnedAt: string }> {
+    const member = await this.prisma.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+
+    if (!member || member.status !== MemberStatus.ACTIVE) {
+      throw new BadRequestException('Not a member of this conversation');
+    }
+
+    if (member.isPinned) {
+      return { isPinned: true, pinnedAt: member.pinnedAt!.toISOString() };
+    }
+
+    // Check pin limit
+    const pinnedCount = await this.prisma.conversationMember.count({
+      where: { userId, isPinned: true, status: MemberStatus.ACTIVE },
+    });
+
+    if (pinnedCount >= MAX_PINNED_CONVERSATIONS) {
+      throw new BadRequestException(
+        `Bạn chỉ có thể ghim tối đa ${MAX_PINNED_CONVERSATIONS} hội thoại`,
+      );
+    }
+
+    const now = new Date();
+    await this.prisma.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: { isPinned: true, pinnedAt: now },
+    });
+
+    return { isPinned: true, pinnedAt: now.toISOString() };
+  }
+
+  /**
+   * Unpin a conversation for the current user.
+   */
+  async unpinConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ isPinned: boolean }> {
+    const member = await this.prisma.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+
+    if (!member || member.status !== MemberStatus.ACTIVE) {
+      throw new BadRequestException('Not a member of this conversation');
+    }
+
+    if (!member.isPinned) {
+      return { isPinned: false };
+    }
+
+    await this.prisma.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: { isPinned: false, pinnedAt: null },
+    });
+
+    return { isPinned: false };
+  }
+
   async getConversationById(
     userId: string,
     conversationId: string,
@@ -678,5 +789,99 @@ export class ConversationService {
         };
       },
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PINNED MESSAGES (Phase 3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get full message data for all pinned messages in a conversation.
+   * Any active member can view.
+   */
+  async getPinnedMessages(userId: string, conversationId: string) {
+    // Verify active member
+    const isMemberActive = await this.isMember(conversationId, userId);
+    if (!isMemberActive) {
+      throw new BadRequestException('Not a member of this conversation');
+    }
+
+    // Get pinned message IDs from conversation settings JSONB
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { settings: true },
+    });
+
+    const settings = (conversation?.settings as unknown as GroupSettings) || {};
+    const pinnedMessageIds = settings.pinnedMessages || [];
+
+    if (pinnedMessageIds.length === 0) {
+      return [];
+    }
+
+    // Convert string IDs to BigInt for query
+    const bigIntIds = pinnedMessageIds.map((id) => BigInt(id));
+
+    // Fetch full message data
+    const messages = await this.prisma.message.findMany({
+      where: {
+        id: { in: bigIntIds },
+        conversationId,
+      },
+      select: {
+        id: true,
+        content: true,
+        type: true,
+        senderId: true,
+        createdAt: true,
+        deletedAt: true,
+        deletedById: true,
+        sender: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+        mediaAttachments: {
+          where: { deletedAt: null },
+          take: 1,
+          select: {
+            id: true,
+            mediaType: true,
+            originalName: true,
+            thumbnailUrl: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Resolve display names for the viewer
+    const senderIds = [
+      ...new Set(messages.map((m) => m.senderId).filter(Boolean) as string[]),
+    ];
+    const nameMap =
+      senderIds.length > 0
+        ? await this.displayNameResolver.batchResolve(userId, senderIds)
+        : new Map<string, string>();
+
+    return messages.map((m) => ({
+      id: m.id.toString(),
+      content: m.deletedById ? null : m.content,
+      type: m.type,
+      senderId: m.senderId,
+      createdAt: m.createdAt.toISOString(),
+      deletedAt: m.deletedAt?.toISOString() ?? null,
+      sender: m.sender
+        ? {
+          id: m.sender.id,
+          displayName:
+            nameMap.get(m.sender.id) ?? m.sender.displayName,
+          avatarUrl: m.sender.avatarUrl,
+        }
+        : null,
+      mediaAttachments: m.mediaAttachments,
+    }));
   }
 }

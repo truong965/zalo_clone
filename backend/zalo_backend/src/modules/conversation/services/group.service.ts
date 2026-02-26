@@ -24,6 +24,7 @@ import {
   ConversationMemberLeftEvent,
   ConversationMemberPromotedEvent,
 } from '../events';
+import { MAX_PINNED_MESSAGES } from '../constants/conversation.constants';
 
 export interface GroupSettings {
   description?: string;
@@ -378,19 +379,40 @@ export class GroupService {
     return { success: true };
   }
 
+  /**
+   * Pin a message in a conversation.
+   * Any ACTIVE member can pin (both DIRECT + GROUP).
+   * Limit: MAX_PINNED_MESSAGES per conversation.
+   */
   async pinMessage(conversationId: string, messageId: bigint, userId: string) {
-    await this.verifyAdmin(conversationId, userId);
+    await this.verifyMember(conversationId, userId);
 
-    const settings = await this.getGroupSettings(conversationId);
+    // Validate message exists in this conversation and is not deleted
+    const message = await this.prisma.message.findFirst({
+      where: {
+        id: messageId,
+        conversationId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (!message) {
+      throw new NotFoundException('Message not found in this conversation');
+    }
+
+    const settings = await this.getConversationSettings(conversationId);
     const pinnedMessages = settings.pinnedMessages || [];
 
     const messageIdStr = messageId.toString();
-    if (pinnedMessages.length >= 3) {
-      throw new BadRequestException('Maximum 3 pinned messages allowed');
-    }
-
     if (pinnedMessages.includes(messageIdStr)) {
       throw new ConflictException('Message already pinned');
+    }
+
+    if (pinnedMessages.length >= MAX_PINNED_MESSAGES) {
+      throw new BadRequestException(
+        `Tối đa ${MAX_PINNED_MESSAGES} tin nhắn được ghim mỗi cuộc trò chuyện`,
+      );
     }
 
     await this.prisma.conversation.update({
@@ -408,12 +430,21 @@ export class GroupService {
     return { success: true };
   }
 
+  /**
+   * Unpin a message from a conversation.
+   * Any ACTIVE member can unpin (both DIRECT + GROUP).
+   */
   async unpinMessage(conversationId: string, messageId: bigint, userId: string) {
-    await this.verifyAdmin(conversationId, userId);
+    await this.verifyMember(conversationId, userId);
 
-    const settings = await this.getGroupSettings(conversationId);
+    const settings = await this.getConversationSettings(conversationId);
     const pinnedMessages = settings.pinnedMessages || [];
     const messageIdStr = messageId.toString();
+
+    if (!pinnedMessages.includes(messageIdStr)) {
+      return { success: true }; // Idempotent — already not pinned
+    }
+
     await this.prisma.conversation.update({
       where: { id: conversationId },
       data: {
@@ -427,6 +458,14 @@ export class GroupService {
     });
 
     return { success: true };
+  }
+
+  /**
+   * Get the list of pinned message IDs for a conversation.
+   */
+  async getPinnedMessageIds(conversationId: string): Promise<string[]> {
+    const settings = await this.getConversationSettings(conversationId);
+    return settings.pinnedMessages || [];
   }
 
   // ============================================================
@@ -490,6 +529,10 @@ export class GroupService {
   }
 
   private async getGroupSettings(conversationId: string): Promise<GroupSettings> {
+    return this.getConversationSettings(conversationId);
+  }
+
+  async getConversationSettings(conversationId: string): Promise<GroupSettings> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       select: { settings: true },

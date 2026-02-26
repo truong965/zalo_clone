@@ -32,6 +32,47 @@ import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import type { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
 import { DisplayNameResolver } from '@shared/services';
 
+/**
+ * Reusable Prisma select shape for reply-to message preview.
+ * Used across getMessages, getMessagesContext, and sendMessage fullMessage.
+ */
+const PARENT_MESSAGE_PREVIEW_SELECT = {
+  id: true,
+  content: true,
+  senderId: true,
+  type: true,
+  deletedAt: true,
+  sender: {
+    select: { id: true, displayName: true, avatarUrl: true },
+  },
+  mediaAttachments: {
+    select: {
+      id: true,
+      mediaType: true,
+      originalName: true,
+      thumbnailUrl: true,
+    },
+    where: { deletedAt: null },
+    take: 1,
+  },
+} as const;
+
+/** Reusable media attachment select fields */
+const MEDIA_ATTACHMENT_SELECT = {
+  id: true,
+  mediaType: true,
+  mimeType: true,
+  cdnUrl: true,
+  thumbnailUrl: true,
+  optimizedUrl: true,
+  originalName: true,
+  size: true,
+  width: true,
+  height: true,
+  duration: true,
+  processingStatus: true,
+} as const;
+
 @Injectable()
 export class MessageService {
   private readonly logger = new Logger(MessageService.name);
@@ -118,21 +159,9 @@ export class MessageService {
           sender: {
             select: { id: true, displayName: true, avatarUrl: true },
           },
+          parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
           mediaAttachments: {
-            select: {
-              id: true,
-              mediaType: true,
-              mimeType: true,
-              cdnUrl: true,
-              thumbnailUrl: true,
-              optimizedUrl: true,
-              originalName: true,
-              size: true,
-              width: true,
-              height: true,
-              duration: true,
-              processingStatus: true,
-            },
+            select: MEDIA_ATTACHMENT_SELECT,
             where: { deletedAt: null },
           },
         },
@@ -250,21 +279,9 @@ export class MessageService {
               sender: {
                 select: { id: true, displayName: true, avatarUrl: true },
               },
+              parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
               mediaAttachments: {
-                select: {
-                  id: true,
-                  mediaType: true,
-                  mimeType: true,
-                  cdnUrl: true,
-                  thumbnailUrl: true,
-                  optimizedUrl: true,
-                  originalName: true,
-                  size: true,
-                  width: true,
-                  height: true,
-                  duration: true,
-                  processingStatus: true,
-                },
+                select: MEDIA_ATTACHMENT_SELECT,
                 where: { deletedAt: null },
               },
             },
@@ -295,21 +312,9 @@ export class MessageService {
         sender: {
           select: { id: true, displayName: true, avatarUrl: true },
         },
+        parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
         mediaAttachments: {
-          select: {
-            id: true,
-            mediaType: true,
-            mimeType: true,
-            cdnUrl: true,
-            thumbnailUrl: true,
-            optimizedUrl: true,
-            originalName: true,
-            size: true,
-            width: true,
-            height: true,
-            duration: true,
-            processingStatus: true,
-          },
+          select: MEDIA_ATTACHMENT_SELECT,
           where: { deletedAt: null },
         },
       },
@@ -460,28 +465,9 @@ export class MessageService {
             avatarUrl: true,
           },
         },
-        parentMessage: {
-          select: {
-            id: true,
-            content: true,
-            senderId: true,
-          },
-        },
+        parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
         mediaAttachments: {
-          select: {
-            id: true,
-            mediaType: true,
-            mimeType: true,
-            cdnUrl: true,
-            thumbnailUrl: true,
-            optimizedUrl: true,
-            originalName: true,
-            size: true,
-            width: true,
-            height: true,
-            duration: true,
-            processingStatus: true,
-          },
+          select: MEDIA_ATTACHMENT_SELECT,
           where: {
             processingStatus: { in: [MediaProcessingStatus.READY, MediaProcessingStatus.PROCESSING] },
             deletedAt: null,
@@ -490,11 +476,14 @@ export class MessageService {
       },
     });
 
-    // Batch resolve display names for senders
+    // Batch resolve display names for senders (including parentMessage senders)
     const senderIds = [
       ...new Set(
         messages
-          .map((m) => m.sender?.id)
+          .flatMap((m) => [
+            m.sender?.id,
+            (m as any).parentMessage?.sender?.id,
+          ])
           .filter((id): id is string => !!id),
       ),
     ];
@@ -513,9 +502,13 @@ export class MessageService {
         if (dto && typeof dto === 'object' && 'sender' in dto) {
           const obj = dto as {
             sender?: { id: string; resolvedDisplayName?: string };
+            parentMessage?: { sender?: { id: string; resolvedDisplayName?: string } };
           };
           if (obj.sender?.id) {
             obj.sender.resolvedDisplayName = nameMap.get(obj.sender.id);
+          }
+          if (obj.parentMessage?.sender?.id) {
+            obj.parentMessage.sender.resolvedDisplayName = nameMap.get(obj.parentMessage.sender.id);
           }
         }
         return dto;
@@ -572,24 +565,9 @@ export class MessageService {
       sender: {
         select: { id: true, displayName: true, avatarUrl: true },
       },
-      parentMessage: {
-        select: { id: true, content: true, senderId: true },
-      },
+      parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
       mediaAttachments: {
-        select: {
-          id: true,
-          mediaType: true,
-          mimeType: true,
-          cdnUrl: true,
-          thumbnailUrl: true,
-          optimizedUrl: true,
-          originalName: true,
-          size: true,
-          width: true,
-          height: true,
-          duration: true,
-          processingStatus: true,
-        },
+        select: MEDIA_ATTACHMENT_SELECT,
         where: {
           processingStatus: {
             in: [MediaProcessingStatus.READY, MediaProcessingStatus.PROCESSING] as MediaProcessingStatus[],
@@ -640,11 +618,14 @@ export class MessageService {
       ...beforeMsgs,           // already DESC order from query
     ];
 
-    // Batch resolve display names for senders
+    // Batch resolve display names for senders (including parentMessage senders)
     const senderIds = [
       ...new Set(
         allMessages
-          .map((m) => m.sender?.id)
+          .flatMap((m) => [
+            m.sender?.id,
+            (m as any).parentMessage?.sender?.id,
+          ])
           .filter((id): id is string => !!id),
       ),
     ];
@@ -663,9 +644,13 @@ export class MessageService {
         if (dto && typeof dto === 'object' && 'sender' in dto) {
           const obj = dto as {
             sender?: { id: string; resolvedDisplayName?: string };
+            parentMessage?: { sender?: { id: string; resolvedDisplayName?: string } };
           };
           if (obj.sender?.id) {
             obj.sender.resolvedDisplayName = nameMap.get(obj.sender.id);
+          }
+          if (obj.parentMessage?.sender?.id) {
+            obj.parentMessage.sender.resolvedDisplayName = nameMap.get(obj.parentMessage.sender.id);
           }
         }
         return dto;

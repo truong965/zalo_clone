@@ -33,6 +33,7 @@ import { SearchEngineModule } from './modules/search_engine/search_engine.module
 import { ContactModule } from './modules/contact/contact.module';
 import { CallModule } from './modules/call/call.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReminderModule } from './modules/reminder/reminder.module';
 
 // Configs
 import jwtConfig from './config/jwt.config';
@@ -134,6 +135,7 @@ import socialConfig from './config/social.config';
     AuthorizationModule, // PHASE 2: canInteract, InteractionGuard
     CallModule, // CALL PHASE 1: Call history + signaling gateway
     NotificationsModule, // PHASE 5: Push Notifications (FCM + Web Push)
+    ReminderModule, // PHASE 4: Reminders (Bull Queue scheduler)
     FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
     PrivacyModule, SearchEngineModule, // Privacy settings & permissions (Independent)
 

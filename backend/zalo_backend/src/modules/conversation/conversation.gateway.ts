@@ -369,7 +369,7 @@ export class ConversationGateway implements OnGatewayInit {
     }
   }
 
-  @SubscribeMessage(SocketEvents.GROUP_PIN_MESSAGE)
+  @SubscribeMessage(SocketEvents.CONVERSATION_PIN_MESSAGE)
   async handlePinMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() dto: { conversationId: string; messageId: bigint },
@@ -383,7 +383,7 @@ export class ConversationGateway implements OnGatewayInit {
         dto.conversationId,
         dto.messageId,
         client.userId,
-        SocketEvents.GROUP_MESSAGE_PINNED,
+        SocketEvents.CONVERSATION_MESSAGE_PINNED,
       );
 
       await this.emitNotifications(notifications);
@@ -391,14 +391,14 @@ export class ConversationGateway implements OnGatewayInit {
     } catch (error) {
       this.logger.error('Error pinning message', (error as Error).stack);
       client.emit(SocketEvents.ERROR, {
-        event: SocketEvents.GROUP_PIN_MESSAGE,
+        event: SocketEvents.CONVERSATION_PIN_MESSAGE,
         error: (error as Error).message,
       });
       throw error;
     }
   }
 
-  @SubscribeMessage(SocketEvents.GROUP_UNPIN_MESSAGE)
+  @SubscribeMessage(SocketEvents.CONVERSATION_UNPIN_MESSAGE)
   async handleUnpinMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() dto: { conversationId: string; messageId: bigint },
@@ -412,7 +412,7 @@ export class ConversationGateway implements OnGatewayInit {
         dto.conversationId,
         dto.messageId,
         client.userId,
-        SocketEvents.GROUP_MESSAGE_UNPINNED,
+        SocketEvents.CONVERSATION_MESSAGE_UNPINNED,
       );
 
       await this.emitNotifications(notifications);
@@ -420,7 +420,7 @@ export class ConversationGateway implements OnGatewayInit {
     } catch (error) {
       this.logger.error('Error unpinning message', (error as Error).stack);
       client.emit(SocketEvents.ERROR, {
-        event: SocketEvents.GROUP_UNPIN_MESSAGE,
+        event: SocketEvents.CONVERSATION_UNPIN_MESSAGE,
         error: (error as Error).message,
       });
       throw error;

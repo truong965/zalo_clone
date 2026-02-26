@@ -52,6 +52,16 @@ export const SocketEvents = {
 
   CONVERSATION_LIST_ITEM_UPDATED: 'conversation:list:itemUpdated',
 
+  // === CONVERSATION PIN EVENTS (Server → Client) ===
+  CONVERSATION_PINNED: 'conversation:pinned',
+  CONVERSATION_UNPINNED: 'conversation:unpinned',
+
+  // Pin Message (conversation-level — works for both DIRECT + GROUP)
+  CONVERSATION_PIN_MESSAGE: 'conversation:pinMessage',
+  CONVERSATION_UNPIN_MESSAGE: 'conversation:unpinMessage',
+  CONVERSATION_MESSAGE_PINNED: 'conversation:messagePinned',
+  CONVERSATION_MESSAGE_UNPINNED: 'conversation:messageUnpinned',
+
   // === GROUP EVENTS ===
 
   // Client → Server
@@ -168,6 +178,12 @@ export const SocketEvents = {
   // === SOCKET LIFECYCLE (internal EventEmitter events) ===
   USER_SOCKET_CONNECTED: 'user.socket.connected',
   USER_SOCKET_DISCONNECTED: 'user.socket.disconnected',
+
+  // === REMINDER EVENTS ===
+  /** Server → Client: Reminder time has arrived */
+  REMINDER_TRIGGERED: 'reminder:triggered',
+  /** Server → Client: Reminder list changed (created/updated/deleted) */
+  REMINDER_UPDATED: 'reminder:updated',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

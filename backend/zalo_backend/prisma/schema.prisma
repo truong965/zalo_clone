@@ -246,6 +246,10 @@ enum EventType {
   MEDIA_UPLOADED
   MEDIA_DELETED
 
+  // Reminder Domain
+  REMINDER_CREATED
+  REMINDER_TRIGGERED
+
   @@map("event_type")
 }
 
@@ -339,6 +343,9 @@ model User {
 
   // Search Analytics
   searchQueries SearchQuery[]
+
+  // Reminders
+  reminders Reminder[]
 
   @@index([phoneNumber])
   @@index([roleId])
@@ -632,6 +639,7 @@ model Conversation {
   messages     Message[]
   joinRequests GroupJoinRequest[]
   calls        CallHistory[]      @relation("CallsInConversation")
+  reminders    Reminder[]
 
   @@index([lastMessageAt(sort: Desc)])
   @@map("conversations")
@@ -662,6 +670,10 @@ model ConversationMember {
   isArchived Boolean @default(false) @map("is_archived")
   isMuted    Boolean @default(false) @map("is_muted")
 
+  // [NEW] Pin conversation — per-user pin state
+  isPinned Boolean   @default(false) @map("is_pinned")
+  pinnedAt DateTime? @map("pinned_at") @db.Timestamptz
+
   // Lifecycle
   joinedAt DateTime  @default(now()) @map("joined_at") @db.Timestamptz
   leftAt   DateTime? @map("left_at") @db.Timestamptz
@@ -675,6 +687,7 @@ model ConversationMember {
   @@index([userId, status])
   @@index([userId, unreadCount(sort: Desc)])
   @@index([userId, isArchived, isMuted, joinedAt(sort: Desc)]) // Search filter index
+  @@index([userId, isPinned, status]) // Fetch pinned conversations efficiently
   //@@unique([conversationId, role], name: "unique_admin_per_group", where: { role: ADMIN, status: ACTIVE })
   @@map("conversation_members")
 }
@@ -759,6 +772,7 @@ model Message {
   replies       Message[] @relation("Reply")
 
   mediaAttachments MediaAttachment[]
+  reminders        Reminder[]
 
   @@index([conversationId, createdAt(sort: Desc)])
   @@index([senderId, createdAt(sort: Desc)])
@@ -1061,4 +1075,43 @@ model SearchQuery {
   @@index([createdAt(sort: Desc)])
   @@index([searchType, resultCount])
   @@map("search_queries")
+}
+
+// ============================================================================
+// 17. REMINDER MODULE (PHASE 4)
+// ============================================================================
+
+/**
+ * Model: Reminder
+ * User-scoped reminders optionally linked to a conversation or message.
+ * Triggered via PostgreSQL polling + @Cron scheduler; pushes Socket.IO notification.
+ *
+ * States:
+ *   PENDING:   isTriggered=false, isCompleted=false  → waiting for remindAt
+ *   TRIGGERED: isTriggered=true,  isCompleted=false  → fired, awaiting user ack
+ *   COMPLETED: isTriggered=true,  isCompleted=true   → user acknowledged/dismissed
+ */
+model Reminder {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  messageId      BigInt?  @map("message_id")
+
+  content        String   @db.VarChar(500)
+  remindAt       DateTime @map("remind_at") @db.Timestamptz
+
+  isTriggered    Boolean   @default(false) @map("is_triggered")
+  triggeredAt    DateTime? @map("triggered_at") @db.Timestamptz
+  isCompleted    Boolean   @default(false) @map("is_completed")
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz
+
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        Message?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([isTriggered, isCompleted, remindAt(sort: Asc)], map: "idx_reminder_pending_poll")
+  @@index([userId, isCompleted, remindAt])
+  @@map("reminders")
 }

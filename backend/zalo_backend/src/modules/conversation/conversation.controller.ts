@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Post,
   Patch,
@@ -10,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ConversationService } from './services/conversation.service';
+import { GroupService } from './services/group.service';
 import {
   InteractionGuard,
   RequireInteraction,
@@ -22,7 +24,10 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 @Controller('conversations')
 @UseGuards(JwtAuthGuard)
 export class ConversationController {
-  constructor(private readonly conversationService: ConversationService) { }
+  constructor(
+    private readonly conversationService: ConversationService,
+    private readonly groupService: GroupService,
+  ) { }
 
   @Post('direct')
   @UseGuards(InteractionGuard)
@@ -103,6 +108,65 @@ export class ConversationController {
       user.id,
       conversationId,
       body.muted,
+    );
+  }
+
+  @Post(':id/pin')
+  @ApiOperation({ summary: 'Pin a conversation' })
+  async pinConversation(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationService.pinConversation(user.id, conversationId);
+  }
+
+  @Delete(':id/pin')
+  @ApiOperation({ summary: 'Unpin a conversation' })
+  async unpinConversation(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationService.unpinConversation(user.id, conversationId);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PIN / UNPIN MESSAGE (Phase 3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  @Get(':id/pinned-messages')
+  @ApiOperation({ summary: 'Get pinned messages for a conversation' })
+  async getPinnedMessages(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+  ) {
+    return this.conversationService.getPinnedMessages(user.id, conversationId);
+  }
+
+  @Post(':id/pin-message')
+  @ApiOperation({ summary: 'Pin a message in a conversation' })
+  async pinMessage(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+    @Body() body: { messageId: string },
+  ) {
+    return this.groupService.pinMessage(
+      conversationId,
+      BigInt(body.messageId),
+      user.id,
+    );
+  }
+
+  @Delete(':id/pin-message')
+  @ApiOperation({ summary: 'Unpin a message from a conversation' })
+  async unpinMessage(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+    @Body() body: { messageId: string },
+  ) {
+    return this.groupService.unpinMessage(
+      conversationId,
+      BigInt(body.messageId),
+      user.id,
     );
   }
 }
