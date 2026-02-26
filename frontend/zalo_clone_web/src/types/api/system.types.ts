@@ -15,9 +15,25 @@ export const CallStatus = {
       MISSED: 'MISSED',
       REJECTED: 'REJECTED',
       CANCELLED: 'CANCELLED',
+      NO_ANSWER: 'NO_ANSWER',
+      FAILED: 'FAILED',
 } as const;
 
 export type CallStatus = (typeof CallStatus)[keyof typeof CallStatus];
+
+export const CallType = {
+      VOICE: 'VOICE',
+      VIDEO: 'VIDEO',
+} as const;
+
+export type CallType = (typeof CallType)[keyof typeof CallType];
+
+export const CallProvider = {
+      WEBRTC_P2P: 'WEBRTC_P2P',
+      DAILY_CO: 'DAILY_CO',
+} as const;
+
+export type CallProvider = (typeof CallProvider)[keyof typeof CallProvider];
 
 // ============================================================================
 // ENTITIES
@@ -27,12 +43,21 @@ export interface CallHistory {
       id: string;
       callerId: string;
       calleeId: string;
+      callType: CallType;
+      provider: CallProvider;
+      conversationId?: string;
       duration?: number;
       status: CallStatus;
+      endReason?: string;
       startedAt: string;
       endedAt?: string;
       createdAt: string;
       deletedAt?: string;
+      /** Populated by backend join */
+      caller?: { id: string; displayName: string; avatarUrl: string | null };
+      /** Populated by backend join */
+      callee?: { id: string; displayName: string; avatarUrl: string | null };
+      isViewed?: boolean;
 }
 
 export interface SocketConnection {

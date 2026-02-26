@@ -75,6 +75,10 @@ export const API_ENDPOINTS = {
     END: (id: string) => `/api/v1/calls/${id}/end`,
     REJECT: (id: string) => `/api/v1/calls/${id}/reject`,
     ACCEPT: (id: string) => `/api/v1/calls/${id}/accept`,
+    HISTORY: '/api/v1/calls/history',
+    MISSED_COUNT: '/api/v1/calls/missed',
+    MARK_MISSED_VIEWED: '/api/v1/calls/missed/view-all',
+    DELETE: (id: string) => `/api/v1/calls/history/${id}`,
   },
 
   // Notifications
@@ -116,5 +120,11 @@ export const API_ENDPOINTS = {
     REMOVE: (contactUserId: string) => `/api/v1/contacts/${contactUserId}`,
     CHECK: (targetUserId: string) => `/api/v1/contacts/check/${targetUserId}`,
     UPDATE_ALIAS: (contactUserId: string) => `/api/v1/contacts/${contactUserId}/alias`,
+  },
+
+  // Devices (FCM push token management)
+  DEVICES: {
+    REGISTER: '/api/v1/devices',
+    REMOVE: (deviceId: string) => `/api/v1/devices/${deviceId}`,
   },
 };

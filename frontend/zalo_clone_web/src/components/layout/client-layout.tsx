@@ -8,6 +8,11 @@ import { ClientSidebar } from './client-sidebar';
 import { useFriendshipSocket } from '@/features/contacts/hooks/use-friendship-socket';
 import { useContactSocket } from '@/features/contacts/hooks/use-contact-socket';
 import { useGroupNotifications } from '@/features/conversation/hooks/use-group-notifications';
+import { CallManager } from '@/features/call/components/CallManager';
+import { IncomingCallOverlay } from '@/features/call/components/IncomingCallOverlay';
+import { OutgoingCallOverlay } from '@/features/call/components/OutgoingCallOverlay';
+import { ActiveCallFloating } from '@/features/call/components/ActiveCallFloating';
+import { useNotificationPermission } from '@/features/notification';
 
 const { Content } = Layout;
 
@@ -23,6 +28,9 @@ export function ClientLayout() {
       // events (created, dissolved, removed) notify the user on any page
       useGroupNotifications();
 
+      // Mount push notification handler — requests FCM permission + registers token
+      useNotificationPermission();
+
       return (
             <Layout className="h-screen w-screen overflow-hidden bg-white">
                   {/* Sidebar cố định bên trái */}
@@ -37,6 +45,12 @@ export function ClientLayout() {
                               <Outlet />
                         </Content>
                   </Layout>
+
+                  {/* ── Call infrastructure (invisible hook host + overlays) ── */}
+                  <CallManager />
+                  <IncomingCallOverlay />
+                  <OutgoingCallOverlay />
+                  <ActiveCallFloating />
             </Layout>
       );
 }

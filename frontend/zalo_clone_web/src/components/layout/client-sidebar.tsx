@@ -2,6 +2,7 @@ import { Layout, Avatar, Tooltip, Popover, Button, Modal, Badge } from 'antd';
 import {
   MessageOutlined,
   ContainerOutlined,
+  PhoneOutlined,
   SettingOutlined,
   UserOutlined,
   LogoutOutlined,
@@ -13,6 +14,7 @@ import { useAuthStore } from '@/features/auth';
 import { useState } from 'react';
 import { UserProfileModal } from '@/features/profile/components/user-profile-modal';
 import { useFriendshipStore } from '@/features/contacts/stores/friendship.store';
+import { useMissedCallCount } from '@/features/call';
 import { ROUTES } from '@/config/routes';
 
 const { Sider } = Layout;
@@ -53,6 +55,8 @@ export function ClientSidebar() {
   const location = useLocation();
   const { user, logout } = useAuthStore(); // Lấy user từ store
   const pendingReceivedCount = useFriendshipStore((s) => s.pendingReceivedCount);
+  const { data: missedCallData } = useMissedCallCount();
+  const missedCallCount = missedCallData?.count ?? 0;
 
   // State quản lý Modal
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -165,6 +169,14 @@ export function ClientSidebar() {
                 isActive={location.pathname.startsWith(ROUTES.CONTACTS)}
                 onClick={() => navigate(ROUTES.CONTACTS)}
                 badgeCount={pendingReceivedCount}
+              />
+
+              <SidebarIcon
+                icon={<PhoneOutlined />}
+                label="Cuộc gọi"
+                isActive={location.pathname.startsWith(ROUTES.CALLS)}
+                onClick={() => navigate(ROUTES.CALLS)}
+                badgeCount={missedCallCount > 0 ? missedCallCount : undefined}
               />
             </div>
           </div>

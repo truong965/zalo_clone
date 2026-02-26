@@ -55,6 +55,75 @@ function DateDivider({ label }: { label: string }) {
       );
 }
 
+// ── CALL_LOG / SYSTEM message rendering ──────────────────────────────────────
+
+interface CallLogMeta {
+      action: string;
+      callType?: 'VOICE' | 'VIDEO';
+      status?: 'COMPLETED' | 'MISSED' | 'REJECTED' | 'CANCELLED' | 'NO_ANSWER' | 'FAILED';
+      duration?: number; // seconds
+}
+
+function formatCallDuration(seconds: number): string {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      if (m === 0) return `${s} giây`;
+      if (s === 0) return `${m} phút`;
+      return `${m} phút ${s} giây`;
+}
+
+function getCallLogLabel(meta: CallLogMeta): string {
+      const typeLabel = meta.callType === 'VIDEO' ? 'Video' : 'Thoại';
+      switch (meta.status) {
+            case 'COMPLETED':
+                  return `Cuộc gọi ${typeLabel.toLowerCase()}${meta.duration ? ` · ${formatCallDuration(meta.duration)}` : ''}`;
+            case 'MISSED':
+                  return `Cuộc gọi ${typeLabel.toLowerCase()} nhỡ`;
+            case 'REJECTED':
+                  return `Cuộc gọi ${typeLabel.toLowerCase()} bị từ chối`;
+            case 'CANCELLED':
+                  return `Cuộc gọi ${typeLabel.toLowerCase()} đã huỷ`;
+            case 'NO_ANSWER':
+                  return `${typeLabel} không được trả lời`;
+            case 'FAILED':
+                  return `Cuộc gọi ${typeLabel.toLowerCase()} thất bại`;
+            default:
+                  return `Cuộc gọi ${typeLabel.toLowerCase()}`;
+      }
+}
+
+/** Centered pill display for CALL_LOG system messages */
+function CallLogEntry({ msg }: { msg: ChatMessage }) {
+      const meta = (msg.metadata ?? {}) as unknown as CallLogMeta;
+
+      if (meta.action !== 'CALL_LOG') {
+            // Generic system message fallback (e.g. "User joined group")
+            return (
+                  <div className="flex justify-center py-1">
+                        <span className="text-[12px] text-gray-400 italic px-3 py-1 bg-gray-100 rounded-full">
+                              {msg.content}
+                        </span>
+                  </div>
+            );
+      }
+
+      const isVideo = meta.callType === 'VIDEO';
+      const isMissed = meta.status === 'MISSED' || meta.status === 'NO_ANSWER';
+
+      return (
+            <div className="flex justify-center py-0.5">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-[12px] select-none">
+                        <span className={isMissed ? 'text-red-400' : 'text-blue-400'} aria-hidden>
+                              {isVideo ? '📹' : '📞'}
+                        </span>
+                        <span className={isMissed ? 'text-red-500' : 'text-gray-600'}>
+                              {getCallLogLabel(meta)}
+                        </span>
+                  </div>
+            </div>
+      );
+}
+
 function renderMessageBody(msg: ChatMessage) {
       const attachments = msg.mediaAttachments ?? [];
 
@@ -283,61 +352,67 @@ export function MessageList({
                                     return (
                                           <Fragment key={msg.id}>
                                                 {showDivider && <DateDivider label={dateLabel} />}
-                                                <div data-message-id={msg.id} className={`flex ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}>
-                                                      {msg.senderSide !== 'me' && (
-                                                            <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center mr-2 text-xs flex-shrink-0">
-                                                                  {(msg.sender?.resolvedDisplayName ?? msg.sender?.displayName)?.[0]?.toUpperCase() ?? 'U'}
-                                                            </div>
-                                                      )}
-                                                      <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 
-                                                      ${msg.senderSide === 'me'
-                                                                  ? 'bg-white text-gray-800 border border-gray-200'
-                                                                  : 'bg-white text-gray-800 border border-gray-200'
-                                                            }
-                                                      ${isHighlighted
-                                                                  ? 'ring-2 ring-blue-400 ring-offset-2 bg-blue-50 transition-all duration-1000 ease-out'
-                                                                  : ''
-                                                            }
-                                                `}>
-                                                            {renderMessageBody(msg)}
-                                                            {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
-                                                                  <div className="mt-2 flex items-center justify-end gap-2">
-                                                                        <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
-                                                                        <Button
-                                                                              size="small"
-                                                                              type="link"
-                                                                              className="!p-0 !h-auto"
-                                                                              onClick={() => onRetry?.(msg)}
-                                                                        >
-                                                                              Gửi lại
-                                                                        </Button>
+                                                {msg.type === 'SYSTEM' ? (
+                                                      <div data-message-id={msg.id}>
+                                                            <CallLogEntry msg={msg} />
+                                                      </div>
+                                                ) : (
+                                                      <div data-message-id={msg.id} className={`flex ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}>
+                                                            {msg.senderSide !== 'me' && (
+                                                                  <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center mr-2 text-xs flex-shrink-0">
+                                                                        {(msg.sender?.resolvedDisplayName ?? msg.sender?.displayName)?.[0]?.toUpperCase() ?? 'U'}
                                                                   </div>
                                                             )}
-                                                            <div className="text-[10px] opacity-60 text-right mt-1 flex items-center justify-end gap-1.5">
-                                                                  {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
-                                                                        <span className="inline-flex items-center gap-1">
-                                                                              <Spin size="small" />
-                                                                              <span>Đang gửi...</span>
-                                                                        </span>
+                                                            <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 
+                                                      ${msg.senderSide === 'me'
+                                                                        ? 'bg-white text-gray-800 border border-gray-200'
+                                                                        : 'bg-white text-gray-800 border border-gray-200'
+                                                                  }
+                                                      ${isHighlighted
+                                                                        ? 'ring-2 ring-blue-400 ring-offset-2 bg-blue-50 transition-all duration-1000 ease-out'
+                                                                        : ''
+                                                                  }
+                                                `}>
+                                                                  {renderMessageBody(msg)}
+                                                                  {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
+                                                                        <div className="mt-2 flex items-center justify-end gap-2">
+                                                                              <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
+                                                                              <Button
+                                                                                    size="small"
+                                                                                    type="link"
+                                                                                    className="!p-0 !h-auto"
+                                                                                    onClick={() => onRetry?.(msg)}
+                                                                              >
+                                                                                    Gửi lại
+                                                                              </Button>
+                                                                        </div>
                                                                   )}
-                                                                  <span>{msg.displayTimestamp}</span>
-                                                                  {/* Receipt status only on the latest message sent by me */}
-                                                                  {isLatestMyMessage && msg.senderSide === 'me' && (() => {
-                                                                        const state = getReceiptDisplayState(msg, isDirect);
-                                                                        if (state === 'none') return null;
-                                                                        return (
+                                                                  <div className="text-[10px] opacity-60 text-right mt-1 flex items-center justify-end gap-1.5">
+                                                                        {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
                                                                               <span className="inline-flex items-center gap-1">
-                                                                                    <ReceiptTick state={state} />
-                                                                                    <span className={state === 'seen' ? 'text-blue-500' : 'text-gray-400'}>
-                                                                                          {getReceiptText(state)}
-                                                                                    </span>
-                                                                                    {!isDirect && <GroupSeenCounter msg={msg} />}
+                                                                                    <Spin size="small" />
+                                                                                    <span>Đang gửi...</span>
                                                                               </span>
-                                                                        );
-                                                                  })()}
+                                                                        )}
+                                                                        <span>{msg.displayTimestamp}</span>
+                                                                        {/* Receipt status only on the latest message sent by me */}
+                                                                        {isLatestMyMessage && msg.senderSide === 'me' && (() => {
+                                                                              const state = getReceiptDisplayState(msg, isDirect);
+                                                                              if (state === 'none') return null;
+                                                                              return (
+                                                                                    <span className="inline-flex items-center gap-1">
+                                                                                          <ReceiptTick state={state} />
+                                                                                          <span className={state === 'seen' ? 'text-blue-500' : 'text-gray-400'}>
+                                                                                                {getReceiptText(state)}
+                                                                                          </span>
+                                                                                          {!isDirect && <GroupSeenCounter msg={msg} />}
+                                                                                    </span>
+                                                                              );
+                                                                        })()}
+                                                                  </div>
                                                             </div>
                                                       </div>
-                                                </div>
+                                                )}
                                           </Fragment>
                                     );
                               })}

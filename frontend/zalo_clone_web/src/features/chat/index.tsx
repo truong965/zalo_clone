@@ -272,6 +272,7 @@ export function ChatFeature() {
                               {selectedConversation ? (
                                     <>
                                           <ChatHeader
+                                                conversationId={selectedConversation.id}
                                                 conversationName={selectedConversation.name || 'Chat'}
                                                 avatarUrl={selectedConversation.avatar ?? null}
                                                 isDirect={selectedConversation.type === 'DIRECT'}

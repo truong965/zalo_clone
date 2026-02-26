@@ -101,6 +101,13 @@ export const authService = {
        */
       async logout() {
             try {
+                  // Unregister FCM token before server logout (needs auth header)
+                  const { unregisterFcmToken } = await import('@/features/notification/services/firebase-messaging');
+                  await unregisterFcmToken().catch(() => { });
+            } catch {
+                  // Firebase not configured or import failed — continue logout
+            }
+            try {
                   await api.post(API_ENDPOINTS.AUTH.LOGOUT, {});
             } finally {
                   // Clear tokens from localStorage

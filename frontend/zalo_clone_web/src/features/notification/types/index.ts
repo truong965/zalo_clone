@@ -19,3 +19,23 @@ export interface NotificationState {
       isLoading: boolean;
       error: string | null;
 }
+
+// ── Push Notification Types ──
+
+export interface PushNotificationData {
+      type: 'INCOMING_CALL' | 'MISSED_CALL' | 'GENERIC';
+      callId?: string;
+      callerId?: string;
+      callerName?: string;
+      callerAvatar?: string;
+      callType?: 'AUDIO' | 'VIDEO';
+      title?: string;
+      body?: string;
+      url?: string;
+}
+
+export interface DeviceTokenRegistration {
+      deviceId: string;
+      fcmToken: string;
+      platform: 'WEB' | 'ANDROID' | 'IOS';
+}

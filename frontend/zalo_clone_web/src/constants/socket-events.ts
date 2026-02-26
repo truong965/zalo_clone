@@ -103,6 +103,34 @@ export const SocketEvents = {
       SEARCH_RESULT_REMOVED: 'search:resultRemoved',
       SEARCH_SUGGESTIONS: 'search:suggestions',
       SEARCH_ERROR: 'search:error',
+
+      // === CALL EVENTS (Phase 3: WebRTC P2P 1-1) ===
+
+      // Client → Server
+      CALL_INITIATE: 'call:initiate',
+      CALL_ACCEPT: 'call:accept',
+      CALL_REJECT: 'call:reject',
+      CALL_HANGUP: 'call:hangup',
+      CALL_OFFER: 'call:offer',
+      CALL_ANSWER: 'call:answer',
+      CALL_ICE_CANDIDATE: 'call:ice-candidate',
+      CALL_ICE_RESTART: 'call:ice-restart',
+      CALL_RINGING_ACK: 'call:ringing-ack',
+      // Phase 4: Daily.co SFU fallback
+      CALL_SWITCH_TO_DAILY: 'call:switch-to-daily',
+
+      // Server → Client
+      CALL_INCOMING: 'call:incoming',
+      CALL_ACCEPTED: 'call:accepted',
+      CALL_REJECTED: 'call:rejected',
+      CALL_ENDED: 'call:ended',
+      CALL_BUSY: 'call:busy',
+      // Phase 4: Daily.co room info
+      CALL_DAILY_ROOM: 'call:daily-room',
+      CALL_PARTICIPANT_JOINED: 'call:participant-joined',
+      CALL_PARTICIPANT_LEFT: 'call:participant-left',
+      CALL_CALLER_DISCONNECTED: 'call:caller-disconnected',
+      CALL_QUALITY_CHANGE: 'call:quality-change',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

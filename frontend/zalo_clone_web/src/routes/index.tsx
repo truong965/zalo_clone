@@ -18,6 +18,7 @@ import { ContactsPage } from '@/pages/contacts';
 import { CallsPage } from '@/pages/calls';
 import { ProfilePage } from '@/pages/profile';
 import { SettingsPage } from '@/pages/settings';
+import { CallScreen } from '@/features/call/components/CallScreen';
 
 // Admin Pages
 import { AdminDashboardPage } from '@/pages/admin/dashboard';
@@ -70,6 +71,10 @@ export const router = createBrowserRouter([
                   {
                         path: 'calls',
                         element: <ErrorBoundary><CallsPage /></ErrorBoundary>,
+                  },
+                  {
+                        path: 'calls/:callId',
+                        element: <ErrorBoundary><CallScreen /></ErrorBoundary>,
                   },
                   {
                         path: 'profile',

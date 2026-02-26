@@ -19,6 +19,10 @@ export const STORAGE_KEYS = {
 
       // --- Chat session (sessionStorage) ---
       CHAT_SELECTED_ID: 'chat_selectedId',
+
+      // --- Push Notifications (localStorage) ---
+      FCM_TOKEN: 'fcm_token',
+      DEVICE_ID: 'device_id',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
