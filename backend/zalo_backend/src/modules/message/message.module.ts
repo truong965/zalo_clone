@@ -21,6 +21,7 @@ import { MessageBroadcasterListener } from './listeners/message-broadcaster.list
 import { MessagingBlockListener } from './listeners/messaging-block.listener';
 import { MessagingFriendshipListener } from './listeners/messaging-friendship.listener';
 import { MessagingUserPresenceListener } from './listeners/messaging-user-presence.listener';
+import { CallMessageListener } from './listeners/call-message.listener';
 
 // Controller & Gateway
 import { MessageController } from './message.controller';
@@ -67,6 +68,7 @@ import { MessageGateway } from './message.gateway';
     MessagingBlockListener,
     MessagingFriendshipListener,
     MessagingUserPresenceListener,
+    CallMessageListener, // CALL PHASE 1: Create system message on call.ended
 
     // Gateway
     MessageGateway,

@@ -1,87 +1,143 @@
 import {
   IsEnum,
-  IsNumber,
   IsOptional,
-  IsUUID,
-  IsDateString,
   IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CallStatus } from '@prisma/client';
+import { CallStatus, CallType, CallProvider, CallParticipantRole, CallParticipantStatus } from '@prisma/client';
 import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
 import { Type } from 'class-transformer';
 
-export class LogCallDto {
-  @IsUUID()
+// ─── Internal DTOs ─────────────────────────────────────────────────────────────
+
+/**
+ * Internal input for ending a call (used by gateway → service).
+ * Not exposed via HTTP — no class-validator decorators needed.
+ */
+export interface EndCallInput {
   callerId: string;
-
-  @IsUUID()
   calleeId: string;
-
-  @IsEnum(CallStatus)
   status: CallStatus;
+  duration?: number;
+  startedAt: string;
+  endedAt?: string;
+  callType?: CallType;
+  provider?: CallProvider;
+  endReason?: string;
+}
 
-  @IsNumber()
-  @IsOptional()
+// ─── Response DTOs ─────────────────────────────────────────────────────────────
+
+export class CallParticipantDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  userId: string;
+
+  @ApiProperty({ enum: CallParticipantRole })
+  role: CallParticipantRole;
+
+  @ApiProperty({ enum: CallParticipantStatus })
+  status: CallParticipantStatus;
+
+  @ApiPropertyOptional()
+  joinedAt?: Date;
+
+  @ApiPropertyOptional()
+  leftAt?: Date;
+
+  @ApiPropertyOptional()
   duration?: number;
 
-  @IsDateString()
-  startedAt: string;
-
-  @IsDateString()
-  @IsOptional()
-  endedAt?: string;
+  @ApiPropertyOptional()
+  user?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  };
 }
 
 export class CallHistoryResponseDto {
   @ApiProperty()
   id: string;
 
+  /** HOST of the call */
   @ApiProperty()
-  callerId: string;
+  initiatorId: string;
 
   @ApiProperty()
-  calleeId: string;
+  participantCount: number;
 
   @ApiProperty({ enum: CallStatus })
   status: CallStatus;
+
+  @ApiProperty({ enum: CallType })
+  callType: CallType;
+
+  @ApiProperty({ enum: CallProvider })
+  provider: CallProvider;
 
   @ApiProperty()
   duration: number;
 
   @ApiProperty()
   startedAt: Date;
-  @ApiProperty()
+
+  @ApiPropertyOptional()
   endedAt?: Date;
+
+  @ApiPropertyOptional()
+  endReason?: string;
+
+  @ApiPropertyOptional()
+  conversationId?: string;
+
   @ApiProperty()
   isViewed: boolean;
 
-  @ApiPropertyOptional()
-  caller?: {
-    id: string;
-    displayName: string;
-    avatarUrl?: string;
-  };
+  @ApiProperty({ type: [CallParticipantDto] })
+  participants: CallParticipantDto[];
 
+  /** Convenience field — initiator user info. */
   @ApiPropertyOptional()
-  callee?: {
+  initiator?: {
     id: string;
     displayName: string;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
   };
 }
 
 /**
  * Active call session (Redis only, not in DB)
+ *
+ * Business rule: 1 active call per user.
+ * Redis key: `call:user:{userId}:current` → callId (String)
+ * Redis key: `call:session:{callId}` → JSON of this DTO
  */
 export class ActiveCallSession {
   callId: string;
   callerId: string;
   calleeId: string;
+  callType: CallType;
+  provider: CallProvider;
+  conversationId?: string;
+  dailyRoomName?: string;
   startedAt: Date;
   status: 'RINGING' | 'ACTIVE' | 'RECONNECTING';
   serverInstance?: string;
+
+  /**
+   * Phase 4.4: Group call support.
+   * All receiver user IDs (includes calleeId for backward compat).
+   * For 1-1 calls: [calleeId]. For group: [calleeId, ...otherReceiverIds].
+   */
+  participantIds?: string[];
+
+  /** True when receiverIds.length > 1 (forces Daily.co) */
+  isGroupCall?: boolean;
 }
+
 /**
  * DTO for getting call history (query params)
  */
@@ -90,6 +146,7 @@ export class GetCallHistoryQueryDto extends CursorPaginationDto {
   @IsOptional()
   @IsEnum(CallStatus)
   status?: CallStatus;
+
   @ApiPropertyOptional({
     description: 'Include total count (expensive, default: first page only)',
     default: false,

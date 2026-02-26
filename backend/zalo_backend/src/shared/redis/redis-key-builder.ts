@@ -105,10 +105,6 @@ export class RedisKeyBuilder {
     return `call:session:${callId}`;
   }
 
-  static callUserActiveCalls(userId: string): string {
-    return `call:user:${userId}:active`;
-  }
-
   static callEndLock(callId: string): string {
     return `call:end_lock:${callId}`;
   }

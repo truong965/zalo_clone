@@ -16,6 +16,7 @@
 
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -24,7 +25,7 @@ import {
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from 'src/modules/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CallStatus, Prisma } from '@prisma/client';
+import { CallStatus, CallType, CallProvider, CallParticipantRole, CallParticipantStatus, Prisma } from '@prisma/client';
 
 import { v4 as uuidv4 } from 'uuid';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
@@ -33,8 +34,8 @@ import { DisplayNameResolver } from '@shared/services';
 import {
   ActiveCallSession,
   CallHistoryResponseDto,
+  EndCallInput,
   GetCallHistoryQueryDto,
-  LogCallDto,
   MissedCallsCountDto,
 } from './dto/call-history.dto';
 
@@ -42,11 +43,22 @@ import {
 const callHistoryWithRelations =
   Prisma.validator<Prisma.CallHistoryDefaultArgs>()({
     include: {
-      caller: {
+      initiator: {
         select: { id: true, displayName: true, avatarUrl: true },
       },
-      callee: {
-        select: { id: true, displayName: true, avatarUrl: true },
+      participants: {
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          status: true,
+          joinedAt: true,
+          leftAt: true,
+          duration: true,
+          user: {
+            select: { id: true, displayName: true, avatarUrl: true },
+          },
+        },
       },
     },
   });
@@ -59,8 +71,11 @@ type CallHistoryWithRelations = Prisma.CallHistoryGetPayload<
 export class CallHistoryService {
   private readonly logger = new Logger(CallHistoryService.name);
 
-  // Redis TTL for active calls
-  private readonly ACTIVE_CALL_TTL = 60; // 60 seconds (refresh on heartbeat)
+  // Redis TTL for active calls (refreshed on heartbeat)
+  private readonly ACTIVE_CALL_TTL = 300; // 5 minutes — enough for ringing + reconnection
+
+  // Hard cap: max call duration to prevent abuse from untrusted client timestamps
+  private readonly MAX_CALL_DURATION = 86400; // 24 hours in seconds
 
   // Cache TTL for call history
   private readonly CACHE_TTL_CALL_HISTORY = 300; // 5 minutes
@@ -82,25 +97,55 @@ export class CallHistoryService {
   async startCall(
     callerId: string,
     calleeId: string,
+    callType: CallType,
+    provider: CallProvider,
+    conversationId?: string,
+    /** Phase 4.4: additional receiver IDs for group calls */
+    additionalReceiverIds?: string[],
   ): Promise<ActiveCallSession> {
+    // Build full participant list (all receivers)
+    const allReceiverIds = [calleeId, ...(additionalReceiverIds ?? [])];
+    const uniqueReceiverIds = [...new Set(allReceiverIds)];
+    const isGroupCall = uniqueReceiverIds.length > 1;
+
+    // Duplicate call prevention: check if caller already has an active call
+    const existingCallerCall = await this.getActiveCall(callerId);
+    if (existingCallerCall) {
+      throw new ConflictException('Caller already has an active call');
+    }
+
+    // Check all receivers for busy status
+    for (const receiverId of uniqueReceiverIds) {
+      const existingReceiverCall = await this.getActiveCall(receiverId);
+      if (existingReceiverCall) {
+        throw new ConflictException(`User ${receiverId} is currently in another call`);
+      }
+    }
+
     const callId = uuidv4();
     const session: ActiveCallSession = {
       callId,
       callerId,
       calleeId,
+      callType,
+      provider: isGroupCall ? CallProvider.DAILY_CO : provider,
+      conversationId,
       startedAt: new Date(),
       status: 'RINGING',
+      participantIds: uniqueReceiverIds,
+      isGroupCall,
     };
 
     // Store in Redis with TTL
     const key = this.getActiveCallKey(callId);
     await this.redis.setex(key, this.ACTIVE_CALL_TTL, JSON.stringify(session));
 
-    // Also index by user IDs for quick lookup
-    await this.indexCallByUsers(callId, callerId, calleeId);
+    // Index by user IDs: 1 active call per user (String, not Set)
+    await this.indexCallByUsers(callId, callerId, uniqueReceiverIds);
 
     this.logger.log(
-      `Active call started: ${callId} (${callerId} → ${calleeId})`,
+      `Active call started: ${callId} (${callerId} → ${uniqueReceiverIds.join(',')}` +
+      `, ${callType}, ${session.provider}${isGroupCall ? ', GROUP' : ''})`,
     );
 
     return session;
@@ -111,7 +156,7 @@ export class CallHistoryService {
    */
   async updateCallStatus(
     callId: string,
-    status: 'RINGING' | 'ACTIVE',
+    status: 'RINGING' | 'ACTIVE' | 'RECONNECTING',
   ): Promise<void> {
     const key = this.getActiveCallKey(callId);
     const sessionJson = await this.redis.get(key);
@@ -128,6 +173,41 @@ export class CallHistoryService {
 
     // Refresh TTL
     await this.redis.setex(key, this.ACTIVE_CALL_TTL, JSON.stringify(session));
+  }
+
+  /**
+   * Update call provider and optionally the Daily.co room name.
+   * Used when switching from WEBRTC_P2P to DAILY_CO (P2P fallback).
+   *
+   * Phase 4: P2P → Daily.co SFU fallback
+   */
+  async updateCallProvider(
+    callId: string,
+    provider: CallProvider,
+    dailyRoomName?: string,
+  ): Promise<void> {
+    const key = this.getActiveCallKey(callId);
+    const sessionJson = await this.redis.get(key);
+
+    if (!sessionJson) {
+      this.logger.warn(`Call not found in Redis: ${callId}`);
+      return;
+    }
+
+    const session: ActiveCallSession = JSON.parse(
+      sessionJson,
+    ) as ActiveCallSession;
+    session.provider = provider;
+    if (dailyRoomName) {
+      session.dailyRoomName = dailyRoomName;
+    }
+
+    // Refresh TTL
+    await this.redis.setex(key, this.ACTIVE_CALL_TTL, JSON.stringify(session));
+
+    this.logger.log(
+      `Call ${callId}: provider updated to ${provider}${dailyRoomName ? ` (room: ${dailyRoomName})` : ''}`,
+    );
   }
 
   /**
@@ -152,7 +232,7 @@ export class CallHistoryService {
   /**
    * End call with distributed lock (prevents race condition)
    */
-  async endCall(dto: LogCallDto): Promise<CallHistoryResponseDto> {
+  async endCall(dto: EndCallInput): Promise<CallHistoryResponseDto> {
     const { callerId, calleeId } = dto;
 
     // Validation
@@ -246,7 +326,7 @@ export class CallHistoryService {
    */
   private async processCallEnd(
     activeSession: ActiveCallSession,
-    dto: LogCallDto,
+    dto: EndCallInput,
   ): Promise<CallHistoryResponseDto> {
     const { status } = dto;
 
@@ -254,42 +334,95 @@ export class CallHistoryService {
     const serverStart = new Date(activeSession.startedAt);
     const serverEnd = new Date();
     const durationMs = serverEnd.getTime() - serverStart.getTime();
-    const finalDuration = Math.max(0, Math.round(durationMs / 1000));
+    const finalDuration = Math.min(
+      Math.max(0, Math.round(durationMs / 1000)),
+      this.MAX_CALL_DURATION,
+    );
 
-    // Save to database
-    const callHistory = await this.prisma.callHistory.create({
-      data: {
-        callerId: activeSession.callerId,
-        calleeId: activeSession.calleeId,
-        status,
-        duration: finalDuration,
-        startedAt: serverStart,
-        endedAt: serverEnd,
-      },
-      include: {
-        caller: {
-          select: { id: true, displayName: true, avatarUrl: true },
+    // All participants: initiator + receivers
+    const allReceiverIds = activeSession.participantIds ?? [activeSession.calleeId];
+    const participantCount = 1 + allReceiverIds.length; // initiator + all receivers
+
+    // Determine participant statuses
+    const receiverParticipantStatus: CallParticipantStatus =
+      status === CallStatus.MISSED ? CallParticipantStatus.MISSED
+        : status === CallStatus.NO_ANSWER ? CallParticipantStatus.MISSED
+          : status === CallStatus.REJECTED ? CallParticipantStatus.REJECTED
+            : status === CallStatus.CANCELLED ? CallParticipantStatus.MISSED
+              : CallParticipantStatus.JOINED; // COMPLETED
+
+    // Save to database atomically
+    const callHistory = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.callHistory.create({
+        data: {
+          initiatorId: activeSession.callerId,
+          participantCount,
+          callType: activeSession.callType,
+          provider: activeSession.provider,
+          conversationId: activeSession.conversationId,
+          status,
+          duration: finalDuration,
+          startedAt: serverStart,
+          endedAt: serverEnd,
         },
-        callee: {
-          select: { id: true, displayName: true, avatarUrl: true },
-        },
-      },
+      });
+
+      // Create participant records
+      await tx.callParticipant.createMany({
+        data: [
+          {
+            callId: created.id,
+            userId: activeSession.callerId,
+            role: CallParticipantRole.HOST,
+            status: status === CallStatus.CANCELLED ? CallParticipantStatus.LEFT : CallParticipantStatus.JOINED,
+            joinedAt: serverStart,
+            leftAt: serverEnd,
+            duration: finalDuration,
+          },
+          ...allReceiverIds.map((receiverId) => ({
+            callId: created.id,
+            userId: receiverId,
+            role: CallParticipantRole.MEMBER,
+            status: receiverParticipantStatus,
+            joinedAt: receiverParticipantStatus === CallParticipantStatus.JOINED ? serverStart : null,
+            leftAt: receiverParticipantStatus === CallParticipantStatus.JOINED ? serverEnd : null,
+            duration: receiverParticipantStatus === CallParticipantStatus.JOINED ? finalDuration : null,
+          })),
+        ],
+        skipDuplicates: true,
+      });
+
+      return tx.callHistory.findUniqueOrThrow({
+        where: { id: created.id },
+        ...callHistoryWithRelations,
+      });
     });
 
     // Remove from active calls
     await this.removeActiveCallById(activeSession.callId);
 
-    // Invalidate missed calls cache if needed
-    if (status === CallStatus.MISSED) {
-      await this.invalidateMissedCallsCache(activeSession.calleeId);
+    // Invalidate missed calls cache for all receivers who missed
+    if (
+      status === CallStatus.MISSED ||
+      status === CallStatus.NO_ANSWER ||
+      status === CallStatus.CANCELLED
+    ) {
+      await Promise.all(
+        allReceiverIds.map((id) => this.invalidateMissedCallsCache(id)),
+      );
     }
 
-    // Publish event
+    // Publish unified event
     this.eventEmitter.emit('call.ended', {
       callId: callHistory.id,
-      callerId: activeSession.callerId,
-      calleeId: activeSession.calleeId,
+      callType: activeSession.callType,
+      initiatorId: activeSession.callerId,
+      receiverIds: activeSession.participantIds ?? [activeSession.calleeId],
+      conversationId: activeSession.conversationId,
       status,
+      reason: dto.endReason ?? 'USER_HANGUP',
+      provider: activeSession.provider,
+      durationSeconds: finalDuration,
     });
 
     this.logger.log(
@@ -303,38 +436,75 @@ export class CallHistoryService {
    * Handle orphaned calls (no active session)
    */
   private async endCallWithoutSession(
-    dto: LogCallDto,
+    dto: EndCallInput,
   ): Promise<CallHistoryResponseDto> {
     const { callerId, calleeId, status, startedAt } = dto;
 
     const clientStart = new Date(startedAt);
     const now = new Date();
-    const duration = Math.max(
+    // Hard cap: don't trust client startedAt — limit to MAX_CALL_DURATION
+    const rawDuration = Math.max(
       0,
       Math.round((now.getTime() - clientStart.getTime()) / 1000),
     );
+    const duration = Math.min(rawDuration, this.MAX_CALL_DURATION);
 
-    const callHistory = await this.prisma.callHistory.create({
-      data: {
-        callerId,
-        calleeId,
-        status,
-        duration,
-        startedAt: clientStart,
-        endedAt: now,
-      },
-      include: {
-        caller: {
-          select: { id: true, displayName: true, avatarUrl: true },
+    const receiverStatus: CallParticipantStatus =
+      status === CallStatus.MISSED || status === CallStatus.NO_ANSWER
+        ? CallParticipantStatus.MISSED
+        : status === CallStatus.REJECTED
+          ? CallParticipantStatus.REJECTED
+          : CallParticipantStatus.JOINED;
+
+    const callHistory = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.callHistory.create({
+        data: {
+          initiatorId: callerId,
+          participantCount: calleeId ? 2 : 1,
+          callType: dto.callType ?? CallType.VOICE,
+          provider: dto.provider ?? CallProvider.WEBRTC_P2P,
+          status,
+          duration,
+          startedAt: clientStart,
+          endedAt: now,
         },
-        callee: {
-          select: { id: true, displayName: true, avatarUrl: true },
+      });
+
+      const participantData: Prisma.CallParticipantCreateManyInput[] = [
+        {
+          callId: created.id,
+          userId: callerId,
+          role: CallParticipantRole.HOST,
+          status: status === CallStatus.CANCELLED ? CallParticipantStatus.LEFT : CallParticipantStatus.JOINED,
+          joinedAt: clientStart,
+          leftAt: now,
+          duration,
         },
-      },
+      ];
+      if (calleeId) {
+        participantData.push({
+          callId: created.id,
+          userId: calleeId,
+          role: CallParticipantRole.MEMBER,
+          status: receiverStatus,
+          joinedAt: receiverStatus === CallParticipantStatus.JOINED ? clientStart : null,
+          leftAt: receiverStatus === CallParticipantStatus.JOINED ? now : null,
+          duration: receiverStatus === CallParticipantStatus.JOINED ? duration : null,
+        });
+      }
+      await tx.callParticipant.createMany({ data: participantData, skipDuplicates: true });
+
+      return tx.callHistory.findUniqueOrThrow({
+        where: { id: created.id },
+        ...callHistoryWithRelations,
+      });
     });
 
-    if (status === CallStatus.MISSED) {
-      await this.invalidateMissedCallsCache(calleeId);
+    if (
+      status === CallStatus.MISSED ||
+      status === CallStatus.NO_ANSWER
+    ) {
+      if (calleeId) await this.invalidateMissedCallsCache(calleeId);
     }
 
     this.logger.warn(`Call logged without active session: ${callHistory.id}`);
@@ -354,7 +524,7 @@ export class CallHistoryService {
     const {
       cursor,
       limit = 20,
-      status = CallStatus.MISSED,
+      status,
       includeTotal,
     } = query;
 
@@ -362,13 +532,21 @@ export class CallHistoryService {
     const viewedAt = await this.getLastViewedAt(userId);
 
     // 2. Build Where Clause (Strict Type)
-    // Logic: (Là caller HOẶC callee) VÀ (Chưa xóa) VÀ (Status khớp nếu có)
+    // Logic: User is participant AND (Chưa xóa) AND (Status khớp nếu có)
+    // Special case: MISSED filter → match by CallParticipant.status = MISSED
+    // (covers CallHistory statuses: MISSED, NO_ANSWER, CANCELLED, REJECTED)
+    const isMissedFilter = status === CallStatus.MISSED;
+
     const where: Prisma.CallHistoryWhereInput = {
-      OR: [{ callerId: userId }, { calleeId: userId }],
+      participants: {
+        some: isMissedFilter
+          ? { userId, status: CallParticipantStatus.MISSED }
+          : { userId },
+      },
       deletedAt: null, // [Quan trọng] Không lấy các log đã Soft Delete
     };
 
-    if (status) {
+    if (status && !isMissedFilter) {
       where.status = status;
     }
 
@@ -384,12 +562,11 @@ export class CallHistoryService {
     });
 
     // 2. [OPTIMIZATION] Batch Resolve Display Names
-    // Resolve display names using contact-based priority:
-    // aliasName > phoneBookName > displayName
+    // Collect all other user IDs from participants
     const otherUserIds = [
       ...new Set(
         calls
-          .flatMap((c) => [c.callerId, c.calleeId])
+          .flatMap((c) => c.participants.map((p) => p.userId))
           .filter((id) => id !== userId),
       ),
     ];
@@ -454,30 +631,32 @@ export class CallHistoryService {
     // Get last viewed timestamp
     const viewedAt = await this.getLastViewedAt(userId);
 
-    // Count missed calls after last viewed time
-    const count = await this.prisma.callHistory.count({
+    // Count missed calls via CallParticipant (user was a receiver who missed the call)
+    const count = await this.prisma.callParticipant.count({
       where: {
-        calleeId: userId,
-        status: CallStatus.MISSED,
-        startedAt: {
-          gt: viewedAt,
+        userId,
+        status: CallParticipantStatus.MISSED,
+        callHistory: {
+          deletedAt: null,
+          startedAt: { gt: viewedAt },
         },
       },
     });
+
     // Get last missed call
-    const lastMissedCall = await this.prisma.callHistory.findFirst({
+    const lastMissedParticipant = await this.prisma.callParticipant.findFirst({
       where: {
-        calleeId: userId,
-        status: CallStatus.MISSED,
-        deletedAt: null,
+        userId,
+        status: CallParticipantStatus.MISSED,
+        callHistory: { deletedAt: null },
       },
-      orderBy: { startedAt: 'desc' },
-      select: { startedAt: true },
+      orderBy: { callHistory: { startedAt: 'desc' } },
+      select: { callHistory: { select: { startedAt: true } } },
     });
 
     const result: MissedCallsCountDto = {
       count,
-      lastMissedAt: lastMissedCall?.startedAt,
+      lastMissedAt: lastMissedParticipant?.callHistory?.startedAt,
     };
 
     // Cache for 1 minute
@@ -522,22 +701,32 @@ export class CallHistoryService {
   ): Promise<CallHistoryResponseDto[]> {
     const viewedAt = await this.getLastViewedAt(userId);
 
-    // Query unviewed missed calls
-    const calls = await this.prisma.callHistory.findMany({
+    // Query unviewed missed calls via participants
+    const missedParticipants = await this.prisma.callParticipant.findMany({
       where: {
-        calleeId: userId,
-        status: CallStatus.MISSED,
-        startedAt: {
-          gt: viewedAt,
+        userId,
+        status: CallParticipantStatus.MISSED,
+        callHistory: {
+          deletedAt: null,
+          startedAt: { gt: viewedAt },
         },
       },
-      orderBy: { startedAt: 'desc' },
+      orderBy: { callHistory: { startedAt: 'desc' } },
       take: limit,
+      select: { callId: true },
+    });
+
+    const callIds = missedParticipants.map((p) => p.callId);
+    if (callIds.length === 0) return [];
+
+    const calls = await this.prisma.callHistory.findMany({
+      where: { id: { in: callIds } },
+      orderBy: { startedAt: 'desc' },
       ...callHistoryWithRelations,
     });
-    // [NEW] Resolve display names for callers (missed calls = other person is always caller)
+    // Resolve display names for initiators
     const otherUserIds = [
-      ...new Set(calls.map((call) => call.callerId)),
+      ...new Set(calls.map((call) => call.initiatorId)),
     ];
     const nameMap = await this.displayNameResolver.batchResolve(
       userId,
@@ -572,6 +761,20 @@ export class CallHistoryService {
   }
 
   /**
+   * Get active call session by callId directly from Redis.
+   * Unlike getActiveCall (which resolves userId → callId → session),
+   * this goes straight to `call:session:{callId}`.
+   *
+   * Returns null if the session doesn't exist or has expired.
+   */
+  async getSessionByCallId(callId: string): Promise<ActiveCallSession | null> {
+    const key = this.getActiveCallKey(callId);
+    const sessionJson = await this.redis.get(key);
+    if (!sessionJson) return null;
+    return JSON.parse(sessionJson) as ActiveCallSession;
+  }
+
+  /**
    * Terminate active call (e.g., when user blocks/unfriends during call)
    */
   async terminateActiveCall(userId1: string, userId2: string): Promise<void> {
@@ -591,11 +794,14 @@ export class CallHistoryService {
       await this.removeActiveCallById(callId);
     }
 
-    // Publish termination event
-    this.eventEmitter.emit('call.terminated', {
-      userId1,
-      userId2,
-      reason: 'relationship_changed',
+    // Publish unified call.ended event with reason
+    this.eventEmitter.emit('call.ended', {
+      callId: activeCalls[0],
+      initiatorId: userId1,
+      receiverIds: [userId2],
+      status: CallStatus.CANCELLED,
+      reason: 'BLOCKED',
+      durationSeconds: 0,
     });
 
     this.logger.log(`Active call terminated: ${userId1} <-> ${userId2}`);
@@ -613,10 +819,10 @@ export class CallHistoryService {
   }
 
   /**
-   * Get Redis key for user's active calls index
+   * Get Redis key for user's current active call (1 call per user)
    */
   private getUserCallsKey(userId: string): string {
-    return `call:user:${userId}:active`;
+    return `call:user:${userId}:current`;
   }
 
   /**
@@ -643,58 +849,57 @@ export class CallHistoryService {
 
   /**
    * Index call by user IDs for quick lookup
+   * Business rule: 1 active call per user → uses String key (not Set)
+   * Phase 4.4: Supports multiple receiver IDs for group calls
    */
   private async indexCallByUsers(
     callId: string,
     callerId: string,
-    calleeId: string,
+    receiverIds: string | string[],
   ): Promise<void> {
-    // Add call ID to both users' active call lists
-    const callerKey = this.getUserCallsKey(callerId);
-    const calleeKey = this.getUserCallsKey(calleeId);
+    const receivers = Array.isArray(receiverIds) ? receiverIds : [receiverIds];
+    const allUserIds = [callerId, ...receivers];
 
-    // Use Redis SET to store active call IDs
-    await Promise.all([
-      this.redis.getClient().sadd(callerKey, callId),
-      this.redis.getClient().sadd(calleeKey, callId),
-      // Set TTL on the sets
-      this.redis.expire(callerKey, this.ACTIVE_CALL_TTL),
-      this.redis.expire(calleeKey, this.ACTIVE_CALL_TTL),
-    ]);
+    await Promise.all(
+      allUserIds.map((userId) =>
+        this.redis.setex(this.getUserCallsKey(userId), this.ACTIVE_CALL_TTL, callId),
+      ),
+    );
   }
 
   /**
-   * Get active call IDs for a user
+   * Get active call IDs for a user (returns 0 or 1 callId)
    */
   private async getActiveCallIdsByUser(userId: string): Promise<string[]> {
     const key = this.getUserCallsKey(userId);
-    return this.redis.getClient().smembers(key);
+    const callId = await this.redis.get(key);
+    return callId ? [callId] : [];
   }
 
   /**
-   * Remove active call from Redis
+   * Remove active call from Redis by caller/callee pair
    */
   private async removeActiveCall(
     callerId: string,
     calleeId: string,
   ): Promise<void> {
-    // Remove from user indexes
-    const callerKey = this.getUserCallsKey(callerId);
-    const calleeKey = this.getUserCallsKey(calleeId);
+    // With String-per-user keys, find the common callId
+    const callerCallId = await this.redis.get(this.getUserCallsKey(callerId));
+    const calleeCallId = await this.redis.get(this.getUserCallsKey(calleeId));
 
-    const callerCalls = await this.redis.getClient().smembers(callerKey);
-    const calleeCalls = await this.redis.getClient().smembers(calleeKey);
-
-    // Find common call ID
-    const callIds = callerCalls.filter((id) => calleeCalls.includes(id));
-
-    for (const callId of callIds) {
-      await this.removeActiveCallById(callId);
+    // If both point to the same call, remove it
+    if (callerCallId && callerCallId === calleeCallId) {
+      await this.removeActiveCallById(callerCallId);
+    } else {
+      // Clean up any dangling references
+      if (callerCallId) await this.removeActiveCallById(callerCallId);
+      if (calleeCallId) await this.removeActiveCallById(calleeCallId);
     }
   }
 
   /**
    * Remove active call by ID
+   * Phase 4.4: Cleans up all participant user keys (group call support)
    */
   private async removeActiveCallById(callId: string): Promise<void> {
     // Get session to find users
@@ -706,15 +911,18 @@ export class CallHistoryService {
         sessionJson,
       ) as ActiveCallSession;
 
-      // Remove from user indexes
-      await Promise.all([
-        this.redis
-          .getClient()
-          .srem(this.getUserCallsKey(session.callerId), callId),
-        this.redis
-          .getClient()
-          .srem(this.getUserCallsKey(session.calleeId), callId),
-      ]);
+      // Collect all user IDs: caller + all participants
+      const allUserIds = new Set<string>([session.callerId, session.calleeId]);
+      if (session.participantIds) {
+        for (const id of session.participantIds) {
+          allUserIds.add(id);
+        }
+      }
+
+      // Remove user index keys
+      await Promise.all(
+        [...allUserIds].map((userId) => this.redis.del(this.getUserCallsKey(userId))),
+      );
     }
 
     // Remove session
@@ -731,15 +939,15 @@ export class CallHistoryService {
     user1Id: string,
     user2Id: string,
   ): Promise<number> {
-    const callerCalls = await this.redis
-      .getClient()
-      .smembers(this.getUserCallsKey(user1Id));
-    const calleeCalls = await this.redis
-      .getClient()
-      .smembers(this.getUserCallsKey(user2Id));
+    // With String-per-user keys, check if both users point to the same call
+    const user1CallId = await this.redis.get(this.getUserCallsKey(user1Id));
+    const user2CallId = await this.redis.get(this.getUserCallsKey(user2Id));
 
-    // Find calls between these two users
-    const callIds = callerCalls.filter((id) => calleeCalls.includes(id));
+    // Find the shared call between these two users
+    const callIds: string[] = [];
+    if (user1CallId && user1CallId === user2CallId) {
+      callIds.push(user1CallId);
+    }
 
     this.logger.log(
       `Terminating ${callIds.length} call(s) between ${user1Id} and ${user2Id}`,
@@ -747,10 +955,14 @@ export class CallHistoryService {
 
     for (const callId of callIds) {
       await this.removeActiveCallById(callId);
-      // Publish event to notify clients
-      this.eventEmitter.emit('call.terminated', {
+      // Publish unified call.ended event
+      this.eventEmitter.emit('call.ended', {
         callId,
-        reason: 'USER_BLOCKED',
+        initiatorId: user1Id,
+        receiverIds: [user2Id],
+        status: CallStatus.CANCELLED,
+        reason: 'BLOCKED',
+        durationSeconds: 0,
       });
     }
 
@@ -762,42 +974,52 @@ export class CallHistoryService {
    */
   private mapToResponseDto(
     call: CallHistoryWithRelations,
-    currentUserId: string, // [NEW] Cần biết ai đang xem để lấy đúng tên
-    nameMap: Map<string, string>, // [NEW] Map tên đã resolve
+    currentUserId: string,
+    nameMap: Map<string, string>,
     viewedAt?: Date,
   ): CallHistoryResponseDto {
-    // Helper function để lấy tên hiển thị chuẩn
     const resolveName = (user: { id: string; displayName: string } | null) => {
       if (!user) return 'Unknown';
-      // Nếu user này là chính mình -> Dùng tên thật (Hoặc "Me")
       if (user.id === currentUserId) return user.displayName;
-      // Nếu là người khác -> Ưu tiên Alias trong danh bạ, fallback về tên thật
       return nameMap.get(user.id) || user.displayName;
     };
-    return {
-      id: call.id.toString(), // id trong schema là BigInt hoặc String? Nếu String thì bỏ .toString()
-      callerId: call.callerId, // Prisma: String? -> DTO: String. Cần handle null nếu schema allow null
-      calleeId: call.calleeId,
-      status: call.status,
-      duration: call.duration ?? 0, // Fix undefined
-      startedAt: call.startedAt,
-      endedAt: call.endedAt ?? undefined, // DTO của bạn có endedAt không? Nếu có thì uncomment
 
-      // Logic isViewed: Trong schema chưa có field này, tạm thời set false hoặc logic riêng
-      isViewed: viewedAt ? call.startedAt <= viewedAt : false,
-
-      caller: call.caller
+    const participants = call.participants.map((p) => ({
+      id: p.id,
+      userId: p.userId,
+      role: p.role,
+      status: p.status,
+      joinedAt: p.joinedAt ?? undefined,
+      leftAt: p.leftAt ?? undefined,
+      duration: p.duration ?? undefined,
+      user: p.user
         ? {
-          id: call.caller.id,
-          displayName: resolveName(call.caller),
-          avatarUrl: call.caller.avatarUrl ?? undefined,
+          id: p.user.id,
+          displayName: resolveName(p.user),
+          avatarUrl: p.user.avatarUrl ?? null,
         }
         : undefined,
-      callee: call.callee
+    }));
+
+    return {
+      id: call.id,
+      initiatorId: call.initiatorId,
+      participantCount: call.participantCount,
+      status: call.status,
+      callType: call.callType,
+      provider: call.provider,
+      duration: call.duration ?? 0,
+      startedAt: call.startedAt,
+      endedAt: call.endedAt ?? undefined,
+      endReason: call.endReason ?? undefined,
+      conversationId: call.conversationId ?? undefined,
+      isViewed: viewedAt ? call.startedAt <= viewedAt : false,
+      participants,
+      initiator: call.initiator
         ? {
-          id: call.callee.id,
-          displayName: resolveName(call.callee),
-          avatarUrl: call.callee.avatarUrl ?? undefined,
+          id: call.initiator.id,
+          displayName: resolveName(call.initiator),
+          avatarUrl: call.initiator.avatarUrl ?? null,
         }
         : undefined,
     };
@@ -812,8 +1034,12 @@ export class CallHistoryService {
       throw new NotFoundException("can't found call");
     }
 
-    // Validate ownership
-    if (call.callerId !== userId && call.calleeId !== userId) {
+    // Validate ownership — initiator OR participant
+    const isInitiator = call.initiatorId === userId;
+    const isParticipant = await this.prisma.callParticipant.count({
+      where: { callId, userId },
+    });
+    if (!isInitiator && !isParticipant) {
       throw new ForbiddenException('Cannot delete call log');
     }
 
@@ -822,12 +1048,6 @@ export class CallHistoryService {
       where: { id: callId },
       data: { deletedAt: new Date() },
     });
-  }
-
-  async logCallEnded(dto: LogCallDto): Promise<CallHistoryResponseDto> {
-    // Validate callerId matches authenticated user
-    // Then call endCall
-    return this.endCall(dto);
   }
 
   async getMissedCalls(userId: string) {
@@ -840,6 +1060,17 @@ export class CallHistoryService {
   async markAllMissedAsViewed(userId: string): Promise<void> {
     // Rename from markMissedCallsAsViewed
     return this.markMissedCallsAsViewed(userId);
+  }
+
+  /**
+   * Remove a single user's call index key.
+   * Used in group calls when a participant rejects/leaves but call continues.
+   * Does NOT end the call session — only frees the user so they can join other calls.
+   */
+  async removeUserFromCall(userId: string): Promise<void> {
+    const key = this.getUserCallsKey(userId);
+    await this.redis.del(key);
+    this.logger.debug(`Removed user ${userId} from active call index`);
   }
 
   /**
@@ -864,9 +1095,15 @@ export class CallHistoryService {
   }
 
   /**
-   * End call gracefully with reason
+   * End call gracefully with reason.
+   * Can be called with just a callId — reads session from Redis.
+   *
+   * Status logic:
+   * - If session was ACTIVE and had meaningful duration → COMPLETED
+   * - If session was RINGING (never answered) → MISSED / NO_ANSWER
+   * - Otherwise → CANCELLED
    */
-  private async endCallGracefully(
+  async endCallGracefully(
     callId: string,
     reason: string,
   ): Promise<void> {
@@ -883,25 +1120,93 @@ export class CallHistoryService {
     ) as ActiveCallSession;
 
     // Calculate duration
-    const durationMs = Date.now() - session.startedAt.getTime();
-    const duration = Math.round(durationMs / 1000);
+    const startedAt = new Date(session.startedAt);
+    const endedAt = new Date();
+    const durationMs = endedAt.getTime() - startedAt.getTime();
+    const duration = Math.min(
+      Math.max(0, Math.round(durationMs / 1000)),
+      this.MAX_CALL_DURATION,
+    );
+
+    // Determine correct status based on session state
+    let status: CallStatus;
+    if (session.status === 'ACTIVE' && duration > 0) {
+      status = CallStatus.COMPLETED;
+    } else if (session.status === 'RINGING') {
+      // Ringing but never answered: NO_ANSWER if timeout, MISSED if disconnect
+      status = reason === 'TIMEOUT' ? CallStatus.NO_ANSWER : CallStatus.MISSED;
+    } else {
+      status = CallStatus.CANCELLED;
+    }
 
     // Log to DB
     try {
-      await this.prisma.callHistory.create({
-        data: {
-          callerId: session.callerId,
-          calleeId: session.calleeId,
-          status: CallStatus.MISSED, // Or DISCONNECTED if you add that status
-          duration,
-          startedAt: session.startedAt,
-          endedAt: new Date(),
-        },
+      const allReceiverIds = session.participantIds ?? [session.calleeId];
+      const participantCount = 1 + allReceiverIds.length;
+      const receiverStatus: CallParticipantStatus =
+        status === CallStatus.MISSED || status === CallStatus.NO_ANSWER
+          ? CallParticipantStatus.MISSED
+          : status === CallStatus.CANCELLED ? CallParticipantStatus.LEFT
+            : CallParticipantStatus.JOINED;
+
+      await this.prisma.$transaction(async (tx) => {
+        const created = await tx.callHistory.create({
+          data: {
+            initiatorId: session.callerId,
+            participantCount,
+            callType: session.callType ?? CallType.VOICE,
+            provider: session.provider ?? CallProvider.WEBRTC_P2P,
+            conversationId: session.conversationId,
+            status,
+            duration,
+            endReason: reason,
+            startedAt,
+            endedAt,
+          },
+        });
+
+        await tx.callParticipant.createMany({
+          data: [
+            {
+              callId: created.id,
+              userId: session.callerId,
+              role: CallParticipantRole.HOST,
+              status: status === CallStatus.CANCELLED ? CallParticipantStatus.LEFT : CallParticipantStatus.JOINED,
+              joinedAt: startedAt,
+              leftAt: endedAt,
+              duration,
+            },
+            ...allReceiverIds.map((receiverId) => ({
+              callId: created.id,
+              userId: receiverId,
+              role: CallParticipantRole.MEMBER,
+              status: receiverStatus,
+              joinedAt: receiverStatus === CallParticipantStatus.JOINED ? startedAt : null,
+              leftAt: receiverStatus === CallParticipantStatus.JOINED ? endedAt : null,
+              duration: receiverStatus === CallParticipantStatus.JOINED ? duration : null,
+            })),
+          ],
+          skipDuplicates: true,
+        });
       });
 
-      this.logger.log(`Call ${callId} ended gracefully: ${reason}`);
+      this.logger.log(
+        `Call ${callId} ended gracefully: ${reason} (${status}, ${duration}s)`,
+      );
     } catch (error) {
       this.logger.error(`Failed to log call ${callId}:`, error);
+    }
+
+    // Invalidate missed calls cache for all receivers who missed
+    if (
+      status === CallStatus.MISSED ||
+      status === CallStatus.NO_ANSWER
+    ) {
+      // Invalidate for all receivers in the session
+      const allReceiverIds = session.participantIds ?? [session.calleeId];
+      await Promise.all(
+        allReceiverIds.map((id) => this.invalidateMissedCallsCache(id)),
+      );
     }
 
     // Remove from Redis

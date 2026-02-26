@@ -126,8 +126,41 @@ enum CallStatus {
   MISSED // Callee didn't answer
   REJECTED // Callee explicitly rejected
   CANCELLED // Caller cancelled before answer
+  NO_ANSWER // Ringing timeout, no one picked up
+  FAILED // Technical failure (network, server error)
 
   @@map("call_status")
+}
+
+enum CallType {
+  VOICE
+  VIDEO
+
+  @@map("call_type")
+}
+
+enum CallProvider {
+  WEBRTC_P2P
+  DAILY_CO
+
+  @@map("call_provider")
+}
+
+enum CallParticipantRole {
+  HOST   // Người khởi tạo cuộc gọi (caller). Future: có thể có co-host.
+  MEMBER // Người nhận (callee).
+
+  @@map("call_participant_role")
+}
+
+enum CallParticipantStatus {
+  JOINED   // Đã tham gia và ở trong call
+  MISSED   // Không trả lời (timeout)
+  REJECTED // Chủ động bấm từ chối
+  LEFT     // Đã tham gia nhưng rời sớm (bao gồm hangup)
+  KICKED   // Schema-ready. MVP: không dùng (kickedBy luôn null).
+
+  @@map("call_participant_status")
 }
 
 // --- Device & Security ---
@@ -297,8 +330,9 @@ model User {
   uploadedMedia MediaAttachment[] @relation("UploadedMedia")
 
   // Calls [NEW]
-  callsMade     CallHistory[] @relation("CallsMade")
-  callsReceived CallHistory[] @relation("CallsReceived")
+  callsMade          CallHistory[]    @relation("CallsMade")
+  callParticipations CallParticipant[] @relation("CallParticipations")
+  kickedCalls        CallParticipant[] @relation("KickedParticipants")
 
   // System Logs
   socketConnections SocketConnection[]
@@ -597,6 +631,7 @@ model Conversation {
   members      ConversationMember[]
   messages     Message[]
   joinRequests GroupJoinRequest[]
+  calls        CallHistory[]      @relation("CallsInConversation")
 
   @@index([lastMessageAt(sort: Desc)])
   @@map("conversations")
@@ -811,29 +846,65 @@ model MediaAttachment {
  * Lưu lịch sử cuộc gọi (write on CALL_ENDED only).
  */
 model CallHistory {
-  id       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  callerId String     @map("caller_id") @db.Uuid
-  calleeId String     @map("callee_id") @db.Uuid
-  duration Int? // seconds (nullable if missed)
-  status   CallStatus
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// HOST of the call — replaces the old callerId field (caller_id → initiator_id).
+  initiatorId      String        @map("initiator_id") @db.Uuid
+  callType         CallType      @map("call_type")
+  provider         CallProvider  @map("provider")
+  duration         Int? // seconds (nullable if missed)
+  status           CallStatus
+  endReason        String?       @map("end_reason") @db.VarChar(50)
+  conversationId   String?       @map("conversation_id") @db.Uuid
+  dailyRoomName    String?       @map("daily_room_name") @db.VarChar(100)
+  participantCount Int           @default(2) @map("participant_count")
 
   startedAt DateTime  @map("started_at") @db.Timestamptz
   endedAt   DateTime? @map("ended_at") @db.Timestamptz
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  deletedAt DateTime? @default(now()) @map("deleted_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  caller User @relation("CallsMade", fields: [callerId], references: [id])
-  callee User @relation("CallsReceived", fields: [calleeId], references: [id])
+  initiator    User              @relation("CallsMade", fields: [initiatorId], references: [id])
+  conversation Conversation?     @relation("CallsInConversation", fields: [conversationId], references: [id])
+  participants CallParticipant[]
 
-  // 1. Caller Feed: Lấy lịch sử gọi đi, loại bỏ bản ghi đã xóa, sort theo thời gian thực
-  @@index([callerId, deletedAt, startedAt(sort: Desc), id], name: "idx_call_history_caller_feed")
-  // 2. Callee Feed: Lấy lịch sử gọi đến
-  @@index([calleeId, deletedAt, startedAt(sort: Desc), id], name: "idx_call_history_callee_feed")
-  // 3. Missed Calls: Lấy danh sách gọi nhỡ nhanh
-  @@index([calleeId, status, startedAt(sort: Desc)], name: "idx_call_history_missed")
-  // 4. Analytics: Thống kê theo thời gian (giữ lại cái cũ nếu cần report)
+  // Feed by initiator (calls I made)
+  @@index([initiatorId, deletedAt, startedAt(sort: Desc), id], name: "idx_call_history_initiator_feed")
+  // Conversation feed
+  @@index([conversationId, deletedAt, startedAt(sort: Desc)], name: "idx_call_history_conversation_feed")
+  // Analytics: by time
   @@index([startedAt], name: "idx_call_history_time_range")
+  // Analytics: by call type
+  @@index([callType, startedAt], name: "idx_call_history_type_analytics")
   @@map("call_history")
+}
+
+/**
+ * Model: CallParticipant [NEW — Phase B]
+ * Tracks every participant in each call (HOST + all MEMBERs).
+ * Enables group call history, missed-call badge per user, and role-based queries.
+ */
+model CallParticipant {
+  id       String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  callId   String                @map("call_id") @db.Uuid
+  userId   String                @map("user_id") @db.Uuid
+  role     CallParticipantRole   @map("role")
+  status   CallParticipantStatus @map("status")
+  /// Schema-ready. MVP: always null. Future: kick feature.
+  kickedBy String?               @map("kicked_by") @db.Uuid
+
+  joinedAt DateTime? @map("joined_at") @db.Timestamptz
+  leftAt   DateTime? @map("left_at") @db.Timestamptz
+  duration Int? // seconds this participant was in call
+
+  callHistory CallHistory @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user        User        @relation("CallParticipations", fields: [userId], references: [id])
+  kicker      User?       @relation("KickedParticipants", fields: [kickedBy], references: [id])
+
+  @@unique([callId, userId])
+  @@index([userId, status], name: "idx_call_participant_user_status") // missed-calls badge
+  @@index([userId, role, status], name: "idx_call_participant_user_role_status") // outgoing/incoming
+  @@index([callId], name: "idx_call_participant_call")
+  @@map("call_participants")
 }
 
 /**

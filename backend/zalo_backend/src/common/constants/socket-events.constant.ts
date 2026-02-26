@@ -124,6 +124,47 @@ export const SocketEvents = {
   /** Owner's alias for a contact was updated; only sent to the owner */
   CONTACT_ALIAS_UPDATED: 'contact:aliasUpdated',
 
+  // === CALL EVENTS ===
+
+  // Client → Server
+  CALL_INITIATE: 'call:initiate',
+  CALL_ACCEPT: 'call:accept',
+  CALL_REJECT: 'call:reject',
+  CALL_HANGUP: 'call:hangup',
+  CALL_OFFER: 'call:offer',
+  CALL_ANSWER: 'call:answer',
+  CALL_ICE_CANDIDATE: 'call:ice-candidate',
+  CALL_ICE_RESTART: 'call:ice-restart',
+  CALL_RINGING_ACK: 'call:ringing-ack',
+  CALL_SWITCH_TO_DAILY: 'call:switch-to-daily',
+
+  // Server → Client
+  CALL_INCOMING: 'call:incoming',
+  CALL_ACCEPTED: 'call:accepted',
+  CALL_REJECTED: 'call:rejected',
+  CALL_ENDED: 'call:ended',
+  CALL_BUSY: 'call:busy',
+  CALL_OFFER_RELAY: 'call:offer',
+  CALL_ANSWER_RELAY: 'call:answer',
+  CALL_ICE_CANDIDATE_RELAY: 'call:ice-candidate',
+  CALL_DAILY_ROOM: 'call:daily-room',
+  CALL_CALLER_DISCONNECTED: 'call:caller-disconnected',
+  CALL_QUALITY_CHANGE: 'call:quality-change',
+  CALL_PARTICIPANT_JOINED: 'call:participant-joined',
+  CALL_PARTICIPANT_LEFT: 'call:participant-left',
+
+  // === CALL INTERNAL EVENTS (EventEmitter — domain events) ===
+  /** Emitted when CallEventHandler wants MessageModule to create a CALL_LOG system message */
+  CALL_LOG_MESSAGE_NEEDED: 'call.log_message_needed',
+  /** Emitted when call ends — listened by ConversationModule to update lastMessageAt */
+  CALL_CONVERSATION_UPDATE_NEEDED: 'call.conversation_update_needed',
+
+  // === PUSH NOTIFICATION EVENTS (EventEmitter — Phase 5) ===
+  /** Gateway requests FCM push for incoming call (callee offline or no ringing ack) */
+  CALL_PUSH_NOTIFICATION_NEEDED: 'call.push_notification_needed',
+  /** CallEventHandler requests FCM push for missed call */
+  CALL_MISSED_NOTIFICATION_NEEDED: 'call.missed_notification_needed',
+
   // === SOCKET LIFECYCLE (internal EventEmitter events) ===
   USER_SOCKET_CONNECTED: 'user.socket.connected',
   USER_SOCKET_DISCONNECTED: 'user.socket.disconnected',

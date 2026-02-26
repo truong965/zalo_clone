@@ -53,6 +53,43 @@ services:
       timeout: 10s
       retries: 3
 
+  # 4. TURN Server (coturn) — WebRTC media relay
+  # PRODUCTION NOTES:
+  # ─────────────────
+  # 1. Replace with managed TURN (Metered.ca / Twilio / Cloudflare) for:
+  #    - Multi-region (Asia/Singapore, Europe, US)
+  #    - ~50% of VN users behind symmetric NAT need TURN relay
+  #    - Easier TLS cert management
+  # 2. If self-hosting in production:
+  #    - Use a separate VM with high bandwidth (TURN relays ALL media)
+  #    - Enable TURNS (port 5349) with valid TLS certs
+  #    - Widen port range: 49152-65535 in coturn.conf
+  #    - Set TURN_SECRET to a strong random value
+  # 3. For dev: coturn runs locally, no TLS, narrow port range
+  coturn:
+    image: coturn/coturn:latest
+    container_name: zalo_coturn
+    restart: always
+    ports:
+      - "3478:3478/udp" # STUN/TURN UDP
+      - "3478:3478/tcp" # STUN/TURN TCP fallback
+      - "5349:5349/tcp" # TURNS (TLS) — unused in dev, ready for prod
+      - "50000-50050:50000-50050/udp" # Media relay port range
+    # Docker Compose substitutes ${TURN_SECRET} here from the .env file.
+    # This is the correct way to inject secrets into coturn — coturn's config
+    # file does NOT expand shell variables, but coturn CLI args do work.
+    command: -n -c /etc/coturn/turnserver.conf --static-auth-secret=${TURN_SECRET:-coturn-dev-secret}
+    volumes:
+      - ./mc-config/coturn.conf:/etc/coturn/turnserver.conf:ro
+    environment:
+      - TURN_SECRET=${TURN_SECRET:-coturn-dev-secret}
+    healthcheck:
+      test: [ "CMD", "turnutils_uclient", "-p", "3478", "127.0.0.1", "-e", "127.0.0.1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # MinIO Client - Auto-create bucket
   minio-init:
     image: minio/mc:latest

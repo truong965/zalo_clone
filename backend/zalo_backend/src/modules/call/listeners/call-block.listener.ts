@@ -19,14 +19,14 @@ import { CallHistoryService } from '../call-history.service';
 export class CallBlockListener {
   private readonly logger = new Logger(CallBlockListener.name);
 
-  constructor(private readonly callHistoryService: CallHistoryService) {}
+  constructor(private readonly callHistoryService: CallHistoryService) { }
 
   /**
    * Handle UserBlockedEvent
    * Terminate all active calls between the two users
    *
    * Action: Find active calls where one user is caller and other is callee
-   *         Remove them from Redis and emit call.terminated event
+   *         Remove them from Redis and emit call.ended event
    *         Socket module will handle client notifications
    */
   @OnEvent('user.blocked')

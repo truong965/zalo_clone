@@ -19,6 +19,8 @@ import { EventsModule } from '@shared/events';
 import { SocketNotificationListener } from './listeners/socket-notification.listener';
 import { FriendshipNotificationListener } from './listeners/friendship-notification.listener';
 import { ContactNotificationListener } from './listeners/contact-notification.listener';
+// CALL PHASE 1: Bridge call.ended domain event → Socket.IO
+import { CallEndedSocketListener } from './listeners/call-ended.listener';
 import { AuthModule } from 'src/modules/auth/auth.module';
 import { FriendshipModule } from 'src/modules/friendship/friendship.module';
 import { PrivacyModule } from 'src/modules/privacy/privacy.module';
@@ -70,6 +72,8 @@ import { PrivacyModule } from 'src/modules/privacy/privacy.module';
     FriendshipNotificationListener,
     // PHASE 3: Contact domain event → Socket.IO notification
     ContactNotificationListener,
+    // CALL PHASE 1: Bridge call.ended domain event → Socket.IO notification
+    CallEndedSocketListener,
   ],
   exports: [
     SocketGateway,
