@@ -64,6 +64,10 @@ export interface MessageParentMessage {
       id: string;
       content?: string | null;
       senderId?: string | null;
+      type?: MessageType;
+      deletedAt?: string | null;
+      sender?: MessageSender | null;
+      mediaAttachments?: Pick<MessageMediaAttachmentItem, 'id' | 'mediaType' | 'originalName' | 'thumbnailUrl'>[];
 }
 
 /** @deprecated Legacy receipt item — kept for reference only */
@@ -118,4 +122,20 @@ export interface MessageReceipt {
       userId: string;
       status: ReceiptStatus;
       timestamp: string;
+}
+
+// ============================================================================
+// PINNED MESSAGE (Phase 3)
+// ============================================================================
+
+/** A pinned message returned by GET /conversations/:id/pinned-messages */
+export interface PinnedMessageItem {
+      id: string;
+      content: string | null;
+      type: MessageType;
+      senderId: string | null;
+      createdAt: string;
+      deletedAt: string | null;
+      sender: MessageSender | null;
+      mediaAttachments: Pick<MessageMediaAttachmentItem, 'id' | 'mediaType' | 'originalName' | 'thumbnailUrl'>[];
 }

@@ -34,6 +34,9 @@ export const API_ENDPOINTS = {
     MARK_AS_READ: (id: string) => `/api/v1/conversations/${id}/read`,
     GET_MEMBERS: (id: string) => `/api/v1/conversations/${id}/members`,
     GROUPS: '/api/v1/conversations/groups',
+    PIN: (id: string) => `/api/v1/conversations/${id}/pin`,
+    PINNED_MESSAGES: (id: string) => `/api/v1/conversations/${id}/pinned-messages`,
+    PIN_MESSAGE: (id: string) => `/api/v1/conversations/${id}/pin-message`,
   },
 
   // Chat - Messages
@@ -126,5 +129,13 @@ export const API_ENDPOINTS = {
   DEVICES: {
     REGISTER: '/api/v1/devices',
     REMOVE: (deviceId: string) => `/api/v1/devices/${deviceId}`,
+  },
+
+  // Reminders
+  REMINDERS: {
+    BASE: '/api/v1/reminders',
+    BY_ID: (id: string) => `/api/v1/reminders/${id}`,
+    UNDELIVERED: '/api/v1/reminders/undelivered',
+    BY_CONVERSATION: (conversationId: string) => `/api/v1/reminders/conversation/${conversationId}`,
   },
 };

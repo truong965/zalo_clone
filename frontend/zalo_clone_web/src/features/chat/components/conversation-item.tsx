@@ -12,6 +12,7 @@ interface ConversationItemProps {
       data: ConversationUI;
       isSelected: boolean;
       onClick: () => void;
+      onTogglePin?: (conversationId: string, isPinned: boolean) => void;
 }
 
 function getLastMessagePreview(data: ConversationUI): string {
@@ -31,7 +32,7 @@ function getLastMessagePreview(data: ConversationUI): string {
       return msg.content ?? '';
 }
 
-export function ConversationItem({ data, isSelected, onClick }: ConversationItemProps) {
+export function ConversationItem({ data, isSelected, onClick, onTogglePin }: ConversationItemProps) {
       const preview = getLastMessagePreview(data);
       const unreadCount = data.unreadCount ?? data.unread ?? 0;
       const isUnread = unreadCount > 0;
@@ -48,6 +49,12 @@ export function ConversationItem({ data, isSelected, onClick }: ConversationItem
       }
 
       // Menu Context
+      const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
+            if (key === 'pin') {
+                  onTogglePin?.(data.id, !!data.isPinned);
+            }
+      };
+
       const menuItems: MenuProps['items'] = [
             {
                   key: 'pin',
@@ -146,7 +153,7 @@ export function ConversationItem({ data, isSelected, onClick }: ConversationItem
                               className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:block z-10"
                               onClick={(e) => e.stopPropagation()}
                         >
-                              <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomLeft">
+                              <Dropdown menu={{ items: menuItems, onClick: handleMenuClick }} trigger={['click']} placement="bottomLeft">
                                     <Button
                                           icon={<MoreOutlined />}
                                           size="small"

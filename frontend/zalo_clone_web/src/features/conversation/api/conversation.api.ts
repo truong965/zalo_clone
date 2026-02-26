@@ -13,6 +13,7 @@ import type {
       CursorPaginatedResponse,
       Conversation,
       ConversationListItem,
+      PinnedMessageItem,
 } from '@/types/api';
 import type { GroupListItem, ContactSearchResult, ContactSearchParams } from '../types';
 
@@ -86,6 +87,8 @@ function mapConversationListItemToUI(item: ConversationListItem): ConversationUI
             myRole: item.myRole as 'ADMIN' | 'MEMBER' | undefined,
             requireApproval: item.requireApproval,
             isMuted: item.isMuted,
+            isPinned: item.isPinned ?? false,
+            pinnedAt: item.pinnedAt ?? null,
       };
 }
 
@@ -163,6 +166,57 @@ async function searchContacts(
       return response.data.data;
 }
 
+async function pinConversation(
+      conversationId: string,
+): Promise<{ isPinned: boolean; pinnedAt: string }> {
+      const response = await apiClient.post<ApiResponse<{ isPinned: boolean; pinnedAt: string }>>(
+            API_ENDPOINTS.CONVERSATIONS.PIN(conversationId),
+      );
+      return response.data.data;
+}
+
+async function unpinConversation(
+      conversationId: string,
+): Promise<{ isPinned: boolean }> {
+      const response = await apiClient.delete<ApiResponse<{ isPinned: boolean }>>(
+            API_ENDPOINTS.CONVERSATIONS.PIN(conversationId),
+      );
+      return response.data.data;
+}
+
+// ── Pin Message (Phase 3) ────────────────────────────────────────────────
+
+async function getPinnedMessages(
+      conversationId: string,
+): Promise<PinnedMessageItem[]> {
+      const response = await apiClient.get<ApiResponse<PinnedMessageItem[]>>(
+            API_ENDPOINTS.CONVERSATIONS.PINNED_MESSAGES(conversationId),
+      );
+      return response.data.data;
+}
+
+async function pinMessage(
+      conversationId: string,
+      messageId: string,
+): Promise<{ success: boolean }> {
+      const response = await apiClient.post<ApiResponse<{ success: boolean }>>(
+            API_ENDPOINTS.CONVERSATIONS.PIN_MESSAGE(conversationId),
+            { messageId },
+      );
+      return response.data.data;
+}
+
+async function unpinMessage(
+      conversationId: string,
+      messageId: string,
+): Promise<{ success: boolean }> {
+      const response = await apiClient.delete<ApiResponse<{ success: boolean }>>(
+            API_ENDPOINTS.CONVERSATIONS.PIN_MESSAGE(conversationId),
+            { data: { messageId } },
+      );
+      return response.data.data;
+}
+
 // ============================================================================
 // EXPORTS
 // ============================================================================
@@ -175,6 +229,11 @@ export const conversationApi = {
       getConversationMembers,
       getUserGroups,
       searchContacts,
+      pinConversation,
+      unpinConversation,
+      getPinnedMessages,
+      pinMessage,
+      unpinMessage,
 };
 
 /**

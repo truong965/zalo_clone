@@ -24,6 +24,17 @@ interface ChatContentProps {
       onRetry?: (msg: ChatMessage) => void;
       /** Whether the current conversation is DIRECT (1v1) */
       isDirect?: boolean;
+      /** Called when user clicks "Reply" on a message */
+      onReply?: (msg: ChatMessage) => void;
+      /** Called when user clicks a reply quote to scroll to the original message */
+      onJumpToMessage?: (messageId: string) => void;
+      /** Set of pinned message IDs */
+      pinnedMessageIds?: Set<string>;
+      /** Called when user clicks "Ghim tin nhắn" */
+      onPinMessage?: (messageId: string) => void;
+      /** Called when user clicks "Bỏ ghim" */
+      onUnpinMessage?: (messageId: string) => void;
+
 }
 
 export function ChatContent({
@@ -44,6 +55,11 @@ export function ChatContent({
       isLoadingNewer,
       onRetry,
       isDirect = true,
+      onReply,
+      onJumpToMessage,
+      pinnedMessageIds,
+      onPinMessage,
+      onUnpinMessage,
 }: ChatContentProps) {
       // Unified bottom indicator:
       // 1. isJumpedAway → "Quay về tin nhắn mới nhất" button
@@ -71,6 +87,11 @@ export function ChatContent({
                         isJumpedAway={isJumpedAway}
                         isLoadingNewer={isLoadingNewer}
                         isDirect={isDirect}
+                        onReply={onReply}
+                        onJumpToMessage={onJumpToMessage}
+                        pinnedMessageIds={pinnedMessageIds}
+                        onPinMessage={onPinMessage}
+                        onUnpinMessage={onUnpinMessage}
                   />
                   {showReturnToLatest && (
                         <div className="sticky bottom-4 ml-auto mr-4 w-fit z-10">

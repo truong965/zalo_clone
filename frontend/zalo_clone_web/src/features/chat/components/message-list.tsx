@@ -1,8 +1,11 @@
 import { Fragment } from 'react';
-import { Button, Empty, Spin } from 'antd';
+import { Button, Dropdown, Empty, Spin, Tooltip } from 'antd';
+import type { MenuProps } from 'antd';
+import { MoreOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../types';
 import type { DirectReceipts } from '@/types/api';
 import { ImageAttachment, VideoAttachment, AudioAttachment, DocumentAttachment } from './attachments';
+import { ReplyQuote } from './reply-quote';
 
 interface MessageListProps {
       messages: ChatMessage[];
@@ -21,6 +24,17 @@ interface MessageListProps {
       isLoadingNewer?: boolean;
       /** Whether the current conversation is DIRECT (1v1) — controls receipt display variant */
       isDirect?: boolean;
+      /** Called when user clicks "Reply" on a message */
+      onReply?: (msg: ChatMessage) => void;
+      /** Called when user clicks a reply quote to scroll to the original message */
+      onJumpToMessage?: (messageId: string) => void;
+      /** Set of pinned message IDs — used to show "Bỏ ghim" vs "Ghim tin nhắn" */
+      pinnedMessageIds?: Set<string>;
+      /** Called when user clicks "Ghim tin nhắn" */
+      onPinMessage?: (messageId: string) => void;
+      /** Called when user clicks "Bỏ ghim" */
+      onUnpinMessage?: (messageId: string) => void;
+
 }
 
 // ── Date-divider helpers ──
@@ -321,6 +335,11 @@ export function MessageList({
       isJumpedAway,
       isLoadingNewer,
       isDirect = true,
+      onReply,
+      onJumpToMessage,
+      pinnedMessageIds,
+      onPinMessage,
+      onUnpinMessage,
 }: MessageListProps) {
       // Find the latest (newest) message sent by "me" — receipt ticks only appear on this one
       const latestMyMessageId = (() => {
@@ -356,63 +375,105 @@ export function MessageList({
                                                       <div data-message-id={msg.id}>
                                                             <CallLogEntry msg={msg} />
                                                       </div>
-                                                ) : (
-                                                      <div data-message-id={msg.id} className={`flex ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}>
-                                                            {msg.senderSide !== 'me' && (
-                                                                  <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center mr-2 text-xs flex-shrink-0">
-                                                                        {(msg.sender?.resolvedDisplayName ?? msg.sender?.displayName)?.[0]?.toUpperCase() ?? 'U'}
-                                                                  </div>
-                                                            )}
-                                                            <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 
-                                                      ${msg.senderSide === 'me'
-                                                                        ? 'bg-white text-gray-800 border border-gray-200'
-                                                                        : 'bg-white text-gray-800 border border-gray-200'
-                                                                  }
-                                                      ${isHighlighted
-                                                                        ? 'ring-2 ring-blue-400 ring-offset-2 bg-blue-50 transition-all duration-1000 ease-out'
-                                                                        : ''
-                                                                  }
-                                                `}>
-                                                                  {renderMessageBody(msg)}
-                                                                  {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
-                                                                        <div className="mt-2 flex items-center justify-end gap-2">
-                                                                              <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
-                                                                              <Button
-                                                                                    size="small"
-                                                                                    type="link"
-                                                                                    className="!p-0 !h-auto"
-                                                                                    onClick={() => onRetry?.(msg)}
-                                                                              >
-                                                                                    Gửi lại
-                                                                              </Button>
-                                                                        </div>
-                                                                  )}
-                                                                  <div className="text-[10px] opacity-60 text-right mt-1 flex items-center justify-end gap-1.5">
-                                                                        {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
-                                                                              <span className="inline-flex items-center gap-1">
-                                                                                    <Spin size="small" />
-                                                                                    <span>Đang gửi...</span>
-                                                                              </span>
+                                                ) : (() => {
+                                                      // Build menu config once, shared between contextMenu + hover button
+                                                      const menuProps: MenuProps = {
+                                                            items: [
+                                                                  { key: 'reply', label: 'Trả lời' },
+                                                                  pinnedMessageIds?.has(msg.id)
+                                                                        ? { key: 'unpin', label: 'Bỏ ghim' }
+                                                                        : { key: 'pin', label: 'Ghim tin nhắn' },
+                                                            ],
+                                                            onClick: ({ key }) => {
+                                                                  if (key === 'reply') onReply?.(msg);
+                                                                  if (key === 'pin') onPinMessage?.(msg.id);
+                                                                  if (key === 'unpin') onUnpinMessage?.(msg.id);
+                                                            },
+                                                      };
+
+                                                      return (
+                                                            <Dropdown
+                                                                  menu={menuProps}
+                                                                  trigger={['contextMenu']}
+                                                            >
+                                                                  <div data-message-id={msg.id} className={`flex group ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}>
+                                                                        {msg.senderSide !== 'me' && (
+                                                                              <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center mr-2 text-xs flex-shrink-0">
+                                                                                    {(msg.sender?.resolvedDisplayName ?? msg.sender?.displayName)?.[0]?.toUpperCase() ?? 'U'}
+                                                                              </div>
                                                                         )}
-                                                                        <span>{msg.displayTimestamp}</span>
-                                                                        {/* Receipt status only on the latest message sent by me */}
-                                                                        {isLatestMyMessage && msg.senderSide === 'me' && (() => {
-                                                                              const state = getReceiptDisplayState(msg, isDirect);
-                                                                              if (state === 'none') return null;
-                                                                              return (
-                                                                                    <span className="inline-flex items-center gap-1">
-                                                                                          <ReceiptTick state={state} />
-                                                                                          <span className={state === 'seen' ? 'text-blue-500' : 'text-gray-400'}>
-                                                                                                {getReceiptText(state)}
+                                                                        <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 
+                                                      ${msg.senderSide === 'me'
+                                                                                    ? 'bg-white text-gray-800 border border-gray-200'
+                                                                                    : 'bg-white text-gray-800 border border-gray-200'
+                                                                              }
+                                                      ${isHighlighted
+                                                                                    ? 'ring-2 ring-blue-400 ring-offset-2 bg-blue-50 transition-all duration-1000 ease-out'
+                                                                                    : ''
+                                                                              }
+                                                `}>
+                                                                              {/* Reply quote (if this message is a reply) */}
+                                                                              {msg.parentMessage ? (
+                                                                                    <ReplyQuote
+                                                                                          parentMessage={msg.parentMessage}
+                                                                                          onJumpToMessage={onJumpToMessage}
+                                                                                    />
+                                                                              ) : null}
+                                                                              {renderMessageBody(msg)}
+                                                                              {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
+                                                                                    <div className="mt-2 flex items-center justify-end gap-2">
+                                                                                          <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
+                                                                                          <Button
+                                                                                                size="small"
+                                                                                                type="link"
+                                                                                                className="!p-0 !h-auto"
+                                                                                                onClick={() => onRetry?.(msg)}
+                                                                                          >
+                                                                                                Gửi lại
+                                                                                          </Button>
+                                                                                    </div>
+                                                                              )}
+                                                                              <div className="text-[10px] opacity-60 text-right mt-1 flex items-center justify-end gap-1.5">
+                                                                                    {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
+                                                                                          <span className="inline-flex items-center gap-1">
+                                                                                                <Spin size="small" />
+                                                                                                <span>Đang gửi...</span>
                                                                                           </span>
-                                                                                          {!isDirect && <GroupSeenCounter msg={msg} />}
-                                                                                    </span>
-                                                                              );
-                                                                        })()}
+                                                                                    )}
+                                                                                    <span>{msg.displayTimestamp}</span>
+                                                                                    {/* Receipt status only on the latest message sent by me */}
+                                                                                    {isLatestMyMessage && msg.senderSide === 'me' && (() => {
+                                                                                          const state = getReceiptDisplayState(msg, isDirect);
+                                                                                          if (state === 'none') return null;
+                                                                                          return (
+                                                                                                <span className="inline-flex items-center gap-1">
+                                                                                                      <ReceiptTick state={state} />
+                                                                                                      <span className={state === 'seen' ? 'text-blue-500' : 'text-gray-400'}>
+                                                                                                            {getReceiptText(state)}
+                                                                                                      </span>
+                                                                                                      {!isDirect && <GroupSeenCounter msg={msg} />}
+                                                                                                </span>
+                                                                                          );
+                                                                                    })()}
+                                                                              </div>
+                                                                        </div>
+                                                                        {/* Hover action button — visible cue for interactions */}
+                                                                        <div
+                                                                              className={`hidden group-hover:flex items-center self-center ${msg.senderSide === 'me' ? 'order-first mr-1' : 'ml-1'}`}
+                                                                              onClick={(e) => e.stopPropagation()}
+                                                                        >
+                                                                              <Dropdown menu={menuProps} trigger={['click']} placement={msg.senderSide === 'me' ? 'bottomRight' : 'bottomLeft'}>
+                                                                                    <Tooltip title="Thao tác">
+                                                                                          <button className="p-1 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors">
+                                                                                                <MoreOutlined style={{ fontSize: 16 }} />
+                                                                                          </button>
+                                                                                    </Tooltip>
+                                                                              </Dropdown>
+                                                                        </div>
                                                                   </div>
-                                                            </div>
-                                                      </div>
-                                                )}
+                                                            </Dropdown>
+                                                      );
+                                                })()}
                                           </Fragment>
                                     );
                               })}

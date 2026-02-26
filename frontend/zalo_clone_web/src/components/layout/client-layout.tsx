@@ -13,6 +13,7 @@ import { IncomingCallOverlay } from '@/features/call/components/IncomingCallOver
 import { OutgoingCallOverlay } from '@/features/call/components/OutgoingCallOverlay';
 import { ActiveCallFloating } from '@/features/call/components/ActiveCallFloating';
 import { useNotificationPermission } from '@/features/notification';
+import { useReminderNotifications } from '@/features/reminder';
 
 const { Content } = Layout;
 
@@ -30,6 +31,9 @@ export function ClientLayout() {
 
       // Mount push notification handler — requests FCM permission + registers token
       useNotificationPermission();
+
+      // Mount global reminder notification listener (singleton — all routes)
+      useReminderNotifications();
 
       return (
             <Layout className="h-screen w-screen overflow-hidden bg-white">

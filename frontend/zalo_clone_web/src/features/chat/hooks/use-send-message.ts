@@ -12,6 +12,28 @@ import type { SendPayload } from '../components/chat-input';
 import { messageService } from '../api/message.api';
 import type { MessageListItem, MessageType, MediaProcessingStatus } from '@/types/api';
 import type { MessagesInfiniteData, MessagesPage } from '../utils/message-cache-helpers';
+import { useChatStore, type ReplyTarget } from '../stores/chat.store';
+
+/**
+ * Build a parentMessage preview shape from the ReplyTarget snapshot
+ * so the optimistic message renders the reply quote immediately.
+ */
+function buildOptimisticParentMessage(target: ReplyTarget) {
+      return {
+            id: target.messageId,
+            content: target.content ?? null,
+            senderId: null,
+            type: target.type as MessageType,
+            deletedAt: null,
+            sender: { id: '', displayName: target.senderName, avatarUrl: null },
+            mediaAttachments: target.mediaAttachments?.map((a) => ({
+                  id: '',
+                  mediaType: a.mediaType as import('@/types/api').MediaType,
+                  originalName: a.originalName,
+                  thumbnailUrl: null,
+            })) ?? [],
+      };
+}
 
 interface UseSendMessageParams {
       selectedId: string | null;
@@ -37,6 +59,10 @@ export function useSendMessage(params: UseSendMessageParams) {
 
             // Text-only: must have content
             if (type === 'TEXT' && !trimmed) return;
+
+            // Snapshot reply target and clear it immediately (optimistic UX)
+            const replyTarget = useChatStore.getState().replyTarget;
+            useChatStore.getState().setReplyTarget(null);
 
             const clientMessageId = crypto.randomUUID();
             const nowIso = new Date().toISOString();
@@ -73,7 +99,10 @@ export function useSendMessage(params: UseSendMessageParams) {
                   sender: currentUserId
                         ? { id: currentUserId, displayName: 'Bạn', avatarUrl: null }
                         : null,
-                  parentMessage: null,
+                  replyToId: replyTarget?.messageId ?? undefined,
+                  parentMessage: replyTarget
+                        ? buildOptimisticParentMessage(replyTarget)
+                        : null,
                   deliveredCount: 0,
                   seenCount: 0,
                   totalRecipients: 0,
@@ -100,6 +129,7 @@ export function useSendMessage(params: UseSendMessageParams) {
                   type: type as MessageType,
                   ...(trimmed ? { content: trimmed } : {}),
                   ...(mediaIds?.length ? { mediaIds } : {}),
+                  ...(replyTarget ? { replyTo: { messageId: replyTarget.messageId } } : {}),
             };
 
             if (isMsgSocketConnected) {

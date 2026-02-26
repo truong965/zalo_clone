@@ -92,6 +92,10 @@ export interface ConversationListItem {
       requireApproval?: boolean;
       /** Whether current user has muted this conversation */
       isMuted?: boolean;
+      /** Whether current user has pinned this conversation */
+      isPinned?: boolean;
+      /** When the conversation was pinned (ISO string) */
+      pinnedAt?: string | null;
 }
 
 export interface ConversationMember {
@@ -147,6 +151,7 @@ export interface ConversationUI extends Conversation {
       isOnline?: boolean;
       lastSeenAt?: string | null;
       isPinned?: boolean;
+      pinnedAt?: string | null;
       updatedAt?: string;
       lastMessageObj?: ConversationLastMessage | null;
       unreadCount?: number;

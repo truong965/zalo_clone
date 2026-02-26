@@ -18,6 +18,7 @@ import {
       PaperClipOutlined,
       SendOutlined,
       LoadingOutlined,
+      ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
@@ -77,13 +78,15 @@ interface ChatInputProps {
       conversationId: string | null;
       onSend?: (payload: SendPayload) => void;
       onTypingChange?: (isTyping: boolean) => void;
+      /** Called when user clicks the reminder toolbar button */
+      onSetReminder?: () => void;
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
-export function ChatInput({ conversationId, onSend, onTypingChange }: ChatInputProps) {
+export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminder }: ChatInputProps) {
       const [message, setMessage] = useState('');
       const [isSending, setIsSending] = useState(false);
       const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -364,6 +367,17 @@ export function ChatInput({ conversationId, onSend, onTypingChange }: ChatInputP
                                     size="middle"
                                     disabled={isDisabled || isUploading}
                                     onClick={openDocAudioPicker}
+                              />
+                        </Tooltip>
+
+                        <Tooltip title="Nhắc hẹn" placement="top">
+                              <Button
+                                    type="text"
+                                    icon={<ClockCircleOutlined />}
+                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                    size="middle"
+                                    disabled={isDisabled}
+                                    onClick={onSetReminder}
                               />
                         </Tooltip>
                   </div>

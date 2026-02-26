@@ -21,6 +21,8 @@ interface ConversationSidebarProps {
       onFriendSearchClick?: () => void;
       /** Open create group modal */
       onCreateGroupClick?: () => void;
+      /** Toggle pin state on a conversation */
+      onTogglePin?: (conversationId: string, isPinned: boolean) => void;
 }
 
 export function ConversationSidebar({
@@ -33,6 +35,7 @@ export function ConversationSidebar({
       onSearchClick,
       onFriendSearchClick,
       onCreateGroupClick,
+      onTogglePin,
 }: ConversationSidebarProps) {
       const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
@@ -127,6 +130,7 @@ export function ConversationSidebar({
                                                 data={item}
                                                 isSelected={selectedId === item.id}
                                                 onClick={() => onSelect(item.id)}
+                                                onTogglePin={onTogglePin}
                                           />
                                     ))}
 

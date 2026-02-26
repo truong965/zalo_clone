@@ -18,6 +18,9 @@ import {
 } from '@ant-design/icons';
 import type { ConversationUI } from '@/types/api';
 import { useBlockUser } from '@/features/contacts/hooks/use-block';
+import { usePinConversation } from '@/features/conversation';
+import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 const { Title } = Typography;
 
@@ -27,7 +30,12 @@ interface DirectInfoContentProps {
 
 export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
       const blockMutation = useBlockUser();
+      const { togglePin } = usePinConversation();
       const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+      const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+      const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversation.id);
+      const [showReminders, setShowReminders] = useState(false);
+      const [showCreateReminder, setShowCreateReminder] = useState(false);
 
       // In a DIRECT conversation, the other user is whoever isn't us
       const otherUserId = conversation.otherUserId ?? null;
@@ -87,13 +95,13 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
                                           </div>
                                     </div>
                               </button>
-                              <div className="flex items-center justify-between p-1">
+                              {/* <div className="flex items-center justify-between p-1">
                                     <div className="flex items-center gap-3">
                                           <EyeInvisibleOutlined className="text-gray-500" />
                                           <span className="text-sm">Ẩn trò chuyện</span>
                                     </div>
                                     <Switch size="small" />
-                              </div>
+                              </div> */}
                         </div>
                   ),
             },
@@ -131,33 +139,68 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
                                           Tắt thông báo
                                     </span>
                               </div>
-                              <div className="flex flex-col items-center gap-2 cursor-pointer group">
-                                    <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                                          <PushpinOutlined className="text-gray-600 group-hover:text-blue-600" />
+                              <div
+                                    className="flex flex-col items-center gap-2 cursor-pointer group"
+                                    onClick={() => togglePin(conversation.id, !!conversation.isPinned)}
+                              >
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${conversation.isPinned
+                                          ? 'bg-blue-100'
+                                          : 'bg-gray-100 group-hover:bg-blue-50'
+                                          }`}>
+                                          <PushpinOutlined className={conversation.isPinned ? 'text-blue-600' : 'text-gray-600 group-hover:text-blue-600'} />
                                     </div>
                                     <span className="text-xs text-gray-500 text-center max-w-[60px]">
-                                          Ghim hội thoại
+                                          {conversation.isPinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
                                     </span>
                               </div>
-                              <div className="flex flex-col items-center gap-2 cursor-pointer group">
+                              {/* <div className="flex flex-col items-center gap-2 cursor-pointer group">
                                     <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-blue-50 transition-colors">
                                           <UsergroupAddOutlined className="text-gray-600 group-hover:text-blue-600" />
                                     </div>
                                     <span className="text-xs text-gray-500 text-center max-w-[60px]">
                                           Tạo nhóm
                                     </span>
-                              </div>
+                              </div> */}
                         </div>
                   </div>
 
                   {/* Scrollable Content */}
                   <div className="flex-1 overflow-y-auto">
-                        <div className="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 border-b border-[#f4f5f7] border-b-[6px]">
+                        <div
+                              className="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 border-b border-[#f4f5f7] border-b-[6px]"
+                              onClick={() => setShowReminders((v) => !v)}
+                        >
                               <ClockCircleOutlined className="text-gray-500 text-lg" />
-                              <span className="text-sm font-medium text-gray-600">
+                              <span className="text-sm font-medium text-gray-600 flex-1">
                                     Danh sách nhắc hẹn
                               </span>
+                              <RightOutlined
+                                    rotate={showReminders ? 90 : 0}
+                                    className="text-xs text-gray-400 transition-transform"
+                              />
                         </div>
+                        {showReminders && (
+                              <div className="border-b border-[#f4f5f7] border-b-[6px]">
+                                    <div className="px-3 pt-2 pb-1">
+                                          <Button
+                                                type="dashed"
+                                                block
+                                                size="small"
+                                                icon={<ClockCircleOutlined />}
+                                                onClick={() => setShowCreateReminder(true)}
+                                          >
+                                                Tạo nhắc hẹn
+                                          </Button>
+                                    </div>
+                                    <ReminderList
+                                          reminders={reminders}
+                                          isLoading={isLoadingReminders}
+                                          onComplete={completeReminder}
+                                          onDelete={deleteReminder}
+                                          currentUserId={currentUserId}
+                                    />
+                              </div>
+                        )}
 
                         <Collapse
                               ghost
@@ -209,6 +252,14 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
                               Người này sẽ không được thông báo.
                         </p>
                   </Modal>
+
+                  <CreateReminderModal
+                        open={showCreateReminder}
+                        onClose={() => setShowCreateReminder(false)}
+                        onSubmit={createReminder}
+                        conversationId={conversation.id}
+                        isSubmitting={isReminderCreating}
+                  />
             </>
       );
 }

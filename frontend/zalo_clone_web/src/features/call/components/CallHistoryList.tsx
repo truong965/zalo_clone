@@ -116,7 +116,7 @@ export function CallHistoryList() {
       }));
 
       return (
-            <div className="flex h-full flex-col">
+            <div className="flex h-full flex-col px-4">
                   <div className="flex items-center justify-between px-4 pt-4 pb-2">
                         <Title level={4} className="!mb-0">
                               Cuộc gọi
@@ -154,7 +154,7 @@ export function CallHistoryList() {
                         {records.map((record, index) => {
                               const isLast = index === records.length - 1;
                               return (
-                                    <div
+                                    <div className='px-4'
                                           key={record.id}
                                           ref={isLast ? lastItemRef : undefined}
                                     >

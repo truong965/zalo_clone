@@ -13,3 +13,5 @@ export {
 export { useFriendSearch, type SearchTab, type MemberSearchItem, type FriendSearchParams } from './use-friend-search';
 export { useCreateGroup } from './use-create-group';
 export { useGroupNotifications } from './use-group-notifications';
+export { usePinConversation } from './use-pin-conversation';
+export { usePinMessage, pinnedMessagesKey } from './use-pin-message';

@@ -13,6 +13,19 @@
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import type { RightSidebarState } from '../types';
+import type { ChatMessage } from '../types';
+
+/**
+ * Lightweight snapshot of the message being replied to.
+ * Kept minimal — just what ReplyPreviewBar + optimistic send need.
+ */
+export interface ReplyTarget {
+      messageId: string;
+      senderName: string;
+      content?: string | null;
+      type: string;
+      mediaAttachments?: { mediaType: string; originalName: string }[];
+}
 
 interface ChatStoreState {
       // ── Selection ──────────────────────────────────────────────────────────
@@ -26,6 +39,9 @@ interface ChatStoreState {
 
       // ── Typing ────────────────────────────────────────────────────────────
       typingUserIds: string[];
+
+      // ── Reply ─────────────────────────────────────────────────────────────
+      replyTarget: ReplyTarget | null;
 }
 
 interface ChatStoreActions {
@@ -35,6 +51,7 @@ interface ChatStoreActions {
       setIsFriendSearchOpen: (open: boolean) => void;
       setPrefillSearchKeyword: (keyword: string | undefined) => void;
       setTypingUserIds: (updater: string[] | ((prev: string[]) => string[])) => void;
+      setReplyTarget: (target: ReplyTarget | null) => void;
 }
 
 export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => ({
@@ -45,6 +62,7 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => (
       isFriendSearchOpen: false,
       prefillSearchKeyword: undefined,
       typingUserIds: [],
+      replyTarget: null,
 
       // ── Actions ─────────────────────────────────────────────────────────────
       setSelectedId: (id) => {
@@ -69,4 +87,6 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => (
             set((state) => ({
                   typingUserIds: typeof updater === 'function' ? updater(state.typingUserIds) : updater,
             })),
+
+      setReplyTarget: (target) => set({ replyTarget: target }),
 }));

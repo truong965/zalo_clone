@@ -15,7 +15,9 @@
  * - R6: User kicked while sidebar open → close sidebar + navigate away
  */
 import { useState, useCallback, useEffect } from 'react';
-import { Collapse, Modal, Spin, Result, notification } from 'antd';
+import {
+      Collapse, Modal, Spin, Result, notification, Button,
+} from 'antd';
 import {
       RightOutlined,
       ClockCircleOutlined,
@@ -35,6 +37,8 @@ import { GroupJoinRequests } from '@/features/conversation/components/group-info
 import { AddMembersModal } from '@/features/conversation/components/add-members-modal';
 import { TransferAdminModal } from '@/features/conversation/components/transfer-admin-modal';
 import { useSocket } from '@/hooks/use-socket';
+import { usePinConversation } from '@/features/conversation';
+import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 
 interface GroupInfoContentProps {
       conversation: ConversationUI;
@@ -59,6 +63,10 @@ export function GroupInfoContent({
       const { connectionNonce } = useSocket();
       const { invalidateMembers, invalidateDetail, invalidateAll } =
             useInvalidateConversations();
+      const { togglePin } = usePinConversation();
+      const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversationId);
+      const [showReminders, setShowReminders] = useState(false);
+      const [showCreateReminder, setShowCreateReminder] = useState(false);
 
       // Fetch members with role
       const membersQuery = useConversationMembers(conversationId);
@@ -310,17 +318,47 @@ export function GroupInfoContent({
                         isAdmin={isAdmin}
                         onUpdateName={handleUpdateName}
                         onAddMembers={() => setShowAddMembers(true)}
+                        onTogglePin={() => togglePin(conversation.id, !!conversation.isPinned)}
                   />
 
                   {/* Scrollable Content */}
                   <div className="flex-1 overflow-y-auto">
                         {/* Reminder List */}
-                        <div className="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 border-b border-[#f4f5f7] border-b-[6px]">
+                        <div
+                              className="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 border-b border-[#f4f5f7] border-b-[6px]"
+                              onClick={() => setShowReminders((v) => !v)}
+                        >
                               <ClockCircleOutlined className="text-gray-500 text-lg" />
-                              <span className="text-sm font-medium text-gray-600">
+                              <span className="text-sm font-medium text-gray-600 flex-1">
                                     Danh sách nhắc hẹn
                               </span>
+                              <RightOutlined
+                                    rotate={showReminders ? 90 : 0}
+                                    className="text-xs text-gray-400 transition-transform"
+                              />
                         </div>
+                        {showReminders && (
+                              <div className="border-b border-[#f4f5f7] border-b-[6px]">
+                                    <div className="px-3 pt-2 pb-1">
+                                          <Button
+                                                type="dashed"
+                                                block
+                                                size="small"
+                                                icon={<ClockCircleOutlined />}
+                                                onClick={() => setShowCreateReminder(true)}
+                                          >
+                                                Tạo nhắc hẹn
+                                          </Button>
+                                    </div>
+                                    <ReminderList
+                                          reminders={reminders}
+                                          isLoading={isLoadingReminders}
+                                          onComplete={completeReminder}
+                                          onDelete={deleteReminder}
+                                          currentUserId={currentUserId}
+                                    />
+                              </div>
+                        )}
 
                         {/* Members Section */}
                         <GroupMembersSection
@@ -393,6 +431,14 @@ export function GroupInfoContent({
                         currentUserId={currentUserId}
                         onClose={() => setShowTransferAdmin(false)}
                         onTransfer={handleTransferAdmin}
+                  />
+
+                  <CreateReminderModal
+                        open={showCreateReminder}
+                        onClose={() => setShowCreateReminder(false)}
+                        onSubmit={createReminder}
+                        conversationId={conversationId}
+                        isSubmitting={isReminderCreating}
                   />
             </>
       );

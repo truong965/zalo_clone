@@ -25,6 +25,9 @@ export {
       useFriendSearch,
       useCreateGroup,
       useGroupNotifications,
+      usePinConversation,
+      usePinMessage,
+      pinnedMessagesKey,
 } from './hooks';
 
 // Stores

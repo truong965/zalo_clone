@@ -15,14 +15,17 @@ import { ChatInput } from './components/chat-input';
 import { ChatSearchSidebar } from './components/chat-search-sidebar';
 import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
+import { ReplyPreviewBar } from './components/reply-preview-bar';
+import { PinnedMessagesBanner } from './components/pinned-messages-banner';
 
 // ── Cross-feature components (rendered by page-level host) ───────────────
 import { FriendshipSearchModal } from '@/features/contacts';
 import { CreateGroupModal, useCreateGroupStore } from '@/features/conversation';
 import { SearchPanel } from '@/features/search/components/SearchPanel';
+import { useReminders, CreateReminderModal } from '@/features/reminder';
 
 // ── Cross-feature hooks ──────────────────────────────────────────────────
-import { useConversationListRealtime } from '@/features/conversation';
+import { useConversationListRealtime, usePinConversation, usePinMessage } from '@/features/conversation';
 import { useAuthStore } from '@/features/auth';
 import { useSocket } from '@/hooks/use-socket';
 
@@ -40,6 +43,13 @@ import { useConversationLoader } from './hooks/use-conversation-loader';
 
 // ── Store ────────────────────────────────────────────────────────────────
 import { useChatStore } from './stores/chat.store';
+import type { ChatMessage } from './types';
+
+interface ReminderTarget {
+      conversationId: string;
+      messageId: string;
+      content: string;
+}
 
 export function ChatFeature() {
       const [, contextHolder] = notification.useNotification();
@@ -60,9 +70,48 @@ export function ChatFeature() {
       const setIsFriendSearchOpen = useChatStore((s) => s.setIsFriendSearchOpen);
       const prefillSearchKeyword = useChatStore((s) => s.prefillSearchKeyword);
       const setPrefillSearchKeyword = useChatStore((s) => s.setPrefillSearchKeyword);
+      const replyTarget = useChatStore((s) => s.replyTarget);
+      const setReplyTarget = useChatStore((s) => s.setReplyTarget);
+
+      // ── Reminder state ──────────────────────────────────────────────────────────
+      const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
+      const { createReminder, isCreating: isReminderCreating } = useReminders();
+
+      // ── Reply handler ────────────────────────────────────────────────────
+      const handleReply = (msg: ChatMessage) => {
+            setReplyTarget({
+                  messageId: msg.id,
+                  senderName:
+                        msg.sender?.resolvedDisplayName ??
+                        msg.sender?.displayName ??
+                        'Người dùng',
+                  content: msg.content,
+                  type: msg.type,
+                  mediaAttachments: msg.mediaAttachments?.map((a) => ({
+                        mediaType: a.mediaType,
+                        originalName: a.originalName,
+                  })),
+            });
+      };
+
+      // ── Reminder handler ─────────────────────────────────────────────────
+      const handleSetReminder = () => {
+            if (!selectedId) return;
+            setReminderTarget({
+                  conversationId: selectedId,
+                  messageId: '',
+                  content: '',
+            });
+            console.log('Setting reminder target:', selectedId);
+      };
 
       // ── Hook: selection / URL sync ───────────────────────────────────────
       const { selectedId, setSelectedId, handleSelectConversation } = useChatSelection();
+
+      // ── Clear reply target when switching conversations ──────────────────
+      useEffect(() => {
+            setReplyTarget(null);
+      }, [selectedId, setReplyTarget]);
 
       // ── Hook: conversation list (query + cache mutations) ────────────────
       const {
@@ -89,6 +138,21 @@ export function ChatFeature() {
             selectedId,
             setSelectedId,
       });
+
+      // ── Hook: pin conversation ───────────────────────────────────────────
+      const { togglePin } = usePinConversation();
+
+      // ── Hook: pin message ────────────────────────────────────────────────
+      const {
+            pinnedMessages,
+            pinMessage,
+            unpinMessage,
+      } = usePinMessage(selectedId);
+
+      const pinnedMessageIds = useMemo(
+            () => new Set((pinnedMessages ?? []).map((m) => m.id)),
+            [pinnedMessages],
+      );
 
       // ── Hook: messages ───────────────────────────────────────────────────
       const {
@@ -265,6 +329,7 @@ export function ChatFeature() {
                                     }}
                                     onFriendSearchClick={() => setIsFriendSearchOpen(true)}
                                     onCreateGroupClick={() => useCreateGroupStore.getState().open()}
+                                    onTogglePin={togglePin}
                               />
                         )}
 
@@ -285,6 +350,12 @@ export function ChatFeature() {
                                                       setIsGlobalSearchOpen(false);
                                                 }}
                                                 onToggleInfo={() => setRightSidebar((prev) => prev === 'info' ? 'none' : 'info')}
+                                          />
+
+                                          <PinnedMessagesBanner
+                                                pinnedMessages={pinnedMessages ?? []}
+                                                onJumpToMessage={(msgId) => void jumpToMessage(msgId)}
+                                                onUnpin={unpinMessage}
                                           />
 
                                           <ChatContent
@@ -308,12 +379,25 @@ export function ChatFeature() {
                                                 isLoadingNewer={isLoadingNewer}
                                                 onRetry={(m) => handleRetryMessage(m)}
                                                 isDirect={selectedConversation.type === 'DIRECT'}
+                                                onReply={handleReply}
+                                                onJumpToMessage={(msgId) => void jumpToMessage(msgId)}
+                                                pinnedMessageIds={pinnedMessageIds}
+                                                onPinMessage={pinMessage}
+                                                onUnpinMessage={unpinMessage}
                                           />
+
+                                          {replyTarget && (
+                                                <ReplyPreviewBar
+                                                      target={replyTarget}
+                                                      onCancel={() => setReplyTarget(null)}
+                                                />
+                                          )}
 
                                           <ChatInput
                                                 conversationId={selectedId}
                                                 onSend={handleSendMessage}
                                                 onTypingChange={handleTypingChange}
+                                                onSetReminder={handleSetReminder}
                                           />
                                     </>
                               ) : selectedId ? (
@@ -374,6 +458,16 @@ export function ChatFeature() {
                               handleSelectConversation(conversationId);
                               await ensureConversationLoaded(conversationId);
                         }}
+                  />
+
+                  <CreateReminderModal
+                        open={!!reminderTarget}
+                        onClose={() => setReminderTarget(null)}
+                        onSubmit={createReminder}
+                        conversationId={reminderTarget?.conversationId}
+                        messageId={reminderTarget?.messageId || undefined}
+                        defaultContent={reminderTarget?.content || undefined}
+                        isSubmitting={isReminderCreating}
                   />
             </>
       );
