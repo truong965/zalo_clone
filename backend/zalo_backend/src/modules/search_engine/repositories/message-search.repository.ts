@@ -57,7 +57,7 @@ export class MessageSearchRepository {
 
     // Message type filter
     if (messageType) {
-      dynamicConditions.push(`m.type = $${paramIndex}::text`);
+      dynamicConditions.push(`m.type = $${paramIndex}::message_type`);
       params.push(messageType);
       paramIndex++;
     }
@@ -165,6 +165,115 @@ export class MessageSearchRepository {
 
     const results = await this.prisma.$queryRawUnsafe(query, ...params);
 
+    return results as RawMessageSearchResult[];
+  }
+
+  /**
+   * Browse messages in a conversation by filters only (no keyword / full-text search).
+   * Used when messageType filter is active but keyword is empty.
+   * Returns messages matching filter criteria, ordered by created_at DESC.
+   */
+  async browseInConversation(
+    userId: string,
+    conversationId: string,
+    limit = 50,
+    cursor?: string,
+    messageType?: MessageType,
+    fromUserId?: string,
+    startDate?: Date,
+    endDate?: Date,
+    hasMedia?: boolean,
+  ): Promise<any[]> {
+    const decodedCursor = cursor ? PaginationUtil.decodeCursor(cursor) : null;
+    const normalizedLimit = PaginationUtil.normalizeLimit(limit, 100);
+
+    // Parameters: $1 = userId, $2 = conversationId, $3 = limit+1
+    const params: any[] = [userId, conversationId, normalizedLimit + 1];
+    let paramIndex = 4;
+
+    const dynamicConditions: string[] = [];
+
+    if (messageType) {
+      dynamicConditions.push(`m.type = $${paramIndex}::message_type`);
+      params.push(messageType);
+      paramIndex++;
+    }
+    if (fromUserId) {
+      dynamicConditions.push(`m.sender_id = $${paramIndex}::uuid`);
+      params.push(fromUserId);
+      paramIndex++;
+    }
+    if (startDate) {
+      dynamicConditions.push(`m.created_at >= $${paramIndex}::timestamptz`);
+      params.push(startDate.toISOString());
+      paramIndex++;
+    }
+    if (endDate) {
+      dynamicConditions.push(`m.created_at <= $${paramIndex}::timestamptz`);
+      params.push(endDate.toISOString());
+      paramIndex++;
+    }
+    if (hasMedia !== undefined) {
+      if (hasMedia) {
+        dynamicConditions.push(`EXISTS (
+          SELECT 1 FROM media_attachments ma
+          WHERE ma.message_id = m.id AND ma.deleted_at IS NULL
+        )`);
+      } else {
+        dynamicConditions.push(`NOT EXISTS (
+          SELECT 1 FROM media_attachments ma
+          WHERE ma.message_id = m.id AND ma.deleted_at IS NULL
+        )`);
+      }
+    }
+
+    let cursorCondition = '';
+    if (decodedCursor) {
+      cursorCondition = `
+        AND (m.created_at < $${paramIndex}::timestamptz
+             OR (m.created_at = $${paramIndex}::timestamptz AND m.id < $${paramIndex + 1}::bigint))
+      `;
+      params.push(decodedCursor.lastCreatedAt, decodedCursor.lastId);
+      paramIndex += 2;
+    }
+
+    const additionalConditions =
+      dynamicConditions.length > 0
+        ? 'AND ' + dynamicConditions.join(' AND ')
+        : '';
+
+    const query = `
+      SELECT
+        m.id,
+        m.conversation_id,
+        m.sender_id,
+        COALESCE(uc.alias_name, uc.phone_book_name, u.display_name) as sender_name,
+        u.avatar_url as sender_avatar_url,
+        c.type as conversation_type,
+        c.name as conversation_name,
+        m.type,
+        m.content,
+        m.created_at,
+        SUBSTRING(COALESCE(m.content, ''), 1, 80) as preview_snippet,
+        0 as rank_score,
+        (SELECT COUNT(*) FROM messages WHERE reply_to_message_id = m.id AND deleted_at IS NULL) as reply_count,
+        m.seen_count as seen_count
+      FROM messages m
+      JOIN conversation_members cm ON m.conversation_id = cm.conversation_id
+      JOIN conversations c ON m.conversation_id = c.id
+      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN user_contacts uc ON uc.owner_id = $1::uuid AND uc.contact_user_id = m.sender_id
+      WHERE m.conversation_id = $2::uuid
+        AND m.deleted_at IS NULL
+        AND cm.user_id = $1::uuid
+        AND cm.status = 'ACTIVE'
+        ${additionalConditions}
+        ${cursorCondition}
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT $3::int
+    `;
+
+    const results = await this.prisma.$queryRawUnsafe(query, ...params);
     return results as RawMessageSearchResult[];
   }
 
@@ -788,6 +897,7 @@ export class MessageSearchRepository {
    */
   private createPreview(content: string | null, keyword: string): string {
     if (!content) return '[No content]';
+    if (!keyword) return content.substring(0, 80);
 
     const lower = content.toLowerCase();
     const lowerKeyword = keyword.toLowerCase();
@@ -813,7 +923,7 @@ export class MessageSearchRepository {
     content: string | null,
     keyword: string,
   ): Array<{ start: number; end: number; text: string }> {
-    if (!content) return [];
+    if (!content || !keyword) return [];
 
     const highlights: Array<{ start: number; end: number; text: string }> = [];
     const lower = content.toLowerCase();

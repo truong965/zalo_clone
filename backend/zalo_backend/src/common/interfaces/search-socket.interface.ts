@@ -47,6 +47,11 @@ export interface SearchLoadMorePayload {
   limit?: number;
   conversationId?: string;
   mediaType?: MediaType;
+  // Conversation filters (needed for filter-only browse pagination)
+  messageType?: MessageType;
+  fromUserId?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 /**

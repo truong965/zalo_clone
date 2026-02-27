@@ -38,8 +38,18 @@ export class MessageSearchService {
     request: MessageSearchRequestDto,
   ): Promise<CursorPaginatedResult<MessageSearchResultDto>> {
     try {
-      // Validation
-      this.validationService.validateKeyword(request.keyword);
+      const trimmedKeyword = request.keyword?.trim() ?? '';
+      const hasTypeFilter = !!request.messageType;
+
+      // Validate keyword only when provided; allow empty keyword when messageType
+      // filter is active (filter-only browse mode)
+      if (trimmedKeyword) {
+        this.validationService.validateKeyword(request.keyword);
+      } else if (!hasTypeFilter) {
+        // No keyword AND no type filter → reject
+        this.validationService.validateKeyword(request.keyword);
+      }
+
       await this.validationService.validateUserExists(userId);
       await this.validationService.validateConversationAccess(
         userId,
@@ -54,7 +64,7 @@ export class MessageSearchService {
         request.messageType || '',
         request.hasMedia === undefined ? '' : request.hasMedia ? '1' : '0',
       ].join(':');
-      const cacheKey = `search:messages:${conversationId}:${userId}:${request.keyword}:${request.cursor || '0'}:${filterParts}`;
+      const cacheKey = `search:messages:${conversationId}:${userId}:${request.keyword || '_browse_'}:${request.cursor || '0'}:${filterParts}`;
 
       // Check cache
       const cached =
@@ -68,19 +78,31 @@ export class MessageSearchService {
       // Execute search
       const startTime = Date.now();
 
-      const rawMessages =
-        await this.messageSearchRepository.searchInConversation(
-          userId,
-          conversationId,
-          request.keyword,
-          request.limit,
-          request.cursor,
-          request.messageType,
-          request.fromUserId,
-          request.startDate ? new Date(request.startDate) : undefined,
-          request.endDate ? new Date(request.endDate) : undefined,
-          request.hasMedia, // Phase 4: hasMedia filter
-        );
+      // Branch: keyword present → full-text search; empty → filter-only browse
+      const rawMessages = trimmedKeyword
+        ? await this.messageSearchRepository.searchInConversation(
+            userId,
+            conversationId,
+            request.keyword,
+            request.limit,
+            request.cursor,
+            request.messageType,
+            request.fromUserId,
+            request.startDate ? new Date(request.startDate) : undefined,
+            request.endDate ? new Date(request.endDate) : undefined,
+            request.hasMedia,
+          )
+        : await this.messageSearchRepository.browseInConversation(
+            userId,
+            conversationId,
+            request.limit,
+            request.cursor,
+            request.messageType,
+            request.fromUserId,
+            request.startDate ? new Date(request.startDate) : undefined,
+            request.endDate ? new Date(request.endDate) : undefined,
+            request.hasMedia,
+          );
 
       const limit = PaginationUtil.normalizeLimit(request.limit, 100);
       const { items, nextCursor } = PaginationUtil.trimAndGetNextCursor(

@@ -10,11 +10,13 @@ import {
   HttpCode,
   HttpStatus,
   ParseBoolPipe,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { MessageService } from './services/message.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
+import { RecentMediaQueryDto } from './dto/recent-media.dto';
 import { CurrentUser } from 'src/common/decorator/customize';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -53,6 +55,25 @@ export class MessageController {
       user.id as string,
       before ? parseInt(before, 10) : 25,
       after ? parseInt(after, 10) : 25,
+    );
+  }
+
+  @Get('conversations/:conversationId/media/recent')
+  @ApiOperation({
+    summary: 'Get recent media items in a conversation (with cursor pagination)',
+  })
+  async getRecentMedia(
+    @CurrentUser() user,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Query() query: RecentMediaQueryDto,
+  ) {
+    return this.messageService.getRecentMedia(
+      user.id,
+      conversationId,
+      query.types,
+      query.limit ?? 3,
+      query.cursor,
+      query.keyword,
     );
   }
 

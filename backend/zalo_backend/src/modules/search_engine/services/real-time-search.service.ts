@@ -254,13 +254,23 @@ export class RealTimeSearchService implements OnModuleInit {
 
     try {
       const trimmedKeyword = payload.keyword?.trim() ?? '';
-      if (!trimmedKeyword) {
+
+      // Filter-only browse: conversation search with messageType but no keyword
+      const isFilterOnlyBrowse =
+        !trimmedKeyword &&
+        payload.searchType === 'CONVERSATION' &&
+        !!payload.conversationId &&
+        !!payload.filters?.messageType;
+
+      // Validate keyword unless filter-only browse mode
+      if (!trimmedKeyword && !isFilterOnlyBrowse) {
         this.validationService.validateKeyword(payload.keyword);
       }
 
-      // Phase 1: Do NOT perform search when keyword is too short.
+      // Phase 1: Do NOT perform search when keyword is too short (1-2 chars).
       // Return empty results (no error) to avoid noisy UX while the user is typing.
-      if (trimmedKeyword.length > 0 && trimmedKeyword.length < 3) {
+      // Exception: filter-only browse is allowed with empty keyword.
+      if (trimmedKeyword.length > 0 && trimmedKeyword.length < 3 && !isFilterOnlyBrowse) {
         const executionTimeMs = Date.now() - startTime;
         return {
           keyword: payload.keyword,
@@ -278,8 +288,10 @@ export class RealTimeSearchService implements OnModuleInit {
         };
       }
 
-      // Validate keyword (min length etc.)
-      this.validationService.validateKeyword(payload.keyword);
+      // Validate keyword only when provided (non-empty)
+      if (trimmedKeyword.length >= 3) {
+        this.validationService.validateKeyword(payload.keyword);
+      }
 
       // Check subscription limits
       this.enforceSubscriptionLimits(userId);
@@ -589,6 +601,10 @@ export class RealTimeSearchService implements OnModuleInit {
           keyword: payload.keyword,
           limit,
           cursor: payload.cursor,
+          messageType: payload.messageType,
+          fromUserId: payload.fromUserId,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
         };
         const result = await this.messageSearchService.searchInConversation(
           userId,

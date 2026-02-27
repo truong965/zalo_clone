@@ -713,4 +713,178 @@ export class MessageService {
       throw new BadRequestException('Delete for me not yet supported');
     }
   }
+
+  // ============================================================================
+  // RECENT MEDIA — Used by info sidebar to show latest N media in conversation
+  // ============================================================================
+
+  /** Allowed message types for the recent-media endpoint */
+  private static readonly ALLOWED_MEDIA_TYPES: ReadonlySet<string> = new Set([
+    MessageType.IMAGE,
+    MessageType.VIDEO,
+    MessageType.FILE,
+    MessageType.AUDIO,
+  ]);
+
+  /**
+   * Get the most recent media messages (with their first attachment) for a conversation.
+   *
+   * Access control: caller must be an active member of the conversation.
+   * Only returns messages that have at least one non-deleted media attachment.
+   *
+   * @param userId  Authenticated user requesting the data
+   * @param conversationId Target conversation
+   * @param typesRaw Comma-separated MessageType values (e.g. "IMAGE,VIDEO"). If empty → all media types.
+   * @param limit   Number of items to return (1–10, default 3)
+   */
+  async getRecentMedia(
+    userId: string,
+    conversationId: string,
+    typesRaw: string | undefined,
+    limit: number,
+    cursor?: string,
+    keyword?: string,
+  ) {
+    // 1. Access control — reuse existing isMember check
+    const member = await this.isMember(conversationId, userId);
+    if (!member) {
+      throw new ForbiddenException('Not a member of this conversation');
+    }
+
+    // 2. Parse & validate types
+    const types = this.parseMediaTypes(typesRaw);
+
+    // 3. Decode cursor for pagination
+    let cursorCreatedAt: Date | undefined;
+    let cursorId: bigint | undefined;
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
+        cursorCreatedAt = new Date(decoded.lastCreatedAt);
+        cursorId = BigInt(decoded.lastId);
+      } catch {
+        // Invalid cursor — ignore and start from beginning
+      }
+    }
+
+    // 4. Build where clause
+    const whereClause: any = {
+      conversationId,
+      deletedAt: null,
+      type: { in: types },
+      mediaAttachments: {
+        some: {
+          deletedAt: null,
+          ...(keyword?.trim()
+            ? { originalName: { contains: keyword.trim(), mode: 'insensitive' } }
+            : {}),
+        },
+      },
+    };
+
+    // Cursor condition: items older than cursor
+    if (cursorCreatedAt && cursorId !== undefined) {
+      whereClause.OR = [
+        { createdAt: { lt: cursorCreatedAt } },
+        { createdAt: cursorCreatedAt, id: { lt: cursorId } },
+      ];
+    }
+
+    // 5. Query messages with their first attachment, ordered by newest first
+    // Fetch limit+1 to detect hasNextPage
+    const messages = await this.prisma.message.findMany({
+      where: whereClause,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: {
+        id: true,
+        type: true,
+        createdAt: true,
+        mediaAttachments: {
+          where: {
+            deletedAt: null,
+            ...(keyword?.trim()
+              ? { originalName: { contains: keyword.trim(), mode: 'insensitive' } }
+              : {}),
+          },
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+            mediaType: true,
+            size: true,
+            thumbnailUrl: true,
+            cdnUrl: true,
+          },
+        },
+      },
+    });
+
+    // 6. Detect pagination
+    const hasNextPage = messages.length > limit;
+    const trimmed = hasNextPage ? messages.slice(0, limit) : messages;
+
+    // 7. Map to flat DTO shape
+    const data = trimmed
+      .filter((msg) => msg.mediaAttachments.length > 0)
+      .map((msg) => {
+        const ma = msg.mediaAttachments[0];
+        return {
+          messageId: msg.id.toString(),
+          mediaId: ma.id,
+          originalName: ma.originalName,
+          mimeType: ma.mimeType,
+          mediaType: ma.mediaType,
+          size: Number(ma.size),
+          thumbnailUrl: ma.thumbnailUrl ?? null,
+          cdnUrl: ma.cdnUrl ?? null,
+          messageType: msg.type,
+          createdAt: msg.createdAt,
+        };
+      });
+
+    // 8. Build next cursor
+    let nextCursor: string | undefined;
+    if (hasNextPage && trimmed.length > 0) {
+      const last = trimmed[trimmed.length - 1];
+      nextCursor = Buffer.from(
+        JSON.stringify({
+          lastCreatedAt: last.createdAt.toISOString(),
+          lastId: last.id.toString(),
+        }),
+      ).toString('base64');
+    }
+
+    return {
+      items: data,
+      meta: {
+        limit,
+        hasNextPage,
+        nextCursor,
+      },
+    };
+  }
+
+  /**
+   * Parse comma-separated type string into validated MessageType array.
+   * Falls back to all allowed media types when input is empty or invalid.
+   */
+  private parseMediaTypes(typesRaw: string | undefined): MessageType[] {
+    if (!typesRaw?.trim()) {
+      return [...MessageService.ALLOWED_MEDIA_TYPES] as MessageType[];
+    }
+
+    const parsed = typesRaw
+      .split(',')
+      .map((t) => t.trim().toUpperCase())
+      .filter((t) => MessageService.ALLOWED_MEDIA_TYPES.has(t));
+
+    if (parsed.length === 0) {
+      return [...MessageService.ALLOWED_MEDIA_TYPES] as MessageType[];
+    }
+
+    return parsed as MessageType[];
+  }
 }
