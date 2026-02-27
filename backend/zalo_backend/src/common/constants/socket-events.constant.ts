@@ -184,6 +184,12 @@ export const SocketEvents = {
   REMINDER_TRIGGERED: 'reminder:triggered',
   /** Server → Client: Reminder list changed (created/updated/deleted) */
   REMINDER_UPDATED: 'reminder:updated',
+
+  // === CONVERSATION PREFERENCE EVENTS (Server → Client, personal) ===
+  /** User archived/unarchived a conversation (cross-device sync) */
+  CONVERSATION_ARCHIVED: 'conversation:archived',
+  /** User muted/unmuted a conversation (cross-device sync) */
+  CONVERSATION_MUTED: 'conversation:muted',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

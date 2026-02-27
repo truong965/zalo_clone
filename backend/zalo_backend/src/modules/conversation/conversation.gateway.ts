@@ -32,6 +32,10 @@ import {
   ConversationRealtimeService,
 } from './services/conversation-realtime.service';
 
+import type {
+  ConversationArchivedEvent,
+  ConversationMutedEvent,
+} from './events';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { AddMembersDto } from './dto/add-members.dto';
@@ -502,6 +506,70 @@ export class ConversationGateway implements OnGatewayInit {
       );
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CONVERSATION PREFERENCE EVENTS (archive / mute — personal, cross-device)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * React to ConversationArchivedEvent → emit socket to user's devices.
+   * No DB side-effects, no idempotency needed.
+   */
+  @OnEvent('conversation.archived')
+  async handleConversationArchived(
+    payload: ConversationArchivedEvent,
+  ): Promise<void> {
+    try {
+      await this.emitToUser(
+        payload.userId,
+        SocketEvents.CONVERSATION_ARCHIVED,
+        {
+          conversationId: payload.conversationId,
+          isArchived: payload.isArchived,
+        },
+      );
+      this.logger.debug(
+        `[CONVERSATION_ARCHIVED] Emitted to user ${payload.userId} (isArchived=${payload.isArchived})`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[CONVERSATION_ARCHIVED] Failed to emit socket for user ${payload.userId}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  /**
+   * React to ConversationMutedEvent → emit socket to user's devices.
+   * No DB side-effects, no idempotency needed.
+   */
+  @OnEvent('conversation.muted')
+  async handleConversationMuted(
+    payload: ConversationMutedEvent,
+  ): Promise<void> {
+    try {
+      await this.emitToUser(
+        payload.userId,
+        SocketEvents.CONVERSATION_MUTED,
+        {
+          conversationId: payload.conversationId,
+          isMuted: payload.isMuted,
+        },
+      );
+      this.logger.debug(
+        `[CONVERSATION_MUTED] Emitted to user ${payload.userId} (isMuted=${payload.isMuted})`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[CONVERSATION_MUTED] Failed to emit socket for user ${payload.userId}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PRIVATE HELPERS
+  // ═══════════════════════════════════════════════════════════════════════
 
   private async emitToUser(userId: string, event: string, data: unknown) {
     const socketIds = await this.socketState.getUserSockets(userId);

@@ -12,6 +12,7 @@ import {
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ConversationService } from './services/conversation.service';
 import { GroupService } from './services/group.service';
+import { ToggleArchiveDto } from './dto/toggle-archive.dto';
 import {
   InteractionGuard,
   RequireInteraction,
@@ -49,11 +50,13 @@ export class ConversationController {
     @CurrentUser() user,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: number,
+    @Query('archived') archived?: string,
   ) {
     return this.conversationService.getUserConversations(
       user.id,
       cursor,
       limit ? +limit : 20,
+      archived === 'true',
     );
   }
 
@@ -108,6 +111,20 @@ export class ConversationController {
       user.id,
       conversationId,
       body.muted,
+    );
+  }
+
+  @Patch(':id/archive')
+  @ApiOperation({ summary: 'Toggle archive/unarchive a conversation' })
+  async toggleArchive(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+    @Body() body: ToggleArchiveDto,
+  ) {
+    return this.conversationService.toggleArchive(
+      user.id,
+      conversationId,
+      body.archived,
     );
   }
 

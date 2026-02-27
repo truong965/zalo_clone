@@ -6,3 +6,4 @@ export { TransferAdminDto } from './transfer-admin.dto';
 export { CreateJoinRequestDto } from './join-request.dto';
 export { ReviewJoinRequestDto } from './review-join-request.dto';
 export { GroupListItemDto } from './group-list-item.dto';
+export { ToggleArchiveDto } from './toggle-archive.dto';

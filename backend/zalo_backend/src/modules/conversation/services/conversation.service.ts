@@ -1,6 +1,7 @@
 // src/modules/conversation/services/conversation.service.ts
 
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
 import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
@@ -16,6 +17,7 @@ import type { CursorPaginatedResult } from '@common/interfaces/paginated-result.
 import type { GroupListItemDto } from '../dto/group-list-item.dto';
 import { MAX_PINNED_CONVERSATIONS } from '../constants/conversation.constants';
 import type { GroupSettings } from './group.service';
+import { ConversationArchivedEvent, ConversationMutedEvent } from '../events';
 
 const conversationWithRelations =
   Prisma.validator<Prisma.ConversationDefaultArgs>()({
@@ -61,6 +63,7 @@ export class ConversationService {
     private readonly redisPresence: RedisPresenceService,
     private readonly privacyService: PrivacyService,
     private readonly displayNameResolver: DisplayNameResolver,
+    private readonly eventEmitter: EventEmitter2,
   ) { }
 
   /**
@@ -314,12 +317,13 @@ export class ConversationService {
     userId: string,
     cursor?: string,
     limit: number = 20,
+    isArchived: boolean = false,
   ): Promise<CursorPaginatedResult<unknown>> {
     // Two-phase query: pinned conversations first, then rest by lastMessageAt
     // This ensures pinned conversations always appear at the top of the list.
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        members: { some: { userId, status: MemberStatus.ACTIVE } },
+        members: { some: { userId, status: MemberStatus.ACTIVE, isArchived } },
         deletedAt: null,
       },
       take: limit + 1,
@@ -328,16 +332,22 @@ export class ConversationService {
       include: conversationWithRelations.include,
     });
 
-    // Fetch pinned state for these conversations in one query
+    // Fetch pinned + mute/archive state for these conversations in one query
     const memberRows = await this.prisma.conversationMember.findMany({
       where: {
         userId,
         conversationId: { in: conversations.map((c) => c.id) },
       },
-      select: { conversationId: true, isPinned: true, pinnedAt: true },
+      select: {
+        conversationId: true,
+        isPinned: true,
+        pinnedAt: true,
+        isMuted: true,
+        isArchived: true,
+      },
     });
-    const pinMap = new Map(
-      memberRows.map((m) => [m.conversationId, { isPinned: m.isPinned, pinnedAt: m.pinnedAt }]),
+    const memberMap = new Map(
+      memberRows.map((m) => [m.conversationId, m]),
     );
 
     const blockMap = new Map<string, boolean>();
@@ -375,7 +385,7 @@ export class ConversationService {
       limit,
       getCursor: (c) => c.id,
       mapToDto: (c) => {
-        const pin = pinMap.get(c.id);
+        const memberState = memberMap.get(c.id);
         return {
           ...this.mapConversationResponse(
             c as ConversationWithRelations,
@@ -384,8 +394,10 @@ export class ConversationService {
             onlineMap,
             nameMap,
           ),
-          isPinned: pin?.isPinned ?? false,
-          pinnedAt: pin?.pinnedAt?.toISOString() ?? null,
+          isPinned: memberState?.isPinned ?? false,
+          pinnedAt: memberState?.pinnedAt?.toISOString() ?? null,
+          isMuted: memberState?.isMuted ?? false,
+          isArchived: memberState?.isArchived ?? false,
         };
       },
     });
@@ -475,6 +487,7 @@ export class ConversationService {
       isMuted: currentUserMember?.isMuted ?? false,
       isPinned: currentUserMember?.isPinned ?? false,
       pinnedAt: currentUserMember?.pinnedAt?.toISOString() ?? null,
+      isArchived: currentUserMember?.isArchived ?? false,
     };
   }
 
@@ -602,12 +615,13 @@ export class ConversationService {
   /**
    * E.2: Toggle mute/unmute a conversation for the current user.
    * Updates isMuted on ConversationMember.
+   * Emits ConversationMutedEvent for cross-device socket sync.
    */
   async toggleMute(
     userId: string,
     conversationId: string,
     muted: boolean,
-  ): Promise<{ isMuted: boolean }> {
+  ): Promise<{ conversationId: string; isMuted: boolean }> {
     const member = await this.prisma.conversationMember.findUnique({
       where: {
         conversationId_userId: { conversationId, userId },
@@ -623,7 +637,55 @@ export class ConversationService {
       data: { isMuted: muted },
     });
 
-    return { isMuted: muted };
+    this.eventEmitter.emit(
+      'conversation.muted',
+      new ConversationMutedEvent(conversationId, userId, muted),
+    );
+
+    return { conversationId, isMuted: muted };
+  }
+
+  /**
+   * Toggle archive/unarchive a conversation for the current user.
+   * Updates isArchived on ConversationMember.
+   * If archiving a pinned conversation, auto-unpins it.
+   * Emits ConversationArchivedEvent for cross-device socket sync.
+   */
+  async toggleArchive(
+    userId: string,
+    conversationId: string,
+    archived: boolean,
+  ): Promise<{ conversationId: string; isArchived: boolean }> {
+    const member = await this.prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: { conversationId, userId },
+      },
+    });
+
+    if (!member || member.status !== MemberStatus.ACTIVE) {
+      throw new BadRequestException('Not a member of this conversation');
+    }
+
+    // Edge case: archive a pinned conversation → auto-unpin
+    const updateData: { isArchived: boolean; isPinned?: boolean; pinnedAt?: null } = {
+      isArchived: archived,
+    };
+    if (archived && member.isPinned) {
+      updateData.isPinned = false;
+      updateData.pinnedAt = null;
+    }
+
+    await this.prisma.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: updateData,
+    });
+
+    this.eventEmitter.emit(
+      'conversation.archived',
+      new ConversationArchivedEvent(conversationId, userId, archived),
+    );
+
+    return { conversationId, isArchived: archived };
   }
 
   /**

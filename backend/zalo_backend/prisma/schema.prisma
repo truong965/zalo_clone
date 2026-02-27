@@ -250,6 +250,10 @@ enum EventType {
   REMINDER_CREATED
   REMINDER_TRIGGERED
 
+  // Conversation Preference Domain
+  CONVERSATION_ARCHIVED
+  CONVERSATION_MUTED
+
   @@map("event_type")
 }
 

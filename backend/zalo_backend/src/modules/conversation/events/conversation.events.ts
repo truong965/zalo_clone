@@ -167,3 +167,69 @@ export class ConversationMemberDemotedEvent extends DomainEvent {
     };
   }
 }
+
+/**
+ * Emitted when a user archives/unarchives a conversation (personal action).
+ *
+ * Listeners:
+ * - ConversationGateway: Emit socket "conversation:archived" to user's devices (cross-device sync)
+ *
+ * Critical Event: NO (personal preference, not audit-trail)
+ *
+ * @version 1
+ */
+export class ConversationArchivedEvent extends DomainEvent {
+  readonly eventType = 'CONVERSATION_ARCHIVED';
+  readonly version = 1;
+
+  constructor(
+    readonly conversationId: string,
+    readonly userId: string,
+    readonly isArchived: boolean,
+  ) {
+    super('ConversationModule', 'ConversationMember', conversationId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      conversationId: this.conversationId,
+      userId: this.userId,
+      isArchived: this.isArchived,
+      eventType: this.eventType,
+    };
+  }
+}
+
+/**
+ * Emitted when a user mutes/unmutes a conversation (personal action).
+ *
+ * Listeners:
+ * - ConversationGateway: Emit socket "conversation:muted" to user's devices (cross-device sync)
+ *
+ * Critical Event: NO (personal preference, not audit-trail)
+ *
+ * @version 1
+ */
+export class ConversationMutedEvent extends DomainEvent {
+  readonly eventType = 'CONVERSATION_MUTED';
+  readonly version = 1;
+
+  constructor(
+    readonly conversationId: string,
+    readonly userId: string,
+    readonly isMuted: boolean,
+  ) {
+    super('ConversationModule', 'ConversationMember', conversationId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      conversationId: this.conversationId,
+      userId: this.userId,
+      isMuted: this.isMuted,
+      eventType: this.eventType,
+    };
+  }
+}

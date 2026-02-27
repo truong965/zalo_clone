@@ -42,6 +42,7 @@ export class ReminderSocketListener {
                         where: {
                               conversationId: event.conversationId,
                               status: MemberStatus.ACTIVE,
+                              isMuted: false,
                         },
                         select: { userId: true },
                   });
