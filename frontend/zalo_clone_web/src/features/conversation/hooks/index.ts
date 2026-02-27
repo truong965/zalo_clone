@@ -3,6 +3,7 @@ export { useConversationSocket } from './use-conversation-socket';
 export { useConversationListRealtime } from './use-conversation-list-realtime';
 export {
       useConversationsList,
+      useArchivedConversationsList,
       useUserGroups,
       useConversationById,
       useConversationMembers,
@@ -15,3 +16,5 @@ export { useCreateGroup } from './use-create-group';
 export { useGroupNotifications } from './use-group-notifications';
 export { usePinConversation } from './use-pin-conversation';
 export { usePinMessage, pinnedMessagesKey } from './use-pin-message';
+export { useMuteConversation } from './use-mute-conversation';
+export { useArchiveConversation } from './use-archive-conversation';

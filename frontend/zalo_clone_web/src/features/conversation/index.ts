@@ -16,6 +16,7 @@ export {
       useConversationSocket,
       useConversationListRealtime,
       useConversationsList,
+      useArchivedConversationsList,
       useUserGroups,
       useConversationById,
       useConversationMembers,
@@ -28,6 +29,8 @@ export {
       usePinConversation,
       usePinMessage,
       pinnedMessagesKey,
+      useMuteConversation,
+      useArchiveConversation,
 } from './hooks';
 
 // Stores

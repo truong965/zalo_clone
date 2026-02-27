@@ -89,6 +89,7 @@ function mapConversationListItemToUI(item: ConversationListItem): ConversationUI
             isMuted: item.isMuted,
             isPinned: item.isPinned ?? false,
             pinnedAt: item.pinnedAt ?? null,
+            isArchived: item.isArchived ?? false,
       };
 }
 
@@ -110,6 +111,7 @@ export interface ConversationMemberInfo {
 async function getConversations(params?: {
       cursor?: string;
       limit?: number;
+      archived?: boolean;
 }): Promise<CursorPaginatedResponse<ConversationUI>> {
       const response = await apiClient.get<ApiResponse<CursorPaginatedResponse<ConversationListItem>>>(
             API_ENDPOINTS.CONVERSATIONS.GET_ALL,
@@ -217,6 +219,30 @@ async function unpinMessage(
       return response.data.data;
 }
 
+// ── Mute / Archive ──────────────────────────────────────────────────────
+
+async function toggleMuteConversation(
+      conversationId: string,
+      muted: boolean,
+): Promise<{ isMuted: boolean }> {
+      const response = await apiClient.patch<ApiResponse<{ isMuted: boolean }>>(
+            API_ENDPOINTS.CONVERSATIONS.MUTE(conversationId),
+            { muted },
+      );
+      return response.data.data;
+}
+
+async function toggleArchiveConversation(
+      conversationId: string,
+      archived: boolean,
+): Promise<{ isArchived: boolean }> {
+      const response = await apiClient.patch<ApiResponse<{ isArchived: boolean }>>(
+            API_ENDPOINTS.CONVERSATIONS.ARCHIVE(conversationId),
+            { archived },
+      );
+      return response.data.data;
+}
+
 // ============================================================================
 // EXPORTS
 // ============================================================================
@@ -234,6 +260,8 @@ export const conversationApi = {
       getPinnedMessages,
       pinMessage,
       unpinMessage,
+      toggleMuteConversation,
+      toggleArchiveConversation,
 };
 
 /**

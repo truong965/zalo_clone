@@ -16,7 +16,7 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import {
-      Collapse, Modal, Spin, Result, notification, Button,
+      Collapse, Modal, Spin, Result, Button,
 } from 'antd';
 import {
       RightOutlined,
@@ -37,7 +37,7 @@ import { GroupJoinRequests } from '@/features/conversation/components/group-info
 import { AddMembersModal } from '@/features/conversation/components/add-members-modal';
 import { TransferAdminModal } from '@/features/conversation/components/transfer-admin-modal';
 import { useSocket } from '@/hooks/use-socket';
-import { usePinConversation } from '@/features/conversation';
+import { usePinConversation, useArchiveConversation, useMuteConversation } from '@/features/conversation';
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
 import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
@@ -70,6 +70,8 @@ export function GroupInfoContent({
       const { invalidateMembers, invalidateDetail, invalidateAll } =
             useInvalidateConversations();
       const { togglePin } = usePinConversation();
+      const { toggleArchive } = useArchiveConversation();
+      const { toggleMute } = useMuteConversation();
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversationId);
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
@@ -370,6 +372,7 @@ export function GroupInfoContent({
                         onUpdateName={handleUpdateName}
                         onAddMembers={() => setShowAddMembers(true)}
                         onTogglePin={() => togglePin(conversation.id, !!conversation.isPinned)}
+                        onToggleMute={() => toggleMute(conversation.id, !!conversation.isMuted)}
                   />
 
                   {/* Scrollable Content */}
@@ -459,10 +462,12 @@ export function GroupInfoContent({
                         {/* Danger Zone */}
                         <GroupDangerZone
                               isAdmin={isAdmin}
+                              isArchived={!!conversation.isArchived}
                               memberCount={members.length}
                               onLeaveGroup={handleLeaveGroup}
-                              onDeleteHistory={() => {
-                                    notification.info({ message: 'Chức năng đang phát triển' });
+                              onArchiveConversation={() => {
+                                    toggleArchive(conversationId, !!conversation.isArchived);
+                                    onClose();
                               }}
                         />
                   </div>

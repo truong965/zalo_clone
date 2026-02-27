@@ -21,7 +21,7 @@ import type { ConversationUI } from '@/types/api';
 
 export const conversationKeys = {
       all: ['conversations'] as const,
-      list: (params?: { limit?: number }) =>
+      list: (params?: { limit?: number; archived?: boolean }) =>
             [...conversationKeys.all, 'list', params] as const,
       groups: (params?: { limit?: number; search?: string }) =>
             [...conversationKeys.all, 'groups', params] as const,
@@ -49,6 +49,24 @@ export function useConversationsList(params?: { limit?: number }) {
             initialPageParam: undefined as string | undefined,
             queryFn: ({ pageParam }) =>
                   conversationApi.getConversations({ cursor: pageParam, limit }),
+            getNextPageParam: (lastPage) =>
+                  lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
+            staleTime: 30_000,
+      });
+}
+
+/**
+ * Infinite query for archived conversations.
+ * Used by the "Lưu trữ" tab in the chat sidebar.
+ */
+export function useArchivedConversationsList(params?: { limit?: number }) {
+      const limit = params?.limit ?? 20;
+
+      return useInfiniteQuery({
+            queryKey: conversationKeys.list({ limit, archived: true }),
+            initialPageParam: undefined as string | undefined,
+            queryFn: ({ pageParam }) =>
+                  conversationApi.getConversations({ cursor: pageParam, limit, archived: true }),
             getNextPageParam: (lastPage) =>
                   lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
             staleTime: 30_000,

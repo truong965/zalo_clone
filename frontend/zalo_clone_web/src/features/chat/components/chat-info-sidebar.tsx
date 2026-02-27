@@ -59,7 +59,7 @@ export function ChatInfoSidebar({
                               onOpenMediaBrowser={onOpenMediaBrowser}
                         />
                   ) : (
-                        <DirectInfoContent conversation={conversation} onOpenMediaBrowser={onOpenMediaBrowser} />
+                        <DirectInfoContent conversation={conversation} onOpenMediaBrowser={onOpenMediaBrowser} onClose={onClose} />
                   )}
             </div>
       );

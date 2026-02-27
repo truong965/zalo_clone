@@ -51,6 +51,10 @@ export const SocketEvents = {
 
       CONVERSATION_LIST_ITEM_UPDATED: 'conversation:list:itemUpdated',
 
+      // === CONVERSATION ARCHIVE / MUTE EVENTS (Server → Client) ===
+      CONVERSATION_ARCHIVED: 'conversation:archived',
+      CONVERSATION_MUTED: 'conversation:muted',
+
       // === CONVERSATION PIN EVENTS (Server → Client) ===
       CONVERSATION_PINNED: 'conversation:pinned',
       CONVERSATION_UNPINNED: 'conversation:unpinned',

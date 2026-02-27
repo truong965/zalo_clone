@@ -96,6 +96,8 @@ export interface ConversationListItem {
       isPinned?: boolean;
       /** When the conversation was pinned (ISO string) */
       pinnedAt?: string | null;
+      /** Whether current user has archived this conversation */
+      isArchived?: boolean;
 }
 
 export interface ConversationMember {
@@ -164,6 +166,8 @@ export interface ConversationUI extends Conversation {
       requireApproval?: boolean;
       /** Whether current user has muted this conversation */
       isMuted?: boolean;
+      /** Whether current user has archived this conversation */
+      isArchived?: boolean;
 }
 
 export type ConversationListItemUI = Omit<ConversationListItem, 'unreadCount'> & {

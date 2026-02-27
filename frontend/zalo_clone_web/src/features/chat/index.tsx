@@ -26,7 +26,7 @@ import { SearchPanel } from '@/features/search/components/SearchPanel';
 import { useReminders, CreateReminderModal } from '@/features/reminder';
 
 // ── Cross-feature hooks ──────────────────────────────────────────────────
-import { useConversationListRealtime, usePinConversation, usePinMessage } from '@/features/conversation';
+import { useConversationListRealtime, usePinConversation, usePinMessage, useArchivedConversationsList, useMuteConversation, useArchiveConversation } from '@/features/conversation';
 import { useAuthStore } from '@/features/auth';
 import { useSocket } from '@/hooks/use-socket';
 
@@ -154,6 +154,38 @@ export function ChatFeature() {
 
       // ── Hook: pin conversation ───────────────────────────────────────────
       const { togglePin } = usePinConversation();
+
+      // ── Hook: mute / archive conversation ─────────────────────────────────
+      const { toggleMute } = useMuteConversation();
+      const { toggleArchive, isArchiving } = useArchiveConversation();
+
+      // ── Hook: archived conversations ("Lưu trữ" tab) ──────────────────────
+      const archivedQuery = useArchivedConversationsList();
+      const archivedConversations = (archivedQuery.data?.pages ?? []).flatMap((p) => p.data);
+      const archivedHasMore = archivedQuery.hasNextPage;
+      const archivedIsLoading = archivedQuery.isLoading || archivedQuery.isFetchingNextPage;
+      const { ref: archivedLoadMoreRef, inView: archivedInView } = useInView({
+            threshold: 0.1,
+            rootMargin: '100px',
+      });
+
+      useEffect(() => {
+            if (!archivedInView || !archivedQuery.hasNextPage || archivedQuery.isFetchingNextPage) return;
+            void archivedQuery.fetchNextPage();
+      }, [archivedInView, archivedQuery]);
+
+      // ── Archive wrapper: deselect if archiving active conversation ────────
+      const handleToggleArchive = useCallback(
+            (conversationId: string, currentlyArchived: boolean) => {
+                  toggleArchive(conversationId, currentlyArchived);
+                  // If archiving the currently selected conversation, deselect it
+                  if (!currentlyArchived && conversationId === selectedId) {
+                        setSelectedId(null);
+                        setRightSidebar('none');
+                  }
+            },
+            [toggleArchive, selectedId, setSelectedId, setRightSidebar],
+      );
 
       // ── Hook: pin message ────────────────────────────────────────────────
       const {
@@ -343,6 +375,12 @@ export function ChatFeature() {
                                     onFriendSearchClick={() => setIsFriendSearchOpen(true)}
                                     onCreateGroupClick={() => useCreateGroupStore.getState().open()}
                                     onTogglePin={togglePin}
+                                    archivedConversations={archivedConversations}
+                                    archivedLoadMoreRef={archivedLoadMoreRef}
+                                    archivedHasMore={archivedHasMore}
+                                    archivedIsLoading={archivedIsLoading}
+                                    onToggleMute={toggleMute}
+                                    onToggleArchive={handleToggleArchive}
                               />
                         )}
 

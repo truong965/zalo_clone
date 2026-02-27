@@ -15,6 +15,7 @@ import {
       UserAddOutlined,
       TeamOutlined,
 } from '@ant-design/icons';
+import { BellSlashedIcon } from '@/components/icons/bell-slashed';
 import type { ConversationUI } from '@/types/api';
 
 interface GroupProfileHeaderProps {
@@ -23,6 +24,7 @@ interface GroupProfileHeaderProps {
       onUpdateName: (name: string) => Promise<void>;
       onAddMembers: () => void;
       onTogglePin?: () => void;
+      onToggleMute?: () => void;
 }
 
 export function GroupProfileHeader({
@@ -30,6 +32,7 @@ export function GroupProfileHeader({
       isAdmin,
       onUpdateName,
       onTogglePin,
+      onToggleMute,
       onAddMembers,
 }: GroupProfileHeaderProps) {
       const [isEditing, setIsEditing] = useState(false);
@@ -119,12 +122,21 @@ export function GroupProfileHeader({
 
                   {/* Quick Actions */}
                   <div className="flex gap-8 justify-center w-full px-4">
-                        <div className="flex flex-col items-center gap-2 cursor-pointer group">
-                              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                                    <BellOutlined className="text-gray-600 group-hover:text-blue-600" />
+                        <div
+                              className="flex flex-col items-center gap-2 cursor-pointer group"
+                              onClick={onToggleMute}
+                        >
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${conversation.isMuted
+                                    ? 'bg-blue-100'
+                                    : 'bg-gray-100 group-hover:bg-blue-50'
+                                    }`}>
+                                    {conversation.isMuted
+                                          ? <BellSlashedIcon className="text-blue-600" />
+                                          : <BellOutlined className="text-gray-600 group-hover:text-blue-600" />
+                                    }
                               </div>
                               <span className="text-xs text-gray-500 text-center max-w-[60px]">
-                                    Tắt thông báo
+                                    {conversation.isMuted ? 'Bật thông báo' : 'Tắt thông báo'}
                               </span>
                         </div>
                         <div
@@ -132,8 +144,8 @@ export function GroupProfileHeader({
                               onClick={onTogglePin}
                         >
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${conversation.isPinned
-                                          ? 'bg-blue-100 text-blue-600'
-                                          : 'bg-gray-100 group-hover:bg-blue-50'
+                                    ? 'bg-blue-100 text-blue-600'
+                                    : 'bg-gray-100 group-hover:bg-blue-50'
                                     }`}>
                                     <PushpinOutlined className={conversation.isPinned ? 'text-blue-600' : 'text-gray-600 group-hover:text-blue-600'} />
                               </div>

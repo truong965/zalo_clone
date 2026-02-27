@@ -85,4 +85,4 @@ export interface ChatState {
 // ============================================================================
 
 export type RightSidebarState = 'none' | 'search' | 'info' | 'media-browser';
-export type ConversationFilterTab = 'all' | 'unread';
+export type ConversationFilterTab = 'all' | 'unread' | 'archived';

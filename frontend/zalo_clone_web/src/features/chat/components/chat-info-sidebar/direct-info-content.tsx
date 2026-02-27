@@ -3,21 +3,22 @@
  * Extracted from the original static ChatInfoSidebar UI.
  */
 import { useState } from 'react';
-import { Avatar, Button, Typography, Collapse, Switch, Modal } from 'antd';
+import { Avatar, Button, Typography, Collapse, Modal } from 'antd';
 import {
       EditOutlined,
       RightOutlined,
       ClockCircleOutlined,
-      DeleteOutlined,
+      InboxOutlined,
       BellOutlined,
       PushpinOutlined,
       StopOutlined,
       ExclamationCircleFilled,
 } from '@ant-design/icons';
+import { BellSlashedIcon } from '@/components/icons/bell-slashed';
 import type { ConversationUI } from '@/types/api';
 import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
 import { useBlockUser } from '@/features/contacts/hooks/use-block';
-import { usePinConversation } from '@/features/conversation';
+import { usePinConversation, useMuteConversation, useArchiveConversation } from '@/features/conversation';
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
@@ -28,12 +29,16 @@ const { Title } = Typography;
 interface DirectInfoContentProps {
       conversation: ConversationUI;
       onOpenMediaBrowser?: (tab: MediaBrowserTab) => void;
+      onClose?: () => void;
 }
 
-export function DirectInfoContent({ conversation, onOpenMediaBrowser }: DirectInfoContentProps) {
+export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }: DirectInfoContentProps) {
       const blockMutation = useBlockUser();
       const { togglePin } = usePinConversation();
+      const { toggleMute } = useMuteConversation();
+      const { toggleArchive, isArchiving } = useArchiveConversation();
       const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+      const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversation.id);
       const [showReminders, setShowReminders] = useState(false);
@@ -178,12 +183,21 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser }: DirectIn
 
                         {/* 3 Quick Actions */}
                         <div className="flex gap-8 justify-center w-full px-4">
-                              <div className="flex flex-col items-center gap-2 cursor-pointer group">
-                                    <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                                          <BellOutlined className="text-gray-600 group-hover:text-blue-600" />
+                              <div
+                                    className="flex flex-col items-center gap-2 cursor-pointer group"
+                                    onClick={() => toggleMute(conversation.id, !!conversation.isMuted)}
+                              >
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${conversation.isMuted
+                                          ? 'bg-blue-100'
+                                          : 'bg-gray-100 group-hover:bg-blue-50'
+                                          }`}>
+                                          {conversation.isMuted
+                                                ? <BellSlashedIcon className="text-blue-600" />
+                                                : <BellOutlined className="text-gray-600 group-hover:text-blue-600" />
+                                          }
                                     </div>
                                     <span className="text-xs text-gray-500 text-center max-w-[60px]">
-                                          Tắt thông báo
+                                          {conversation.isMuted ? 'Bật thông báo' : 'Tắt thông báo'}
                                     </span>
                               </div>
                               <div
@@ -265,12 +279,13 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser }: DirectIn
                         <div className="border-t border-[#f4f5f7] border-t-[6px] p-2">
                               <Button
                                     type="text"
-                                    danger
                                     block
                                     className="text-left flex items-center gap-2 h-10"
-                                    icon={<DeleteOutlined />}
+                                    icon={<InboxOutlined />}
+                                    loading={isArchiving}
+                                    onClick={() => setIsArchiveModalOpen(true)}
                               >
-                                    Ẩn hội thoại
+                                    {conversation.isArchived ? 'Bỏ lưu trữ' : 'Lưu trữ hội thoại'}
                               </Button>
                         </div>
                   </div>
@@ -297,6 +312,27 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser }: DirectIn
                               Sau khi chặn, bạn sẽ không thể gửi hoặc nhận tin nhắn từ
                               {' '}<strong>{otherUserName}</strong>.
                               Người này sẽ không được thông báo.
+                        </p>
+                  </Modal>
+
+                  {/* Archive confirmation modal */}
+                  <Modal
+                        title={conversation.isArchived ? 'Bỏ lưu trữ hội thoại' : 'Lưu trữ hội thoại'}
+                        open={isArchiveModalOpen}
+                        onOk={() => {
+                              toggleArchive(conversation.id, !!conversation.isArchived);
+                              setIsArchiveModalOpen(false);
+                              onClose?.();
+                        }}
+                        onCancel={() => setIsArchiveModalOpen(false)}
+                        okText={conversation.isArchived ? 'Bỏ lưu trữ' : 'Lưu trữ'}
+                        cancelText="Hủy"
+                  >
+                        <p className="text-gray-600">
+                              {conversation.isArchived
+                                    ? 'Hội thoại sẽ được chuyển về danh sách chính.'
+                                    : 'Hội thoại sẽ được chuyển vào mục "Lưu trữ". Bạn vẫn có thể xem lại trong tab Lưu trữ.'
+                              }
                         </p>
                   </Modal>
 

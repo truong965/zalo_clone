@@ -37,6 +37,8 @@ export const API_ENDPOINTS = {
     PIN: (id: string) => `/api/v1/conversations/${id}/pin`,
     PINNED_MESSAGES: (id: string) => `/api/v1/conversations/${id}/pinned-messages`,
     PIN_MESSAGE: (id: string) => `/api/v1/conversations/${id}/pin-message`,
+    MUTE: (id: string) => `/api/v1/conversations/${id}/mute`,
+    ARCHIVE: (id: string) => `/api/v1/conversations/${id}/archive`,
   },
 
   // Chat - Messages

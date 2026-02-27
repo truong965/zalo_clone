@@ -12,7 +12,7 @@ interface ConversationSidebarProps {
       conversations: ConversationUI[];
       selectedId: string | null;
       onSelect: (id: string) => void;
-      loadMoreRef: (node?: Element | null) => void; // ✅ NEW
+      loadMoreRef: (node?: Element | null) => void;
       hasMore?: boolean;
       isLoading?: boolean;
       /** Open global search panel (Option A) */
@@ -23,27 +23,46 @@ interface ConversationSidebarProps {
       onCreateGroupClick?: () => void;
       /** Toggle pin state on a conversation */
       onTogglePin?: (conversationId: string, isPinned: boolean) => void;
+      /** Archived conversations for the "Lưu trữ" tab */
+      archivedConversations?: ConversationUI[];
+      archivedLoadMoreRef?: (node?: Element | null) => void;
+      archivedHasMore?: boolean;
+      archivedIsLoading?: boolean;
+      /** Toggle mute on a conversation */
+      onToggleMute?: (conversationId: string, currentlyMuted: boolean) => void;
+      /** Toggle archive on a conversation */
+      onToggleArchive?: (conversationId: string, currentlyArchived: boolean) => void;
 }
 
 export function ConversationSidebar({
       conversations,
       selectedId,
       onSelect,
-      loadMoreRef, // ✅ NEW
+      loadMoreRef,
       hasMore = false,
       isLoading = false,
       onSearchClick,
       onFriendSearchClick,
       onCreateGroupClick,
       onTogglePin,
+      archivedConversations = [],
+      archivedLoadMoreRef,
+      archivedHasMore = false,
+      archivedIsLoading = false,
+      onToggleMute,
+      onToggleArchive,
 }: ConversationSidebarProps) {
       const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
-      const filteredConversations = conversations.filter(c => {
-            const unreadCount = c.unreadCount ?? c.unread ?? 0;
-            if (activeTab === 'unread') return unreadCount > 0;
-            return true;
-      });
+      const filteredConversations = activeTab === 'archived'
+            ? archivedConversations
+            : conversations.filter(c => {
+                  if (activeTab === 'unread') {
+                        const unreadCount = c.unreadCount ?? c.unread ?? 0;
+                        return unreadCount > 0;
+                  }
+                  return true;
+            });
 
       const globalMenuItems: MenuProps['items'] = [
             {
@@ -101,6 +120,15 @@ export function ConversationSidebar({
                               >
                                     Chưa đọc
                               </span>
+                              <span
+                                    className={`cursor-pointer transition-colors pb-1 ${activeTab === 'archived'
+                                          ? 'text-blue-600 border-b-2 border-blue-600'
+                                          : 'text-gray-500 hover:text-blue-600'
+                                          }`}
+                                    onClick={() => setActiveTab('archived')}
+                              >
+                                    Lưu trữ
+                              </span>
                         </div>
                         <div className="flex items-center gap-1 text-gray-500">
                               {/* <Dropdown menu={{ items: globalMenuItems }} placement="bottomLeft" trigger={['click']}>
@@ -131,18 +159,32 @@ export function ConversationSidebar({
                                                 isSelected={selectedId === item.id}
                                                 onClick={() => onSelect(item.id)}
                                                 onTogglePin={onTogglePin}
+                                                onToggleMute={onToggleMute}
+                                                onToggleArchive={onToggleArchive}
                                           />
                                     ))}
 
-                                    {/* ✅ Load More Trigger (Bottom) */}
-                                    {hasMore && (
-                                          <div ref={loadMoreRef} className="py-3 flex justify-center">
-                                                {isLoading ? (
-                                                      <Spin size="small" />
-                                                ) : (
-                                                      <div className="h-1" />
-                                                )}
-                                          </div>
+                                    {/* Load More Trigger (Bottom) */}
+                                    {activeTab === 'archived' ? (
+                                          archivedHasMore && (
+                                                <div ref={archivedLoadMoreRef} className="py-3 flex justify-center">
+                                                      {archivedIsLoading ? (
+                                                            <Spin size="small" />
+                                                      ) : (
+                                                            <div className="h-1" />
+                                                      )}
+                                                </div>
+                                          )
+                                    ) : (
+                                          hasMore && (
+                                                <div ref={loadMoreRef} className="py-3 flex justify-center">
+                                                      {isLoading ? (
+                                                            <Spin size="small" />
+                                                      ) : (
+                                                            <div className="h-1" />
+                                                      )}
+                                                </div>
+                                          )
                                     )}
                               </>
                         ) : (

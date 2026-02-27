@@ -1,8 +1,10 @@
 import { Avatar, Typography, Badge, Dropdown, Button, type MenuProps } from 'antd';
 import {
       PushpinOutlined, MoreOutlined,
-      DeleteOutlined, TeamOutlined
+      TeamOutlined, BellOutlined,
+      InboxOutlined,
 } from '@ant-design/icons';
+import { BellSlashedIcon } from '@/components/icons/bell-slashed';
 import type { ConversationUI } from '../types';
 import { MessageType } from '@/types/api';
 
@@ -13,6 +15,8 @@ interface ConversationItemProps {
       isSelected: boolean;
       onClick: () => void;
       onTogglePin?: (conversationId: string, isPinned: boolean) => void;
+      onToggleMute?: (conversationId: string, currentlyMuted: boolean) => void;
+      onToggleArchive?: (conversationId: string, currentlyArchived: boolean) => void;
 }
 
 function getLastMessagePreview(data: ConversationUI): string {
@@ -32,19 +36,24 @@ function getLastMessagePreview(data: ConversationUI): string {
       return msg.content ?? '';
 }
 
-export function ConversationItem({ data, isSelected, onClick, onTogglePin }: ConversationItemProps) {
+export function ConversationItem({ data, isSelected, onClick, onTogglePin, onToggleMute, onToggleArchive }: ConversationItemProps) {
       const preview = getLastMessagePreview(data);
       const unreadCount = data.unreadCount ?? data.unread ?? 0;
       const isUnread = unreadCount > 0;
+      const isMuted = !!data.isMuted;
+      const isArchived = !!data.isArchived;
+
+      // Muted conversations suppress all unread visual indicators
+      const showUnreadVisual = isUnread && !isMuted;
 
       // Logic màu nền: 
       // 1. Nếu đang chọn -> Màu đậm hơn (blue-100)
-      // 2. Nếu chưa đọc & không chọn -> Màu xanh nhạt (blue-50)
+      // 2. Nếu chưa đọc & không muted & không chọn -> Màu xanh nhạt (blue-50)
       // 3. Mặc định -> Trắng (hover xám)
       let bgClass = 'hover:bg-gray-100 bg-white';
       if (isSelected) {
             bgClass = 'bg-blue-100 hover:bg-blue-200';
-      } else if (isUnread) {
+      } else if (showUnreadVisual) {
             bgClass = 'bg-blue-50 hover:bg-blue-100';
       }
 
@@ -52,6 +61,10 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin }: Con
       const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
             if (key === 'pin') {
                   onTogglePin?.(data.id, !!data.isPinned);
+            } else if (key === 'muted') {
+                  onToggleMute?.(data.id, isMuted);
+            } else if (key === 'archive') {
+                  onToggleArchive?.(data.id, isArchived);
             }
       };
 
@@ -63,24 +76,21 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin }: Con
             },
             {
                   key: 'muted',
-                  label: 'Tắt thông báo',
-                  icon: <BellOutlined />,
+                  label: isMuted ? 'Bật thông báo' : 'Tắt thông báo',
+                  icon: isMuted ? <BellSlashedIcon /> : <BellOutlined />,
             },
-            // {
-            //       key: 'classify',
-            //       label: 'Phân loại',
-            //       icon: <TagsOutlined />,
-            //       children: [
-            //             { key: 'work', label: 'Công việc' },
-            //             { key: 'family', label: 'Gia đình' },
-            //       ]
-            // },
             { type: 'divider' },
-            {
-                  key: 'hide',
-                  label: <span className="text-red-500">Ẩn hội thoại</span>,
-                  icon: <DeleteOutlined className="text-red-500" />,
-            },
+            isArchived
+                  ? {
+                        key: 'archive',
+                        label: 'Bỏ lưu trữ',
+                        icon: <InboxOutlined />,
+                  }
+                  : {
+                        key: 'archive',
+                        label: 'Lưu trữ hội thoại',
+                        icon: <InboxOutlined />,
+                  },
       ];
 
       return (
@@ -117,15 +127,20 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin }: Con
 
                               {/* Row 1: Name + Timestamp */}
                               <div className="flex justify-between items-baseline mb-0.5">
-                                    <Text
-                                          strong={isUnread}
-                                          className={`truncate text-[15px] mr-2 ${isUnread ? 'text-gray-900' : 'text-gray-800'}`}
-                                    >
-                                          {data.name || 'Người dùng ẩn danh'}
-                                    </Text>
+                                    <div className="flex items-center min-w-0 mr-2">
+                                          <Text
+                                                strong={showUnreadVisual}
+                                                className={`truncate text-[15px] ${showUnreadVisual ? 'text-gray-900' : 'text-gray-800'}`}
+                                          >
+                                                {data.name || 'Người dùng ẩn danh'}
+                                          </Text>
+                                          {isMuted && (
+                                                <BellSlashedIcon className="text-gray-400 text-[11px] ml-1.5 flex-shrink-0" />
+                                          )}
+                                    </div>
 
                                     {/* Timestamp: Luôn nằm cùng dòng, không xuống dòng */}
-                                    <Text className={`text-xs whitespace-nowrap flex-shrink-0 ${isUnread ? 'font-medium text-blue-600' : 'text-gray-400'}`}>
+                                    <Text className={`text-xs whitespace-nowrap flex-shrink-0 ${showUnreadVisual ? 'font-medium text-blue-600' : 'text-gray-400'}`}>
                                           {data.timestamp}
                                     </Text>
                               </div>
@@ -133,16 +148,15 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin }: Con
                               {/* Row 2: Message Preview + Badge */}
                               <div className="flex justify-between items-center">
                                     <Text
-                                          className={`truncate text-sm pr-2 flex-1 ${isUnread ? 'font-semibold text-gray-800' : 'text-gray-500'}`}
+                                          className={`truncate text-sm pr-2 flex-1 ${showUnreadVisual ? 'font-semibold text-gray-800' : 'text-gray-500'}`}
                                           ellipsis
                                     >
                                           {data.isPinned && <PushpinOutlined className="text-gray-400 mr-1 rotate-45" />}
-                                          {/* Thêm prefix Bạn: nếu cần thiết trong hàm getPreview hoặc ở đây */}
                                           {preview}
                                     </Text>
 
-                                    {/* Unread Badge: Luôn nằm sát phải */}
-                                    {unreadCount > 0 && (
+                                    {/* Unread Badge: hidden when muted */}
+                                    {showUnreadVisual && unreadCount > 0 && (
                                           <Badge count={unreadCount} size="small" className="site-badge-count-4 ml-2 flex-shrink-0" />
                                     )}
                               </div>

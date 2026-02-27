@@ -18,7 +18,9 @@ import { REMINDERS_BASE_KEY } from './use-reminders';
 import { useSocket } from '@/hooks/use-socket';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { SocketEvents } from '@/constants/socket-events';
+import { conversationKeys } from '@/features/conversation/hooks/use-conversation-queries';
 import type { ReminderTriggeredPayload } from '@/types/api';
+import type { ConversationUI } from '@/types/conversation';
 
 /** Simple notification sound using Web Audio API */
 function playNotificationSound() {
@@ -125,6 +127,15 @@ export function useReminderNotifications() {
             if (!socket) return;
 
             const handleTriggered = (payload: ReminderTriggeredPayload) => {
+                  // Defence-in-depth: skip notification if the conversation is muted
+                  // (backend already filters, but guard against race conditions)
+                  if (payload.conversationId) {
+                        const cached = queryClient.getQueryData<ConversationUI>(
+                              conversationKeys.detail(payload.conversationId),
+                        );
+                        if (cached?.isMuted) return;
+                  }
+
                   // Play sound
                   playNotificationSound();
 

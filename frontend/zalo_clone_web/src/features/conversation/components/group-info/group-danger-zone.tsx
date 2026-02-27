@@ -5,23 +5,25 @@
  */
 import { Button, Modal } from 'antd';
 import {
-      DeleteOutlined,
+      InboxOutlined,
       LogoutOutlined,
       ExclamationCircleOutlined,
 } from '@ant-design/icons';
 
 interface GroupDangerZoneProps {
       isAdmin: boolean;
+      isArchived: boolean;
       memberCount: number;
       onLeaveGroup: () => Promise<void>;
-      onDeleteHistory: () => void;
+      onArchiveConversation: () => void;
 }
 
 export function GroupDangerZone({
       isAdmin,
+      isArchived,
       memberCount,
       onLeaveGroup,
-      onDeleteHistory,
+      onArchiveConversation,
 }: GroupDangerZoneProps) {
       const handleLeave = () => {
             // R1: Admin cannot leave — show a helpful message
@@ -67,13 +69,12 @@ export function GroupDangerZone({
             <div className="p-2">
                   <Button
                         type="text"
-                        danger
                         block
                         className="text-left flex items-center gap-2 h-10"
-                        icon={<DeleteOutlined />}
-                        onClick={onDeleteHistory}
+                        icon={<InboxOutlined />}
+                        onClick={onArchiveConversation}
                   >
-                        Ẩn hội thoại
+                        {isArchived ? 'Bỏ lưu trữ' : 'Lưu trữ hội thoại'}
                   </Button>
                   <Button
                         type="text"
