@@ -73,7 +73,7 @@ export function GroupDangerZone({
                         icon={<DeleteOutlined />}
                         onClick={onDeleteHistory}
                   >
-                        Xóa lịch sử trò chuyện
+                        Ẩn hội thoại
                   </Button>
                   <Button
                         type="text"

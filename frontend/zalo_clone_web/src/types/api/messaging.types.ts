@@ -139,3 +139,24 @@ export interface PinnedMessageItem {
       sender: MessageSender | null;
       mediaAttachments: Pick<MessageMediaAttachmentItem, 'id' | 'mediaType' | 'originalName' | 'thumbnailUrl'>[];
 }
+
+// ============================================================================
+// RECENT MEDIA (Info Sidebar Preview)
+// ============================================================================
+
+/**
+ * A single recent media item returned by
+ * GET /messages/conversations/:id/media/recent
+ */
+export interface RecentMediaItem {
+      messageId: string;
+      mediaId: string;
+      originalName: string;
+      mimeType: string;
+      mediaType: MediaType;
+      size: number;
+      thumbnailUrl: string | null;
+      cdnUrl: string | null;
+      messageType: MessageType;
+      createdAt: string;
+}

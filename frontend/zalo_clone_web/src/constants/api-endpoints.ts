@@ -47,6 +47,8 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/api/v1/messages/${id}`,
     SEARCH: '/api/v1/messages/search',
     CONTEXT: '/api/v1/messages/context',
+    RECENT_MEDIA: (conversationId: string) =>
+      `/api/v1/messages/conversations/${conversationId}/media/recent`,
   },
 
   // Contacts - Friendships (/friendships controller)

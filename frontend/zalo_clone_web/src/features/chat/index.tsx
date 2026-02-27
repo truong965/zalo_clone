@@ -3,7 +3,7 @@
 // Thin composition shell — all business logic lives in extracted hooks.
 // This component wires hooks together and renders the layout.
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { notification } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
@@ -17,6 +17,7 @@ import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
 import { ReplyPreviewBar } from './components/reply-preview-bar';
 import { PinnedMessagesBanner } from './components/pinned-messages-banner';
+import { MediaBrowserPanel } from './components/media-browser-panel';
 
 // ── Cross-feature components (rendered by page-level host) ───────────────
 import { FriendshipSearchModal } from '@/features/contacts';
@@ -43,6 +44,7 @@ import { useConversationLoader } from './hooks/use-conversation-loader';
 
 // ── Store ────────────────────────────────────────────────────────────────
 import { useChatStore } from './stores/chat.store';
+import type { MediaBrowserTab } from './stores/chat.store';
 import type { ChatMessage } from './types';
 
 interface ReminderTarget {
@@ -70,8 +72,19 @@ export function ChatFeature() {
       const setIsFriendSearchOpen = useChatStore((s) => s.setIsFriendSearchOpen);
       const prefillSearchKeyword = useChatStore((s) => s.prefillSearchKeyword);
       const setPrefillSearchKeyword = useChatStore((s) => s.setPrefillSearchKeyword);
+      const mediaBrowserTab = useChatStore((s) => s.mediaBrowserTab);
+      const setMediaBrowserTab = useChatStore((s) => s.setMediaBrowserTab);
       const replyTarget = useChatStore((s) => s.replyTarget);
       const setReplyTarget = useChatStore((s) => s.setReplyTarget);
+
+      // ── "Xem tất cả" handler (info sidebar → media browser panel) ─────────
+      const handleOpenMediaBrowser = useCallback(
+            (tab: MediaBrowserTab) => {
+                  setMediaBrowserTab(tab);
+                  setRightSidebar('media-browser');
+            },
+            [setMediaBrowserTab, setRightSidebar],
+      );
 
       // ── Reminder state ──────────────────────────────────────────────────────────
       const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
@@ -432,6 +445,7 @@ export function ChatFeature() {
                                     conversationId={selectedId}
                                     currentUserId={currentUserId}
                                     onClose={() => setRightSidebar('none')}
+                                    onOpenMediaBrowser={handleOpenMediaBrowser}
                                     onLeaveGroup={() => {
                                           // Immediately remove from cache + clear selection
                                           // to prevent stale API calls (members, messages, message:seen)
@@ -439,6 +453,13 @@ export function ChatFeature() {
                                           setSelectedId(null);
                                           setRightSidebar('none');
                                     }}
+                              />
+                        )}
+                        {rightSidebar === 'media-browser' && selectedId && (
+                              <MediaBrowserPanel
+                                    conversationId={selectedId}
+                                    initialTab={mediaBrowserTab}
+                                    onClose={() => setRightSidebar('none')}
                               />
                         )}
                   </div>

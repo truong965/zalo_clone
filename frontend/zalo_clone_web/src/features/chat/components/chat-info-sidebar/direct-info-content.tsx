@@ -9,26 +9,28 @@ import {
       RightOutlined,
       ClockCircleOutlined,
       DeleteOutlined,
-      EyeInvisibleOutlined,
       BellOutlined,
       PushpinOutlined,
-      UsergroupAddOutlined,
       StopOutlined,
       ExclamationCircleFilled,
 } from '@ant-design/icons';
 import type { ConversationUI } from '@/types/api';
+import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
 import { useBlockUser } from '@/features/contacts/hooks/use-block';
 import { usePinConversation } from '@/features/conversation';
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
+import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
 
 const { Title } = Typography;
 
 interface DirectInfoContentProps {
       conversation: ConversationUI;
+      onOpenMediaBrowser?: (tab: MediaBrowserTab) => void;
 }
 
-export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
+export function DirectInfoContent({ conversation, onOpenMediaBrowser }: DirectInfoContentProps) {
       const blockMutation = useBlockUser();
       const { togglePin } = usePinConversation();
       const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
@@ -36,6 +38,10 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversation.id);
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
+
+      // async-parallel: two independent queries run in parallel
+      const { data: recentMedia } = useConversationRecentMedia(conversation.id, ['IMAGE', 'VIDEO'], 3);
+      const { data: recentFiles } = useConversationRecentMedia(conversation.id, ['FILE'], 3);
 
       // In a DIRECT conversation, the other user is whoever isn't us
       const otherUserId = conversation.otherUserId ?? null;
@@ -54,31 +60,72 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
                   key: '1',
                   label: <span className="font-medium">Ảnh/Video</span>,
                   children: (
-                        <div className="text-gray-500 text-center py-2 text-xs">
-                              Chưa có Ảnh/Video được chia sẻ
-                        </div>
+                        <>
+                              {!recentMedia?.length ? (
+                                    <div className="text-gray-500 text-center py-2 text-xs">
+                                          Chưa có Ảnh/Video được chia sẻ
+                                    </div>
+                              ) : (
+                                    <>
+                                          <div className="grid grid-cols-3 gap-1">
+                                                {recentMedia.map((item) => (
+                                                      <MediaThumbnail key={item.mediaId} item={item} />
+                                                ))}
+                                          </div>
+                                          <Button
+                                                type="link"
+                                                size="small"
+                                                className="w-full mt-1 text-xs"
+                                                onClick={() => onOpenMediaBrowser?.('photos')}
+                                          >
+                                                Xem tất cả
+                                          </Button>
+                                    </>
+                              )}
+                        </>
                   ),
             },
             {
                   key: '2',
                   label: <span className="font-medium">File</span>,
                   children: (
-                        <div className="text-gray-500 text-center py-2 text-xs">
-                              Chưa có File được chia sẻ
-                        </div>
+                        <>
+                              {!recentFiles?.length ? (
+                                    <div className="text-gray-500 text-center py-2 text-xs">
+                                          Chưa có File được chia sẻ
+                                    </div>
+                              ) : (
+                                    <>
+                                          <div className="flex flex-col gap-1">
+                                                {recentFiles.map((item) => (
+                                                      <div
+                                                            key={item.mediaId}
+                                                            className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                                                      >
+                                                            <MediaThumbnail item={item} />
+                                                            <div className="flex-1 min-w-0">
+                                                                  <div className="text-xs text-gray-700 truncate">
+                                                                        {item.originalName}
+                                                                  </div>
+                                                            </div>
+                                                      </div>
+                                                ))}
+                                          </div>
+                                          <Button
+                                                type="link"
+                                                size="small"
+                                                className="w-full mt-1 text-xs"
+                                                onClick={() => onOpenMediaBrowser?.('files')}
+                                          >
+                                                Xem tất cả
+                                          </Button>
+                                    </>
+                              )}
+                        </>
                   ),
             },
             {
                   key: '3',
-                  label: <span className="font-medium">Link</span>,
-                  children: (
-                        <div className="text-gray-500 text-center py-2 text-xs">
-                              Chưa có Link được chia sẻ
-                        </div>
-                  ),
-            },
-            {
-                  key: '4',
                   label: <span className="font-medium">Thiết lập bảo mật</span>,
                   children: (
                         <div className="flex flex-col gap-3">
@@ -204,7 +251,7 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
 
                         <Collapse
                               ghost
-                              expandIconPosition="end"
+                              expandIconPlacement="end"
                               expandIcon={({ isActive }) => (
                                     <RightOutlined
                                           rotate={isActive ? 90 : 0}
@@ -223,7 +270,7 @@ export function DirectInfoContent({ conversation }: DirectInfoContentProps) {
                                     className="text-left flex items-center gap-2 h-10"
                                     icon={<DeleteOutlined />}
                               >
-                                    Xóa lịch sử trò chuyện
+                                    Ẩn hội thoại
                               </Button>
                         </div>
                   </div>

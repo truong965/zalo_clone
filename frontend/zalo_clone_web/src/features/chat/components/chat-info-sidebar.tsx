@@ -10,6 +10,7 @@ import { Typography, Spin } from 'antd';
 import { useConversationById } from '@/features/conversation/hooks/use-conversation-queries';
 import { DirectInfoContent } from './chat-info-sidebar/direct-info-content';
 import { GroupInfoContent } from './chat-info-sidebar/group-info-content';
+import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
 
 const { Title } = Typography;
 
@@ -19,6 +20,8 @@ interface ChatInfoSidebarProps {
       currentUserId: string;
       /** Called when user leaves/gets kicked → navigate away from conversation */
       onLeaveGroup?: () => void;
+      /** Called when user clicks "Xem tất cả" in media panel → open media browser */
+      onOpenMediaBrowser?: (tab: MediaBrowserTab) => void;
 }
 
 export function ChatInfoSidebar({
@@ -26,6 +29,7 @@ export function ChatInfoSidebar({
       conversationId,
       currentUserId,
       onLeaveGroup,
+      onOpenMediaBrowser,
 }: ChatInfoSidebarProps) {
       const { data: conversation, isLoading } = useConversationById(conversationId);
 
@@ -52,9 +56,10 @@ export function ChatInfoSidebar({
                               currentUserId={currentUserId}
                               onClose={onClose}
                               onLeaveGroup={onLeaveGroup}
+                              onOpenMediaBrowser={onOpenMediaBrowser}
                         />
                   ) : (
-                        <DirectInfoContent conversation={conversation} />
+                        <DirectInfoContent conversation={conversation} onOpenMediaBrowser={onOpenMediaBrowser} />
                   )}
             </div>
       );

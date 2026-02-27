@@ -86,7 +86,7 @@ export function AliasEditModal({
                   open={open}
                   title="Đặt tên gợi nhớ"
                   onCancel={onClose}
-                  destroyOnClose
+                  destroyOnHidden
                   footer={
                         <Space>
                               {resolvedAlias && (

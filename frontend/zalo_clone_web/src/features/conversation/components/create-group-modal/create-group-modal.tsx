@@ -67,7 +67,7 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
                   open={isOpen}
                   onCancel={handleClose}
                   width="min(96vw, 900px)"
-                  destroyOnClose
+                  destroyOnCldestroyOnHiddenose
                   maskClosable={false}
                   footer={
                         <div className="flex justify-end gap-2">

@@ -68,7 +68,7 @@ export function TransferAdminModal({
                   open={open}
                   onCancel={handleClose}
                   width={400}
-                  destroyOnClose
+                  destroyOnHidden
                   okText="Chuyển quyền"
                   okButtonProps={{
                         disabled: !selectedId,

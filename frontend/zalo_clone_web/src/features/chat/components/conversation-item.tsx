@@ -61,11 +61,11 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin }: Con
                   label: data.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại',
                   icon: <PushpinOutlined />,
             },
-            // {
-            //       key: 'mark-unread',
-            //       label: 'Đánh dấu chưa đọc',
-            //       icon: <CheckCircleOutlined />,
-            // },
+            {
+                  key: 'muted',
+                  label: 'Tắt thông báo',
+                  icon: <BellOutlined />,
+            },
             // {
             //       key: 'classify',
             //       label: 'Phân loại',
@@ -77,8 +77,8 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin }: Con
             // },
             { type: 'divider' },
             {
-                  key: 'delete',
-                  label: <span className="text-red-500">Xóa hội thoại</span>,
+                  key: 'hide',
+                  label: <span className="text-red-500">Ẩn hội thoại</span>,
                   icon: <DeleteOutlined className="text-red-500" />,
             },
       ];

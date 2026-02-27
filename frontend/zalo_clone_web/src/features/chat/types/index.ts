@@ -84,5 +84,5 @@ export interface ChatState {
 // UI CONTROL TYPES
 // ============================================================================
 
-export type RightSidebarState = 'none' | 'search' | 'info';
+export type RightSidebarState = 'none' | 'search' | 'info' | 'media-browser';
 export type ConversationFilterTab = 'all' | 'unread';

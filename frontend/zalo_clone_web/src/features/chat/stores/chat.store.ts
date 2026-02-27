@@ -15,6 +15,8 @@ import { STORAGE_KEYS } from '@/constants/storage-keys';
 import type { RightSidebarState } from '../types';
 import type { ChatMessage } from '../types';
 
+export type MediaBrowserTab = 'photos' | 'files';
+
 /**
  * Lightweight snapshot of the message being replied to.
  * Kept minimal — just what ReplyPreviewBar + optimistic send need.
@@ -37,6 +39,9 @@ interface ChatStoreState {
       isFriendSearchOpen: boolean;
       prefillSearchKeyword: string | undefined;
 
+      // ── Media Browser ──────────────────────────────────────────────────────
+      mediaBrowserTab: MediaBrowserTab;
+
       // ── Typing ────────────────────────────────────────────────────────────
       typingUserIds: string[];
 
@@ -50,6 +55,7 @@ interface ChatStoreActions {
       setIsGlobalSearchOpen: (open: boolean) => void;
       setIsFriendSearchOpen: (open: boolean) => void;
       setPrefillSearchKeyword: (keyword: string | undefined) => void;
+      setMediaBrowserTab: (tab: MediaBrowserTab) => void;
       setTypingUserIds: (updater: string[] | ((prev: string[]) => string[])) => void;
       setReplyTarget: (target: ReplyTarget | null) => void;
 }
@@ -61,6 +67,7 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => (
       isGlobalSearchOpen: false,
       isFriendSearchOpen: false,
       prefillSearchKeyword: undefined,
+      mediaBrowserTab: 'photos',
       typingUserIds: [],
       replyTarget: null,
 
@@ -82,6 +89,7 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => (
       setIsGlobalSearchOpen: (open) => set({ isGlobalSearchOpen: open }),
       setIsFriendSearchOpen: (open) => set({ isFriendSearchOpen: open }),
       setPrefillSearchKeyword: (keyword) => set({ prefillSearchKeyword: keyword }),
+      setMediaBrowserTab: (tab) => set({ mediaBrowserTab: tab }),
 
       setTypingUserIds: (updater) =>
             set((state) => ({

@@ -102,7 +102,7 @@ export function AddMembersModal({
                   open={open}
                   onCancel={handleClose}
                   width={420}
-                  destroyOnClose
+                  destroyOnHidden
                   footer={
                         <div className="flex justify-end gap-2">
                               <Button onClick={handleClose} disabled={isAdding}>

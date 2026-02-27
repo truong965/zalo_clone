@@ -10,10 +10,12 @@
  * - Click result → scroll to message trong message list
  */
 
-import { useCallback, useState, useEffect, useRef } from 'react';
-import { Avatar, Button, Input, Select, Spin, Typography, DatePicker } from 'antd';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { Avatar, Button, Divider, Input, Select, Spin, Typography, DatePicker } from 'antd';
 import { CloseOutlined, SearchOutlined, LoadingOutlined, FilterOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import 'dayjs/locale/vi';
+import { groupBy } from 'lodash-es';
 import type { Dayjs } from 'dayjs';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -28,6 +30,23 @@ import { conversationService } from '@/features/conversation';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
+
+dayjs.locale('vi');
+
+// ── Constants ────────────────────────────────────────────────────────────
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function formatDateDivider(dateKey: string): string {
+      const d = dayjs(dateKey);
+      const today = dayjs().startOf('day');
+      const diff = today.diff(d, 'day');
+      if (diff === 0) return 'Hôm nay';
+      if (diff === 1) return 'Hôm qua';
+      if (diff < 7) return d.format('dddd');          // e.g. "thứ ba"
+      if (d.year() === today.year()) return d.format('D [tháng] M');
+      return d.format('D [tháng] M, YYYY');
+}
 
 interface ChatSearchSidebarProps {
       /** ID of the conversation to search within */
@@ -61,6 +80,17 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
       const hasActiveFilters = !!(filters.startDate || filters.endDate || filters.fromUserId);
       const [showFilters, setShowFilters] = useState(hasActiveFilters);
 
+      // Clear stale filters from previous session on mount
+      // (singleton conversation search store retains filters across mounts)
+      const initialFiltersCleared = useRef(false);
+      useEffect(() => {
+            if (!initialFiltersCleared.current) {
+                  initialFiltersCleared.current = true;
+                  setFilters({ startDate: undefined, endDate: undefined, fromUserId: undefined });
+            }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+
       // Auto-search when initialKeyword is provided AND socket is connected
       // (from global search → conversation search flow)
       const initialKeywordApplied = useRef(false);
@@ -85,6 +115,14 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
       const messages = results?.messages ?? [];
       const hasResults = messages.length > 0;
       const hasKeyword = keyword.trim().length > 0;
+
+      // Phase I: group results by date for dividers
+      const groupedMessages = useMemo(() => {
+            const groups = groupBy(messages, (msg) =>
+                  dayjs(msg.createdAt).format('YYYY-MM-DD'),
+            );
+            return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+      }, [messages]);
 
       const handleClose = useCallback(() => {
             closeSearch();
@@ -267,8 +305,8 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                               <SearchEmpty hasSearched keyword={keyword} />
                         )}
 
-                        {/* Initial state */}
-                        {!hasKeyword && !hasResults && (
+                        {/* Initial state — no keyword and no type filter */}
+                        {!hasKeyword && !hasResults && !isLoading && (
                               <div className="flex-1 flex flex-col items-center justify-center text-center mt-10">
                                     <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-4">
                                           <SearchOutlined className="text-5xl text-blue-300" />
@@ -278,21 +316,30 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                               </div>
                         )}
 
-                        {/* Results */}
-                        {hasResults && (
+                        {/* Results — show when there's an active search */}
+                        {hasResults && hasKeyword && (
                               <div className="pb-4">
                                     <div className="px-3 py-1.5">
                                           <Text className="text-[11px] text-gray-400">
                                                 {messages.length} kết quả
                                           </Text>
                                     </div>
-                                    {messages.map((msg) => (
-                                          <MessageResult
-                                                key={msg.id}
-                                                data={msg}
-                                                hideConversationInfo
-                                                onClick={handleMessageClick}
-                                          />
+                                    {groupedMessages.map(([dateKey, group]) => (
+                                          <div key={dateKey}>
+                                                <Divider className="!my-1">
+                                                      <Text className="text-[11px] text-gray-400">
+                                                            {formatDateDivider(dateKey)}
+                                                      </Text>
+                                                </Divider>
+                                                {group.map((msg) => (
+                                                      <MessageResult
+                                                            key={msg.id}
+                                                            data={msg}
+                                                            hideConversationInfo
+                                                            onClick={handleMessageClick}
+                                                      />
+                                                ))}
+                                          </div>
                                     ))}
                               </div>
                         )}

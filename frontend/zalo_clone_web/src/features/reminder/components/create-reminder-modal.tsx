@@ -88,7 +88,7 @@ export function CreateReminderModal({
                   okText="Tạo"
                   cancelText="Hủy"
                   confirmLoading={isSubmitting}
-                  destroyOnClose
+                  destroyOnHidden
             >
                   <div className="flex flex-col gap-4 py-2">
                         <div>

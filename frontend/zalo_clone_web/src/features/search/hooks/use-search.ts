@@ -26,8 +26,10 @@ import type { SearchStoreApi } from '../stores/search.store';
 import { searchService } from '../api/search.service';
 import type {
       SearchTab,
+      SearchFilters,
       SearchSubscribePayload,
       SearchLoadMorePayload,
+      SearchType,
 } from '../types';
 
 /** Minimum keyword length to trigger search (matches backend minLength = 3) */
@@ -181,7 +183,7 @@ export function useSearch(options?: UseSearchOptions) {
 
                   const trimmed = newKeyword.trim();
 
-                  // Clear search results if keyword too short, but keep the keyword in input
+                  // Clear search results if keyword too short
                   if (trimmed.length < MIN_KEYWORD_LENGTH) {
                         debouncedSubscribe.cancel();
                         if (keyword.trim().length >= MIN_KEYWORD_LENGTH) {
@@ -306,11 +308,18 @@ export function useSearch(options?: UseSearchOptions) {
                         cursor,
                         conversationId: type === 'CONVERSATION' ? conversationId : undefined,
                         mediaType: type === 'MEDIA' ? filters.mediaType : undefined,
+                        // Forward conversation filters for filter-only browse pagination
+                        ...(type === 'CONVERSATION' && {
+                              messageType: filters.messageType,
+                              fromUserId: filters.fromUserId,
+                              startDate: filters.startDate,
+                              endDate: filters.endDate,
+                        }),
                   };
 
                   loadMore(payload);
             },
-            [keyword, cursors, conversationId, filters.mediaType, loadMore],
+            [keyword, cursors, conversationId, filters, searchType, loadMore],
       );
 
       // ============================================================================
@@ -321,12 +330,18 @@ export function useSearch(options?: UseSearchOptions) {
       useEffect(() => {
             const currentJson = JSON.stringify(filters);
             if (prevFiltersJsonRef.current === currentJson) return;
-            prevFiltersJsonRef.current = currentJson;
 
-            // Only re-search if there's a valid keyword and auto-subscribe is enabled
+            // Re-search if there's a valid keyword
             const trimmed = keyword.trim();
             if (trimmed.length < MIN_KEYWORD_LENGTH) return;
             if (!autoSubscribe) return;
+
+            // Wait for socket connection — DON'T update prevFiltersJsonRef so the
+            // effect re-runs once isConnected flips to true.
+            if (!isConnected) return;
+
+            // Commit: we're going to subscribe with these filters
+            prevFiltersJsonRef.current = currentJson;
 
             // Cancel pending debounce and immediately search with new filters
             debouncedSubscribe.cancel();
@@ -357,7 +372,7 @@ export function useSearch(options?: UseSearchOptions) {
             }
 
             subscribe(payload);
-      }, [filters, keyword, searchType, conversationId, autoSubscribe, debouncedSubscribe, setStatus, subscribe]);
+      }, [filters, keyword, searchType, conversationId, autoSubscribe, debouncedSubscribe, setStatus, subscribe, isConnected]);
 
       // ============================================================================
       // Cleanup on unmount — unsubscribe from server
@@ -388,7 +403,7 @@ export function useSearch(options?: UseSearchOptions) {
       /** Number of pending realtime matches */
       const pendingMatchCount = newMatches.length;
 
-      /** Whether search is active (keyword entered and results/loading) */
+      /** Whether search is active (keyword entered, and results/loading) */
       const isSearchActive =
             keyword.trim().length >= MIN_KEYWORD_LENGTH &&
             (status === 'loading' || status === 'success');

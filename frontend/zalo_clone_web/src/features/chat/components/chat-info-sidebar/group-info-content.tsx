@@ -39,6 +39,9 @@ import { TransferAdminModal } from '@/features/conversation/components/transfer-
 import { useSocket } from '@/hooks/use-socket';
 import { usePinConversation } from '@/features/conversation';
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
+import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
+import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
+import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
 
 interface GroupInfoContentProps {
       conversation: ConversationUI;
@@ -47,6 +50,8 @@ interface GroupInfoContentProps {
       onClose: () => void;
       /** Called when user leaves/is kicked from group, to navigate away */
       onLeaveGroup?: () => void;
+      /** Called when user clicks "Xem tất cả" to open media browser */
+      onOpenMediaBrowser?: (tab: MediaBrowserTab) => void;
 }
 
 export function GroupInfoContent({
@@ -55,6 +60,7 @@ export function GroupInfoContent({
       currentUserId,
       onClose,
       onLeaveGroup,
+      onOpenMediaBrowser,
 }: GroupInfoContentProps) {
       const [showAddMembers, setShowAddMembers] = useState(false);
       const [showTransferAdmin, setShowTransferAdmin] = useState(false);
@@ -67,6 +73,10 @@ export function GroupInfoContent({
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversationId);
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
+
+      // async-parallel: two independent queries run in parallel
+      const { data: recentMedia } = useConversationRecentMedia(conversationId, ['IMAGE', 'VIDEO'], 3);
+      const { data: recentFiles } = useConversationRecentMedia(conversationId, ['FILE'], 3);
 
       // Fetch members with role
       const membersQuery = useConversationMembers(conversationId);
@@ -265,27 +275,68 @@ export function GroupInfoContent({
                   key: '1',
                   label: <span className="font-medium">Ảnh/Video</span>,
                   children: (
-                        <div className="text-gray-500 text-center py-2 text-xs">
-                              Chưa có Ảnh/Video được chia sẻ
-                        </div>
+                        <>
+                              {!recentMedia?.length ? (
+                                    <div className="text-gray-500 text-center py-2 text-xs">
+                                          Chưa có Ảnh/Video được chia sẻ
+                                    </div>
+                              ) : (
+                                    <>
+                                          <div className="grid grid-cols-3 gap-1">
+                                                {recentMedia.map((item) => (
+                                                      <MediaThumbnail key={item.mediaId} item={item} />
+                                                ))}
+                                          </div>
+                                          <Button
+                                                type="link"
+                                                size="small"
+                                                className="w-full mt-1 text-xs"
+                                                onClick={() => onOpenMediaBrowser?.('photos')}
+                                          >
+                                                Xem tất cả
+                                          </Button>
+                                    </>
+                              )}
+                        </>
                   ),
             },
             {
                   key: '2',
                   label: <span className="font-medium">File</span>,
                   children: (
-                        <div className="text-gray-500 text-center py-2 text-xs">
-                              Chưa có File được chia sẻ
-                        </div>
-                  ),
-            },
-            {
-                  key: '3',
-                  label: <span className="font-medium">Link</span>,
-                  children: (
-                        <div className="text-gray-500 text-center py-2 text-xs">
-                              Chưa có Link được chia sẻ
-                        </div>
+                        <>
+                              {!recentFiles?.length ? (
+                                    <div className="text-gray-500 text-center py-2 text-xs">
+                                          Chưa có File được chia sẻ
+                                    </div>
+                              ) : (
+                                    <>
+                                          <div className="flex flex-col gap-1">
+                                                {recentFiles.map((item) => (
+                                                      <div
+                                                            key={item.mediaId}
+                                                            className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                                                      >
+                                                            <MediaThumbnail item={item} />
+                                                            <div className="flex-1 min-w-0">
+                                                                  <div className="text-xs text-gray-700 truncate">
+                                                                        {item.originalName}
+                                                                  </div>
+                                                            </div>
+                                                      </div>
+                                                ))}
+                                          </div>
+                                          <Button
+                                                type="link"
+                                                size="small"
+                                                className="w-full mt-1 text-xs"
+                                                onClick={() => onOpenMediaBrowser?.('files')}
+                                          >
+                                                Xem tất cả
+                                          </Button>
+                                    </>
+                              )}
+                        </>
                   ),
             },
       ];
@@ -374,7 +425,7 @@ export function GroupInfoContent({
                         <div className="border-b border-[#f4f5f7] border-b-[6px]">
                               <Collapse
                                     ghost
-                                    expandIconPosition="end"
+                                    expandIconPlacement="end"
                                     expandIcon={({ isActive }) => (
                                           <RightOutlined
                                                 rotate={isActive ? 90 : 0}
