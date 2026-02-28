@@ -8,7 +8,7 @@ import {
   UserOutlined,
   MessageOutlined,
   PhoneOutlined,
-  WarningOutlined,
+  AlertOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -49,10 +49,10 @@ export function AdminSidebar() {
       onClick: () => navigate('/admin/calls'),
     },
     {
-      key: '/admin/reports',
-      icon: <WarningOutlined />,
-      label: 'Reports',
-      onClick: () => navigate('/admin/reports'),
+      key: '/admin/activity',
+      icon: <AlertOutlined />,
+      label: 'Activity',
+      onClick: () => navigate('/admin/activity'),
     },
     {
       key: '/admin/settings',
@@ -71,9 +71,6 @@ export function AdminSidebar() {
       className="bg-white shadow-sm"
       theme="light"
     >
-      <div className="p-4 text-center">
-        <h2 className="font-bold text-blue-600">Admin</h2>
-      </div>
       <Menu
         mode="inline"
         selectedKeys={[currentPath]}

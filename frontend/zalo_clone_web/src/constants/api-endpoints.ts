@@ -142,4 +142,37 @@ export const API_ENDPOINTS = {
     UNDELIVERED: '/api/v1/reminders/undelivered',
     BY_CONVERSATION: (conversationId: string) => `/api/v1/reminders/conversation/${conversationId}`,
   },
+
+  // Admin Panel
+  ADMIN: {
+    STATS: {
+      OVERVIEW: '/api/v1/admin/stats/overview',
+      DAILY: '/api/v1/admin/stats/daily',
+    },
+    USERS: {
+      LIST: '/api/v1/admin/users',
+      DETAIL: (id: string) => `/api/v1/admin/users/${id}`,
+      SUSPEND: (id: string) => `/api/v1/admin/users/${id}/suspend`,
+      ACTIVATE: (id: string) => `/api/v1/admin/users/${id}/activate`,
+      FORCE_LOGOUT: (id: string) => `/api/v1/admin/users/${id}/force-logout`,
+    },
+    CONVERSATIONS: '/api/v1/admin/conversations',
+    CALLS: '/api/v1/admin/calls',
+    ACTIVITY: {
+      SUSPENDED: '/api/v1/admin/activity/suspended',
+      INACTIVE: '/api/v1/admin/activity/inactive',
+      HIGH_ACTIVITY: '/api/v1/admin/activity/high-activity',
+      MULTI_DEVICE: '/api/v1/admin/activity/multi-device',
+    },
+    SYSTEM: {
+      STATUS: '/api/v1/admin/system/status',
+    },
+    ROLES: {
+      LIST: '/api/v1/roles',
+      DETAIL: (id: string) => `/api/v1/roles/${id}`,
+      CREATE: '/api/v1/roles',
+      UPDATE: (id: string) => `/api/v1/roles/${id}`,
+      DELETE: (id: string) => `/api/v1/roles/${id}`,
+    },
+  },
 };

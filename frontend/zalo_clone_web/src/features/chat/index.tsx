@@ -157,7 +157,7 @@ export function ChatFeature() {
 
       // ── Hook: mute / archive conversation ─────────────────────────────────
       const { toggleMute } = useMuteConversation();
-      const { toggleArchive, isArchiving } = useArchiveConversation();
+      const { toggleArchive } = useArchiveConversation();
 
       // ── Hook: archived conversations ("Lưu trữ" tab) ──────────────────────
       const archivedQuery = useArchivedConversationsList();

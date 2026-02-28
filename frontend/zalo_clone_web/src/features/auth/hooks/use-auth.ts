@@ -41,8 +41,13 @@ export function useAuth() {
             async (payload: LoginRequest) => {
                   try {
                         await storeLogin(payload);
-                        // Navigate after successful login
-                        navigate(ROUTES.CHAT);
+                        // Navigate after successful login — admins go to dashboard
+                        const loggedInUser = useAuthStore.getState().user;
+                        if (loggedInUser?.role === 'ADMIN') {
+                              navigate(ROUTES.ADMIN_DASHBOARD);
+                        } else {
+                              navigate(ROUTES.CHAT);
+                        }
                   } catch (error: any) {
                         // Error is already set in store
                         throw error;

@@ -13,7 +13,6 @@
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import type { RightSidebarState } from '../types';
-import type { ChatMessage } from '../types';
 
 export type MediaBrowserTab = 'photos' | 'files';
 

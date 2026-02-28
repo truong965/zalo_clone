@@ -26,10 +26,8 @@ import type { SearchStoreApi } from '../stores/search.store';
 import { searchService } from '../api/search.service';
 import type {
       SearchTab,
-      SearchFilters,
       SearchSubscribePayload,
       SearchLoadMorePayload,
-      SearchType,
 } from '../types';
 
 /** Minimum keyword length to trigger search (matches backend minLength = 3) */

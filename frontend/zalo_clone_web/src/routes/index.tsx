@@ -25,7 +25,7 @@ import { AdminDashboardPage } from '@/pages/admin/dashboard';
 import { AdminUsersPage } from '@/pages/admin/users';
 import { AdminMessagesPage } from '@/pages/admin/messages';
 import { AdminCallsPage } from '@/pages/admin/calls';
-import { AdminReportsPage } from '@/pages/admin/reports';
+import { AdminActivityPage } from '@/pages/admin/activity';
 import { AdminSettingsPage } from '@/pages/admin/settings';
 
 // Common Pages
@@ -121,8 +121,8 @@ export const router = createBrowserRouter([
                         element: <AdminCallsPage />,
                   },
                   {
-                        path: 'reports',
-                        element: <AdminReportsPage />,
+                        path: 'activity',
+                        element: <AdminActivityPage />,
                   },
                   {
                         path: 'settings',

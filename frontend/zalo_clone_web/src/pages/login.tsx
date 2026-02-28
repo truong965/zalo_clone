@@ -25,15 +25,16 @@ export function LoginPage() {
     login,
     isLoading,
     isAuthenticated,
+    user,
     // error, // [THAY ĐỔI 3]: Không cần dùng state error này nữa vì ta sẽ bắn thông báo trực tiếp khi fail
     clearError,
   } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(ROUTES.CHAT);
+      navigate(user?.role === 'ADMIN' ? ROUTES.ADMIN_DASHBOARD : ROUTES.CHAT);
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, user]);
 
   const onFinish = async (values: { phoneNumber: string; password: string }) => {
     try {

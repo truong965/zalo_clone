@@ -20,7 +20,7 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { SocketEvents } from '@/constants/socket-events';
 import { conversationKeys } from '@/features/conversation/hooks/use-conversation-queries';
 import type { ReminderTriggeredPayload } from '@/types/api';
-import type { ConversationUI } from '@/types/conversation';
+import type { ConversationUI } from '@/types/api';
 
 /**
  * Module-level AudioContext — created once after first user gesture.
@@ -105,7 +105,7 @@ function showBrowserNotification(content: string, conversationId: string | null)
 /** Show persistent modal notification + acknowledge on dismiss */
 function showReminderModal(
       payload: { reminderId: string; content: string; conversationId: string | null },
-      onAcknowledge: (reminderId: string) => void,
+      onAcknowledge?: (reminderId: string) => void,
 ) {
       Modal.confirm({
             title: '⏰ Nhắc hẹn',
@@ -119,7 +119,7 @@ function showReminderModal(
             cancelText: 'Để sau',
             centered: true,
             onOk: () => {
-                  onAcknowledge(payload.reminderId);
+                  onAcknowledge?.(payload.reminderId);
             },
             // Don't auto-acknowledge on cancel — reminder stays as TRIGGERED
       });
