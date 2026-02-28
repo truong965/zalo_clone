@@ -119,6 +119,9 @@ interface CallStoreActions {
       /** Toggle speaker (for future mobile support) */
       toggleSpeaker: () => void;
 
+      /** Explicitly set camera off state (used by Daily.co hook on join) */
+      setCameraOff: (off: boolean) => void;
+
       /** Update connection quality indicator */
       setConnectionQuality: (quality: ConnectionQuality) => void;
 
@@ -279,6 +282,8 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
             }),
 
       toggleSpeaker: () => set((state) => ({ isSpeakerOn: !state.isSpeakerOn })),
+
+      setCameraOff: (off) => set({ isCameraOff: off }),
 
       setConnectionQuality: (quality) => set({ connectionQuality: quality }),
       setCallStatus: (status) => set({ callStatus: status }),

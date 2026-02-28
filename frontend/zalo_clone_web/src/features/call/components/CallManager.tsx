@@ -23,6 +23,7 @@ import { useDailyCall } from '../hooks/use-daily-call';
 import { useConnectionStats } from '../hooks/use-connection-stats';
 import { useAdaptiveBitrate } from '../hooks/use-adaptive-bitrate';
 import { useCallStore } from '../stores/call.store';
+import { useAuthStore } from '@/features/auth';
 import type { CallType, PeerInfo, DailyRoomPayload, ParticipantJoinedPayload, ParticipantLeftPayload } from '../types';
 
 // ── CustomEvent detail types ──────────────────────────────────────────
@@ -34,6 +35,8 @@ interface InitiateCallDetail {
       conversationId: string | null;
       /** Phase 4.4: extra receiver IDs for group calls */
       receiverIds?: string[];
+      /** When true, start the call with the local camera off */
+      initialCameraOff?: boolean;
 }
 
 export function CallManager() {
@@ -130,7 +133,8 @@ export function CallManager() {
             useCallStore.getState().switchToDaily({ roomUrl, token: myToken });
 
             // Join Daily.co room
-            await dailyRef.current?.join(roomUrl, myToken);
+            const myAvatarUrl = useAuthStore.getState().user?.avatarUrl ?? undefined;
+            await dailyRef.current?.join(roomUrl, myToken, store.callType ?? undefined, myAvatarUrl);
       };
 
       // ── Listen for CustomEvents from UI components ──────────────────────
@@ -150,6 +154,11 @@ export function CallManager() {
                         isGroupCall,
                   });
 
+                  // Set initial camera state from user’s choice
+                  if (detail.initialCameraOff) {
+                        useCallStore.getState().setCameraOff(true);
+                  }
+
                   // Emit to server (include receiverIds for group calls)
                   socketEmitters.emitInitiateCall({
                         calleeId: detail.calleeId,
@@ -166,7 +175,8 @@ export function CallManager() {
                         // Group call: hide overlay immediately, join Daily.co directly
                         useCallStore.getState().setCallActive();
                         socketEmitters.emitAcceptCall({ callId: store.callId! });
-                        void dailyRef.current?.join(store.dailyRoomUrl, store.dailyToken);
+                        const myAvatar = useAuthStore.getState().user?.avatarUrl ?? undefined;
+                        void dailyRef.current?.join(store.dailyRoomUrl, store.dailyToken, store.callType ?? undefined, myAvatar);
                   } else {
                         // 1-1 P2P call: acceptCall() needs incomingCall in store
                         // to read callType + callId, so do NOT call setCallActive()
@@ -181,11 +191,33 @@ export function CallManager() {
             };
 
             const handleHangup = () => {
-                  const provider = useCallStore.getState().provider;
-                  if (provider === 'DAILY_CO') {
+                  const store = useCallStore.getState();
+
+                  if (store.provider === 'DAILY_CO') {
+                        // ── Group / Daily.co call hangup ──────────────────────
+                        // 1. Leave Daily room (triggers 'left-meeting' event which
+                        //    clears dailyParticipants in the store)
+                        // 2. Notify server via call:hangup so backend can either
+                        //    remove this participant or end the call (if host)
+                        // 3. Reset local state — for non-host participants the
+                        //    server sends CALL_PARTICIPANT_LEFT (not CALL_ENDED),
+                        //    so we must reset ourselves.
+                        //
+                        // IMPORTANT: Do NOT call webrtc.hangup() here — there is
+                        // no PeerConnection in a Daily.co call, and hangup() would
+                        // redundantly emit call:hangup + resetCallState, causing a
+                        // race condition with the left-meeting event.
                         void dailyRef.current?.leave();
+
+                        if (store.callId) {
+                              socketEmitters.emitHangup({ callId: store.callId });
+                        }
+
+                        useCallStore.getState().resetCallState();
+                  } else {
+                        // ── 1-1 P2P call hangup (unchanged) ──────────────────
+                        webrtcRef.current?.hangup();
                   }
-                  webrtcRef.current?.hangup();
             };
 
             window.addEventListener('call:initiate', handleInitiate);
@@ -200,6 +232,38 @@ export function CallManager() {
                   window.removeEventListener('call:hangup', handleHangup);
             };
       }, [socketEmitters]);
+
+      // ── Duration timer for Daily.co group calls ──────────────────
+      // Bug 3 fix: WebRTC P2P starts its own timer inside use-webrtc-call.
+      // Daily.co calls had no timer, so callDuration stayed at 0.
+      useEffect(() => {
+            if (callStatus !== 'ACTIVE' || provider !== 'DAILY_CO') return;
+
+            const timer = setInterval(() => {
+                  useCallStore.getState().tick();
+            }, 1_000);
+
+            return () => clearInterval(timer);
+      }, [callStatus, provider]);
+
+      // ── Sync store camera/mute state → Daily.co SDK ──────────────────
+      // Pattern: state-decouple-implementation — the store is the single
+      // source of truth for isCameraOff / isMuted. This bridge reactively
+      // forwards state changes to the Daily.co call object so that
+      // CallControls doesn't need to know about the call provider.
+
+      const isCameraOff = useCallStore((s) => s.isCameraOff);
+      const isMuted = useCallStore((s) => s.isMuted);
+
+      useEffect(() => {
+            if (provider !== 'DAILY_CO' || callStatus !== 'ACTIVE') return;
+            dailyRef.current?.toggleVideo(!isCameraOff);
+      }, [isCameraOff, provider, callStatus]);
+
+      useEffect(() => {
+            if (provider !== 'DAILY_CO' || callStatus !== 'ACTIVE') return;
+            dailyRef.current?.toggleAudio(!isMuted);
+      }, [isMuted, provider, callStatus]);
 
       // ── Cleanup on unmount or when call ends ────────────────────────────
       useEffect(() => {

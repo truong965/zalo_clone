@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useCallStore } from '../stores/call.store';
-import type { DailyParticipant } from '../types';
+import type { CallType, DailyParticipant } from '../types';
 
 // ============================================================================
 // TYPES (from @daily-co/daily-js, kept minimal to avoid import at module level)
@@ -31,6 +31,8 @@ interface DailyCallObject {
       destroy: () => Promise<void>;
       setLocalAudio: (enabled: boolean) => void;
       setLocalVideo: (enabled: boolean) => void;
+      /** Set custom user data visible to other participants */
+      setUserData: (data: Record<string, unknown>) => void;
       participants: () => Record<string, DailyParticipantRaw>;
       on: (event: string, handler: (...args: unknown[]) => void) => void;
       off: (event: string, handler: (...args: unknown[]) => void) => void;
@@ -47,6 +49,8 @@ interface DailyParticipantRaw {
             audio: { persistentTrack?: MediaStreamTrack; state: string };
             video: { persistentTrack?: MediaStreamTrack; state: string };
       };
+      /** Custom data passed via meeting token or setUserData */
+      userData?: { avatarUrl?: string };
 }
 
 // ============================================================================
@@ -98,6 +102,7 @@ export function useDailyCall() {
                         videoTrack: p.tracks.video.persistentTrack ?? null,
                         audioEnabled: p.audio,
                         videoEnabled: p.video,
+                        avatarUrl: p.userData?.avatarUrl,
                   }),
             );
 
@@ -107,7 +112,7 @@ export function useDailyCall() {
       // ── Join a Daily.co room ────────────────────────────────────────────
 
       const join = useCallback(
-            async (roomUrl: string, token: string) => {
+            async (roomUrl: string, token: string, _callType?: CallType, avatarUrl?: string) => {
                   // Lazy-load Daily.co SDK (bundle-conditional pattern)
                   const DailyIframe = await import('@daily-co/daily-js');
                   const Daily = DailyIframe.default;
@@ -115,7 +120,16 @@ export function useDailyCall() {
                   // Cleanup any existing call object
                   await cleanup();
 
-                  // Create new call object
+                  // Camera decision: respect store’s isCameraOff (set by user’s
+                  // pre-call choice in ChatHeader). Falls back to callType when
+                  // store hasn’t been explicitly set (e.g. incoming call accept).
+                  const storeState = useCallStore.getState();
+                  const wantCameraOff = storeState.isCameraOff;
+
+                  // IMPORTANT: Always acquire the camera device (videoSource: true)
+                  // so that setLocalVideo(true) can re-enable it mid-call.
+                  // Using videoSource: false would skip device acquisition entirely,
+                  // making it impossible to toggle the camera back on later.
                   const callObject = Daily.createCallObject({
                         audioSource: true,
                         videoSource: true,
@@ -195,6 +209,19 @@ export function useDailyCall() {
 
                   try {
                         await callObject.join({ url: roomUrl, token });
+
+                        // Broadcast avatar URL to other participants via userData
+                        if (avatarUrl) {
+                              callObject.setUserData({ avatarUrl });
+                        }
+
+                        // Turn camera off after join if user chose "tắt camera".
+                        // Camera device was acquired (videoSource: true) so toggling
+                        // back on mid-call will work.
+                        if (wantCameraOff) {
+                              callObject.setLocalVideo(false);
+                              useCallStore.getState().setCameraOff(true);
+                        }
                   } catch (err) {
                         const message =
                               err instanceof Error

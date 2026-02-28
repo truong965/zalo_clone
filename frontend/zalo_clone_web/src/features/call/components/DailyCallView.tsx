@@ -63,10 +63,21 @@ function ParticipantTile({ participant }: { participant: DailyParticipant }) {
                               className={`h-full w-full object-cover ${participant.isLocal ? 'scale-x-[-1]' : ''}`}
                         />
                   ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold text-white">
-                                    {participant.displayName.charAt(0).toUpperCase()}
-                              </div>
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-2">
+                              {participant.avatarUrl ? (
+                                    <img
+                                          src={participant.avatarUrl}
+                                          alt={participant.displayName}
+                                          className="h-20 w-20 rounded-full object-cover ring-2 ring-white/20 sm:h-24 sm:w-24"
+                                    />
+                              ) : (
+                                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-600 text-3xl font-bold text-white ring-2 ring-white/20 sm:h-24 sm:w-24 sm:text-4xl">
+                                          {participant.displayName.charAt(0).toUpperCase()}
+                                    </div>
+                              )}
+                              <span className="text-sm text-white/80">
+                                    {participant.isLocal ? 'Bạn' : participant.displayName}
+                              </span>
                         </div>
                   )}
 

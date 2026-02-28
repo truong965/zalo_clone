@@ -294,6 +294,17 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                         audio: true,
                         video: callType === 'VIDEO',
                   });
+
+                  // If user chose "camera off" before the call, disable video
+                  // tracks immediately while keeping the stream available for
+                  // later toggling.
+                  const { isCameraOff } = useCallStore.getState();
+                  if (isCameraOff) {
+                        for (const track of stream.getVideoTracks()) {
+                              track.enabled = false;
+                        }
+                  }
+
                   localStreamRef.current = stream;
                   useCallStore.getState().setLocalStream(stream);
                   return stream;

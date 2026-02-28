@@ -76,8 +76,8 @@ export function CallScreen() {
                         <ReconnectingOverlay onHangup={handleHangup} />
                   )}
 
-                  {/* ── Controls bar (fixed bottom) ───────────────────────────── */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent">
+                  {/* ── Controls bar (flex, non-overlapping) ──────────────────── */}
+                  <div className="shrink-0 bg-gray-900/95">
                         <CallControls onHangup={handleHangup} />
                   </div>
             </div>

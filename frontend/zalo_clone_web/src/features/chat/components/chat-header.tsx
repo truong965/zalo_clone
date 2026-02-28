@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { Avatar, Button, Dropdown, Typography } from 'antd';
+import { Avatar, Button, Dropdown, Modal, Typography } from 'antd';
 import {
       SearchOutlined,
       VideoCameraOutlined,
@@ -49,6 +49,7 @@ export function ChatHeader({
 }: ChatHeaderProps) {
       const [aliasModalOpen, setAliasModalOpen] = useState(false);
       const [groupCallLoading, setGroupCallLoading] = useState(false);
+      const [groupCallModalOpen, setGroupCallModalOpen] = useState(false);
       const currentUserId = useAuthStore((s) => s.user?.id);
 
       // Only enabled for 1-to-1 conversations
@@ -100,7 +101,7 @@ export function ChatHeader({
 
       // ── Group call initiation ────────────────────────────────────────────
       const initiateGroupCall = useCallback(
-            async (callType: CallType) => {
+            async (callType: CallType, initialCameraOff = false) => {
                   if (!conversationId || isDirect) return;
                   const currentStatus = useCallStore.getState().callStatus;
                   if (currentStatus !== 'IDLE') return;
@@ -128,6 +129,7 @@ export function ChatHeader({
                                           callType,
                                           peerInfo,
                                           conversationId,
+                                          initialCameraOff,
                                     },
                               }),
                         );
@@ -143,7 +145,7 @@ export function ChatHeader({
       // ── Call initiation (dispatches to CallManager) ─────────────────────
 
       const initiateCall = useCallback(
-            (callType: CallType) => {
+            (callType: CallType, initialCameraOff = false) => {
                   if (!otherUserId || !isDirect) return;
                   const currentStatus = useCallStore.getState().callStatus;
                   if (currentStatus !== 'IDLE') return;
@@ -160,6 +162,7 @@ export function ChatHeader({
                                     callType,
                                     peerInfo,
                                     conversationId,
+                                    initialCameraOff,
                               },
                         }),
                   );
@@ -170,16 +173,16 @@ export function ChatHeader({
       const callMenuItems = useMemo(
             () => [
                   {
-                        key: 'voice-call',
-                        label: 'Gọi thoại',
-                        icon: <PhoneOutlined />,
-                        onClick: () => initiateCall('VOICE'),
+                        key: 'video-cam-on',
+                        label: 'Gọi video (bật camera)',
+                        icon: <VideoCameraOutlined />,
+                        onClick: () => initiateCall('VIDEO', false),
                   },
                   {
-                        key: 'video-call',
-                        label: 'Gọi video',
-                        icon: <VideoCameraOutlined />,
-                        onClick: () => initiateCall('VIDEO'),
+                        key: 'video-cam-off',
+                        label: 'Gọi video (tắt camera)',
+                        icon: <PhoneOutlined />,
+                        onClick: () => initiateCall('VIDEO', true),
                   },
             ],
             [initiateCall],
@@ -231,34 +234,14 @@ export function ChatHeader({
                                     </Dropdown>
                               )}
                               {!isDirect && (
-                                    <Dropdown
-                                          menu={{
-                                                items: [
-                                                      {
-                                                            key: 'group-voice',
-                                                            label: 'Gọi thoại nhóm',
-                                                            icon: <PhoneOutlined />,
-                                                            onClick: () => void initiateGroupCall('VOICE'),
-                                                      },
-                                                      {
-                                                            key: 'group-video',
-                                                            label: 'Gọi video nhóm',
-                                                            icon: <VideoCameraOutlined />,
-                                                            onClick: () => void initiateGroupCall('VIDEO'),
-                                                      },
-                                                ],
-                                          }}
-                                          trigger={['click']}
-                                          placement="bottomRight"
-                                    >
-                                          <Button
-                                                icon={<PhoneOutlined />}
-                                                type="text"
-                                                loading={groupCallLoading}
-                                                className="text-gray-500 hover:bg-gray-100"
-                                                title="Gọi nhóm"
-                                          />
-                                    </Dropdown>
+                                    <Button
+                                          icon={<VideoCameraOutlined />}
+                                          type="text"
+                                          loading={groupCallLoading}
+                                          className="text-gray-500 hover:bg-gray-100"
+                                          title="Gọi nhóm"
+                                          onClick={() => setGroupCallModalOpen(true)}
+                                    />
                               )}
                               <Button
                                     icon={<SearchOutlined />}
@@ -286,6 +269,41 @@ export function ChatHeader({
                               )}
                         </div>
                   </div>
+
+                  {/* ── Group call camera-choice modal ── */}
+                  <Modal
+                        open={groupCallModalOpen}
+                        title="Gọi nhóm"
+                        footer={null}
+                        onCancel={() => setGroupCallModalOpen(false)}
+                        centered
+                        width={360}
+                  >
+                        <p className="text-gray-600 mb-4">Chọn cài đặt camera trước khi gọi:</p>
+                        <div className="flex gap-3">
+                              <Button
+                                    type="primary"
+                                    icon={<VideoCameraOutlined />}
+                                    className="flex-1"
+                                    onClick={() => {
+                                          setGroupCallModalOpen(false);
+                                          void initiateGroupCall('VIDEO', false);
+                                    }}
+                              >
+                                    Bật camera
+                              </Button>
+                              <Button
+                                    icon={<PhoneOutlined />}
+                                    className="flex-1"
+                                    onClick={() => {
+                                          setGroupCallModalOpen(false);
+                                          void initiateGroupCall('VIDEO', true);
+                                    }}
+                              >
+                                    Tắt camera
+                              </Button>
+                        </div>
+                  </Modal>
 
                   {isDirect && otherUserId && (
                         <AliasEditModal

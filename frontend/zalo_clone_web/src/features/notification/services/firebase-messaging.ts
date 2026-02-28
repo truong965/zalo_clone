@@ -100,10 +100,63 @@ export async function requestAndRegisterFcmToken(): Promise<string | null> {
                   return null;
             }
 
-            const currentToken = await getToken(messaging, {
-                  vapidKey,
-                  serviceWorkerRegistration: sw,
-            });
+            let currentToken: string | null = null;
+            try {
+                  currentToken = await getToken(messaging, {
+                        vapidKey,
+                        serviceWorkerRegistration: sw,
+                  });
+            } catch (firstError) {
+                  // "Registration failed - push service error" indicates a stale/corrupt
+                  // push subscription (e.g. VAPID key changed, browser push DB corrupted).
+                  // Aggressive recovery: delete token → unregister SW → re-register → retry.
+                  if (
+                        firstError instanceof DOMException &&
+                        firstError.name === 'AbortError'
+                  ) {
+                        console.warn('[fcm] Stale push subscription detected — aggressive recovery…');
+                        try {
+                              // 1. Delete Firebase's internal token reference
+                              try { await deleteToken(messaging); } catch { /* best-effort */ }
+
+                              // 2. Unsubscribe any existing PushManager subscription
+                              const existingSub = await sw.pushManager.getSubscription();
+                              if (existingSub) await existingSub.unsubscribe();
+
+                              // 3. Unregister the service worker entirely
+                              await sw.unregister();
+                              swRegistration = null;
+
+                              // 4. Small delay to let the browser clean up internally
+                              await new Promise((r) => setTimeout(r, 500));
+
+                              // 5. Re-register SW fresh
+                              const freshSw = await ensureServiceWorker();
+                              if (!freshSw) {
+                                    console.error('[fcm] Recovery failed: could not re-register SW');
+                                    return null;
+                              }
+
+                              // 6. Wait for the new SW to fully activate
+                              await navigator.serviceWorker.ready;
+
+                              // 7. Retry getToken with the fresh registration
+                              currentToken = await getToken(messaging, {
+                                    vapidKey,
+                                    serviceWorkerRegistration: freshSw,
+                              });
+                        } catch (retryError) {
+                              console.error('[fcm] Recovery failed:', retryError);
+                              console.info(
+                                    '[fcm] 💡 If this persists, try clearing site data: ' +
+                                    'Settings → Privacy → Site settings → this site → Clear data',
+                              );
+                              return null;
+                        }
+                  } else {
+                        throw firstError; // re-throw non-AbortError for outer catch
+                  }
+            }
 
             if (!currentToken) {
                   console.warn('[fcm] No FCM token available (may need permission)');

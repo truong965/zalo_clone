@@ -35,8 +35,8 @@ export function MuteButton() {
                         icon={isMuted ? <AudioMutedOutlined /> : <AudioOutlined />}
                         onClick={toggleMute}
                         className={`!w-14 !h-14 !text-lg ${isMuted
-                                    ? '!bg-red-500/20 !border-red-500 !text-red-400'
-                                    : '!bg-white/10 !border-white/20 !text-white'
+                              ? '!bg-red-500/20 !border-red-500 !text-red-400'
+                              : '!bg-white/10 !border-white/20 !text-white'
                               }`}
                   />
             </Tooltip>
@@ -46,11 +46,9 @@ export function MuteButton() {
 export function CameraButton() {
       const isCameraOff = useCallStore((s) => s.isCameraOff);
       const toggleCamera = useCallStore((s) => s.toggleCamera);
-      const callType = useCallStore((s) => s.callType);
 
-      // Only show for video calls
-      if (callType !== 'VIDEO') return null;
-
+      // Always show camera button — users can toggle camera mid-call
+      // regardless of initial callType (e.g. turn on camera during voice call).
       return (
             <Tooltip title={isCameraOff ? 'Bật camera' : 'Tắt camera'}>
                   <Button
@@ -59,8 +57,8 @@ export function CameraButton() {
                         icon={isCameraOff ? <StopOutlined /> : <VideoCameraOutlined />}
                         onClick={toggleCamera}
                         className={`!w-14 !h-14 !text-lg ${isCameraOff
-                                    ? '!bg-red-500/20 !border-red-500 !text-red-400'
-                                    : '!bg-white/10 !border-white/20 !text-white'
+                              ? '!bg-red-500/20 !border-red-500 !text-red-400'
+                              : '!bg-white/10 !border-white/20 !text-white'
                               }`}
                   />
             </Tooltip>
@@ -98,8 +96,8 @@ export function SpeakerButton() {
                         icon={<SoundOutlined />}
                         onClick={toggleSpeaker}
                         className={`!w-14 !h-14 !text-lg ${isSpeakerOn
-                                    ? '!bg-white/10 !border-white/20 !text-white'
-                                    : '!bg-white/20 !border-white/30 !text-gray-400'
+                              ? '!bg-white/10 !border-white/20 !text-white'
+                              : '!bg-white/20 !border-white/30 !text-gray-400'
                               }`}
                   />
             </Tooltip>

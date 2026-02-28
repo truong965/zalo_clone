@@ -165,6 +165,8 @@ export interface DailyParticipant {
   audioEnabled: boolean;
   /** Whether video is enabled */
   videoEnabled: boolean;
+  /** Avatar URL (from Daily userData, optional) */
+  avatarUrl?: string;
 }
 
 // ============================================================================
