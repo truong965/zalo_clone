@@ -33,6 +33,7 @@ export class RedisKeyBuilder {
   static readonly DOMAIN_SOCKET = 'SOCKET';
   static readonly DOMAIN_PRESENCE = 'PRESENCE';
   static readonly DOMAIN_CONTACT = 'CONTACT';
+  static readonly DOMAIN_NOTIFICATION = 'NOTIFICATION';
 
   /**
    * DOMAIN_SOCIAL: Namespace prefix cho social graph (Block, Friendship, Privacy).
@@ -389,6 +390,31 @@ export class RedisKeyBuilder {
     period: 'daily' | 'weekly',
   ): string {
     return `${this.DOMAIN_RATELIMIT}:FRIEND_REQUEST:${userId}:${period}`;
+  }
+
+  // ============ PATTERN METHODS (for wildcard deletion) ============
+
+  // ============ NOTIFICATION KEYS ============
+
+  /**
+   * Notification batch counter + state (Redis hash).
+   * Used by: NotificationBatchService for anti-spam time-window batching.
+   * Pattern: `NOTIFICATION:BATCH:{recipientId}:{conversationId}`
+   * TTL: batch window seconds (5-10s) — auto-cleanup.
+   */
+  static notificationBatch(recipientId: string, conversationId: string): string {
+    return `${this.DOMAIN_NOTIFICATION}:BATCH:${recipientId}:${conversationId}`;
+  }
+
+  /**
+   * Conversation member cache for notification decisions.
+   * Caches { userId, isMuted, isArchived, role } for all members.
+   * Used by: MessageNotificationListener to avoid DB query per message event.
+   * Pattern: `NOTIFICATION:CONV_MEMBERS:{conversationId}`
+   * TTL: 5 minutes (invalidated on member change events).
+   */
+  static notificationConvMembers(conversationId: string): string {
+    return `${this.DOMAIN_NOTIFICATION}:CONV_MEMBERS:${conversationId}`;
   }
 
   // ============ PATTERN METHODS (for wildcard deletion) ============

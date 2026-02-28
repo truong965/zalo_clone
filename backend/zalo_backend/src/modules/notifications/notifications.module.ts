@@ -5,10 +5,12 @@
  * - Firebase Admin SDK lifecycle (FirebaseService)
  * - Device token CRUD (DeviceTokenService + DeviceTokenController)
  * - Push notification orchestration (PushNotificationService)
- * - Event listeners for call push notifications (CallNotificationListener)
+ * - Event listeners for push notifications (CallNotificationListener, MessageNotificationListener, FriendshipNotificationListener, GroupNotificationListener)
+ * - Redis-based notification batching (NotificationBatchService)
+ * - Conversation member cache for notification decisions (ConversationMemberCacheService)
  *
- * Event-driven: CallModule emits events → CallNotificationListener reacts.
- * No imports from CallModule (zero coupling).
+ * Event-driven: Domain modules emit events → Notification listeners react.
+ * No imports from domain modules (zero coupling).
  *
  * Exports PushNotificationService for potential direct use by other modules
  * (but prefer event-driven communication).
@@ -24,12 +26,17 @@ import firebaseConfig from '@config/firebase.config';
 import { FirebaseService } from './services/firebase.service';
 import { DeviceTokenService } from './services/device-token.service';
 import { PushNotificationService } from './services/push-notification.service';
+import { NotificationBatchService } from './services/notification-batch.service';
+import { ConversationMemberCacheService } from './services/conversation-member-cache.service';
 
 // Controllers
 import { DeviceTokenController } from './controllers/device-token.controller';
 
 // Listeners
 import { CallNotificationListener } from './listeners/call-notification.listener';
+import { MessageNotificationListener } from './listeners/message-notification.listener';
+import { FriendshipNotificationListener } from './listeners/friendship-notification.listener';
+import { GroupNotificationListener } from './listeners/group-notification.listener';
 
 @Module({
       imports: [
@@ -39,10 +46,17 @@ import { CallNotificationListener } from './listeners/call-notification.listener
       ],
       controllers: [DeviceTokenController],
       providers: [
+            // Core services
             FirebaseService,
             DeviceTokenService,
             PushNotificationService,
+            NotificationBatchService,
+            ConversationMemberCacheService,
+            // Event listeners
             CallNotificationListener,
+            MessageNotificationListener,
+            FriendshipNotificationListener,
+            GroupNotificationListener,
       ],
       exports: [PushNotificationService, DeviceTokenService],
 })

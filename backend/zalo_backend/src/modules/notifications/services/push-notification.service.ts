@@ -37,6 +37,58 @@ export interface MissedCallPushParams {
       conversationName?: string | null;
 }
 
+/**
+ * Params for friendship push notifications.
+ * Built by FriendshipNotificationListener from domain events.
+ */
+export interface FriendRequestPushParams {
+      recipientId: string;
+      fromUserId: string;
+      fromUserName: string;
+      fromUserAvatar: string | null;
+      requestId: string;
+}
+
+export interface FriendAcceptedPushParams {
+      recipientId: string;
+      acceptedByUserId: string;
+      acceptedByName: string;
+      acceptedByAvatar: string | null;
+      friendshipId: string;
+}
+
+/**
+ * Params for group event push notifications.
+ * Built by GroupNotificationListener from domain events.
+ */
+export interface GroupEventPushParams {
+      recipientId: string;
+      conversationId: string;
+      /** Subtype for frontend routing/display differentiation */
+      subtype: string;
+      groupName: string;
+      title: string;
+      body: string;
+}
+
+/**
+ * Params for message push notifications (single or batched).
+ * Built by MessageNotificationListener from BatchState.
+ */
+export interface MessagePushParams {
+      recipientId: string;
+      conversationId: string;
+      conversationType: 'DIRECT' | 'GROUP';
+      senderName: string;
+      /** Last message content (truncated, type-aware) */
+      messageContent: string;
+      /** Number of messages in this batch */
+      messageCount: number;
+      /** Group/conversation name (for group chats) */
+      conversationName: string | null;
+      senderId: string;
+}
+
 @Injectable()
 export class PushNotificationService {
       private readonly logger = new Logger(PushNotificationService.name);
@@ -113,40 +165,212 @@ export class PushNotificationService {
             const callTypeLabel = callType === 'VIDEO' ? 'video' : 'thoại';
 
             // Group-aware notification content
-            const notification = isGroupCall
-                  ? {
-                        title: 'Cuộc gọi nhóm nhỡ',
-                        body: conversationName
-                              ? `Cuộc gọi nhóm ${callTypeLabel} nhỡ từ ${conversationName}`
-                              : `${callerName} đã gọi nhóm ${callTypeLabel}`,
-                        imageUrl: callerAvatar ?? undefined,
-                  }
-                  : {
-                        title: 'Cuộc gọi nhỡ',
-                        body: `${callerName} đã gọi ${callTypeLabel} cho bạn`,
-                        imageUrl: callerAvatar ?? undefined,
-                  };
+            const title = isGroupCall ? 'Cuộc gọi nhóm nhỡ' : 'Cuộc gọi nhỡ';
+            const body = isGroupCall
+                  ? conversationName
+                        ? `Cuộc gọi nhóm ${callTypeLabel} nhỡ từ ${conversationName}`
+                        : `${callerName} đã gọi nhóm ${callTypeLabel}`
+                  : `${callerName} đã gọi ${callTypeLabel} cho bạn`;
 
+            // Data-only message — consistent with plan §10 (all push = data-only).
+            // SW renders the browser notification from the data fields.
+            // Avoids Firebase SDK auto-display of notification-type messages.
             const data: Record<string, string> = {
                   type: 'MISSED_CALL',
                   callId,
                   callType,
                   callerId,
                   callerName,
+                  callerAvatar: callerAvatar ?? '',
+                  title,
+                  body,
                   timestamp: new Date().toISOString(),
             };
 
-            const { invalidTokens } = await this.firebase.sendNotification(
-                  tokens,
-                  notification,
-                  data,
-                  { priority: 'normal', ttlSeconds: 3600 },
-            );
+            const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+                  priority: 'normal',
+                  ttlSeconds: 3600,
+            });
 
             await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
             this.logger.log(
                   `📱 Missed call push sent: ${callId} → callee ${calleeId.slice(0, 8)}…`,
+            );
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Message push (data-only, for offline users — Phase 1)
+      // ─────────────────────────────────────────────────────────────────────
+
+      async sendMessagePush(params: MessagePushParams): Promise<void> {
+            const {
+                  recipientId,
+                  conversationId,
+                  conversationType,
+                  senderName,
+                  messageContent,
+                  messageCount,
+                  conversationName,
+                  senderId,
+            } = params;
+
+            const tokens = await this.deviceTokens.getTokensByUserId(recipientId);
+            if (tokens.length === 0) return;
+
+            // Compose title/body based on conversation type and batch count
+            const { title, body } = this.composeMessageNotification({
+                  conversationType,
+                  senderName,
+                  messageContent,
+                  messageCount,
+                  conversationName,
+            });
+
+            // Data-only message — SW renders browser notification
+            const data: Record<string, string> = {
+                  type: 'NEW_MESSAGE',
+                  conversationId,
+                  conversationType,
+                  senderId,
+                  senderName,
+                  messageCount: String(messageCount),
+                  title,
+                  body,
+                  timestamp: new Date().toISOString(),
+            };
+
+            const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+                  priority: 'normal',
+                  ttlSeconds: 300, // 5 minutes — messages aren't as urgent as calls
+            });
+
+            await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+
+            this.logger.log(
+                  `📱 Message push sent: conv=${conversationId.slice(0, 8)}… → user=${recipientId.slice(0, 8)}… (${messageCount} msg, ${tokens.length} device(s))`,
+            );
+      }
+
+      /**
+       * Compose notification title/body based on context.
+       * Keeps push text logic in one place — easy to customize.
+       */
+      private composeMessageNotification(params: {
+            conversationType: 'DIRECT' | 'GROUP';
+            senderName: string;
+            messageContent: string;
+            messageCount: number;
+            conversationName: string | null;
+      }): { title: string; body: string } {
+            const { conversationType, senderName, messageContent, messageCount, conversationName } = params;
+
+            if (conversationType === 'GROUP') {
+                  const title = conversationName || 'Nhóm chat';
+                  if (messageCount > 1) {
+                        return { title, body: `${messageCount} tin nhắn mới` };
+                  }
+                  return { title, body: `${senderName}: ${messageContent}` };
+            }
+
+            // DIRECT
+            if (messageCount > 1) {
+                  return { title: senderName, body: `Đã gửi ${messageCount} tin nhắn` };
+            }
+            return { title: senderName, body: messageContent };
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Friendship push (data-only, no batching — low frequency events)
+      // ─────────────────────────────────────────────────────────────────────
+
+      async sendFriendRequestPush(params: FriendRequestPushParams): Promise<void> {
+            const { recipientId, fromUserId, fromUserName, fromUserAvatar, requestId } = params;
+
+            const tokens = await this.deviceTokens.getTokensByUserId(recipientId);
+            if (tokens.length === 0) return;
+
+            const data: Record<string, string> = {
+                  type: 'FRIEND_REQUEST',
+                  fromUserId,
+                  fromUserName,
+                  fromUserAvatar: fromUserAvatar ?? '',
+                  requestId,
+                  title: 'Lời mời kết bạn',
+                  body: `${fromUserName} muốn kết bạn với bạn`,
+                  timestamp: new Date().toISOString(),
+            };
+
+            const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+                  priority: 'normal',
+                  ttlSeconds: 3600, // 1 hour — friend requests aren't urgent
+            });
+
+            await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+
+            this.logger.log(
+                  `📱 Friend request push sent: ${fromUserId.slice(0, 8)}… → ${recipientId.slice(0, 8)}… (${tokens.length} device(s))`,
+            );
+      }
+
+      async sendFriendAcceptedPush(params: FriendAcceptedPushParams): Promise<void> {
+            const { recipientId, acceptedByUserId, acceptedByName, acceptedByAvatar, friendshipId } = params;
+
+            const tokens = await this.deviceTokens.getTokensByUserId(recipientId);
+            if (tokens.length === 0) return;
+
+            const data: Record<string, string> = {
+                  type: 'FRIEND_ACCEPTED',
+                  acceptedByUserId,
+                  acceptedByName,
+                  acceptedByAvatar: acceptedByAvatar ?? '',
+                  friendshipId,
+                  title: 'Kết bạn thành công',
+                  body: `${acceptedByName} đã chấp nhận lời mời kết bạn`,
+                  timestamp: new Date().toISOString(),
+            };
+
+            const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+                  priority: 'normal',
+                  ttlSeconds: 3600,
+            });
+
+            await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+
+            this.logger.log(
+                  `📱 Friend accepted push sent: ${acceptedByUserId.slice(0, 8)}… → ${recipientId.slice(0, 8)}… (${tokens.length} device(s))`,
+            );
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Group event push (data-only, no batching — low frequency events)
+      // ─────────────────────────────────────────────────────────────────────
+
+      async sendGroupEventPush(params: GroupEventPushParams): Promise<void> {
+            const { recipientId, conversationId, subtype, groupName, title, body } = params;
+
+            const tokens = await this.deviceTokens.getTokensByUserId(recipientId);
+            if (tokens.length === 0) return;
+
+            const data: Record<string, string> = {
+                  type: 'GROUP_EVENT',
+                  subtype,
+                  conversationId,
+                  groupName,
+                  title,
+                  body,
+                  timestamp: new Date().toISOString(),
+            };
+
+            const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+                  priority: 'normal',
+                  ttlSeconds: 3600,
+            });
+
+            await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+
+            this.logger.log(
+                  `📱 Group event push sent: ${subtype} conv=${conversationId.slice(0, 8)}… → user=${recipientId.slice(0, 8)}… (${tokens.length} device(s))`,
             );
       }
 
