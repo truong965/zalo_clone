@@ -6,3 +6,4 @@ export * from './types';
 export * from './api/notification.api';
 export * from './services/firebase-messaging';
 export * from './hooks/use-notification-permission';
+export * from './hooks/use-push-notification-navigation';

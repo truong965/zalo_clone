@@ -22,24 +22,50 @@ import { conversationKeys } from '@/features/conversation/hooks/use-conversation
 import type { ReminderTriggeredPayload } from '@/types/api';
 import type { ConversationUI } from '@/types/conversation';
 
-/** Simple notification sound using Web Audio API */
-function playNotificationSound() {
+/**
+ * Module-level AudioContext — created once after first user gesture.
+ * Browsers require a user gesture before AudioContext can be started.
+ * We cache the instance and resume it on demand.
+ */
+let _audioCtx: AudioContext | null = null;
+
+/** Called on first user click/keydown to unlock audio for this session */
+function unlockAudioContext(): void {
       try {
-            const ctx = new AudioContext();
-            const oscillator = ctx.createOscillator();
-            const gain = ctx.createGain();
+            if (!_audioCtx) {
+                  _audioCtx = new AudioContext();
+            } else if (_audioCtx.state === 'suspended') {
+                  void _audioCtx.resume();
+            }
+      } catch {
+            // Not critical
+      }
+}
+
+/** Simple notification sound using Web Audio API */
+async function playNotificationSound(): Promise<void> {
+      try {
+            if (!_audioCtx) return; // Haven't had a user gesture yet — skip silently
+
+            // Resume if browser suspended the context (tab was backgrounded)
+            if (_audioCtx.state === 'suspended') {
+                  await _audioCtx.resume();
+            }
+
+            const oscillator = _audioCtx.createOscillator();
+            const gain = _audioCtx.createGain();
             oscillator.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(_audioCtx.destination);
 
-            oscillator.frequency.setValueAtTime(800, ctx.currentTime);
-            oscillator.frequency.setValueAtTime(600, ctx.currentTime + 0.1);
-            oscillator.frequency.setValueAtTime(800, ctx.currentTime + 0.2);
+            oscillator.frequency.setValueAtTime(800, _audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(600, _audioCtx.currentTime + 0.1);
+            oscillator.frequency.setValueAtTime(800, _audioCtx.currentTime + 0.2);
 
-            gain.gain.setValueAtTime(0.3, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+            gain.gain.setValueAtTime(0.3, _audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, _audioCtx.currentTime + 0.4);
 
-            oscillator.start(ctx.currentTime);
-            oscillator.stop(ctx.currentTime + 0.4);
+            oscillator.start(_audioCtx.currentTime);
+            oscillator.stop(_audioCtx.currentTime + 0.4);
       } catch {
             // Silent fail — audio not critical
       }
@@ -122,6 +148,16 @@ export function useReminderNotifications() {
             requestNotificationPermission();
       }, []);
 
+      // Unlock AudioContext on first user gesture (browser autoplay policy)
+      useEffect(() => {
+            document.addEventListener('click', unlockAudioContext, { once: true });
+            document.addEventListener('keydown', unlockAudioContext, { once: true });
+            return () => {
+                  document.removeEventListener('click', unlockAudioContext);
+                  document.removeEventListener('keydown', unlockAudioContext);
+            };
+      }, []);
+
       // Listen for REMINDER_TRIGGERED socket events
       useEffect(() => {
             if (!socket) return;
@@ -136,8 +172,8 @@ export function useReminderNotifications() {
                         if (cached?.isMuted) return;
                   }
 
-                  // Play sound
-                  playNotificationSound();
+                  // Play sound (async — fire-and-forget, errors caught inside)
+                  void playNotificationSound();
 
                   // Creator sees persistent modal with "complete" action;
                   // other members see it as view-only (modal closes without API call)
@@ -183,7 +219,7 @@ export function useReminderNotifications() {
                               );
                         }
                         if (missed.length > 0) {
-                              playNotificationSound();
+                              void playNotificationSound();
                         }
                   } catch {
                         // Silent fail — will retry on next reconnect

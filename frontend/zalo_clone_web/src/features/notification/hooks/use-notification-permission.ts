@@ -53,6 +53,18 @@ export function useNotificationPermission(
                   // Incoming call while app is focused — socket handles this, ignore push
                   if (data.type === 'INCOMING_CALL') return;
 
+                  // New message while app is focused — socket events handle this in real-time.
+                  // Skip push toast to avoid duplicate notifications.
+                  if (data.type === 'NEW_MESSAGE') return;
+
+                  // Friendship events while app is focused — socket events handle these.
+                  // useFriendshipSocket already shows antd notifications + updates badge.
+                  if (data.type === 'FRIEND_REQUEST' || data.type === 'FRIEND_ACCEPTED') return;
+
+                  // Group events while app is focused — socket events handle these.
+                  // useGroupNotifications already shows updates via socket.
+                  if (data.type === 'GROUP_EVENT') return;
+
                   // Missed call or generic notification — show toast
                   const title = payload.notification?.title || data.title || 'Thông báo';
                   const body = payload.notification?.body || data.body || '';
