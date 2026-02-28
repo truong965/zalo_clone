@@ -49,8 +49,10 @@ export class CallNotificationListener {
       private readonly logger = new Logger(CallNotificationListener.name);
 
       /**
-       * Track which callIds we've already sent an incoming-call push for,
-       * to avoid duplicates (e.g. offline event + ack-timeout event for same call).
+       * Track which (callId, calleeId) pairs we've already sent a push for,
+       * to avoid duplicates (e.g. offline event + ack-timeout event for same callee).
+       * Keyed by `callId:calleeId` so group calls can push to each offline
+       * receiver independently.
        * In-memory Set is sufficient — push is best-effort, not transactional.
        */
       private readonly sentIncomingPush = new Set<string>();
@@ -68,17 +70,20 @@ export class CallNotificationListener {
       async handleIncomingCallPush(payload: CallPushNotificationPayload): Promise<void> {
             if (!this.pushService.isAvailable) return;
 
-            // Deduplicate: only send once per callId (offline + ack-timeout may both fire)
-            if (this.sentIncomingPush.has(payload.callId)) {
+            // Deduplicate per (callId, calleeId) — for group calls, each offline
+            // receiver must get their own push, but the same receiver shouldn't
+            // get two (e.g. offline event + ack-timeout event).
+            const dedupKey = `${payload.callId}:${payload.calleeId}`;
+            if (this.sentIncomingPush.has(dedupKey)) {
                   this.logger.debug(
-                        `[INCOMING_PUSH] Already sent for callId=${payload.callId}, skipping`,
+                        `[INCOMING_PUSH] Already sent for callId=${payload.callId} calleeId=${payload.calleeId.slice(0, 8)}…, skipping`,
                   );
                   return;
             }
-            this.sentIncomingPush.add(payload.callId);
+            this.sentIncomingPush.add(dedupKey);
 
             // Auto-cleanup after 60 s to prevent memory leak
-            setTimeout(() => this.sentIncomingPush.delete(payload.callId), 60_000);
+            setTimeout(() => this.sentIncomingPush.delete(dedupKey), 60_000);
 
             this.logger.log(
                   `[INCOMING_PUSH] Sending push for call ${payload.callId} (reason: ${payload.reason})`,

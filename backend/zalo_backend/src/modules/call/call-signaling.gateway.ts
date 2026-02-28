@@ -117,8 +117,20 @@ export class CallSignalingGateway implements OnGatewayInit {
       /**
        * Ringing timeouts: callId → NodeJS.Timeout
        * Auto-end calls that are never answered.
+       * Used for 1-1 calls only; group calls use participantRingingTimeouts.
        */
       private readonly ringingTimeouts = new Map<string, NodeJS.Timeout>();
+
+      /**
+       * Per-participant ringing timeouts for group calls.
+       * callId → Map<userId, NodeJS.Timeout>
+       * Each receiver gets their own timeout. When all have responded
+       * (accepted/rejected/timed-out), the call ends if no one accepted.
+       */
+      private readonly participantRingingTimeouts = new Map<
+            string,
+            Map<string, NodeJS.Timeout>
+      >();
 
       /**
        * Ringing ack timeouts: callId → NodeJS.Timeout
@@ -544,12 +556,28 @@ export class CallSignalingGateway implements OnGatewayInit {
                   }
             }
 
-            // Start ringing timeout (30s) — works for both 1-1 and group calls
-            const ringingTimer = setTimeout(() => {
-                  this.ringingTimeouts.delete(callId);
-                  void this.handleRingingTimeout(callId);
-            }, RINGING_TIMEOUT_MS);
-            this.ringingTimeouts.set(callId, ringingTimer);
+            // Start ringing timeout
+            if (isGroupCall) {
+                  // Option B: Per-participant timeouts for group calls.
+                  // Each receiver gets their own 30s timer. When a receiver
+                  // accepts/rejects, only their timer is cleared. If ALL receivers
+                  // time-out or reject without anyone accepting, the call ends.
+                  const perParticipantTimers = new Map<string, NodeJS.Timeout>();
+                  for (const receiverId of allReceiverIds) {
+                        const timer = setTimeout(() => {
+                              void this.handleParticipantRingingTimeout(callId, receiverId);
+                        }, RINGING_TIMEOUT_MS);
+                        perParticipantTimers.set(receiverId, timer);
+                  }
+                  this.participantRingingTimeouts.set(callId, perParticipantTimers);
+            } else {
+                  // 1-1 calls: single global timeout (unchanged)
+                  const ringingTimer = setTimeout(() => {
+                        this.ringingTimeouts.delete(callId);
+                        void this.handleRingingTimeout(callId);
+                  }, RINGING_TIMEOUT_MS);
+                  this.ringingTimeouts.set(callId, ringingTimer);
+            }
 
             this.logger.log(
                   `Call ${callId}: ${callerId} → ${allReceiverIds.join(',')}` +
@@ -589,8 +617,12 @@ export class CallSignalingGateway implements OnGatewayInit {
                   return this.emitError(client, 'Only a receiver can accept');
             }
 
-            // Clear ringing timeout (for 1-1; group keeps ringing for other receivers)
-            if (!session.isGroupCall) {
+            // Clear ringing timeout for this participant.
+            // Group calls: clear only THIS participant’s individual timer (Option B).
+            // 1-1 calls: clear the single global timer.
+            if (session.isGroupCall) {
+                  this.clearParticipantRingingTimeout(dto.callId, userId);
+            } else {
                   this.clearRingingTimeout(dto.callId);
             }
 
@@ -662,6 +694,9 @@ export class CallSignalingGateway implements OnGatewayInit {
                   const callRoom = this.getCallRoom(dto.callId);
                   client.leave(callRoom);
 
+                  // Clear this participant's individual ringing timer
+                  this.clearParticipantRingingTimeout(dto.callId, userId);
+
                   // Remove user from Redis index so they're no longer "in a call"
                   await this.callHistoryService.removeUserFromCall(userId);
 
@@ -670,6 +705,9 @@ export class CallSignalingGateway implements OnGatewayInit {
                         callId: dto.callId,
                         userId,
                   });
+
+                  // Check if all participants have rejected/timed out (no one accepted)
+                  await this.checkAllParticipantsResponded(dto.callId);
 
                   this.logger.log(`Call ${dto.callId}: participant ${userId} rejected (group call continues)`);
             } else {
@@ -1122,6 +1160,7 @@ export class CallSignalingGateway implements OnGatewayInit {
 
             // Clear timers
             this.clearRingingTimeout(callId);
+            this.clearAllParticipantRingingTimeouts(callId);
             this.clearRingingAckTimeout(callId);
             this.clearDisconnectTimer(callId);
       }
@@ -1188,6 +1227,102 @@ export class CallSignalingGateway implements OnGatewayInit {
                   clearTimeout(timer);
                   this.ringingTimeouts.delete(callId);
             }
+      }
+
+      // ── Per-participant ringing timeout helpers (Option B) ──────────────
+
+      /**
+       * Clear a single participant's ringing timeout.
+       * Called when a participant accepts or explicitly rejects.
+       */
+      private clearParticipantRingingTimeout(callId: string, userId: string): void {
+            const timers = this.participantRingingTimeouts.get(callId);
+            if (!timers) return;
+            const timer = timers.get(userId);
+            if (timer) {
+                  clearTimeout(timer);
+                  timers.delete(userId);
+            }
+            // Clean up parent map when no more participant timers remain
+            if (timers.size === 0) {
+                  this.participantRingingTimeouts.delete(callId);
+            }
+      }
+
+      /**
+       * Clear all participant ringing timeouts for a call (full cleanup).
+       * Called from endCallInternal.
+       */
+      private clearAllParticipantRingingTimeouts(callId: string): void {
+            const timers = this.participantRingingTimeouts.get(callId);
+            if (!timers) return;
+            for (const timer of timers.values()) {
+                  clearTimeout(timer);
+            }
+            this.participantRingingTimeouts.delete(callId);
+      }
+
+      /**
+       * Handle an individual participant's ringing timeout.
+       *
+       * Marks this participant as MISSED, removes them from the call,
+       * and checks if all receivers have now responded.
+       */
+      private async handleParticipantRingingTimeout(
+            callId: string,
+            userId: string,
+      ): Promise<void> {
+            this.logger.log(
+                  `Call ${callId}: participant ${userId} ringing timeout (${RINGING_TIMEOUT_MS / 1000}s)`,
+            );
+
+            // Remove from the per-participant map (timer already fired)
+            const timers = this.participantRingingTimeouts.get(callId);
+            if (timers) {
+                  timers.delete(userId);
+                  if (timers.size === 0) {
+                        this.participantRingingTimeouts.delete(callId);
+                  }
+            }
+
+            // Remove user from Redis active-call index
+            await this.callHistoryService.removeUserFromCall(userId);
+
+            // Notify the call room that this participant missed
+            const callRoom = this.getCallRoom(callId);
+            this.server.to(callRoom).emit(SocketEvents.CALL_PARTICIPANT_LEFT, {
+                  callId,
+                  userId,
+                  reason: 'TIMEOUT',
+            });
+
+            // Check if all receivers have responded (accepted/rejected/timed-out)
+            await this.checkAllParticipantsResponded(callId);
+      }
+
+      /**
+       * Check whether the group call should end because all receivers
+       * have either rejected or timed out (nobody accepted).
+       *
+       * If the call is still in RINGING state and no per-participant timers
+       * remain, that means nobody joined — end the call with NO_ANSWER.
+       * If the call already transitioned to ACTIVE, the call stays alive
+       * even if some participants haven't responded yet.
+       */
+      private async checkAllParticipantsResponded(callId: string): Promise<void> {
+            const remainingTimers = this.participantRingingTimeouts.get(callId);
+            // Some participants still have pending timers — not everyone responded yet
+            if (remainingTimers && remainingTimers.size > 0) return;
+
+            const session = await this.callHistoryService.getSessionByCallId(callId);
+            if (!session) return; // Already cleaned up
+
+            // If the call has already moved to ACTIVE (someone accepted), leave it running
+            if (session.status === 'ACTIVE') return;
+
+            // Still RINGING and all participants responded without anyone accepting → end call
+            this.logger.log(`Call ${callId}: all group participants timed out / rejected — ending call`);
+            await this.endCallInternal(session, CallEndReason.TIMEOUT);
       }
 
       private clearRingingAckTimeout(callId: string): void {
