@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
@@ -15,10 +16,17 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 import { UserProfileEntity } from './entities/user-profile.entity';
 import { PermissionEntity } from '../permissions/entity/permission.entity';
+import { EventPublisher } from '@shared/events';
+import { UserRegisteredEvent } from '@modules/auth/events';
 
 @Injectable()
 export class UsersService extends BaseService<User> {
-  constructor(private prisma: PrismaService) {
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private readonly eventPublisher: EventPublisher,
+  ) {
     super(prisma.extended.user as unknown as PrismaDelegate<User>);
   }
 
@@ -136,6 +144,18 @@ export class UsersService extends BaseService<User> {
       passwordHash,
       roleId: userRole.id,
       status: UserStatus.ACTIVE,
+    });
+
+    // Emit domain event for stats counters & downstream listeners
+    await this.eventPublisher.publish(
+      new UserRegisteredEvent(
+        newUser.id,
+        newUser.phoneNumber,
+        newUser.displayName,
+      ),
+      { fireAndForget: true },
+    ).catch((err) => {
+      this.logger.warn(`Failed to emit UserRegisteredEvent: ${err.message}`);
     });
 
     return new UserEntity(newUser);

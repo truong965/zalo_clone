@@ -1119,3 +1119,41 @@ model Reminder {
   @@index([userId, isCompleted, remindAt])
   @@map("reminders")
 }
+
+// ============================================================================
+// 18. ADMIN PANEL — DAILY STATS (PHASE 0)
+// ============================================================================
+
+/**
+ * Model: DailyStats
+ *
+ * Pre-aggregated daily statistics computed by a nightly cronjob (00:05 ICT).
+ * Used by admin dashboard time-series charts. One row per calendar day.
+ *
+ * NOTE: Real-time KPI (totalUsers, onlineUsers, messagesToday) come from Redis counters.
+ * This table stores historical aggregates for charts — not queried in hot path.
+ */
+model DailyStats {
+  date DateTime @db.Date // Calendar day (YYYY-MM-DD), used as PK
+
+  // User Activity
+  newUsers    Int @default(0) @map("new_users")    // Users registered this day
+  activeUsers Int @default(0) @map("active_users") // Users who sent ≥1 message
+
+  // Messages
+  messagesTotal  Int  @default(0) @map("messages_total")
+  messagesByType Json @default("{}") @map("messages_by_type") @db.JsonB // { TEXT: N, IMAGE: N, ... }
+
+  // Calls
+  callsTotal      Int  @default(0) @map("calls_total")
+  callsByType     Json @default("{}") @map("calls_by_type") @db.JsonB     // { VOICE: N, VIDEO: N }
+  callsByStatus   Json @default("{}") @map("calls_by_status") @db.JsonB   // { COMPLETED: N, MISSED: N, ... }
+  callAvgDuration Int  @default(0) @map("call_avg_duration")              // Average seconds (COMPLETED only)
+
+  // Media
+  mediaUploads Int    @default(0) @map("media_uploads")
+  mediaBytes   BigInt @default(0) @map("media_bytes") // Total bytes uploaded
+
+  @@id([date])
+  @@map("daily_stats")
+}

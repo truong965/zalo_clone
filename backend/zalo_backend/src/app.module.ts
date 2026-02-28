@@ -34,6 +34,7 @@ import { ContactModule } from './modules/contact/contact.module';
 import { CallModule } from './modules/call/call.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReminderModule } from './modules/reminder/reminder.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 // Configs
 import jwtConfig from './config/jwt.config';
@@ -138,6 +139,9 @@ import socialConfig from './config/social.config';
     ReminderModule, // PHASE 4: Reminders (Bull Queue scheduler)
     FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
     PrivacyModule, SearchEngineModule, // Privacy settings & permissions (Independent)
+
+    // Admin Panel (Phase 0: skeleton → Phase 1-2: full implementation)
+    AdminModule,
 
     // Utilities
     ContactModule,
