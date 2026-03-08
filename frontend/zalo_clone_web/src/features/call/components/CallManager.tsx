@@ -26,6 +26,12 @@ import { useCallStore } from '../stores/call.store';
 import { useAuthStore } from '@/features/auth';
 import type { CallType, PeerInfo, DailyRoomPayload, ParticipantJoinedPayload, ParticipantLeftPayload } from '../types';
 
+// ── Debug helper ──────────────────────────────────────────────────────
+const DEBUG = import.meta.env.DEV;
+function dbg(label: string, ...args: unknown[]) {
+      if (DEBUG) console.warn(`[CallManager] ${label}`, ...args);
+}
+
 // ── CustomEvent detail types ──────────────────────────────────────────
 
 interface InitiateCallDetail {
@@ -110,19 +116,34 @@ export function CallManager() {
 
       // ── P2P → Daily.co transition handler ───────────────────────────────
       const handleDailyRoomReceived = async (payload: DailyRoomPayload) => {
-            const { roomUrl, tokens } = payload;
+            dbg('handleDailyRoomReceived', { roomUrl: payload.roomUrl, tokenKeys: Object.keys(payload.tokens) }); const { roomUrl, tokens } = payload;
             const store = useCallStore.getState();
 
-            // Determine current user's token
-            // We need to find which token belongs to us. The tokens map is userId→token.
-            // We check peerId (the other person) and use the other token for us.
-            const myId = store.peerId
-                  ? Object.keys(tokens).find((id) => id !== store.peerId)
-                  : Object.keys(tokens)[0];
+            // Determine current user's token using auth store (reliable for all cases)
+            const myUserId = useAuthStore.getState().user?.id;
+            const myToken = myUserId ? tokens[myUserId] : undefined;
 
-            const myToken = myId ? tokens[myId] : undefined;
+            dbg('Token lookup', { myUserId, hasToken: !!myToken, tokenKeys: Object.keys(tokens) });
+
             if (!myToken) {
-                  useCallStore.getState().setError('No meeting token received');
+                  // Fallback: try finding token by excluding peerId (legacy 1-1 path)
+                  const fallbackId = store.peerId
+                        ? Object.keys(tokens).find((id) => id !== store.peerId)
+                        : Object.keys(tokens)[0];
+                  const fallbackToken = fallbackId ? tokens[fallbackId] : undefined;
+
+                  if (!fallbackToken) {
+                        dbg('ERROR: No meeting token found for current user');
+                        useCallStore.getState().setError('No meeting token received');
+                        return;
+                  }
+
+                  dbg('Using fallback token lookup', { fallbackId });
+                  // Close P2P connection
+                  webrtcRef.current?.cleanup();
+                  useCallStore.getState().switchToDaily({ roomUrl, token: fallbackToken });
+                  const myAvatarUrl = useAuthStore.getState().user?.avatarUrl ?? undefined;
+                  await dailyRef.current?.join(roomUrl, fallbackToken, store.callType ?? undefined, myAvatarUrl);
                   return;
             }
 
@@ -142,6 +163,7 @@ export function CallManager() {
             const handleInitiate = (e: Event) => {
                   const detail = (e as CustomEvent<InitiateCallDetail>).detail;
                   if (!detail) return;
+                  dbg('call:initiate', { calleeId: detail.calleeId, callType: detail.callType, receiverIds: detail.receiverIds?.length });
 
                   const isGroupCall = (detail.receiverIds?.length ?? 0) > 0;
 
@@ -170,6 +192,7 @@ export function CallManager() {
 
             const handleAccept = () => {
                   const store = useCallStore.getState();
+                  dbg('call:accept-incoming', { isGroupCall: store.isGroupCall, hasDailyRoom: !!store.dailyRoomUrl, provider: store.provider });
 
                   if (store.isGroupCall && store.dailyRoomUrl && store.dailyToken) {
                         // Group call: hide overlay immediately, join Daily.co directly
@@ -192,6 +215,7 @@ export function CallManager() {
 
             const handleHangup = () => {
                   const store = useCallStore.getState();
+                  dbg('call:hangup', { provider: store.provider, callId: store.callId });
 
                   if (store.provider === 'DAILY_CO') {
                         // ── Group / Daily.co call hangup ──────────────────────
@@ -266,12 +290,22 @@ export function CallManager() {
       }, [isMuted, provider, callStatus]);
 
       // ── Cleanup on unmount or when call ends ────────────────────────────
+      // Use refs to avoid re-running every render (webrtc/daily are new objects
+      // each render unless React Compiler memoizes them).
+      const webrtcCleanupRef = useRef(webrtc.cleanup);
+      const dailyCleanupRef = useRef(daily.cleanup);
+      useEffect(() => {
+            webrtcCleanupRef.current = webrtc.cleanup;
+            dailyCleanupRef.current = daily.cleanup;
+      });
+
       useEffect(() => {
             if (callStatus === 'IDLE' || callStatus === 'ENDED') {
-                  webrtc.cleanup();
-                  void daily.cleanup();
+                  dbg('Cleanup: callStatus is', callStatus);
+                  webrtcCleanupRef.current();
+                  void dailyCleanupRef.current();
             }
-      }, [callStatus, webrtc, daily]);
+      }, [callStatus]);
 
       // This component renders nothing — it's a hook host
       return null;

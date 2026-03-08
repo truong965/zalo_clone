@@ -20,6 +20,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useCallStore } from '../stores/call.store';
 import type { CallType, DailyParticipant } from '../types';
 
+// ── Debug helper ──────────────────────────────────────────────────────
+const DEBUG = import.meta.env.DEV;
+function dbg(label: string, ...args: unknown[]) {
+      if (DEBUG) console.warn(`[Daily] ${label}`, ...args);
+}
+
 // ============================================================================
 // TYPES (from @daily-co/daily-js, kept minimal to avoid import at module level)
 // ============================================================================
@@ -106,6 +112,18 @@ export function useDailyCall() {
                   }),
             );
 
+            dbg('syncParticipants', {
+                  count: mapped.length,
+                  participants: mapped.map(p => ({
+                        name: p.displayName,
+                        isLocal: p.isLocal,
+                        hasVideo: !!p.videoTrack,
+                        videoEnabled: p.videoEnabled,
+                        hasAudio: !!p.audioTrack,
+                        videoState: (rawParticipants[Object.keys(rawParticipants).find(k => rawParticipants[k].session_id === p.sessionId) ?? '']?.tracks?.video as { state?: string })?.state,
+                  })),
+            });
+
             useCallStore.getState().setDailyParticipants(mapped);
       }, []);
 
@@ -113,6 +131,7 @@ export function useDailyCall() {
 
       const join = useCallback(
             async (roomUrl: string, token: string, _callType?: CallType, avatarUrl?: string) => {
+                  dbg('join called', { roomUrl, hasToken: !!token, _callType, avatarUrl });
                   // Lazy-load Daily.co SDK (bundle-conditional pattern)
                   const DailyIframe = await import('@daily-co/daily-js');
                   const Daily = DailyIframe.default;
@@ -140,11 +159,13 @@ export function useDailyCall() {
                   // ── Register event handlers ──────────────────────────────────
 
                   callObject.on('joined-meeting', () => {
+                        dbg('joined-meeting event');
                         isJoinedRef.current = true;
                         syncParticipants();
                   });
 
                   callObject.on('participant-joined', () => {
+                        dbg('participant-joined event');
                         syncParticipants();
                   });
 
@@ -152,7 +173,29 @@ export function useDailyCall() {
                         syncParticipants();
                   });
 
+                  // Track events: these fire when a remote track actually becomes
+                  // playable (or stops). More reliable than participant-updated for
+                  // knowing when video is ready to render.
+                  callObject.on('track-started', (event: unknown) => {
+                        const ev = event as { participant?: { session_id?: string }; track?: { kind?: string } } | undefined;
+                        dbg('track-started', {
+                              sessionId: ev?.participant?.session_id,
+                              kind: ev?.track?.kind,
+                        });
+                        syncParticipants();
+                  });
+
+                  callObject.on('track-stopped', (event: unknown) => {
+                        const ev = event as { participant?: { session_id?: string }; track?: { kind?: string } } | undefined;
+                        dbg('track-stopped', {
+                              sessionId: ev?.participant?.session_id,
+                              kind: ev?.track?.kind,
+                        });
+                        syncParticipants();
+                  });
+
                   callObject.on('participant-left', () => {
+                        dbg('participant-left event');
                         syncParticipants();
                   });
 
@@ -209,6 +252,7 @@ export function useDailyCall() {
 
                   try {
                         await callObject.join({ url: roomUrl, token });
+                        dbg('Successfully joined Daily.co room');
 
                         // Broadcast avatar URL to other participants via userData
                         if (avatarUrl) {

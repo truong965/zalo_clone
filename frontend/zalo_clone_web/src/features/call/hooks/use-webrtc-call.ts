@@ -58,6 +58,12 @@ interface UseWebRTCCallParams {
 // HOOK
 // ============================================================================
 
+// ── Debug helper ──────────────────────────────────────────────────────
+const DEBUG = import.meta.env.DEV;
+function dbg(label: string, ...args: unknown[]) {
+      if (DEBUG) console.warn(`[WebRTC] ${label}`, ...args);
+}
+
 export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       const pcRef = useRef<RTCPeerConnection | null>(null);
       const localStreamRef = useRef<MediaStream | null>(null);
@@ -131,12 +137,21 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       const createPeerConnection = useCallback(
             (iceServers: IceServerConfig[], iceTransportPolicy: RTCIceTransportPolicy) => {
                   if (pcRef.current) {
+                        dbg('createPeerConnection: closing existing PC first');
                         closePeerConnection();
                   }
 
                   const callId = useCallStore.getState().callId;
-                  if (!callId) return null;
+                  if (!callId) {
+                        dbg('ABORT createPeerConnection: callId is null — store state:', {
+                              callStatus: useCallStore.getState().callStatus,
+                              callType: useCallStore.getState().callType,
+                              callId: useCallStore.getState().callId,
+                        });
+                        return null;
+                  }
 
+                  dbg('createPeerConnection', { callId, serverCount: iceServers.length, policy: iceTransportPolicy });
                   const pc = new RTCPeerConnection({
                         iceServers: iceServers as RTCIceServer[],
                         iceTransportPolicy,
@@ -145,24 +160,32 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                   // ── ICE candidate gathering → emit to server ─────────────────
                   pc.onicecandidate = (event) => {
                         if (event.candidate && callId) {
+                              dbg('ICE candidate gathered', event.candidate.type, event.candidate.protocol);
                               emittersRef.current.emitIceCandidate({
                                     callId,
                                     candidates: JSON.stringify(event.candidate.toJSON()),
                               });
+                        } else if (!event.candidate) {
+                              dbg('ICE gathering complete');
                         }
                   };
 
                   // ── Remote track received → set remote stream ────────────────
                   pc.ontrack = (event) => {
+                        dbg('ontrack fired', { kind: event.track.kind, streamCount: event.streams.length });
                         const [remoteStream] = event.streams;
                         if (remoteStream) {
+                              dbg('Setting remoteStream in store', { tracks: remoteStream.getTracks().length });
                               useCallStore.getState().setRemoteStream(remoteStream);
+                        } else {
+                              dbg('WARNING: ontrack fired but event.streams is empty!');
                         }
                   };
 
                   // ── ICE connection state monitoring ──────────────────────────
                   pc.oniceconnectionstatechange = () => {
                         const state = pc.iceConnectionState;
+                        dbg('ICE connection state →', state);
 
                         switch (state) {
                               case 'connected':
@@ -290,10 +313,12 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
 
       const acquireLocalMedia = useCallback(async (callType: CallType) => {
             try {
+                  dbg('acquireLocalMedia: requesting getUserMedia', { audio: true, video: callType === 'VIDEO' });
                   const stream = await navigator.mediaDevices.getUserMedia({
                         audio: true,
                         video: callType === 'VIDEO',
                   });
+                  dbg('acquireLocalMedia: SUCCESS', { tracks: stream.getTracks().map(t => `${t.kind}:${t.readyState}`) });
 
                   // If user chose "camera off" before the call, disable video
                   // tracks immediately while keeping the stream available for
@@ -309,6 +334,11 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                   useCallStore.getState().setLocalStream(stream);
                   return stream;
             } catch (err) {
+                  dbg('acquireLocalMedia FAILED', {
+                        name: err instanceof DOMException ? err.name : 'Unknown',
+                        message: err instanceof Error ? err.message : String(err),
+                        err,
+                  });
                   const message = err instanceof DOMException
                         ? err.name === 'NotAllowedError'
                               ? 'Quyền truy cập camera/microphone bị từ chối'
@@ -323,34 +353,43 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
 
       const startCallAsCaller = useCallback(
             async (iceServers: IceServerConfig[], iceTransportPolicy: RTCIceTransportPolicy) => {
+                  dbg('startCallAsCaller', { iceServers: iceServers.length, iceTransportPolicy });
                   isCallerRef.current = true;
                   const callType = useCallStore.getState().callType;
-                  if (!callType) return;
+                  if (!callType) { dbg('ABORT startCallAsCaller: callType is null'); return; }
 
                   const stream = await acquireLocalMedia(callType);
-                  if (!stream) return;
+                  if (!stream) { dbg('ABORT startCallAsCaller: acquireLocalMedia failed'); return; }
+                  dbg('Local media acquired', { tracks: stream.getTracks().map(t => t.kind) });
 
                   const pc = createPeerConnection(iceServers, iceTransportPolicy);
-                  if (!pc) return;
+                  if (!pc) { dbg('ABORT startCallAsCaller: createPeerConnection returned null (callId missing?)'); return; }
+                  dbg('PeerConnection created (caller)');
 
                   // Add local tracks to peer connection
                   for (const track of stream.getTracks()) {
                         pc.addTrack(track, stream);
                   }
+                  dbg('Local tracks added to PC', { count: stream.getTracks().length });
 
                   // Create and send offer
                   try {
                         const offer = await pc.createOffer();
                         await pc.setLocalDescription(offer);
+                        dbg('Offer created and set as local description');
 
                         const callId = useCallStore.getState().callId;
                         if (callId && pc.localDescription) {
+                              dbg('Emitting offer', { callId, sdpLength: pc.localDescription.sdp.length });
                               emittersRef.current.emitOffer({
                                     callId,
                                     sdp: pc.localDescription.sdp,
                               });
+                        } else {
+                              dbg('WARNING: Offer NOT emitted', { callId, hasLocalDesc: !!pc.localDescription });
                         }
-                  } catch {
+                  } catch (err) {
+                        dbg('ERROR creating offer', err);
                         useCallStore.getState().setError('Không thể tạo kết nối');
                   }
 
@@ -363,41 +402,55 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
 
       const handleOffer = useCallback(
             async (payload: SdpRelayPayload) => {
+                  dbg('handleOffer received', { callId: payload.callId, sdpLength: payload.sdp.length });
                   isCallerRef.current = false;
                   const { iceServers, iceTransportPolicy, callType } = useCallStore.getState();
-                  if (!callType) return;
+                  if (!callType) { dbg('ABORT handleOffer: callType is null'); return; }
 
                   // Acquire media if not yet done
                   let stream = localStreamRef.current;
                   if (!stream) {
+                        dbg('handleOffer: localStream not ready, acquiring media...');
                         stream = await acquireLocalMedia(callType);
-                        if (!stream) return;
+                        if (!stream) { dbg('ABORT handleOffer: acquireLocalMedia failed'); return; }
+                  } else {
+                        dbg('handleOffer: localStream already available');
                   }
 
                   let pc = pcRef.current;
                   if (!pc) {
+                        dbg('handleOffer: creating PeerConnection (callee)', { iceServers: iceServers.length, iceTransportPolicy });
                         pc = createPeerConnection(iceServers, iceTransportPolicy);
-                        if (!pc) return;
+                        if (!pc) { dbg('ABORT handleOffer: createPeerConnection returned null'); return; }
 
                         for (const track of stream.getTracks()) {
                               pc.addTrack(track, stream);
                         }
+                        dbg('handleOffer: local tracks added to PC', { count: stream.getTracks().length });
+                  } else {
+                        dbg('handleOffer: reusing existing PeerConnection');
                   }
 
                   try {
                         await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: payload.sdp }));
+                        dbg('handleOffer: remote description set');
 
                         const answer = await pc.createAnswer();
                         await pc.setLocalDescription(answer);
+                        dbg('handleOffer: answer created and set as local description');
 
                         const callId = useCallStore.getState().callId;
                         if (callId && pc.localDescription) {
+                              dbg('handleOffer: emitting answer', { callId, sdpLength: pc.localDescription.sdp.length });
                               emittersRef.current.emitAnswer({
                                     callId,
                                     sdp: pc.localDescription.sdp,
                               });
+                        } else {
+                              dbg('WARNING handleOffer: answer NOT emitted', { callId, hasLocalDesc: !!pc.localDescription });
                         }
-                  } catch {
+                  } catch (err) {
+                        dbg('ERROR handleOffer', err);
                         useCallStore.getState().setError('Không thể thiết lập kết nối');
                   }
 
@@ -409,8 +462,9 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       // ── Handle incoming answer (CALLER side) ────────────────────────────
 
       const handleAnswer = useCallback(async (payload: SdpRelayPayload) => {
+            dbg('handleAnswer received', { callId: payload.callId, sdpLength: payload.sdp.length });
             const pc = pcRef.current;
-            if (!pc) return;
+            if (!pc) { dbg('ABORT handleAnswer: pcRef is null'); return; }
 
             try {
                   await pc.setRemoteDescription(
@@ -425,7 +479,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
 
       const handleIceCandidate = useCallback(async (payload: IceCandidateRelayPayload) => {
             const pc = pcRef.current;
-            if (!pc) return;
+            if (!pc) { dbg('SKIP handleIceCandidate: pcRef is null'); return; }
 
             try {
                   // Backend sends candidates as JSON string (possibly batched array)
@@ -452,6 +506,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
 
       const handleCallAccepted = useCallback(
             (payload: CallAcceptedPayload) => {
+                  dbg('handleCallAccepted', { callId: payload.callId, servers: payload.iceServers.length, policy: payload.iceTransportPolicy });
                   // Store already updated by useCallSocket.onAccepted
                   // Now create PeerConnection and start WebRTC flow
                   void startCallAsCaller(payload.iceServers, payload.iceTransportPolicy);
@@ -463,7 +518,8 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
 
       const acceptCall = useCallback(async () => {
             const { incomingCall, callId } = useCallStore.getState();
-            if (!incomingCall || !callId) return;
+            dbg('acceptCall', { hasIncomingCall: !!incomingCall, callId });
+            if (!incomingCall || !callId) { dbg('ABORT acceptCall: missing incomingCall or callId'); return; }
 
             // Read callType BEFORE clearing incomingCall
             const callType = incomingCall.callType;

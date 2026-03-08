@@ -19,6 +19,12 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useSocket } from '@/hooks/use-socket';
 import { SocketEvents } from '@/constants/socket-events';
 import { useCallStore } from '../stores/call.store';
+
+// ── Debug helper ──────────────────────────────────────────────────────
+const DEBUG = import.meta.env.DEV;
+function dbg(label: string, ...args: unknown[]) {
+      if (DEBUG) console.warn(`[CallSocket] ${label}`, ...args);
+}
 import type {
       IncomingCallPayload,
       CallAcceptedPayload,
@@ -79,6 +85,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
             if (!socket || !isConnected) return;
 
             const onIncoming = (payload: IncomingCallPayload) => {
+                  dbg('call:incoming received', { callId: payload.callId, callType: payload.callType, isGroup: payload.isGroupCall });
                   // Already in a call → ignore
                   const currentStatus = useCallStore.getState().callStatus;
                   if (currentStatus !== 'IDLE') return;
@@ -97,6 +104,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
             };
 
             const onAccepted = (payload: CallAcceptedPayload) => {
+                  dbg('call:accepted received', { callId: payload.callId, servers: payload.iceServers?.length, policy: payload.iceTransportPolicy });
                   useCallStore.getState().setCallAccepted({
                         callId: payload.callId,
                         iceServers: payload.iceServers,
@@ -106,30 +114,60 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
             };
 
             const onRejected = () => {
+                  // Only reset if we're still in DIALING/RINGING for this call
+                  const { callStatus } = useCallStore.getState();
+                  if (callStatus !== 'DIALING' && callStatus !== 'RINGING') {
+                        dbg('call:rejected IGNORED (status is', callStatus, ')');
+                        return;
+                  }
+                  dbg('call:rejected → resetCallState');
                   useCallStore.getState().resetCallState();
             };
 
-            const onEnded = (_payload: CallEndedPayload) => {
+            const onEnded = (payload: CallEndedPayload) => {
+                  // Guard: only reset if this event belongs to the current call.
+                  // Prevents stale call:ended from a previous call wiping out a
+                  // newly-initiated call (race condition when user quickly re-calls).
+                  const currentCallId = useCallStore.getState().callId;
+                  if (currentCallId && payload.callId && currentCallId !== payload.callId) {
+                        dbg('call:ended IGNORED (stale)', { received: payload.callId, current: currentCallId });
+                        return;
+                  }
+                  dbg('call:ended → resetCallState', { callId: payload.callId });
                   useCallStore.getState().resetCallState();
             };
 
-            const onBusy = (_payload: CallBusyPayload) => {
+            const onBusy = (payload: CallBusyPayload) => {
+                  // Only relevant when dialing
+                  const { callStatus } = useCallStore.getState();
+                  if (callStatus !== 'DIALING') {
+                        dbg('call:busy IGNORED (status is', callStatus, ')');
+                        return;
+                  }
+                  dbg('call:busy', payload);
                   useCallStore.getState().setError('Người dùng đang bận');
                   // Auto-reset after brief display
                   setTimeout(() => {
-                        useCallStore.getState().resetCallState();
+                        // Re-check: user may have already started a new call
+                        const s = useCallStore.getState();
+                        if (s.callStatus === 'DIALING' && s.error === 'Người dùng đang bận') {
+                              useCallStore.getState().resetCallState();
+                        }
                   }, 2000);
             };
 
             const onOffer = (payload: SdpRelayPayload) => {
+                  dbg('call:offer received', { callId: payload.callId, from: payload.fromUserId, sdpLen: payload.sdp?.length });
                   callbacksRef.current.onOffer?.(payload);
             };
 
             const onAnswer = (payload: SdpRelayPayload) => {
+                  dbg('call:answer received', { callId: payload.callId, from: payload.fromUserId, sdpLen: payload.sdp?.length });
                   callbacksRef.current.onAnswer?.(payload);
             };
 
             const onIceCandidate = (payload: IceCandidateRelayPayload) => {
+                  dbg('call:ice-candidate received', { callId: payload.callId, from: payload.fromUserId });
                   callbacksRef.current.onIceCandidate?.(payload);
             };
 
@@ -144,6 +182,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
 
             // Phase 4: Daily.co room info (P2P→SFU fallback or group call)
             const onDailyRoom = (payload: DailyRoomPayload) => {
+                  dbg('call:daily-room received', { callId: payload.callId, roomUrl: payload.roomUrl, tokenCount: Object.keys(payload.tokens).length });
                   callbacksRef.current.onDailyRoom?.(payload);
             };
 
@@ -197,7 +236,14 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
                         payload,
                         (ack: { callId?: string; error?: string }) => {
                               if (ack?.callId) {
+                                    dbg('emitInitiateCall ACK success', { callId: ack.callId });
                                     useCallStore.getState().setCallId(ack.callId);
+                              } else if (ack?.error) {
+                                    dbg('emitInitiateCall ACK ERROR', ack.error);
+                                    useCallStore.getState().setError(ack.error);
+                                    useCallStore.getState().resetCallState();
+                              } else {
+                                    dbg('emitInitiateCall ACK: no callId or error', ack);
                               }
                         },
                   );
