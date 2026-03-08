@@ -1,0 +1,165 @@
+# Production Docker Compose for EC2 Deployment
+
+services:
+  # 1. Zalo Backend API
+  api:
+    image: trungmai965/zalo_backend:latest
+    container_name: zalo_api_prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Redis — app reads REDIS_HOST/PORT/PASSWORD separately (not REDIS_URL)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: 0
+      # JWT — app reads ACCESS + REFRESH secrets separately (not JWT_SECRET)
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-7d}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-100d}
+      # MinIO (S3-compatible) — app reads AWS_* and S3_* vars
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET_NAME: zalo-clone-media-prod
+      S3_FORCE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      CLOUDFRONT_DOMAIN: ""
+      # WebRTC / TURN
+      STUN_SERVER_URL: ${STUN_SERVER_URL:-stun:stun.l.google.com:19302}
+      TURN_SERVER_URL: ${TURN_SERVER_URL}
+      TURN_SECRET: ${TURN_SECRET}
+      TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-43200}
+      DEFAULT_ICE_TRANSPORT_POLICY: relay
+      # Firebase Push Notifications
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+      # CORS / App
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      FRONTEND_URL: ${FRONTEND_URL}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Media worker concurrency
+      IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-4}
+      VIDEO_WORKER_CONCURRENCY: ${VIDEO_WORKER_CONCURRENCY:-2}
+      QUEUE_PROVIDER: bull
+    # Port 3000 not exposed — nginx handles external traffic
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - uploads:/tmp/uploads
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/api/v1/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 2. PostgreSQL Database
+  postgres:
+    image: postgres:18.1-alpine
+    container_name: zalo_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Remove port mapping in production for security
+    # Internal communication only within Docker network
+
+    # 3. Redis Cache
+  redis:
+    image: redis:8.4-alpine
+    container_name: zalo_redis_prod
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    # Remove port mapping in production
+
+    # 4. MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: zalo_minio_prod
+    restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Remove port mapping in production - use reverse proxy
+
+    # 5. Nginx Reverse Proxy (Optional but recommended for production)
+  nginx:
+    image: nginx:alpine
+    container_name: zalo_nginx_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+      - minio
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 6. MinIO Client - Auto-create bucket
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c " echo 'Waiting for MinIO to start...'; sleep 10; mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; mc mb myminio/zalo-clone-media-prod --ignore-existing; mc anonymous set download myminio/zalo-clone-media-prod; mc ilm add --expiry-days 30 myminio/zalo-clone-media-prod --prefix 'temp/'; echo 'MinIO production bucket initialized'; "
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  uploads:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  default:
+    driver: bridge

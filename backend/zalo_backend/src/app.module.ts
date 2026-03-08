@@ -44,6 +44,7 @@ import s3Config from './config/s3.config';
 import uploadConfig from './config/upload.config';
 import queueConfig from './config/queue.config';
 import socialConfig from './config/social.config';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -145,6 +146,7 @@ import socialConfig from './config/social.config';
 
     // Utilities
     ContactModule,
+    HealthModule, // [CRITICAL] Health Check Endpoint (/api/health)
   ],
   controllers: [AppController],
   providers: [

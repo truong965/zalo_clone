@@ -1,0 +1,66 @@
+# Production Dockerfile for Zalo Backend
+# Optimized for multi-stage build and minimal production image
+
+# 1. Base Stage: Node.js environment
+FROM node:25-alpine AS base
+WORKDIR /app
+# Install system dependencies for Sharp and build tools
+RUN apk add --no-cache libc6-compat curl
+
+# 2. Dependencies Stage: Install ALL node_modules (including devDeps for build)
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm ci && npm cache clean --force
+
+# 2b. Production Dependencies Stage: Only production node_modules for runtime image
+FROM base AS prod-deps
+COPY package.json package-lock.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# 3. Builder Stage: Build NestJS application
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Build application
+RUN npm run build
+
+# 4. Production Runner Stage
+FROM node:25-alpine AS production
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apk add --no-cache libc6-compat curl dumb-init
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+  adduser -S nextjs -u 1001
+
+# Copy built application and production dependencies only
+COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
+COPY --from=prod-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Copy generated Prisma client (prisma generate ran in builder stage, not prod-deps)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+# prisma.config.ts is required by Prisma CLI (migrate deploy) at runtime
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+
+# Create necessary directories
+RUN mkdir -p /tmp/uploads && chown nextjs:nodejs /tmp/uploads
+
+# Switch to non-root user
+USER nextjs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/api/v1/health || exit 1
+
+EXPOSE 3000
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/src/main.js"]
