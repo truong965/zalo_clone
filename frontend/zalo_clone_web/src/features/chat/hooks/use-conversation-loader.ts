@@ -7,6 +7,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { conversationService } from '@/features/conversation';
+import { ApiError } from '@/lib/api-error';
+import { useChatStore } from '../stores/chat.store';
 import type { ConversationUI } from '../types';
 
 interface UseConversationLoaderParams {
@@ -39,8 +41,19 @@ export function useConversationLoader(params: UseConversationLoaderParams) {
                   // may not always trigger useInfiniteQuery re-render)
                   setSearchConvMap((prev) => ({ ...prev, [id]: conv }));
             } catch (error) {
-                  console.error(`[ensureConversationLoaded] Failed to load conversation ${id}:`, error);
-                  fetchedSearchConvIds.current.delete(id); // Allow retry on next attempt
+                  const apiErr = ApiError.from(error);
+                  if (
+                        apiErr.statusCode === 400 ||
+                        apiErr.statusCode === 403 ||
+                        apiErr.statusCode === 404
+                  ) {
+                        // Stale / inaccessible conversation — clear selection silently
+                        // so the UI doesn't stay stuck waiting for data that won't arrive.
+                        useChatStore.getState().setSelectedId(null);
+                  } else {
+                        console.error(`[ensureConversationLoaded] Failed to load conversation ${id}:`, error);
+                        fetchedSearchConvIds.current.delete(id); // Allow retry on transient errors
+                  }
             }
       }, [prependConversation]);
 

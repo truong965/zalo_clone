@@ -109,6 +109,9 @@ export const useAuthStore = create<AuthState>()(
                               try {
                                     set({ isLoading: true, error: null });
                                     const data = await authService.login(payload);
+                                    // Safety net: clear stale conversation from any previous session
+                                    // (covers browser crash / tab close where logout was never called)
+                                    sessionStorage.removeItem(STORAGE_KEYS.CHAT_SELECTED_ID);
                                     set({ user: data.user, isAuthenticated: true, isLoading: false });
                                     return data;
                               } catch (error: unknown) {
@@ -125,6 +128,8 @@ export const useAuthStore = create<AuthState>()(
                               try {
                                     set({ isLoading: true });
                                     await authService.logout();
+                                    // Clear chat session state so the next user starts fresh
+                                    sessionStorage.removeItem(STORAGE_KEYS.CHAT_SELECTED_ID);
                                     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
                               } catch (error: unknown) {
                                     const errorMsg = ApiError.from(error).message || 'Logout failed';
@@ -197,13 +202,17 @@ export const useAuthStore = create<AuthState>()(
                         /**
                          * Reset auth state
                          */
-                        reset: () => set({
-                              user: null,
-                              isAuthenticated: false,
-                              isLoading: false,
-                              error: null,
-                              sessions: [],
-                        }),
+                        reset: () => {
+                              // Clear chat session state for token-expiry / forced-logout path
+                              sessionStorage.removeItem(STORAGE_KEYS.CHAT_SELECTED_ID);
+                              set({
+                                    user: null,
+                                    isAuthenticated: false,
+                                    isLoading: false,
+                                    error: null,
+                                    sessions: [],
+                              });
+                        },
                   }),
                   {
                         name: STORAGE_KEYS.AUTH_STORE, // localStorage key

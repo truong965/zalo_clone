@@ -34,6 +34,12 @@ export function usePinMessage(conversationId: string | null) {
             queryFn: () => conversationApi.getPinnedMessages(conversationId!),
             enabled: !!conversationId,
             staleTime: 60_000,
+            retry: (failureCount, error) => {
+                  // Don't retry on access/not-found errors (stale conversationId)
+                  const status = (error as { statusCode?: number })?.statusCode;
+                  if (status === 400 || status === 403 || status === 404) return false;
+                  return failureCount < 2;
+            },
       });
 
       // ── Mutation: pin ────────────────────────────────────────────────────

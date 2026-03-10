@@ -40,7 +40,7 @@ export function RegisterPage() {
       api.success({
         message: 'Đăng ký thành công!',
         description: 'Vui lòng đăng nhập với tài khoản mới.',
-        placement: 'bottomRight',
+        placement: 'topRight',
         duration: 5,
       });
       setTimeout(() => navigate(ROUTES.LOGIN), 1500);
@@ -48,7 +48,7 @@ export function RegisterPage() {
       api.error({
         message: 'Đăng ký thất bại',
         description: ApiError.from(err).message || 'Vui lòng kiểm tra lại thông tin.',
-        placement: 'bottomRight',
+        placement: 'topRight',
       });
     }
   };
@@ -130,7 +130,7 @@ export function RegisterPage() {
                 </Form.Item>
 
                 <Form.Item label="Ngày Sinh" name="dateOfBirth" className="mb-0">
-                  <Input type="date" />
+                  <Input type="date" max={new Date().toISOString().split('T')[0]} />
                 </Form.Item>
               </div>
 

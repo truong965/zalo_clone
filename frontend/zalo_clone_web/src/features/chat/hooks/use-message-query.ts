@@ -65,6 +65,12 @@ export function useMessageQuery(params: {
             refetchOnWindowFocus: false,
             refetchOnMount: false,
             refetchOnReconnect: false,
+            retry: (failureCount, error) => {
+                  // Don't retry on access/not-found errors (stale conversationId)
+                  const status = (error as { statusCode?: number })?.statusCode;
+                  if (status === 400 || status === 403 || status === 404) return false;
+                  return failureCount < 2;
+            },
       });
 
       const messagesDesc = (query.data?.pages ?? []).flatMap((p) => p.data);

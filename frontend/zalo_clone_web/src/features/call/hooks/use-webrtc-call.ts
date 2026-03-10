@@ -312,11 +312,13 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       // ── Get local media ─────────────────────────────────────────────────
 
       const acquireLocalMedia = useCallback(async (callType: CallType) => {
+            const wantVideo = callType === 'VIDEO';
+
             try {
-                  dbg('acquireLocalMedia: requesting getUserMedia', { audio: true, video: callType === 'VIDEO' });
+                  dbg('acquireLocalMedia: requesting getUserMedia', { audio: true, video: wantVideo });
                   const stream = await navigator.mediaDevices.getUserMedia({
                         audio: true,
-                        video: callType === 'VIDEO',
+                        video: wantVideo,
                   });
                   dbg('acquireLocalMedia: SUCCESS', { tracks: stream.getTracks().map(t => `${t.kind}:${t.readyState}`) });
 
@@ -339,6 +341,40 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                         message: err instanceof Error ? err.message : String(err),
                         err,
                   });
+
+                  // ── Fallback: video device unavailable → continue with audio-only ──
+                  // Common when testing with 2 tabs on the same machine: one tab
+                  // grabs exclusive camera access, the other gets NotFoundError /
+                  // NotReadableError. The call should still work (audio-only) rather
+                  // than aborting entirely.
+                  if (
+                        wantVideo &&
+                        err instanceof DOMException &&
+                        (err.name === 'NotFoundError' ||
+                              err.name === 'NotReadableError' ||
+                              err.name === 'OverconstrainedError' ||
+                              err.name === 'AbortError')
+                  ) {
+                        dbg('acquireLocalMedia: video device unavailable, retrying audio-only');
+                        try {
+                              const audioStream = await navigator.mediaDevices.getUserMedia({
+                                    audio: true,
+                              });
+                              dbg('acquireLocalMedia: audio-only SUCCESS', {
+                                    tracks: audioStream.getTracks().map(t => `${t.kind}:${t.readyState}`),
+                              });
+
+                              // Mark camera as off since we have no video track
+                              useCallStore.getState().setCameraOff(true);
+
+                              localStreamRef.current = audioStream;
+                              useCallStore.getState().setLocalStream(audioStream);
+                              return audioStream;
+                        } catch (audioErr) {
+                              dbg('acquireLocalMedia: audio-only also FAILED', audioErr);
+                        }
+                  }
+
                   const message = err instanceof DOMException
                         ? err.name === 'NotAllowedError'
                               ? 'Quyền truy cập camera/microphone bị từ chối'

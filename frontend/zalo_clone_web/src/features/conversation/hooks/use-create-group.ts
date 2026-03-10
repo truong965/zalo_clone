@@ -28,23 +28,23 @@ import {
  * 3. Return the final file URL
  */
 async function uploadAvatar(file: File): Promise<string> {
-      // Step 1: Get presigned URL
-      const { data: initRes } = await apiClient.post(API_ENDPOINTS.MEDIA.UPLOAD, {
+      // Step 1: Get presigned PUT URL + final CloudFront/S3 URL
+      const { data: initRes } = await apiClient.post(API_ENDPOINTS.MEDIA.UPLOAD_AVATAR, {
             fileName: file.name,
-            fileType: file.type,
+            mimeType: file.type,
             fileSize: file.size,
-            category: 'avatar',
       });
 
-      const { uploadUrl, fileUrl } = initRes.data;
+      const { presignedUrl, fileUrl } = initRes.data;
 
-      // Step 2: Upload to presigned URL
-      await fetch(uploadUrl, {
+      // Step 2: PUT file directly to S3/MinIO via presigned URL
+      await fetch(presignedUrl, {
             method: 'PUT',
             body: file,
             headers: { 'Content-Type': file.type },
       });
 
+      // fileUrl is the CloudFront URL (prod) or MinIO URL (dev) — use as avatarUrl
       return fileUrl;
 }
 

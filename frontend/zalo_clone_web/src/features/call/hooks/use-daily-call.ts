@@ -145,13 +145,41 @@ export function useDailyCall() {
                   const storeState = useCallStore.getState();
                   const wantCameraOff = storeState.isCameraOff;
 
-                  // IMPORTANT: Always acquire the camera device (videoSource: true)
-                  // so that setLocalVideo(true) can re-enable it mid-call.
-                  // Using videoSource: false would skip device acquisition entirely,
-                  // making it impossible to toggle the camera back on later.
+                  // ── Detect available devices before creating call object ────
+                  // When testing with 2 tabs on the same machine, the second tab
+                  // may not have camera access (NotFoundError). Detect this upfront
+                  // so we can create the call object with appropriate settings.
+                  let hasVideoDevice = true;
+                  try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        const videoInputs = devices.filter(d => d.kind === 'videoinput');
+                        hasVideoDevice = videoInputs.length > 0;
+                        dbg('Device detection', { videoInputs: videoInputs.length, audioInputs: devices.filter(d => d.kind === 'audioinput').length });
+
+                        // Extra check: try acquiring video briefly to confirm it's usable
+                        if (hasVideoDevice) {
+                              try {
+                                    const testStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                                    for (const track of testStream.getTracks()) track.stop();
+                              } catch {
+                                    dbg('Device detection: camera listed but not accessible, treating as unavailable');
+                                    hasVideoDevice = false;
+                              }
+                        }
+                  } catch {
+                        dbg('Device detection: enumerateDevices failed, assuming video available');
+                  }
+
+                  const useVideo = hasVideoDevice && !wantCameraOff;
+                  dbg('Camera decision', { hasVideoDevice, wantCameraOff, useVideo });
+
+                  // Create call object. Use videoSource: false when camera is
+                  // unavailable so Daily.co doesn't fail trying to acquire it.
+                  // Note: if camera becomes available later, setLocalVideo(true) may
+                  // still work on some browsers as Daily re-checks device list.
                   const callObject = Daily.createCallObject({
                         audioSource: true,
-                        videoSource: true,
+                        videoSource: hasVideoDevice,
                   }) as unknown as DailyCallObject;
 
                   callObjectRef.current = callObject;
@@ -259,12 +287,14 @@ export function useDailyCall() {
                               callObject.setUserData({ avatarUrl });
                         }
 
-                        // Turn camera off after join if user chose "tắt camera".
-                        // Camera device was acquired (videoSource: true) so toggling
-                        // back on mid-call will work.
-                        if (wantCameraOff) {
+                        // Turn camera off after join if user chose "tắt camera"
+                        // or if the camera device wasn't available.
+                        if (wantCameraOff || !hasVideoDevice) {
                               callObject.setLocalVideo(false);
                               useCallStore.getState().setCameraOff(true);
+                              if (!hasVideoDevice) {
+                                    dbg('Camera device not available; joined with audio only');
+                              }
                         }
                   } catch (err) {
                         const message =

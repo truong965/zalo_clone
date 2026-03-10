@@ -101,6 +101,8 @@ export const API_ENDPOINTS = {
     UPLOAD: '/api/v1/media/upload',
     INITIATE: '/api/v1/media/upload/initiate',
     CONFIRM: '/api/v1/media/upload/confirm',
+    // Avatar presigned upload — returns { presignedUrl, fileUrl } (no MediaAttachment record)
+    UPLOAD_AVATAR: '/api/v1/media/upload/avatar',
     GET: (id: string) => `/api/v1/media/${id}`,
     DELETE: (id: string) => `/api/v1/media/${id}`,
   },
