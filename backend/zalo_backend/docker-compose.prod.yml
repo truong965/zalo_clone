@@ -1,4 +1,7 @@
 # Production Docker Compose for EC2 Deployment
+# Storage: AWS S3 (bucket: zalo-clone-media-production, region: ap-southeast-1)
+# Queue:   AWS SQS (QUEUE_PROVIDER=sqs)
+# Auth:    IAM Instance Profile attached to EC2 — no explicit AWS credentials needed
 
 services:
   # 1. Zalo Backend API
@@ -21,14 +24,22 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-7d}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-100d}
-      # MinIO (S3-compatible) — app reads AWS_* and S3_* vars
-      S3_ENDPOINT: http://minio:9000
-      S3_BUCKET_NAME: zalo-clone-media-prod
-      S3_FORCE_PATH_STYLE: "true"
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
-      CLOUDFRONT_DOMAIN: ""
+      # ── AWS S3 (native, no MinIO) ──────────────────────────────────────────
+      # S3_ENDPOINT is intentionally absent → SDK uses native S3 endpoint
+      # AWS credentials are resolved from the EC2 IAM Instance Profile automatically
+      # Do NOT set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY here
+      S3_BUCKET_NAME: zalo-clone-media-production
+      AWS_REGION: ap-southeast-1
+      CLOUDFRONT_DOMAIN: ${CLOUDFRONT_DOMAIN:-}
+      # ── AWS SQS ────────────────────────────────────────────────────────────
+      QUEUE_PROVIDER: sqs
+      SQS_IMAGE_QUEUE_URL: ${SQS_IMAGE_QUEUE_URL}
+      SQS_IMAGE_DLQ_URL: ${SQS_IMAGE_DLQ_URL:-}
+      SQS_VIDEO_QUEUE_URL: ${SQS_VIDEO_QUEUE_URL}
+      SQS_VIDEO_DLQ_URL: ${SQS_VIDEO_DLQ_URL:-}
+      SQS_VISIBILITY_TIMEOUT_IMAGE: ${SQS_VISIBILITY_TIMEOUT_IMAGE:-120}
+      SQS_VISIBILITY_TIMEOUT_VIDEO: ${SQS_VISIBILITY_TIMEOUT_VIDEO:-900}
+      SQS_WAIT_TIME: ${SQS_WAIT_TIME:-20}
       # WebRTC / TURN
       STUN_SERVER_URL: ${STUN_SERVER_URL:-stun:stun.l.google.com:19302}
       TURN_SERVER_URL: ${TURN_SERVER_URL}
@@ -47,14 +58,11 @@ services:
       # Media worker concurrency
       IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-4}
       VIDEO_WORKER_CONCURRENCY: ${VIDEO_WORKER_CONCURRENCY:-2}
-      QUEUE_PROVIDER: bull
     # Port 3000 not exposed — nginx handles external traffic
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      minio:
         condition: service_healthy
     volumes:
       - uploads:/tmp/uploads
@@ -100,25 +108,7 @@ services:
       retries: 5
     # Remove port mapping in production
 
-    # 4. MinIO Object Storage
-  minio:
-    image: minio/minio:latest
-    container_name: zalo_minio_prod
-    restart: always
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    # Remove port mapping in production - use reverse proxy
-
-    # 5. Nginx Reverse Proxy (Optional but recommended for production)
+    # 4. Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: zalo_nginx_prod
@@ -132,28 +122,19 @@ services:
       - nginx_logs:/var/log/nginx
     depends_on:
       - api
-      - minio
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
-
-  # 6. MinIO Client - Auto-create bucket
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c " echo 'Waiting for MinIO to start...'; sleep 10; mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; mc mb myminio/zalo-clone-media-prod --ignore-existing; mc anonymous set download myminio/zalo-clone-media-prod; mc ilm add --expiry-days 30 myminio/zalo-clone-media-prod --prefix 'temp/'; echo 'MinIO production bucket initialized'; "
+  # NOTE: MinIO removed — media storage moved to AWS S3 (bucket: zalo-clone-media-production)
+  # NOTE: S3 bucket + lifecycle rules must be pre-created in AWS Console.
+  #       See doc/plan/MINIO-BULL-TO-S3-SQS-MIGRATION.md Phase 1 for setup steps.
 
 volumes:
   postgres_data:
     driver: local
   redis_data:
-    driver: local
-  minio_data:
     driver: local
   uploads:
     driver: local

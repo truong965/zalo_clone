@@ -7,7 +7,6 @@
 import { Injectable, Inject, OnModuleDestroy, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { SQSClient } from '@aws-sdk/client-sqs';
-import s3Config from 'src/config/s3.config';
 import queueConfig from 'src/config/queue.config';
 
 @Injectable()
@@ -16,22 +15,16 @@ export class SqsClientFactory implements OnModuleDestroy {
       readonly client: SQSClient;
 
       constructor(
-            @Inject(s3Config.KEY)
-            private readonly s3Cfg: ConfigType<typeof s3Config>,
             @Inject(queueConfig.KEY)
             private readonly queueCfg: ConfigType<typeof queueConfig>,
       ) {
-            const { accessKeyId, secretAccessKey } = this.s3Cfg.credentials;
             const region = this.queueCfg.sqs.region;
 
-            this.client = new SQSClient({
-                  region,
-                  // On EC2 with IAM Instance Profile, omit explicit credentials so the
-                  // SDK resolves them from the instance metadata endpoint automatically.
-                  ...(accessKeyId && secretAccessKey
-                        ? { credentials: { accessKeyId, secretAccessKey } }
-                        : {}),
-            });
+            // Credentials are resolved automatically by the AWS SDK provider chain:
+            // - EC2 production: IAM Instance Profile (ZaloSQSAccess policy)
+            // - Local dev: ~/.aws/credentials or AWS_PROFILE
+            // Never pass explicit credentials here.
+            this.client = new SQSClient({ region });
 
             this.logger.log(`SqsClientFactory initialised (region=${region})`);
       }

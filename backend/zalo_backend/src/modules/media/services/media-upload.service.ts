@@ -24,6 +24,8 @@ import uploadConfig from '../../../config/upload.config';
 import {
   InitiateUploadDto,
   InitiateUploadResponse,
+  AvatarUploadDto,
+  AvatarUploadResponse,
 } from '../dto/initiate-upload.dto';
 import { MediaResponseDto } from '../dto/media-response.dto';
 import { MEDIA_QUEUE_PROVIDER } from '../queues/media-queue.interface';
@@ -197,6 +199,41 @@ export class MediaUploadService {
       expiresIn: this.config.presignedUrlExpiry,
       s3Key: s3KeyTemp,
     };
+  }
+
+  /**
+   * Avatar upload — presigned PUT URL + CloudFront/S3 final URL.
+   * Avatars live under the `avatars/` S3 prefix and are served via CloudFront
+   * in production (CLOUDFRONT_DOMAIN set) or via MinIO URL in local dev.
+   * No MediaAttachment record is created; the returned fileUrl is saved
+   * directly as User.avatarUrl / Conversation.avatarUrl by the caller.
+   */
+  async avatarUpload(
+    userId: string,
+    dto: AvatarUploadDto,
+  ): Promise<AvatarUploadResponse> {
+    if (!dto.mimeType.startsWith('image/')) {
+      throw new BadRequestException('Avatar must be an image file');
+    }
+
+    const ext = (dto.fileName.split('.').pop() ?? 'jpg').toLowerCase();
+    const uploadId = createId();
+    const s3Key = `avatars/${userId}/${uploadId}.${ext}`;
+
+    const presignedUrl = await this.s3Service.generatePresignedUrl({
+      key: s3Key,
+      expiresIn: this.config.presignedUrlExpiry,
+      contentType: dto.mimeType,
+    });
+
+    // getCloudFrontUrl returns:
+    //   prod  → https://cdn.zaloclone.me/avatars/{userId}/{id}.{ext}
+    //   dev   → http://localhost:9000/zalo-clone-media-production/avatars/{userId}/{id}.{ext}
+    const fileUrl = this.s3Service.getCloudFrontUrl(s3Key);
+
+    this.logger.debug('Avatar upload initiated', { userId, s3Key });
+
+    return { presignedUrl, fileUrl, expiresIn: this.config.presignedUrlExpiry, s3Key };
   }
 
   async confirmUpload(

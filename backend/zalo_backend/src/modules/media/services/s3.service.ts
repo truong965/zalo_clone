@@ -54,11 +54,16 @@ export class S3Service {
     @Inject(s3Config.KEY)
     private readonly config: ConfigType<typeof s3Config>,
   ) {
+    const { accessKeyId, secretAccessKey } = this.config.credentials;
     this.s3Client = new S3Client({
       region: this.config.region,
       endpoint: this.config.endpoint,
       forcePathStyle: this.config.forcePathStyle,
-      credentials: this.config.credentials,
+      // Omit credentials when both vars are empty so the AWS SDK resolves them
+      // automatically via the EC2 IAM Instance Profile / instance metadata service.
+      ...(accessKeyId && secretAccessKey
+        ? { credentials: { accessKeyId, secretAccessKey } }
+        : {}),
     });
 
     this.bucketName = this.config.bucketName;

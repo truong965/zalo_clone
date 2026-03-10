@@ -34,3 +34,28 @@ export interface InitiateUploadResponse {
   expiresIn: number;
   s3Key: string;
 }
+
+// ── Avatar upload ─────────────────────────────────────────────────────────────
+// Avatars bypass the media worker pipeline — they are uploaded directly to the
+// `avatars/` S3 prefix and served via CloudFront (prod) or MinIO URL (dev).
+// No MediaAttachment DB record is created.
+export class AvatarUploadDto {
+  @IsString()
+  @MaxLength(255)
+  fileName: string;
+
+  @IsString()
+  mimeType: string; // must be image/*
+
+  @IsInt()
+  @Min(1)
+  @Max(10 * 1024 * 1024) // 10 MB
+  fileSize: number;
+}
+
+export interface AvatarUploadResponse {
+  presignedUrl: string; // PUT directly from browser to S3
+  fileUrl: string;      // CloudFront URL (prod) or MinIO URL (dev) — save as avatarUrl
+  expiresIn: number;
+  s3Key: string;
+}

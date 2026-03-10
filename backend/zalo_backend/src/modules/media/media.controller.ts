@@ -17,7 +17,7 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { CurrentUser, Public } from 'src/common/decorator/customize';
 import { MediaUploadService } from './services/media-upload.service';
-import { InitiateUploadDto } from './dto/initiate-upload.dto';
+import { InitiateUploadDto, AvatarUploadDto } from './dto/initiate-upload.dto';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
 
 @Controller('media')
@@ -37,6 +37,21 @@ export class MediaController {
     @Body() dto: InitiateUploadDto,
   ) {
     return this.mediaUploadService.initiateUpload(userId, dto);
+  }
+
+  /**
+   * Avatar upload — returns a presigned PUT URL + the final CloudFront/S3 URL.
+   * Avatars bypass the media worker pipeline (no MediaAttachment record).
+   * Flow: POST here → PUT file to presignedUrl → store fileUrl as avatarUrl.
+   */
+  @Post('upload/avatar')
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5/min
+  @HttpCode(HttpStatus.OK)
+  async avatarUpload(
+    @CurrentUser('id') userId: string,
+    @Body() dto: AvatarUploadDto,
+  ) {
+    return this.mediaUploadService.avatarUpload(userId, dto);
   }
 
   /**
