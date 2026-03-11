@@ -13,6 +13,8 @@ import { PrivacyController } from './privacy.controller';
 import { PrivacyCacheListener } from './listeners/privacy-cache.listener';
 import { PrivacyFriendshipListener } from './listeners/privacy-friendship.listener';
 import { PrivacyBlockListener } from './listeners/privacy-block.listener';
+import { PrivacyUserRegisteredListener } from './listeners/privacy-user-registered.listener';
+import { DatabaseModule } from '@database/prisma.module';
 
 /**
  * PrivacyModule (PHASE 7 - REFACTORED EVENT-DRIVEN)
@@ -43,6 +45,7 @@ import { PrivacyBlockListener } from './listeners/privacy-block.listener';
  */
 @Module({
   imports: [
+    DatabaseModule,
     RedisModule,
     EventsModule,
     IdempotencyModule,
@@ -57,7 +60,8 @@ import { PrivacyBlockListener } from './listeners/privacy-block.listener';
     PrivacyCacheListener, // PHASE 4: Handle privacy.updated
     PrivacyFriendshipListener, // Handle friendship events
     PrivacyBlockListener, // Handle block events → cache invalidation
+    PrivacyUserRegisteredListener, // Create default PrivacySettings on registration
   ],
   exports: [PrivacyService], // Export for other modules to use
 })
-export class PrivacyModule {}
+export class PrivacyModule { }

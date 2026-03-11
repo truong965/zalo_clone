@@ -9,7 +9,6 @@ import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { RedisModule } from 'src/modules/redis/redis.module';
 import socketConfig from 'src/config/socket.config';
 import { DatabaseModule } from 'src/database/prisma.module';
-import { SocketConnectionLoggerService } from './services/socket-connection-logger.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SocketCleanupJob } from './jobs/socket-cleanup.job';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -64,7 +63,6 @@ import { PrivacyModule } from 'src/modules/privacy/privacy.module';
     SocketStateService,
     WsJwtGuard,
     WsThrottleGuard,
-    SocketConnectionLoggerService,
     SocketCleanupJob,
 
     // PHASE 2: Event listener (replaces forwardRef() to MessagingModule)

@@ -13,7 +13,7 @@ export class RedisPresenceService {
     private readonly redisService: RedisService,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
-  ) {}
+  ) { }
 
   /**
    * Mark user as online with device
@@ -118,10 +118,13 @@ export class RedisPresenceService {
 
   /**
    * Get online user count
+   * Uses ZCOUNT with a score window matching userStatus TTL so stale entries
+   * (not yet cleaned up by the cron job) are not counted.
    */
   async getOnlineUserCount(): Promise<number> {
     const client = this.redisService.getClient();
-    return client.zcard(RedisKeyBuilder.presenceOnlineUsers());
+    const cutoff = Date.now() - this.config.ttl.userStatus * 1000;
+    return client.zcount(RedisKeyBuilder.presenceOnlineUsers(), cutoff, '+inf');
   }
 
   /**

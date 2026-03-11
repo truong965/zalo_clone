@@ -342,9 +342,6 @@ model User {
   callParticipations CallParticipant[] @relation("CallParticipations")
   kickedCalls        CallParticipant[] @relation("KickedParticipants")
 
-  // System Logs
-  socketConnections SocketConnection[]
-
   // Search Analytics
   searchQueries SearchQuery[]
 
@@ -923,40 +920,6 @@ model CallParticipant {
   @@index([userId, role, status], name: "idx_call_participant_user_role_status") // outgoing/incoming
   @@index([callId], name: "idx_call_participant_call")
   @@map("call_participants")
-}
-
-/**
- * Model: SocketConnection
- * Logs historical socket connections for analytics and debugging.
- */
-model SocketConnection {
-  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId   String @map("user_id") @db.Uuid
-  socketId String @map("socket_id") @db.VarChar(100)
-
-  // Device Context
-  deviceId       String  @map("device_id") @db.VarChar(255)
-  serverInstance String? @map("server_instance") @db.VarChar(50)
-  ipAddress      String  @map("ip_address") @db.VarChar(45)
-  userAgent      String? @map("user_agent") @db.Text
-
-  // Lifecycle
-  connectedAt      DateTime  @default(now()) @map("connected_at") @db.Timestamptz
-  disconnectedAt   DateTime? @map("disconnected_at") @db.Timestamptz
-  disconnectReason String?   @map("disconnect_reason") @db.VarChar(100)
-
-  // Usage Metrics
-  messagesSent     Int  @default(0) @map("messages_sent")
-  messagesReceived Int  @default(0) @map("messages_received")
-  duration         Int? @map("duration_seconds")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, connectedAt(sort: Desc)])
-  @@index([socketId])
-  @@index([serverInstance])
-  @@index([connectedAt])
-  @@map("socket_connections")
 }
 
 // ============================================================================

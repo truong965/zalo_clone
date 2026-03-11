@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
+import { RedisRegistryService } from '@modules/redis/services/redis-registry.service';
 
 /**
  * AdminSystemService
@@ -15,6 +16,7 @@ export class AdminSystemService {
       constructor(
             private readonly prisma: PrismaService,
             private readonly redis: RedisService,
+            private readonly redisRegistry: RedisRegistryService,
       ) { }
 
       async getSystemStatus() {
@@ -68,9 +70,7 @@ export class AdminSystemService {
 
       private async getActiveSocketConnections(): Promise<number> {
             try {
-                  return await this.prisma.socketConnection.count({
-                        where: { disconnectedAt: null },
-                  });
+                  return await this.redisRegistry.getTotalSocketCount();
             } catch {
                   return 0;
             }

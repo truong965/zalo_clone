@@ -20,6 +20,7 @@ import { ConversationRealtimeService } from './services/conversation-realtime.se
 // Listeners
 import { ConversationEventHandler } from './listeners/conversation-event.handler';
 import { CallConversationListener } from './listeners/call-conversation.listener';
+import { FriendshipConversationListener } from './listeners/friendship-conversation.listener';
 
 // Controller & Gateway
 import { ConversationController } from './conversation.controller';
@@ -64,6 +65,7 @@ import { ConversationGateway } from './conversation.gateway';
     // Listeners
     ConversationEventHandler,
     CallConversationListener, // CALL PHASE 1: Update conversation on call.ended
+    FriendshipConversationListener, // Auto-create conversation on friendship.accepted
 
     // Gateway
     ConversationGateway,

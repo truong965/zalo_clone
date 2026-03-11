@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RedisRegistryService } from 'src/modules/redis/services/redis-registry.service';
 import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
-import { SocketConnectionLoggerService } from '../services/socket-connection-logger.service';
 
 @Injectable()
 export class SocketCleanupJob {
@@ -11,8 +10,7 @@ export class SocketCleanupJob {
   constructor(
     private readonly redisRegistry: RedisRegistryService,
     private readonly redisPresence: RedisPresenceService,
-    private readonly connectionLogger: SocketConnectionLoggerService,
-  ) {}
+  ) { }
 
   /**
    * Chạy mỗi giờ (Every Hour)
@@ -32,13 +30,9 @@ export class SocketCleanupJob {
       const stalePresenceCleaned =
         await this.redisPresence.cleanupStalePresence();
 
-      // 3. Dọn dẹp Log kết nối cũ trong DB (Giữ lại 7 ngày)
-      // Reference: SocketConnectionLoggerService.cleanupOldLogs
-      const logsCleaned = await this.connectionLogger.cleanupOldLogs(7);
-
-      if (zombiesCleaned > 0 || stalePresenceCleaned > 0 || logsCleaned > 0) {
+      if (zombiesCleaned > 0 || stalePresenceCleaned > 0) {
         this.logger.log(
-          ` Cleanup Report: ${zombiesCleaned} zombies, ${stalePresenceCleaned} stale presences, ${logsCleaned} old logs removed.`,
+          `Cleanup Report: ${zombiesCleaned} zombies, ${stalePresenceCleaned} stale presences removed.`,
         );
       } else {
         this.logger.debug(' System is clean. Nothing to remove.');

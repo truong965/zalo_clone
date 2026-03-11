@@ -312,8 +312,9 @@ export class SocketGateway
       // Socket.IO có ping/pong riêng, nhưng cái này dùng để sync time hoặc check app state
       this.registerSafeInterval(
         client,
-        () => {
-          if (client.connected) {
+        async () => {
+          if (client.connected && client.userId) {
+            await this.socketState.refreshHeartbeat(client.id, client.userId);
             client.emit(SocketEvents.SERVER_HEARTBEAT, { ts: Date.now() });
           }
         },
