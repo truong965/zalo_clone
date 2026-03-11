@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { Avatar, Badge, Button, Typography } from 'antd';
-import { PhoneOutlined, CloseOutlined, VideoCameraOutlined, TeamOutlined } from '@ant-design/icons';
+import { PhoneOutlined, CloseOutlined, VideoCameraOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
 
 const { Title, Text } = Typography;
@@ -171,9 +171,8 @@ export function IncomingCallOverlay() {
                                     size={96}
                                     src={callerInfo.avatarUrl ?? undefined}
                                     className="bg-blue-500 relative z-10"
-                              >
-                                    {callerInfo.displayName?.[0]?.toUpperCase() ?? '?'}
-                              </Avatar>
+                                    icon={<UserOutlined />}
+                              />
                               {isGroup && (
                                     <span className="absolute -bottom-1 -right-1 z-20 bg-blue-500 rounded-full w-8 h-8 flex items-center justify-center border-2 border-gray-900">
                                           <TeamOutlined className="text-white text-sm" />

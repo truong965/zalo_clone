@@ -2,7 +2,7 @@ import { Avatar, Typography, Badge, Dropdown, Button, type MenuProps } from 'ant
 import {
       PushpinOutlined, MoreOutlined,
       TeamOutlined, BellOutlined,
-      InboxOutlined,
+      InboxOutlined, UserOutlined,
 } from '@ant-design/icons';
 import { BellSlashedIcon } from '@/components/icons/bell-slashed';
 import type { ConversationUI } from '../types';
@@ -109,11 +109,8 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
                               <Avatar
                                     size={48}
                                     src={data.avatar || undefined}
-                                    className={!data.avatar ? (data.type === 'GROUP' ? 'bg-orange-400' : 'bg-blue-500') : ''}
-                                    icon={!data.avatar && data.type === 'GROUP' ? <TeamOutlined /> : undefined}
-                              >
-                                    {data.name?.[0]?.toUpperCase() ?? 'U'}
-                              </Avatar>
+                                    icon={data.type === 'GROUP' ? <TeamOutlined /> : <UserOutlined />}
+                              />
 
                               {/* Online Indicator (Chỉ hiện cho Direct) */}
                               {data.type === 'DIRECT' && data.isOnline && (

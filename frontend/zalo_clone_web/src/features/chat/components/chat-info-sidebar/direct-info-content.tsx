@@ -13,6 +13,7 @@ import {
       PushpinOutlined,
       StopOutlined,
       ExclamationCircleFilled,
+      UserOutlined,
 } from '@ant-design/icons';
 import { BellSlashedIcon } from '@/components/icons/bell-slashed';
 import type { ConversationUI } from '@/types/api';
@@ -167,9 +168,8 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                               size={64}
                               src={conversation.avatar}
                               className="mb-3 border border-gray-200"
-                        >
-                              {conversation.name?.charAt(0)}
-                        </Avatar>
+                              icon={<UserOutlined />}
+                        />
                         <div className="flex items-center gap-2 mb-4">
                               <Title level={4} className="m-0">
                                     {conversation.name || 'Chat'}

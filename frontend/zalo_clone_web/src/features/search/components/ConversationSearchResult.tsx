@@ -11,7 +11,7 @@
  */
 
 import { Avatar, Typography } from 'antd';
-import { TeamOutlined } from '@ant-design/icons';
+import { TeamOutlined, UserOutlined } from '@ant-design/icons';
 import type { ConversationMessageGroup, HighlightLocation } from '../types';
 import { formatSearchTimestamp } from '../utils/search.util';
 
@@ -77,12 +77,8 @@ export function ConversationSearchResult({ data, onClick }: ConversationSearchRe
                         <Avatar
                               size={40}
                               src={data.conversationAvatar || undefined}
-                              className={!data.conversationAvatar ? 'bg-blue-500' : ''}
-                        >
-                              {data.conversationType === 'GROUP'
-                                    ? <TeamOutlined />
-                                    : data.conversationName?.[0]?.toUpperCase() ?? 'C'}
-                        </Avatar>
+                              icon={data.conversationType === 'GROUP' ? <TeamOutlined /> : <UserOutlined />}
+                        />
                   </div>
 
                   {/* Content */}

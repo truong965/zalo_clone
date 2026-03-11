@@ -6,7 +6,7 @@
  */
 
 import { Modal, Button, Avatar, notification } from 'antd';
-import { UserAddOutlined } from '@ant-design/icons';
+import { UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import { useSendFriendRequest } from '../api/friendship.api';
 import { ApiError } from '@/lib/api-error';
 
@@ -55,10 +55,8 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
                               <Avatar
                                     src={target.avatarUrl}
                                     size={64}
-                                    className="bg-blue-100 text-blue-600"
-                              >
-                                    {target.displayName?.charAt(0)}
-                              </Avatar>
+                                    icon={<UserOutlined />}
+                              />
 
                               <h3 className="text-base font-semibold text-gray-800 m-0">
                                     {target.displayName}

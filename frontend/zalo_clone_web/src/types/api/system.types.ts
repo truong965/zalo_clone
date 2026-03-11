@@ -60,22 +60,6 @@ export interface CallHistory {
       isViewed?: boolean;
 }
 
-export interface SocketConnection {
-      id: string;
-      userId: string;
-      socketId: string;
-      deviceId: string;
-      serverInstance?: string;
-      ipAddress: string;
-      userAgent?: string;
-      connectedAt: string;
-      disconnectedAt?: string;
-      disconnectReason?: string;
-      messagesSent: number;
-      messagesReceived: number;
-      duration?: number;
-}
-
 export interface DomainEvent {
       id: string;
       eventId: string;

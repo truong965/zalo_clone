@@ -338,7 +338,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
 
                   {/* 1. TOOLBAR */}
                   <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-50">
-                        <Tooltip title="Gửi Sticker" placement="top">
+                        {/* <Tooltip title="Gửi Sticker" placement="top">
                               <Button
                                     type="text"
                                     icon={<SmileOutlined />}
@@ -346,7 +346,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                                     size="middle"
                                     disabled={isDisabled}
                               />
-                        </Tooltip>
+                        </Tooltip> */}
 
                         <Tooltip title="Gửi hình ảnh / video" placement="top">
                               <Button

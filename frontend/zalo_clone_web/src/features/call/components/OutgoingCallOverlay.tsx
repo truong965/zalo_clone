@@ -14,7 +14,7 @@
 
 import { useCallback } from 'react';
 import { Avatar, Button, Typography } from 'antd';
-import { PhoneOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import { PhoneOutlined, VideoCameraOutlined, UserOutlined } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
 
 const { Title, Text } = Typography;
@@ -48,9 +48,8 @@ export function OutgoingCallOverlay() {
                                     size={96}
                                     src={peerInfo?.avatarUrl ?? undefined}
                                     className="bg-blue-500 relative z-10"
-                              >
-                                    {peerInfo?.displayName?.[0]?.toUpperCase() ?? '?'}
-                              </Avatar>
+                                    icon={<UserOutlined />}
+                              />
                         </div>
 
                         {/* Callee name + status */}

@@ -17,6 +17,7 @@ import {
       ArrowDownOutlined,
       CloseOutlined,
       TeamOutlined,
+      UserOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import type { CallHistoryRecord, CallParticipantRecord, CallType } from '../types';
@@ -128,11 +129,10 @@ function GroupAvatarStack({ participants, currentUserId }: GroupAvatarStackProps
                                     key={p.userId}
                                     size={size}
                                     src={user?.avatarUrl ?? undefined}
-                                    className="bg-blue-500 border-2 border-white dark:border-gray-900 absolute"
+                                    className="border-2 border-white dark:border-gray-900 absolute"
                                     style={{ top, left, zIndex: MAX_GROUP_AVATARS - idx }}
-                              >
-                                    {user?.displayName?.[0]?.toUpperCase() ?? '?'}
-                              </Avatar>
+                                    icon={<UserOutlined />}
+                              />
                         );
                   })}
                   {remaining > 0 && (
@@ -208,9 +208,7 @@ export function CallHistoryItem({ record, onCallback }: CallHistoryItemProps) {
                               currentUserId={currentUserId}
                         />
                   ) : (
-                        <Avatar size={48} src={peerAvatar} className="flex-shrink-0 bg-blue-500">
-                              {peerName[0]?.toUpperCase() ?? '?'}
-                        </Avatar>
+                        <Avatar size={48} src={peerAvatar} className="flex-shrink-0" icon={<UserOutlined />} />
                   )}
 
                   {/* Info */}

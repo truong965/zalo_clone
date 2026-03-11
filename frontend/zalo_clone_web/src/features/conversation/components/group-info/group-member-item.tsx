@@ -9,6 +9,7 @@ import {
       MoreOutlined,
       DeleteOutlined,
       SwapOutlined,
+      UserOutlined,
 } from '@ant-design/icons';
 import type { ConversationMemberInfo } from '@/features/conversation/api/conversation.api';
 import type { MenuProps } from 'antd';
@@ -56,9 +57,8 @@ export function GroupMemberItem({
                         size={36}
                         src={member.avatarUrl}
                         className="flex-none"
-                  >
-                        {member.displayName?.charAt(0)}
-                  </Avatar>
+                        icon={<UserOutlined />}
+                  />
                   <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                               <span className="text-sm font-medium truncate">

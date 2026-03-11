@@ -99,8 +99,9 @@ api.interceptors.response.use(
 
         // Gọi refresh endpoint
         // ✅ Refresh token được gửi tự động qua httpOnly cookie
+        // ⚠️ Dùng URL tuyệt đối tránh relative URL resolve về frontend origin (Vercel)
         const response = await axios.post(
-          API_ENDPOINTS.AUTH.REFRESH,
+          `${env.BACKEND_URL}${API_ENDPOINTS.AUTH.REFRESH}`,
           {},
           {
             withCredentials: true, // Gửi httpOnly cookie

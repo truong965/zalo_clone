@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { Avatar, Typography } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
 import { QualityIndicator } from './QualityIndicator';
 
@@ -74,9 +75,8 @@ export function VoiceCallView() {
                               size={120}
                               src={peerInfo?.avatarUrl ?? undefined}
                               className="bg-blue-500 relative z-10 text-4xl"
-                        >
-                              {peerInfo?.displayName?.[0]?.toUpperCase() ?? '?'}
-                        </Avatar>
+                              icon={<UserOutlined />}
+                        />
                   </div>
 
                   {/* Peer name */}

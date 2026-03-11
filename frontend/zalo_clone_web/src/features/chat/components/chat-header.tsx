@@ -8,6 +8,8 @@ import {
       EditOutlined,
       DeleteOutlined,
       PhoneOutlined,
+      UserOutlined,
+      TeamOutlined,
 } from '@ant-design/icons';
 import {
       useContactCheck,
@@ -158,9 +160,7 @@ export function ChatHeader({
             <>
                   <div className="h-16 px-4 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm z-10 flex-none">
                         <div className="flex items-center gap-3">
-                              <Avatar size="large" src={avatarUrl ?? undefined} className="bg-blue-500">
-                                    {conversationName?.[0]?.toUpperCase() ?? 'U'}
-                              </Avatar>
+                              <Avatar size="large" src={avatarUrl ?? undefined} icon={isDirect ? <UserOutlined /> : <TeamOutlined />} />
                               <div>
                                     <Title level={5} className="mb-0 !text-gray-800">{conversationName}</Title>
                                     {typingText ? (

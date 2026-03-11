@@ -10,6 +10,7 @@ import {
       CheckOutlined,
       CloseOutlined,
       TeamOutlined,
+      UserOutlined,
 } from '@ant-design/icons';
 
 interface JoinRequestItem {
@@ -123,9 +124,8 @@ export function GroupJoinRequests({
                                                 <Avatar
                                                       size={36}
                                                       src={request.user?.avatarUrl}
-                                                >
-                                                      {request.user?.displayName?.charAt(0)}
-                                                </Avatar>
+                                                      icon={<UserOutlined />}
+                                                />
                                                 <div className="flex-1 min-w-0">
                                                       <div className="text-sm font-medium truncate">
                                                             {request.user?.displayName ?? 'Người dùng'}

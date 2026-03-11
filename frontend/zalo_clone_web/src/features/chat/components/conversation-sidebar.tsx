@@ -1,9 +1,9 @@
 // conversation-sidebar.tsx
 import { useState } from 'react';
-import { Input, Button, Dropdown, Spin, type MenuProps } from 'antd';
+import { Input, Button, Spin } from 'antd';
 import {
       SearchOutlined, UserAddOutlined, UsergroupAddOutlined,
-      MoreOutlined, CheckCircleOutlined
+      // MoreOutlined, CheckCircleOutlined
 } from '@ant-design/icons';
 import { ConversationItem } from './conversation-item';
 import type { ConversationUI, ConversationFilterTab } from '../types';
@@ -64,13 +64,13 @@ export function ConversationSidebar({
                   return true;
             });
 
-      const globalMenuItems: MenuProps['items'] = [
-            {
-                  key: 'mark-all-read',
-                  label: 'Đánh dấu đã đọc tất cả',
-                  icon: <CheckCircleOutlined />,
-            },
-      ];
+      // const globalMenuItems: MenuProps['items'] = [
+      //       {
+      //             key: 'mark-all-read',
+      //             label: 'Đánh dấu đã đọc tất cả',
+      //             icon: <CheckCircleOutlined />,
+      //       },
+      // ];
 
       return (
             <div className="w-[340px] h-full flex flex-col border-r border-gray-200 bg-white overflow-hidden">
@@ -130,13 +130,7 @@ export function ConversationSidebar({
                                     Lưu trữ
                               </span>
                         </div>
-                        <div className="flex items-center gap-1 text-gray-500">
-                              {/* <Dropdown menu={{ items: globalMenuItems }} placement="bottomLeft" trigger={['click']}>
-                                    <div className="flex items-center gap-1 cursor-pointer hover:text-blue-600">
-                                          <span className="text-xs">Phân loại</span>
-                                          <DownOutlined className="text-[10px]" />
-                                    </div>
-                              </Dropdown> */}
+                        {/* <div className="flex items-center gap-1 text-gray-500">
                               <Dropdown menu={{ items: globalMenuItems }} placement="bottomLeft" trigger={['click']}>
                                     <Button
                                           type="text"
@@ -145,7 +139,7 @@ export function ConversationSidebar({
                                           className="text-gray-500"
                                     />
                               </Dropdown>
-                        </div>
+                        </div> */}
                   </div>
 
                   {/* Conversations List - SCROLLABLE */}

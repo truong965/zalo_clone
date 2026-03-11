@@ -18,7 +18,7 @@ export function ProfilePage() {
             lastName: 'Doe',
             email: 'john@example.com',
             phoneNumber: '+1234567890',
-            avatar: 'https://i.pravatar.cc/150?img=1',
+            avatar: undefined as string | undefined,
             bio: 'Software Developer | Tech Enthusiast',
             createdAt: '2024-01-15',
       });

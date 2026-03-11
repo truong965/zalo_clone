@@ -11,6 +11,7 @@
  */
 
 import { Avatar, Typography, Tag } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
 import type { MessageSearchResult } from '../types';
 import { formatSearchTimestamp, getConversationTypeLabel } from '../utils/search.util';
 
@@ -100,10 +101,8 @@ export function MessageResult({ data, hideConversationInfo = false, onClick }: M
                         <Avatar
                               size={40}
                               src={data.senderAvatarUrl || undefined}
-                              className={!data.senderAvatarUrl ? 'bg-blue-500' : ''}
-                        >
-                              {data.senderName?.[0]?.toUpperCase() ?? 'U'}
-                        </Avatar>
+                              icon={<UserOutlined />}
+                        />
                   </div>
 
                   {/* Content */}

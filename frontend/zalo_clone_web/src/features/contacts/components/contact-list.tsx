@@ -42,6 +42,7 @@ import { useContactsList, useRemoveContact } from '../hooks/use-contacts-list';
 import { FriendCard } from './friend-card';
 import { AliasEditModal } from './alias-edit-modal';
 import type { ContactResponseDto } from '../types/contact.types';
+import { conversationService } from '@/features/conversation';
 
 const { Text } = Typography;
 
@@ -101,6 +102,22 @@ export function ContactList() {
             useState<ContactResponseDto | null>(null);
 
       const handleCloseAlias = useCallback(() => setSelectedForAlias(null), []);
+
+      // ── Message navigation ─────────────────────────────────────────────────────
+      const [navigatingId, setNavigatingId] = useState<string | null>(null);
+
+      const handleMessage = useCallback(async (contactUserId: string) => {
+            if (navigatingId) return;
+            setNavigatingId(contactUserId);
+            try {
+                  const conv = await conversationService.getOrCreateDirectConversation(contactUserId);
+                  navigate(`/chat/${conv.id}`);
+            } catch {
+                  // Error handled by axios interceptor (network/auth errors)
+            } finally {
+                  setNavigatingId(null);
+            }
+      }, [navigate, navigatingId]);
 
       // ── Render ─────────────────────────────────────────────────────────────────
       return (
@@ -164,9 +181,8 @@ export function ContactList() {
                                                       ) : (
                                                             <ContactItem
                                                                   contact={contact}
-                                                                  onMessage={() =>
-                                                                        navigate(`/chat/new?userId=${contact.contactUserId}`)
-                                                                  }
+                                                                  loading={navigatingId === contact.contactUserId}
+                                                                  onMessage={() => void handleMessage(contact.contactUserId)}
                                                                   onSetAlias={() => setSelectedForAlias(contact)}
                                                             />
                                                       )}
@@ -195,10 +211,12 @@ export function ContactList() {
 
 function ContactItem({
       contact,
+      loading,
       onMessage,
       onSetAlias,
 }: {
       contact: ContactResponseDto;
+      loading?: boolean;
       onMessage: () => void;
       onSetAlias: () => void;
 }) {
@@ -208,8 +226,9 @@ function ContactItem({
       const menuItems = useMemo(() => [
             {
                   key: 'message',
-                  label: 'Nhắn tin',
+                  label: loading ? 'Đang mở...' : 'Nhắn tin',
                   icon: <MessageOutlined />,
+                  disabled: loading,
             },
             {
                   key: 'set-alias',
@@ -222,7 +241,7 @@ function ContactItem({
                   label: <span className="text-red-500">Xoá khỏi danh bạ</span>,
                   icon: <DeleteOutlined className="text-red-500" />,
             },
-      ], [contact.aliasName]);
+      ], [contact.aliasName, loading]);
 
       const handleMenuClick = useCallback(({ key }: { key: string }) => {
             if (key === 'message') onMessage();

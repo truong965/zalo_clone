@@ -14,6 +14,7 @@ import {
       UserAddOutlined,
       CheckOutlined,
       RollbackOutlined,
+      UserOutlined,
 } from '@ant-design/icons';
 import type { ContactSearchResult } from '../types';
 import { getRelationshipLabel } from '../utils/search.util';
@@ -69,10 +70,8 @@ export function ContactResult({
                         <Avatar
                               size={44}
                               src={data.avatarUrl || undefined}
-                              className={!data.avatarUrl ? 'bg-blue-500' : ''}
-                        >
-                              {effectiveName?.[0]?.toUpperCase() ?? 'U'}
-                        </Avatar>
+                              icon={<UserOutlined />}
+                        />
                         {data.isOnline && (
                               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                         )}

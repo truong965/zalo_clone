@@ -1,44 +1,95 @@
 // src/features/users/components/user-profile-modal.tsx
-import { Modal, Button } from 'antd';
+import { Modal, Button, notification } from 'antd';
 import { ArrowLeftOutlined, CloseOutlined } from '@ant-design/icons';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { UserInfoView } from './user-info-view';
 import { UserEditForm } from './user-edit-form';
 import { useAuthStore } from '@/features/auth';
+import apiClient from '@/lib/axios';
+import { API_ENDPOINTS } from '@/constants/api-endpoints';
 
 interface UserProfileModalProps {
       open: boolean;
       onClose: () => void;
 }
 
+async function uploadAvatarFile(file: File): Promise<string> {
+      const { data: initRes } = await apiClient.post(API_ENDPOINTS.MEDIA.UPLOAD_AVATAR, {
+            fileName: file.name,
+            mimeType: file.type,
+            fileSize: file.size,
+      });
+
+      const { presignedUrl, fileUrl } = initRes.data;
+
+      const uploadRes = await fetch(presignedUrl, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type },
+      });
+
+      if (!uploadRes.ok) {
+            throw new Error(`Upload failed: ${uploadRes.status}`);
+      }
+
+      return fileUrl;
+}
+
 export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
-      const { user } = useAuthStore();
+      const { user, getProfile } = useAuthStore();
       const [isEditing, setIsEditing] = useState(false);
       const [loading, setLoading] = useState(false);
+      const avatarInputRef = useRef<HTMLInputElement>(null);
 
       // Reset về view mode mỗi khi mở modal lại
       useEffect(() => {
             if (open) setIsEditing(false);
       }, [open]);
 
-      if (!user) return null;
+      const patchProfile = useCallback(async (data: Record<string, unknown>) => {
+            if (!user) return;
+            await apiClient.patch(API_ENDPOINTS.USERS.GET_BY_ID(user.id), data);
+            await getProfile();
+      }, [user, getProfile]);
 
-      // Xử lý update profile (Giả lập)
-      const handleUpdateProfile = async (values: any) => {
+      // Xử lý update profile
+      const handleUpdateProfile = async (values: Record<string, unknown>) => {
             try {
                   setLoading(true);
-                  console.log('Update payload:', values);
-                  // await authService.updateProfile(values); // TODO: Implement API update user
-                  // await getProfile(); // Refresh data store
-
-                  // Update xong thì quay về view
+                  await patchProfile(values);
+                  notification.success({ message: 'Cập nhật thành công' });
                   setIsEditing(false);
-            } catch (error) {
-                  console.error(error);
+            } catch {
+                  notification.error({ message: 'Cập nhật thất bại' });
             } finally {
                   setLoading(false);
             }
       };
+
+      // Avatar upload
+      const handleAvatarClick = useCallback(() => {
+            avatarInputRef.current?.click();
+      }, []);
+
+      const handleAvatarFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            // Reset input value so same file can be re-selected
+            e.target.value = '';
+
+            try {
+                  setLoading(true);
+                  const avatarUrl = await uploadAvatarFile(file);
+                  await patchProfile({ avatarUrl });
+                  notification.success({ message: 'Cập nhật ảnh đại diện thành công' });
+            } catch {
+                  notification.error({ message: 'Không thể tải ảnh lên' });
+            } finally {
+                  setLoading(false);
+            }
+      }, [patchProfile]);
+
+      if (!user) return null;
 
       // Custom Header cho Modal để hiển thị nút Back
       const renderHeader = () => (
@@ -56,8 +107,6 @@ export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
                               {isEditing ? 'Cập nhật thông tin' : 'Thông tin tài khoản'}
                         </span>
                   </div>
-                  {/* Nút close mặc định của Modal sẽ hiển thị ở góc, ta có thể ẩn nó đi và dùng custom nếu muốn, 
-          hoặc để Modal tự handle */}
             </div>
       );
 
@@ -65,16 +114,25 @@ export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
             <Modal
                   open={open}
                   onCancel={onClose}
-                  footer={null} // Tự quản lý footer trong từng component con
+                  footer={null}
                   closable={true}
-                  closeIcon={<CloseOutlined className="text-gray-500 text-lg mt-2" />} // Chỉnh vị trí nút X
-                  title={renderHeader()} // Dùng custom header title
-                  width={400} // Độ rộng giống mobile/popup chat
+                  closeIcon={<CloseOutlined className="text-gray-500 text-lg mt-2" />}
+                  title={renderHeader()}
+                  width={400}
                   centered
                   maskClosable={false}
                   className="user-profile-modal"
-                  styles={{ body: { padding: 0 } }} // Reset padding mặc định của body modal
+                  styles={{ body: { padding: 0 } }}
             >
+                  {/* Hidden file input for avatar upload */}
+                  <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => void handleAvatarFileChange(e)}
+                  />
+
                   <div className="min-h-[450px]">
                         {isEditing ? (
                               <UserEditForm
@@ -87,7 +145,7 @@ export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
                               <UserInfoView
                                     user={user}
                                     onEdit={() => setIsEditing(true)}
-
+                                    onAvatarChange={handleAvatarClick}
                               />
                         )}
                   </div>

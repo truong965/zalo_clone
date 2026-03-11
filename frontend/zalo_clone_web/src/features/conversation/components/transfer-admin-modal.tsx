@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { Modal, Avatar } from 'antd';
-import { CrownOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { CrownOutlined, ExclamationCircleOutlined, UserOutlined } from '@ant-design/icons';
 import type { ConversationMemberInfo } from '@/features/conversation/api/conversation.api';
 
 interface TransferAdminModalProps {
@@ -96,9 +96,7 @@ export function TransferAdminModal({
                                                 }`}
                                           onClick={() => setSelectedId(member.id)}
                                     >
-                                          <Avatar size={36} src={member.avatarUrl}>
-                                                {member.displayName?.charAt(0)}
-                                          </Avatar>
+                                          <Avatar size={36} src={member.avatarUrl} icon={<UserOutlined />} />
                                           <span className="flex-1 text-sm truncate">
                                                 {member.displayName}
                                           </span>

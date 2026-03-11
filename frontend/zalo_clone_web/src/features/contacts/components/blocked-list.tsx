@@ -8,7 +8,7 @@
 
 import { useCallback, useState } from 'react';
 import { Avatar, Button, Spin, Empty, Typography, Popconfirm, Input } from 'antd';
-import { StopOutlined, SearchOutlined } from '@ant-design/icons';
+import { StopOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons';
 import { useInView } from 'react-intersection-observer';
 import { useBlockedList, useUnblockUser } from '../hooks/use-block';
 import { useDebounce } from '@/hooks';
@@ -38,11 +38,10 @@ function BlockedUserCard({
             <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50">
                   <Avatar
                         size={48}
-                        src={item.avatarUrl ?? `https://i.pravatar.cc/150?u=${item.userId}`}
+                        src={item.avatarUrl || undefined}
                         className="flex-shrink-0"
-                  >
-                        {item.displayName?.charAt(0)}
-                  </Avatar>
+                        icon={<UserOutlined />}
+                  />
 
                   <div className="flex-1 min-w-0">
                         <Text strong className="block truncate text-sm">

@@ -34,24 +34,19 @@ function formatTimestamp(isoDate: string): string {
 }
 
 /**
- * Resolve avatar URL with appropriate fallback.
- * - DM conversations: pravatar.cc placeholder seeded by conversation id
- * - Group conversations: no external fallback (let UI show group icon)
+ * Resolve avatar URL.
+ * Returns undefined when no image URL → lets <Avatar> show letter fallback.
  */
 function resolveAvatar(
       url: string | null | undefined,
-      id: string,
-      type?: 'DM' | 'GROUP',
 ): string | undefined {
-      if (url) return url;
-      if (type === 'GROUP') return undefined; // Let component render default group icon
-      return `https://i.pravatar.cc/150?u=${id}`;
+      return url || undefined;
 }
 
 function mapConversationToUI(conv: Conversation): ConversationUI {
       return {
             ...conv,
-            avatar: resolveAvatar(conv.avatarUrl, conv.id, conv.type as 'DM' | 'GROUP'),
+            avatar: resolveAvatar(conv.avatarUrl),
             lastMessage: 'Loading...',
             timestamp: conv.lastMessageAt
                   ? formatTimestamp(conv.lastMessageAt)
@@ -70,7 +65,7 @@ function mapConversationListItemToUI(item: ConversationListItem): ConversationUI
             id: item.id,
             type: item.type,
             name: item.name ?? undefined,
-            avatar: resolveAvatar(item.avatar, item.id, item.type as 'DM' | 'GROUP'),
+            avatar: resolveAvatar(item.avatar),
             isOnline: item.isOnline,
             lastSeenAt: item.lastSeenAt,
             isBlocked: item.isBlocked,

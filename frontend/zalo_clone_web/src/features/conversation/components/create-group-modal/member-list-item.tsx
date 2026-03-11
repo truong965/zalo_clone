@@ -69,7 +69,7 @@ export const MemberListItem = memo(function MemberListItem({
                   <Avatar
                         size={36}
                         src={avatarUrl}
-                        icon={!avatarUrl ? <UserOutlined /> : undefined}
+                        icon={<UserOutlined />}
                         className="flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">

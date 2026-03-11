@@ -395,7 +395,14 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                   if (!callType) { dbg('ABORT startCallAsCaller: callType is null'); return; }
 
                   const stream = await acquireLocalMedia(callType);
-                  if (!stream) { dbg('ABORT startCallAsCaller: acquireLocalMedia failed'); return; }
+                  if (!stream) {
+                        dbg('ABORT startCallAsCaller: acquireLocalMedia failed — ending call');
+                        const cid = useCallStore.getState().callId;
+                        if (cid) emittersRef.current.emitHangup({ callId: cid });
+                        cleanup();
+                        useCallStore.getState().resetCallState();
+                        return;
+                  }
                   dbg('Local media acquired', { tracks: stream.getTracks().map(t => t.kind) });
 
                   const pc = createPeerConnection(iceServers, iceTransportPolicy);
@@ -448,7 +455,14 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                   if (!stream) {
                         dbg('handleOffer: localStream not ready, acquiring media...');
                         stream = await acquireLocalMedia(callType);
-                        if (!stream) { dbg('ABORT handleOffer: acquireLocalMedia failed'); return; }
+                        if (!stream) {
+                              dbg('ABORT handleOffer: acquireLocalMedia failed — ending call');
+                              const cid = useCallStore.getState().callId;
+                              if (cid) emittersRef.current.emitHangup({ callId: cid });
+                              cleanup();
+                              useCallStore.getState().resetCallState();
+                              return;
+                        }
                   } else {
                         dbg('handleOffer: localStream already available');
                   }
@@ -567,7 +581,13 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
             useCallStore.getState().setCallActive();
 
             // Acquire media early (while waiting for offer)
-            await acquireLocalMedia(callType);
+            const stream = await acquireLocalMedia(callType);
+            if (!stream) {
+                  dbg('ABORT acceptCall: acquireLocalMedia failed — ending call');
+                  if (callId) emittersRef.current.emitHangup({ callId });
+                  cleanup();
+                  useCallStore.getState().resetCallState();
+            }
       }, [acquireLocalMedia]);
 
       // ── Hangup ──────────────────────────────────────────────────────────

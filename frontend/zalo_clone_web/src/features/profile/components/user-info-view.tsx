@@ -19,6 +19,7 @@ const { Title } = Typography;
 interface UserInfoViewProps {
       user: Partial<User> & { displayName: string };
       onEdit?: () => void;
+      onAvatarChange?: () => void;
       showEdit?: boolean;
       showSensitive?: boolean;
       actions?: ReactNode;
@@ -28,6 +29,7 @@ interface UserInfoViewProps {
 export function UserInfoView({
       user,
       onEdit,
+      onAvatarChange,
       showEdit = true,
       showSensitive = true,
       actions,
@@ -121,10 +123,7 @@ export function UserInfoView({
                                     <div
                                           className="absolute bottom-0 right-0 flex items-center justify-center bg-[#F0F2F5] hover:bg-gray-200 rounded-full border-[3px] border-white shadow-sm cursor-pointer transition-colors"
                                           style={{ width: 36, height: 36 }}
-                                          onClick={() => {
-                                                // TODO: Xử lý sự kiện upload avatar tại đây
-                                                console.log('Upload avatar clicked');
-                                          }}
+                                          onClick={() => onAvatarChange?.()}
                                     >
                                           <CameraOutlined className="text-gray-600 text-lg" />
                                     </div>

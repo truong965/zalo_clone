@@ -6,7 +6,7 @@
  */
 import { useState, useRef, useCallback } from 'react';
 import { Modal, Avatar, Button, Spin, Empty, Alert, Typography, Input, Segmented } from 'antd';
-import { UserAddOutlined, SearchOutlined } from '@ant-design/icons';
+import { UserAddOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons';
 import { useFriendSearch, type SearchTab } from '../hooks/use-friend-search';
 
 const { Text } = Typography;
@@ -191,16 +191,14 @@ export function AddMembersModal({
                                                 <div
                                                       key={item.id}
                                                       className={`flex items-center gap-3 px-3 py-2 rounded transition-colors ${item.disabled
-                                                                  ? 'opacity-50 cursor-not-allowed'
-                                                                  : isSelected
-                                                                        ? 'bg-blue-50 border border-blue-200 cursor-pointer'
-                                                                        : 'hover:bg-gray-50 cursor-pointer'
+                                                            ? 'opacity-50 cursor-not-allowed'
+                                                            : isSelected
+                                                                  ? 'bg-blue-50 border border-blue-200 cursor-pointer'
+                                                                  : 'hover:bg-gray-50 cursor-pointer'
                                                             }`}
                                                       onClick={() => isClickable && toggleSelect(item.id)}
                                                 >
-                                                      <Avatar size={36} src={item.avatarUrl}>
-                                                            {item.displayName?.charAt(0)}
-                                                      </Avatar>
+                                                      <Avatar size={36} src={item.avatarUrl} icon={<UserOutlined />} />
                                                       <div className="flex-1 min-w-0">
                                                             <div className="text-sm truncate">
                                                                   {item.displayName}

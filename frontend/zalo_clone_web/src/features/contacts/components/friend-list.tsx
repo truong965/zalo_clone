@@ -22,6 +22,7 @@ import { FriendCard } from './friend-card';
 import { AliasEditModal } from './alias-edit-modal';
 import type { FriendWithUserDto } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
+import { conversationService } from '@/features/conversation';
 
 const { Text } = Typography;
 
@@ -69,6 +70,22 @@ export function FriendList() {
       // Fetch next page via useEffect when the last virtual item is visible
       const virtualItems = virtualizer.getVirtualItems();
       const lastVirtualItem = virtualItems.at(-1);
+
+      // ── Message navigation ─────────────────────────────────────────────────────
+      const [navigatingId, setNavigatingId] = useState<string | null>(null);
+
+      const handleMessage = useCallback(async (userId: string) => {
+            if (navigatingId) return;
+            setNavigatingId(userId);
+            try {
+                  const conv = await conversationService.getOrCreateDirectConversation(userId);
+                  navigate(`/chat/${conv.id}`);
+            } catch {
+                  // Error handled by axios interceptor
+            } finally {
+                  setNavigatingId(null);
+            }
+      }, [navigate, navigatingId]);
 
       useEffect(() => {
             if (lastVirtualItem == null) return;
@@ -138,9 +155,8 @@ export function FriendList() {
                                                       ) : (
                                                             <FriendItem
                                                                   friend={friend}
-                                                                  onMessage={() =>
-                                                                        navigate(`/chat/new?userId=${friend.userId}`)
-                                                                  }
+                                                                  loading={navigatingId === friend.userId}
+                                                                  onMessage={() => void handleMessage(friend.userId)}
                                                             />
                                                       )}
                                                 </div>
@@ -159,9 +175,11 @@ export function FriendList() {
 
 function FriendItem({
       friend,
+      loading,
       onMessage,
 }: {
       friend: FriendWithUserDto;
+      loading?: boolean;
       onMessage: () => void;
 }) {
       const queryClient = useQueryClient();
@@ -177,8 +195,9 @@ function FriendItem({
       const menuItems = useMemo(() => [
             {
                   key: 'message',
-                  label: 'Nhắn tin',
+                  label: loading ? 'Đang mở...' : 'Nhắn tin',
                   icon: <MessageOutlined />,
+                  disabled: loading,
             },
             {
                   key: 'set-alias',
@@ -191,7 +210,7 @@ function FriendItem({
                   label: <span className="text-red-500">Hủy kết bạn</span>,
                   icon: <UserDeleteOutlined className="text-red-500" />,
             },
-      ], []);
+      ], [loading]);
 
       const handleMenuClick = useCallback(({ key }: { key: string }) => {
             if (key === 'message') onMessage();
