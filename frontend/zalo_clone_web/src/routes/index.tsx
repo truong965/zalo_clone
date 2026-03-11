@@ -2,45 +2,59 @@
  * Routes configuration
  */
 
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import { PrivateRoute } from '@/components/private-route';
 import { ClientLayout } from '@/components/layout/client-layout';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
+import { PageSkeleton } from '@/components/shared/page-skeleton';
 
-// Auth Pages
-import { LoginPage } from '@/pages/login';
-import { RegisterPage } from '@/pages/register';
+// Auth Pages (lazy)
+const LoginPage = lazy(() => import('@/pages/login').then(m => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('@/pages/register').then(m => ({ default: m.RegisterPage })));
 
-// Client Pages
-import { ChatPage } from '@/pages/chat';
-import { ContactsPage } from '@/pages/contacts';
-import { CallsPage } from '@/pages/calls';
-import { ProfilePage } from '@/pages/profile';
-import { SettingsPage } from '@/pages/settings';
-import { CallScreen } from '@/features/call/components/CallScreen';
+// Client Pages (lazy)
+const ChatPage = lazy(() => import('@/pages/chat').then(m => ({ default: m.ChatPage })));
+const ContactsPage = lazy(() => import('@/pages/contacts').then(m => ({ default: m.ContactsPage })));
+const CallsPage = lazy(() => import('@/pages/calls').then(m => ({ default: m.CallsPage })));
+const ProfilePage = lazy(() => import('@/pages/profile').then(m => ({ default: m.ProfilePage })));
+const SettingsPage = lazy(() => import('@/pages/settings').then(m => ({ default: m.SettingsPage })));
+const CallScreen = lazy(() => import('@/features/call/components/CallScreen').then(m => ({ default: m.CallScreen })));
 
-// Admin Pages
-import { AdminDashboardPage } from '@/pages/admin/dashboard';
-import { AdminUsersPage } from '@/pages/admin/users';
-import { AdminMessagesPage } from '@/pages/admin/messages';
-import { AdminCallsPage } from '@/pages/admin/calls';
-import { AdminActivityPage } from '@/pages/admin/activity';
-import { AdminSettingsPage } from '@/pages/admin/settings';
+// Admin Pages (lazy)
+const AdminDashboardPage = lazy(() => import('@/pages/admin/dashboard').then(m => ({ default: m.AdminDashboardPage })));
+const AdminUsersPage = lazy(() => import('@/pages/admin/users').then(m => ({ default: m.AdminUsersPage })));
+const AdminMessagesPage = lazy(() => import('@/pages/admin/messages').then(m => ({ default: m.AdminMessagesPage })));
+const AdminCallsPage = lazy(() => import('@/pages/admin/calls').then(m => ({ default: m.AdminCallsPage })));
+const AdminActivityPage = lazy(() => import('@/pages/admin/activity').then(m => ({ default: m.AdminActivityPage })));
+const AdminSettingsPage = lazy(() => import('@/pages/admin/settings').then(m => ({ default: m.AdminSettingsPage })));
 
-// Common Pages
-import { NotFoundPage } from '@/pages/not-found';
-import { PermissionDeniedPage } from '@/pages/permission-denied';
+// Common Pages (lazy)
+const NotFoundPage = lazy(() => import('@/pages/not-found').then(m => ({ default: m.NotFoundPage })));
+const PermissionDeniedPage = lazy(() => import('@/pages/permission-denied').then(m => ({ default: m.PermissionDeniedPage })));
 
 export const router = createBrowserRouter([
       // Auth Routes
       {
             path: '/login',
-            element: <ErrorBoundary><LoginPage /></ErrorBoundary>,
+            element: (
+                  <ErrorBoundary>
+                        <Suspense fallback={<PageSkeleton />}>
+                              <LoginPage />
+                        </Suspense>
+                  </ErrorBoundary>
+            ),
       },
       {
             path: '/register',
-            element: <ErrorBoundary><RegisterPage /></ErrorBoundary>,
+            element: (
+                  <ErrorBoundary>
+                        <Suspense fallback={<PageSkeleton />}>
+                              <RegisterPage />
+                        </Suspense>
+                  </ErrorBoundary>
+            ),
       },
 
       // Client Routes
@@ -54,31 +68,73 @@ export const router = createBrowserRouter([
             children: [
                   {
                         path: 'chat',
-                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <ChatPage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         path: 'chat/:conversationId',
-                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <ChatPage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         path: 'chat/new',
-                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <ChatPage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         path: 'contacts',
-                        element: <ErrorBoundary><ContactsPage /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <ContactsPage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         path: 'calls',
-                        element: <ErrorBoundary><CallsPage /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <CallsPage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         path: 'calls/:callId',
-                        element: <ErrorBoundary><CallScreen /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <CallScreen />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         path: 'profile',
-                        element: <ErrorBoundary><ProfilePage /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <ProfilePage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         path: 'notifications',
@@ -86,11 +142,23 @@ export const router = createBrowserRouter([
                   },
                   {
                         path: 'settings',
-                        element: <ErrorBoundary><SettingsPage /></ErrorBoundary>,
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <SettingsPage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
                   {
                         index: true,
-                        element: <ErrorBoundary><ChatPage /></ErrorBoundary>, // Default to chat
+                        element: (
+                              <ErrorBoundary>
+                                    <Suspense fallback={<PageSkeleton />}>
+                                          <ChatPage />
+                                    </Suspense>
+                              </ErrorBoundary>
+                        ),
                   },
             ],
       },
@@ -106,31 +174,59 @@ export const router = createBrowserRouter([
             children: [
                   {
                         path: 'dashboard',
-                        element: <AdminDashboardPage />,
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminDashboardPage />
+                              </Suspense>
+                        ),
                   },
                   {
                         path: 'users',
-                        element: <AdminUsersPage />,
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminUsersPage />
+                              </Suspense>
+                        ),
                   },
                   {
                         path: 'messages',
-                        element: <AdminMessagesPage />,
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminMessagesPage />
+                              </Suspense>
+                        ),
                   },
                   {
                         path: 'calls',
-                        element: <AdminCallsPage />,
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminCallsPage />
+                              </Suspense>
+                        ),
                   },
                   {
                         path: 'activity',
-                        element: <AdminActivityPage />,
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminActivityPage />
+                              </Suspense>
+                        ),
                   },
                   {
                         path: 'settings',
-                        element: <AdminSettingsPage />,
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminSettingsPage />
+                              </Suspense>
+                        ),
                   },
                   {
                         index: true,
-                        element: <AdminDashboardPage />,
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminDashboardPage />
+                              </Suspense>
+                        ),
                   },
             ],
       },
@@ -138,10 +234,18 @@ export const router = createBrowserRouter([
       // Error Routes
       {
             path: '/permission-denied',
-            element: <PermissionDeniedPage />,
+            element: (
+                  <Suspense fallback={<PageSkeleton />}>
+                        <PermissionDeniedPage />
+                  </Suspense>
+            ),
       },
       {
             path: '*',
-            element: <NotFoundPage />,
+            element: (
+                  <Suspense fallback={<PageSkeleton />}>
+                        <NotFoundPage />
+                  </Suspense>
+            ),
       },
 ]);

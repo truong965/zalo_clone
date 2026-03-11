@@ -12,11 +12,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { isFirebaseConfigured } from '@/config/firebase';
-import {
-      requestAndRegisterFcmToken,
-      onForegroundMessage,
-      unregisterFcmToken,
-} from '../services/firebase-messaging';
 
 /**
  * Options for the notification permission hook.
@@ -42,12 +37,15 @@ export function useNotificationPermission(
             if (tokenRequestedRef.current) return; // Already requested this session
             tokenRequestedRef.current = true;
 
+            const { requestAndRegisterFcmToken, onForegroundMessage } =
+                  await import('../services/firebase-messaging');
+
             // Request permission + register token
             const token = await requestAndRegisterFcmToken();
             if (!token) return;
 
             // Listen for foreground messages
-            unsubscribeRef.current = onForegroundMessage((payload) => {
+            unsubscribeRef.current = await onForegroundMessage((payload) => {
                   const data = payload.data || {};
 
                   // Incoming call while app is focused — socket handles this, ignore push
@@ -84,5 +82,10 @@ export function useNotificationPermission(
             };
       }, [setupPushNotifications]);
 
-      return { unregisterFcmToken };
+      return {
+            unregisterFcmToken: async () => {
+                  const mod = await import('../services/firebase-messaging');
+                  return mod.unregisterFcmToken();
+            },
+      };
 }

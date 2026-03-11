@@ -3,9 +3,11 @@
  *
  * Handles requesting permission, obtaining FCM tokens, registering
  * the Service Worker, and syncing the token with the backend.
+ *
+ * Firebase SDK is dynamically imported to keep it out of the main bundle.
  */
 
-import { getToken, deleteToken, onMessage, type MessagePayload } from 'firebase/messaging';
+import type { MessagePayload } from 'firebase/messaging';
 import { getFirebaseMessaging, isFirebaseConfigured } from '@/config/firebase';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import { env } from '@/config/env';
@@ -90,8 +92,11 @@ export async function requestAndRegisterFcmToken(): Promise<string | null> {
       if (!sw) return null;
 
       // 3. Get FCM token
-      const messaging = getFirebaseMessaging();
+      const messaging = await getFirebaseMessaging();
       if (!messaging) return null;
+
+      // Dynamic import Firebase SDK functions
+      const { getToken, deleteToken } = await import('firebase/messaging');
 
       try {
             const vapidKey = env.VAPID_PUBLIC_KEY;
@@ -199,8 +204,9 @@ export async function unregisterFcmToken(): Promise<void> {
             }
 
             // Delete FCM token from Firebase
-            const messaging = getFirebaseMessaging();
+            const messaging = await getFirebaseMessaging();
             if (messaging) {
+                  const { deleteToken } = await import('firebase/messaging');
                   await deleteToken(messaging).catch(() => { });
             }
 
@@ -221,11 +227,12 @@ export async function unregisterFcmToken(): Promise<void> {
  *
  * @returns Unsubscribe function.
  */
-export function onForegroundMessage(
+export async function onForegroundMessage(
       callback: (payload: MessagePayload) => void,
-): (() => void) | null {
-      const messaging = getFirebaseMessaging();
+): Promise<(() => void) | null> {
+      const messaging = await getFirebaseMessaging();
       if (!messaging) return null;
 
+      const { onMessage } = await import('firebase/messaging');
       return onMessage(messaging, callback);
 }

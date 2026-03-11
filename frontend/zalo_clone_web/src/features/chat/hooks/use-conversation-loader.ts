@@ -43,9 +43,9 @@ export function useConversationLoader(params: UseConversationLoaderParams) {
             } catch (error) {
                   const apiErr = ApiError.from(error);
                   if (
-                        apiErr.statusCode === 400 ||
-                        apiErr.statusCode === 403 ||
-                        apiErr.statusCode === 404
+                        apiErr.status === 400 ||
+                        apiErr.status === 403 ||
+                        apiErr.status === 404
                   ) {
                         // Stale / inaccessible conversation — clear selection silently
                         // so the UI doesn't stay stuck waiting for data that won't arrive.

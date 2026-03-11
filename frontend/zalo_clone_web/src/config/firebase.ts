@@ -3,10 +3,12 @@
  *
  * Lazily initializes the Firebase app and exports the Messaging instance.
  * Only loads when push notification features are actually used.
+ *
+ * Firebase SDK is dynamically imported to keep it out of the main bundle.
  */
 
-import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getMessaging, type Messaging } from 'firebase/messaging';
+import type { FirebaseApp } from 'firebase/app';
+import type { Messaging } from 'firebase/messaging';
 import { env } from './env';
 
 // ────────────────────────────────────────────────────────────
@@ -32,13 +34,14 @@ export function isFirebaseConfigured(): boolean {
  * Get or create the Firebase App singleton.
  * Returns null if Firebase env vars are not configured.
  */
-export function getFirebaseApp(): FirebaseApp | null {
+export async function getFirebaseApp(): Promise<FirebaseApp | null> {
       if (!isFirebaseConfigured()) {
             console.warn('[firebase] Firebase config not found — push notifications disabled');
             return null;
       }
 
       if (!firebaseApp) {
+            const { initializeApp } = await import('firebase/app');
             firebaseApp = initializeApp({
                   apiKey: env.FIREBASE_API_KEY!,
                   authDomain: env.FIREBASE_AUTH_DOMAIN,
@@ -57,7 +60,7 @@ export function getFirebaseApp(): FirebaseApp | null {
  * Get or create the Firebase Messaging singleton.
  * Returns null if Firebase is not configured or browser doesn't support it.
  */
-export function getFirebaseMessaging(): Messaging | null {
+export async function getFirebaseMessaging(): Promise<Messaging | null> {
       if (messagingInstance) return messagingInstance;
 
       // Service Worker & Notification API required
@@ -66,10 +69,11 @@ export function getFirebaseMessaging(): Messaging | null {
             return null;
       }
 
-      const app = getFirebaseApp();
+      const app = await getFirebaseApp();
       if (!app) return null;
 
       try {
+            const { getMessaging } = await import('firebase/messaging');
             messagingInstance = getMessaging(app);
             return messagingInstance;
       } catch (error) {

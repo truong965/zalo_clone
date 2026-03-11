@@ -18,4 +18,32 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1400,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': [
+            'react',
+            'react-dom',
+            'react-router-dom',
+          ],
+          'vendor-antd': [
+            'antd',
+            '@ant-design/icons',
+          ],
+          'vendor-tanstack': [
+            '@tanstack/react-query',
+          ],
+          'vendor-firebase': [
+            'firebase/app',
+            'firebase/messaging',
+          ],
+          'vendor-socketio': [
+            'socket.io-client',
+          ],
+        },
+      },
+    },
+  },
 })

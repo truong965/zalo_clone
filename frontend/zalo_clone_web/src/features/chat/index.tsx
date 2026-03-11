@@ -21,7 +21,8 @@ import { MediaBrowserPanel } from './components/media-browser-panel';
 
 // ── Cross-feature components (rendered by page-level host) ───────────────
 import { FriendshipSearchModal } from '@/features/contacts';
-import { CreateGroupModal, useCreateGroupStore } from '@/features/conversation';
+import { CreateGroupModal } from '@/features/conversation/components/create-group-modal/create-group-modal';
+import { useCreateGroupStore } from '@/features/conversation';
 import { SearchPanel } from '@/features/search/components/SearchPanel';
 import { useReminders, CreateReminderModal } from '@/features/reminder';
 
