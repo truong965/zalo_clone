@@ -123,6 +123,14 @@ jobs:
               -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}" \
               api npx prisma migrate deploy
 
+            echo ">>> Running database seed (roles + admin user)..."
+            docker compose -f docker-compose.prod.yml run --rm \
+              -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}" \
+              -e SEED_ADMIN_PHONE="${SEED_ADMIN_PHONE}" \
+              -e SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD}" \
+              -e SEED_ADMIN_NAME="${SEED_ADMIN_NAME:-Administrator}" \
+              api npx prisma db seed
+
             echo ">>> Restarting api service..."
             docker compose -f docker-compose.prod.yml up -d --force-recreate api
 
