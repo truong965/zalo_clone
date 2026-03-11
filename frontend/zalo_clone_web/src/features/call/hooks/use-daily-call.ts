@@ -112,17 +112,17 @@ export function useDailyCall() {
                   }),
             );
 
-            dbg('syncParticipants', {
-                  count: mapped.length,
-                  participants: mapped.map(p => ({
-                        name: p.displayName,
-                        isLocal: p.isLocal,
-                        hasVideo: !!p.videoTrack,
-                        videoEnabled: p.videoEnabled,
-                        hasAudio: !!p.audioTrack,
-                        videoState: (rawParticipants[Object.keys(rawParticipants).find(k => rawParticipants[k].session_id === p.sessionId) ?? '']?.tracks?.video as { state?: string })?.state,
-                  })),
-            });
+            // dbg('syncParticipants', {
+            //       count: mapped.length,
+            //       participants: mapped.map(p => ({
+            //             name: p.displayName,
+            //             isLocal: p.isLocal,
+            //             hasVideo: !!p.videoTrack,
+            //             videoEnabled: p.videoEnabled,
+            //             hasAudio: !!p.audioTrack,
+            //             videoState: (rawParticipants[Object.keys(rawParticipants).find(k => rawParticipants[k].session_id === p.sessionId) ?? '']?.tracks?.video as { state?: string })?.state,
+            //       })),
+            // });
 
             useCallStore.getState().setDailyParticipants(mapped);
       }, []);

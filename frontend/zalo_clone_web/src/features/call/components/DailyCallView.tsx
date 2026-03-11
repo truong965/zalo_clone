@@ -36,7 +36,7 @@ function ParticipantTile({ participant }: { participant: DailyParticipant }) {
             } else {
                   el.srcObject = null;
             }
-      }, [participant.videoTrack]);
+      }, [participant.videoTrack, participant.videoEnabled]);
 
       // Attach audio only for remote participants
       const audioRef = useRef<HTMLAudioElement>(null);
