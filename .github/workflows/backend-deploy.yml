@@ -109,8 +109,8 @@ jobs:
             params = json.load(sys.stdin)
             for p in params:
                 key = p['Name'].split('/')[-1]
-                val = p['Value'].replace('\n', '\\\\n')
-                print(f'{key}={val}')
+                val = p['Value'].replace('\n', '\\\\n').replace(\"'\", \"'\\\\''\" )
+                print(f\"{key}='{val}'\")
             " > .env
             echo "  ✅ .env regenerated ($(wc -l < .env) parameters from SSM)"
 
