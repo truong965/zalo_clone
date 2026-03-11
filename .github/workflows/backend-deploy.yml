@@ -8,6 +8,10 @@ on:
       - 'backend/zalo_backend/**'
       - '.github/workflows/backend-deploy.yml'
 
+# Opt into Node.js 24 for all actions (Node 20 deprecated, forced from June 2026)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   # ───────────────────────────────────────────────
   # JOB 1: Build & Push Docker image to Docker Hub
@@ -122,10 +126,15 @@ jobs:
             echo ">>> Restarting api service..."
             docker compose -f docker-compose.prod.yml up -d --force-recreate api
 
-            echo ">>> Waiting for health check..."
-            sleep 15
-            curl -f https://api.zaloclone.me/api/v1/health || \
-              (echo "Health check failed!" && docker compose -f docker-compose.prod.yml logs --tail=50 api && exit 1)
+            echo ">>> Waiting for api container to be healthy..."
+            # API không expose port ra host → dùng docker healthcheck status thay vì curl external
+            for i in $(seq 1 12); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' zalo_api_prod 2>/dev/null || echo "not_found")
+              echo "  [$i/12] api health status: $STATUS"
+              [ "$STATUS" = "healthy" ] && break
+              [ "$i" = "12" ] && echo "Health check timed out!" && docker compose -f docker-compose.prod.yml logs --tail=50 api && exit 1
+              sleep 10
+            done
 
             echo ">>> Cleaning up old images..."
             docker image prune -f
