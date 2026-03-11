@@ -61,7 +61,28 @@ jobs:
     needs: build-and-push
 
     steps:
-      - name: Deploy via SSH
+      # Checkout cần thiết để runner có file config cho bước SCP bên dưới
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── [Cách A] Copy config files thẳng từ runner lên EC2 via SCP ──────
+      # Runner đã có code sau bước checkout → không cần git trên EC2
+      - name: Copy config files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "backend/zalo_backend/docker-compose.prod.yml,backend/zalo_backend/nginx.conf"
+          target: "~/zalo_backend/"
+          strip_components: 2   # bỏ tiền tố "backend/zalo_backend/" → file vào thẳng ~/zalo_backend/
+
+      # ── [Cách X + Deploy] EC2 tự sinh .env từ SSM rồi restart ───────────
+      # EC2 dùng IAM Instance Profile (không cần AWS key riêng) để đọc SSM.
+      # Mọi env var được quản lý tại AWS SSM Parameter Store path /zalo/prod/*.
+      # Khi cần thêm/sửa var: chạy `aws ssm put-parameter` trên local, không cần SSH vào EC2.
+      # Xem hướng dẫn đầy đủ tại: backend/zalo_backend/CI-CD-GUIDE.md
+      - name: Generate .env from SSM & Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -71,7 +92,25 @@ jobs:
             set -e
             cd ~/zalo_backend
 
-            echo ">>> Pulling latest image..."
+            echo ">>> Generating .env from SSM Parameter Store..."
+            aws ssm get-parameters-by-path \
+              --path "/zalo/prod/" \
+              --with-decryption \
+              --recursive \
+              --region ap-southeast-1 \
+              --output json \
+              --query "Parameters[*].{Name:Name,Value:Value}" | \
+            python3 -c "
+            import json, sys
+            params = json.load(sys.stdin)
+            for p in params:
+                key = p['Name'].split('/')[-1]
+                val = p['Value'].replace('\n', '\\\\n')
+                print(f'{key}={val}')
+            " > .env
+            echo "  ✅ .env regenerated ($(wc -l < .env) parameters from SSM)"
+
+            echo ">>> Pulling latest Docker image..."
             docker compose -f docker-compose.prod.yml pull api
 
             echo ">>> Running database migrations..."
