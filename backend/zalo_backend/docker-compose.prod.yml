@@ -55,9 +55,6 @@ services:
       FRONTEND_URL: ${FRONTEND_URL}
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Media worker concurrency
-      IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-4}
-      VIDEO_WORKER_CONCURRENCY: ${VIDEO_WORKER_CONCURRENCY:-2}
     # Port 3000 not exposed — nginx handles external traffic
     depends_on:
       postgres:
