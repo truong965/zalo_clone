@@ -159,7 +159,7 @@ function GroupAvatarStack({ participants, currentUserId }: GroupAvatarStackProps
 
 interface CallHistoryItemProps {
       record: CallHistoryRecord;
-      onCallback?: (userId: string, callType: CallType, conversationId: string | null) => void;
+      onCallback?: (userId: string, callType: CallType, conversationId: string | null, peerInfo: { displayName: string; avatarUrl: string | null }) => void;
 }
 
 export function CallHistoryItem({ record, onCallback }: CallHistoryItemProps) {
@@ -196,8 +196,11 @@ export function CallHistoryItem({ record, onCallback }: CallHistoryItemProps) {
       );
 
       const handleCallback = useCallback(() => {
-            onCallback?.(peerId, record.callType, record.conversationId);
-      }, [onCallback, peerId, record.callType, record.conversationId]);
+            onCallback?.(peerId, record.callType, record.conversationId, {
+                  displayName: isGroup ? `Cuộc gọi nhóm · ${record.participantCount} người` : peerName,
+                  avatarUrl: isGroup ? null : (peerAvatar ?? null),
+            });
+      }, [onCallback, peerId, record.callType, record.conversationId, isGroup, record.participantCount, peerName, peerAvatar]);
 
       return (
             <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">

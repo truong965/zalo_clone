@@ -87,7 +87,12 @@ export function CallHistoryList() {
       );
 
       // ── Callback handler ────────────────────────────────────────────────
-      const handleCallback = useCallback((_userId: string, _callType: CallType, _conversationId: string | null) => {
+      const handleCallback = useCallback((
+            _userId: string,
+            _callType: CallType,
+            _conversationId: string | null,
+            _peerInfo: { displayName: string; avatarUrl: string | null },
+      ) => {
             const currentStatus = useCallStore.getState().callStatus;
             if (currentStatus !== 'IDLE') return;
 
@@ -96,7 +101,7 @@ export function CallHistoryList() {
                         detail: {
                               calleeId: _userId,
                               callType: _callType,
-                              peerInfo: { displayName: _userId, avatarUrl: null },
+                              peerInfo: _peerInfo,
                               conversationId: _conversationId,
                         },
                   }),
