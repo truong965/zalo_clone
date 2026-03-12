@@ -8,6 +8,8 @@ import { EventsModule } from '@shared/events';
 import { SharedModule } from '@shared/shared.module';
 import { AuthorizationModule } from '@modules/authorization/authorization.module';
 import { SocketModule } from 'src/socket/socket.module';
+import { ConversationModule } from '@modules/conversation/conversation.module';
+import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 
 // Services
 import { MessageService } from './services/message.service';
@@ -19,7 +21,6 @@ import { MessageRealtimeService } from './services/message-realtime.service';
 // Listeners
 import { MessageBroadcasterListener } from './listeners/message-broadcaster.listener';
 import { MessagingBlockListener } from './listeners/messaging-block.listener';
-import { MessagingFriendshipListener } from './listeners/messaging-friendship.listener';
 import { MessagingUserPresenceListener } from './listeners/messaging-user-presence.listener';
 import { CallMessageListener } from './listeners/call-message.listener';
 
@@ -53,6 +54,8 @@ import { MessageGateway } from './message.gateway';
     SharedModule,
     AuthorizationModule, // Provides InteractionAuthorizationService for sendMessage() DIRECT permission check
     forwardRef(() => SocketModule),
+    ConversationModule,
+    IdempotencyModule,
   ],
   controllers: [MessageController],
   providers: [
@@ -66,7 +69,6 @@ import { MessageGateway } from './message.gateway';
     // Listeners
     MessageBroadcasterListener,
     MessagingBlockListener,
-    MessagingFriendshipListener,
     MessagingUserPresenceListener,
     CallMessageListener, // CALL PHASE 1: Create system message on call.ended
 

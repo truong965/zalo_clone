@@ -64,7 +64,7 @@ export class MessageNotificationListener {
        * Handle message.sent event — core notification dispatch.
        * Never throws — all errors are caught and logged.
        */
-      @OnEvent('message.sent')
+      @OnEvent('message.sent', { async: true })
       async handleMessageSent(event: MessageSentEvent): Promise<void> {
             if (!this.pushService.isAvailable) {
                   this.logger.warn(

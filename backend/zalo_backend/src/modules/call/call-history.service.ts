@@ -24,13 +24,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from 'src/modules/redis/redis.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CallStatus, CallType, CallProvider, CallParticipantRole, CallParticipantStatus, Prisma } from '@prisma/client';
 
 import { v4 as uuidv4 } from 'uuid';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
 import { SelfActionException } from 'src/shared/errors';
 import { DisplayNameResolver } from '@shared/services';
+import { EventPublisher } from '@shared/events';
+import { CallEndedEvent, CallEndReason, type CallEndReasonType } from './events/call.events';
 import {
   ActiveCallSession,
   CallHistoryResponseDto,
@@ -85,7 +86,7 @@ export class CallHistoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventPublisher: EventPublisher,
     private readonly displayNameResolver: DisplayNameResolver,
   ) { }
 
@@ -344,12 +345,7 @@ export class CallHistoryService {
     const participantCount = 1 + allReceiverIds.length; // initiator + all receivers
 
     // Determine participant statuses
-    const receiverParticipantStatus: CallParticipantStatus =
-      status === CallStatus.MISSED ? CallParticipantStatus.MISSED
-        : status === CallStatus.NO_ANSWER ? CallParticipantStatus.MISSED
-          : status === CallStatus.REJECTED ? CallParticipantStatus.REJECTED
-            : status === CallStatus.CANCELLED ? CallParticipantStatus.MISSED
-              : CallParticipantStatus.JOINED; // COMPLETED
+    const receiverParticipantStatus = this.resolveReceiverParticipantStatus(status);
 
     // Save to database atomically
     const callHistory = await this.prisma.$transaction(async (tx) => {
@@ -412,18 +408,20 @@ export class CallHistoryService {
       );
     }
 
-    // Publish unified event
-    this.eventEmitter.emit('call.ended', {
-      callId: callHistory.id,
-      callType: activeSession.callType,
-      initiatorId: activeSession.callerId,
-      receiverIds: activeSession.participantIds ?? [activeSession.calleeId],
-      conversationId: activeSession.conversationId,
-      status,
-      reason: dto.endReason ?? 'USER_HANGUP',
-      provider: activeSession.provider,
-      durationSeconds: finalDuration,
-    });
+    // Publish unified event (persisted to domain_events for audit trail)
+    await this.eventPublisher.publish(
+      new CallEndedEvent(
+        callHistory.id,
+        activeSession.callType,
+        activeSession.callerId,
+        activeSession.participantIds ?? [activeSession.calleeId],
+        activeSession.conversationId,
+        status,
+        (dto.endReason as CallEndReasonType) ?? CallEndReason.USER_HANGUP,
+        activeSession.provider,
+        finalDuration,
+      ),
+    );
 
     this.logger.log(
       `Call logged: ${callHistory.id} (${status}, ${finalDuration}s)`,
@@ -449,12 +447,7 @@ export class CallHistoryService {
     );
     const duration = Math.min(rawDuration, this.MAX_CALL_DURATION);
 
-    const receiverStatus: CallParticipantStatus =
-      status === CallStatus.MISSED || status === CallStatus.NO_ANSWER
-        ? CallParticipantStatus.MISSED
-        : status === CallStatus.REJECTED
-          ? CallParticipantStatus.REJECTED
-          : CallParticipantStatus.JOINED;
+    const receiverStatus = this.resolveReceiverParticipantStatus(status);
 
     const callHistory = await this.prisma.$transaction(async (tx) => {
       const created = await tx.callHistory.create({
@@ -794,15 +787,20 @@ export class CallHistoryService {
       await this.removeActiveCallById(callId);
     }
 
-    // Publish unified call.ended event with reason
-    this.eventEmitter.emit('call.ended', {
-      callId: activeCalls[0],
-      initiatorId: userId1,
-      receiverIds: [userId2],
-      status: CallStatus.CANCELLED,
-      reason: 'BLOCKED',
-      durationSeconds: 0,
-    });
+    // Publish unified call.ended event with reason (persisted for audit trail)
+    await this.eventPublisher.publish(
+      new CallEndedEvent(
+        activeCalls[0],
+        undefined,
+        userId1,
+        [userId2],
+        undefined,
+        CallStatus.CANCELLED,
+        CallEndReason.BLOCKED,
+        undefined,
+        0,
+      ),
+    );
 
     this.logger.log(`Active call terminated: ${userId1} <-> ${userId2}`);
   }
@@ -955,18 +953,41 @@ export class CallHistoryService {
 
     for (const callId of callIds) {
       await this.removeActiveCallById(callId);
-      // Publish unified call.ended event
-      this.eventEmitter.emit('call.ended', {
-        callId,
-        initiatorId: user1Id,
-        receiverIds: [user2Id],
-        status: CallStatus.CANCELLED,
-        reason: 'BLOCKED',
-        durationSeconds: 0,
-      });
+      // Publish unified call.ended event (persisted for audit trail)
+      await this.eventPublisher.publish(
+        new CallEndedEvent(
+          callId,
+          undefined,
+          user1Id,
+          [user2Id],
+          undefined,
+          CallStatus.CANCELLED,
+          CallEndReason.BLOCKED,
+          undefined,
+          0,
+        ),
+      );
     }
 
     return callIds.length;
+  }
+
+  /**
+   * Resolve receiver participant status from call status.
+   * Centralizes the mapping to avoid nested ternary chains.
+   */
+  private resolveReceiverParticipantStatus(status: CallStatus): CallParticipantStatus {
+    switch (status) {
+      case CallStatus.MISSED:
+      case CallStatus.NO_ANSWER:
+        return CallParticipantStatus.MISSED;
+      case CallStatus.REJECTED:
+        return CallParticipantStatus.REJECTED;
+      case CallStatus.CANCELLED:
+        return CallParticipantStatus.LEFT;
+      default:
+        return CallParticipantStatus.JOINED;
+    }
   }
 
   /**
@@ -1143,11 +1164,7 @@ export class CallHistoryService {
     try {
       const allReceiverIds = session.participantIds ?? [session.calleeId];
       const participantCount = 1 + allReceiverIds.length;
-      const receiverStatus: CallParticipantStatus =
-        status === CallStatus.MISSED || status === CallStatus.NO_ANSWER
-          ? CallParticipantStatus.MISSED
-          : status === CallStatus.CANCELLED ? CallParticipantStatus.LEFT
-            : CallParticipantStatus.JOINED;
+      const receiverStatus = this.resolveReceiverParticipantStatus(status);
 
       await this.prisma.$transaction(async (tx) => {
         const created = await tx.callHistory.create({

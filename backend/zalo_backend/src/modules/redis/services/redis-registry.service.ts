@@ -13,7 +13,7 @@ export class RedisRegistryService {
     private readonly redisService: RedisService,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
-  ) {}
+  ) { }
 
   /**
    * Register socket connection
@@ -155,7 +155,7 @@ export class RedisRegistryService {
     const client = this.redisService.getClient();
     const data = await client.hgetall(RedisKeyBuilder.socketUser(socketId));
 
-    if (!data || !data.userId) {
+    if (!data?.userId) {
       return null;
     }
 
@@ -271,8 +271,6 @@ export class RedisRegistryService {
             // Chúng ta coi đây là Zombie cần dọn dẹp
             if (!err && ttl === -1) {
               const key = keys[index];
-              // const socketId = key.split(':')[1]; // Extract ID
-
               // Xóa key metadata
               deletePipeline.del(key);
               // Lưu ý: Ta không xóa trong Set ở đây vì Lazy Cleanup sẽ lo việc đó

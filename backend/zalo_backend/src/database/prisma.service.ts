@@ -156,8 +156,7 @@ export type ExtendedPrismaClient = ReturnType<typeof createExtendedClient>;
 @Injectable()
 export class PrismaService
   extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+  implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
   private modelsWithCreateBy = new Set<string>();
@@ -223,27 +222,4 @@ export class PrismaService
   async onModuleDestroy() {
     await this.$disconnect();
   }
-  /**
-   * Clean database for testing
-   */
-  // async cleanDatabase() {
-  //   if (process.env.NODE_ENV === 'production') {
-  //     throw new Error('Cannot clean database in production');
-  //   }
-
-  //   const models = Reflect.ownKeys(this).filter((key) => key[0] !== '_');
-
-  //   return Promise.all(
-  //     models.map((modelKey) => {
-  //       const model = this[modelKey as keyof this];
-  //       if (
-  //         typeof model === 'object' &&
-  //         model !== null &&
-  //         'deleteMany' in model
-  //       ) {
-  //         return (model as any).deleteMany();
-  //       }
-  //     }),
-  //   );
-  // }
 }

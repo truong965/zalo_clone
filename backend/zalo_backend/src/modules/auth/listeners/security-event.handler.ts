@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { OnEvent } from '@nestjs/event-emitter';
-import { EventType } from '@prisma/client';
+import { EventType, TokenRevocationReason } from '@prisma/client';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
+import { TokenService } from '../services/token.service';
 
 /**
  * PHASE 3 Action 3.2: SecurityEventHandler (SEPARATED LISTENER)
@@ -15,24 +17,49 @@ import { IdempotencyService } from '@common/idempotency/idempotency.service';
  * Handles cross-module coordination via events (Socket, etc.)
  *
  * Idempotency: All handlers track processing to prevent duplicate execution
+ *
+ * SocketGateway is resolved lazily via ModuleRef to avoid circular dependency
+ * (AuthModule ← SocketModule → AuthModule).
  */
 
 export interface AuthSecurityRevokedEvent {
   eventId?: string;
   userId: string;
   reason:
-    | 'PASSWORD_CHANGE'
-    | 'MANUAL_LOGOUT_ALL'
-    | 'SECURITY_RISK'
-    | 'TOKEN_ROTATION';
+  | 'PASSWORD_CHANGE'
+  | 'MANUAL_LOGOUT_ALL'
+  | 'SECURITY_RISK'
+  | 'TOKEN_ROTATION';
   excludeDeviceId?: string;
 }
 
 @Injectable()
-export class SecurityEventHandler {
+export class SecurityEventHandler implements OnApplicationBootstrap {
   private readonly logger = new Logger(SecurityEventHandler.name);
+  private socketGateway: { forceDisconnectUser(userId: string, reason: string): Promise<void> };
 
-  constructor(private readonly idempotency: IdempotencyService) {}
+  constructor(
+    private readonly idempotency: IdempotencyService,
+    private readonly tokenService: TokenService,
+    private readonly moduleRef: ModuleRef,
+  ) { }
+
+  onApplicationBootstrap() {
+    try {
+      // Lazy resolve SocketGateway to avoid circular module dependency
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { SocketGateway } = require('../../../socket/socket.gateway') as {
+        SocketGateway: new (...args: unknown[]) => typeof this.socketGateway;
+      };
+      this.socketGateway = this.moduleRef.get(SocketGateway, { strict: false });
+      this.logger.log('SecurityEventHandler: SocketGateway resolved ✅');
+    } catch (err) {
+      this.logger.warn(
+        'SecurityEventHandler: SocketGateway not available — socket disconnect will be skipped',
+        (err as Error).message,
+      );
+    }
+  }
 
   @OnEvent('auth.security.revoked')
   async handleSecurityRevoked(
@@ -64,9 +91,22 @@ export class SecurityEventHandler {
     );
 
     try {
-      this.logger.debug(`[SECURITY] Disconnecting all sockets for ${userId}`);
-      this.logger.debug(`[SECURITY] Invalidating refresh tokens for ${userId}`);
-      this.logger.debug(`[SECURITY] Emitting force logout event`);
+      // 1. Revoke all refresh tokens in DB
+      await this.tokenService.revokeAllUserSessions(
+        userId,
+        TokenRevocationReason.SUSPICIOUS_ACTIVITY,
+      );
+      this.logger.debug(`[SECURITY] Invalidated all refresh tokens for ${userId}`);
+
+      // 2. Force disconnect all active WebSocket connections
+      if (this.socketGateway) {
+        await this.socketGateway.forceDisconnectUser(
+          userId,
+          `Security revocation: ${reason}`,
+        );
+        this.logger.debug(`[SECURITY] Disconnected all sockets for ${userId}`);
+      }
+
       this.logger.warn(
         `[SECURITY] ✅ Security revoked for ${userId} (${reason})`,
       );

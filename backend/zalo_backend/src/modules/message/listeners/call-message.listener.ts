@@ -1,34 +1,21 @@
 /**
  * CallMessageListener
  *
- * Lives in MessageModule. Listens to `call.log_message_needed` events
- * emitted by CallModule's CallEventHandler and creates a SYSTEM message
- * in the conversation so users can see the call log in chat history.
+ * Lives in MessageModule. Listens directly to `call.ended` domain event
+ * and creates a SYSTEM message in the conversation so users can see the
+ * call log in chat history.
  *
- * Event-driven: CallModule emits → MessageModule listens. No direct imports.
+ * Choreography Pattern: Listens to `call.ended` directly — no middleman.
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
+import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { SocketEvents } from '@common/constants/socket-events.constant';
-import { CallStatus } from '@prisma/client';
+import { CallStatus, EventType } from '@prisma/client';
 import { safeJSON } from '@common/utils/json.util';
-
-export interface CallLogMessageNeededPayload {
-      callId: string;
-      callType: 'VOICE' | 'VIDEO';
-      conversationId: string;
-      /** Initiator / host of the call */
-      initiatorId: string;
-      /** All receiver user IDs */
-      receiverIds: string[];
-      /** Total participant count (initiator + receivers) */
-      participantCount: number;
-      status: CallStatus;
-      reason: string;
-      durationSeconds: number;
-}
+import { IdempotencyService } from '@common/idempotency/idempotency.service';
+import { SystemMessageBroadcasterService } from '@modules/conversation/services/system-message-broadcaster.service';
+import type { CallEndedPayload } from '@modules/call/events';
 
 @Injectable()
 export class CallMessageListener {
@@ -36,31 +23,51 @@ export class CallMessageListener {
 
       constructor(
             private readonly prisma: PrismaService,
-            private readonly eventEmitter: EventEmitter2,
+            private readonly broadcaster: SystemMessageBroadcasterService,
+            private readonly idempotency: IdempotencyService,
       ) { }
 
       /**
        * Create a SYSTEM message to log the call in the conversation.
+       * Precondition: conversationId must exist.
        */
-      @OnEvent(SocketEvents.CALL_LOG_MESSAGE_NEEDED)
-      async handleCallLogMessageNeeded(payload: CallLogMessageNeededPayload): Promise<void> {
+      @OnEvent('call.ended', { async: true })
+      async handleCallEnded(payload: CallEndedPayload): Promise<void> {
+            const { conversationId } = payload;
+
+            // Precondition: only create call log if call had a conversation
+            if (!conversationId) return;
+
             const {
                   callId,
                   callType,
-                  conversationId,
                   initiatorId,
-                  participantCount,
+                  receiverIds,
                   status,
                   durationSeconds,
             } = payload;
-
-            this.logger.debug(
-                  `[CALL_LOG] Creating system message for call ${callId} in conversation ${conversationId}`,
-            );
+            const eventId = payload.eventId || callId;
+            const handlerId = 'CallMessageListener';
 
             try {
-                  // Build human-readable call summary
-                  const content = this.buildCallLogContent(callType, status, durationSeconds, participantCount);
+                  // Idempotency check
+                  const alreadyProcessed = await this.idempotency.isProcessed(eventId, handlerId);
+                  if (alreadyProcessed) {
+                        this.logger.debug(`[CALL_LOG] Skipping duplicate: ${eventId}`);
+                        return;
+                  }
+            } catch (error) {
+                  this.logger.warn(`[CALL_LOG] Idempotency check failed, proceeding`, error);
+            }
+
+            try {
+                  const participantCount = (receiverIds?.length ?? 0) + 1;
+                  const content = this.buildCallLogContent(
+                        callType ?? 'VOICE',
+                        status,
+                        durationSeconds,
+                        participantCount,
+                  );
 
                   const message = await this.prisma.message.create({
                         data: {
@@ -78,22 +85,27 @@ export class CallMessageListener {
                         },
                   });
 
-                  this.logger.log(
-                        `[CALL_LOG] System message ${message.id} created for call ${callId}`,
-                  );
+                  this.logger.log(`[CALL_LOG] System message ${message.id} created for call ${callId}`);
 
-                  // Emit system-message.broadcast so ConversationGateway can broadcast to members
-                  this.eventEmitter.emit('system-message.broadcast', {
+                  await this.broadcaster.broadcast({
                         conversationId,
                         message: safeJSON(message),
                         excludeUserIds: [],
                   });
+
+                  // Record successful processing
+                  try {
+                        await this.idempotency.recordProcessed(eventId, handlerId, EventType.CALL_ENDED);
+                  } catch (recordErr) {
+                        this.logger.warn(`[CALL_LOG] Failed to record idempotency`, recordErr);
+                  }
             } catch (error) {
-                  this.logger.error(
-                        `[CALL_LOG] Failed to create system message for call ${callId}:`,
-                        error,
-                  );
-                  // Non-critical — don't throw
+                  this.logger.error(`[CALL_LOG] Failed to create system message for call ${callId}:`, error);
+                  try {
+                        await this.idempotency.recordError(
+                              payload.eventId || callId, handlerId, error as Error, EventType.CALL_ENDED,
+                        );
+                  } catch { /* swallow */ }
             }
       }
 

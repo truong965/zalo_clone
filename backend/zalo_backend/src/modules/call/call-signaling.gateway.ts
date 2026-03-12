@@ -201,7 +201,7 @@ export class CallSignalingGateway implements OnGatewayInit {
                         this.disconnectTimers.delete(callId);
                         void this.endCallInternal(
                               session,
-                              isInitiator ? CallEndReason.NETWORK_DROP : CallEndReason.NETWORK_DROP,
+                              CallEndReason.NETWORK_DROP,
                         );
                   }, DISCONNECT_GRACE_MS);
                   this.disconnectTimers.set(callId, timer);
@@ -260,21 +260,7 @@ export class CallSignalingGateway implements OnGatewayInit {
 
                   const callerDisplayName = await this.getParticipantDisplayName(session.callerId);
                   const calleeIceConfig = await this.iceConfigService.getIceConfig(userId);
-
-                  // Look up caller avatar from their socket
-                  let callerAvatarUrl: string | null = null;
-                  const callerSocketIds = await this.socketState.getUserSockets(session.callerId);
-                  for (const sid of callerSocketIds) {
-                        const sockets = await this.server.in(sid).fetchSockets();
-                        for (const s of sockets) {
-                              const authSocket = s as unknown as AuthenticatedSocket;
-                              if (authSocket.user?.avatarUrl) {
-                                    callerAvatarUrl = authSocket.user.avatarUrl;
-                                    break;
-                              }
-                        }
-                        if (callerAvatarUrl) break;
-                  }
+                  const callerAvatarUrl = await this.lookupUserAvatar(session.callerId);
 
                   socket.emit(SocketEvents.CALL_INCOMING, {
                         callId,
@@ -349,219 +335,237 @@ export class CallSignalingGateway implements OnGatewayInit {
                   return this.emitError(client, 'Group calls require Daily.co configuration');
             }
 
-            // Privacy & block check for all receivers
-            // B.3: Group calls with a valid GROUP conversation bypass privacy/block checks
-            // (members are already vetted by conversation membership)
-            let skipPrivacyCheck = false;
+            // Privacy & block check
+            const privacyResult = await this.validateCallPrivacy(callerId, allReceiverIds, isGroupCall, conversationId);
+            if (!privacyResult.allowed) {
+                  return this.emitError(client, privacyResult.reason!);
+            }
+            const conversationName = privacyResult.conversationName;
+
+            // Start call session
+            const session = await this.startCallSession(client, callerId, allReceiverIds, callType, isGroupCall, conversationId);
+            if (!session) return;
+
+            const callId = session.callId;
+            const callRoom = this.getCallRoom(callId);
+            client.join(callRoom);
+
+            const callerInfo = client.user
+                  ? { id: callerId, displayName: client.user.displayName, avatarUrl: client.user.avatarUrl }
+                  : { id: callerId, displayName: 'Unknown', avatarUrl: null };
+
+            // Dispatch to group or 1-1 flow
+            if (isGroupCall) {
+                  const result = await this.initiateGroupCall(client, callId, callRoom, callType, conversationId, conversationName, callerInfo, allReceiverIds);
+                  if (!result) return;
+            } else {
+                  this.initiate1v1Call(callId, callRoom, callType, conversationId, callerInfo, calleeId);
+            }
+
+            // Start ringing timeouts
+            this.startRingingTimeouts(callId, allReceiverIds, isGroupCall);
+
+            this.logger.log(
+                  `Call ${callId}: ${callerId} → ${allReceiverIds.join(',')}` +
+                  ` (${callType}${isGroupCall ? ', GROUP' : ''})`,
+            );
+
+            return { callId };
+      }
+
+      /**
+       * Validate privacy/block settings for all receivers.
+       */
+      private async validateCallPrivacy(
+            callerId: string,
+            allReceiverIds: string[],
+            isGroupCall: boolean,
+            conversationId?: string,
+      ): Promise<{ allowed: boolean; reason?: string; conversationName: string | null }> {
             let conversationName: string | null = null;
+
             if (isGroupCall && conversationId) {
                   const conv = await this.prisma.conversation.findUnique({
                         where: { id: conversationId },
                         select: { type: true, name: true },
                   });
-                  skipPrivacyCheck = conv?.type === ConversationType.GROUP;
+                  if (conv?.type === ConversationType.GROUP) {
+                        return { allowed: true, conversationName: conv.name ?? null };
+                  }
                   conversationName = conv?.name ?? null;
             }
 
-            if (!skipPrivacyCheck) {
-                  for (const receiverId of allReceiverIds) {
-                        const canCall = await this.privacyService.canUserCallMe(callerId, receiverId);
-                        if (!canCall) {
-                              return this.emitError(
-                                    client,
-                                    `Call not allowed: user ${receiverId} has blocked or restricted calls`,
-                              );
-                        }
+            for (const receiverId of allReceiverIds) {
+                  const canCall = await this.privacyService.canUserCallMe(callerId, receiverId);
+                  if (!canCall) {
+                        return {
+                              allowed: false,
+                              reason: `Call not allowed: user ${receiverId} has blocked or restricted calls`,
+                              conversationName,
+                        };
                   }
             }
 
-            // Additional receivers beyond primary callee (for service layer)
+            return { allowed: true, conversationName };
+      }
+
+      /**
+       * Create a call session, handling busy/error states.
+       */
+      private async startCallSession(
+            client: AuthenticatedSocket,
+            callerId: string,
+            allReceiverIds: string[],
+            callType: any,
+            isGroupCall: boolean,
+            conversationId?: string,
+      ): Promise<ActiveCallSession | null> {
             const additionalReceiverIds = allReceiverIds.length > 1
                   ? allReceiverIds.slice(1)
                   : undefined;
 
-            // Start call (handles busy check internally via ConflictException)
-            let session: ActiveCallSession;
             try {
-                  session = await this.callHistoryService.startCall(
+                  return await this.callHistoryService.startCall(
                         callerId,
-                        allReceiverIds[0], // primary calleeId
+                        allReceiverIds[0],
                         callType,
                         isGroupCall ? CallProvider.DAILY_CO : CallProvider.WEBRTC_P2P,
                         conversationId,
                         additionalReceiverIds,
                   );
             } catch (error: any) {
-                  // ConflictException = busy
                   if (error.status === 409) {
-                        client.emit(SocketEvents.CALL_BUSY, { calleeId });
-                        return;
+                        client.emit(SocketEvents.CALL_BUSY, { calleeId: allReceiverIds[0] });
+                        return null;
                   }
-                  return this.emitError(client, error.message ?? 'Failed to start call');
+                  this.emitError(client, error.message ?? 'Failed to start call');
+                  return null;
             }
+      }
 
-            const callId = session.callId;
-            const callRoom = this.getCallRoom(callId);
+      /**
+       * Handle group call initiation: create Daily.co room and notify receivers.
+       */
+      private async initiateGroupCall(
+            client: AuthenticatedSocket,
+            callId: string,
+            callRoom: string,
+            callType: any,
+            conversationId: string | undefined,
+            conversationName: string | null,
+            callerInfo: { id: string; displayName: string; avatarUrl: string | null },
+            allReceiverIds: string[],
+      ): Promise<boolean> {
+            try {
+                  const room = await this.dailyCoService.createRoom(callId, {
+                        maxParticipants: allReceiverIds.length + 1,
+                        expireSeconds: 3600,
+                  });
 
-            // Caller joins the call room
-            client.join(callRoom);
+                  await this.callHistoryService.updateCallProvider(callId, CallProvider.DAILY_CO, room.name);
+                  const roomUrl = this.dailyCoService.getRoomUrl(room.name);
 
-            // Build caller info
-            const callerInfo = client.user
-                  ? { id: callerId, displayName: client.user.displayName, avatarUrl: client.user.avatarUrl }
-                  : { id: callerId, displayName: 'Unknown', avatarUrl: null };
+                  const allParticipantIds = [callerInfo.id, ...allReceiverIds];
+                  const tokenEntries = await Promise.all(
+                        allParticipantIds.map(async (userId) => {
+                              const displayName = userId === callerInfo.id
+                                    ? callerInfo.displayName
+                                    : await this.getParticipantDisplayName(userId);
+                              const token = await this.dailyCoService.createMeetingToken(
+                                    room.name, userId, displayName, userId === callerInfo.id,
+                              );
+                              return [userId, token] as const;
+                        }),
+                  );
+                  const tokens = Object.fromEntries(tokenEntries);
 
-            // ── GROUP CALL: Create Daily.co room + tokens immediately ──────
-            if (isGroupCall) {
-                  try {
-                        const room = await this.dailyCoService.createRoom(callId, {
-                              maxParticipants: allReceiverIds.length + 1, // receivers + caller
-                              expireSeconds: 3600,
-                        });
+                  for (const receiverId of allReceiverIds) {
+                        const receiverSocketIds = await this.socketState.getUserSockets(receiverId);
 
-                        // Update session with room info
-                        await this.callHistoryService.updateCallProvider(
-                              callId,
-                              CallProvider.DAILY_CO,
-                              room.name,
-                        );
-
-                        const roomUrl = this.dailyCoService.getRoomUrl(room.name);
-
-                        // Generate tokens for all participants (caller + all receivers)
-                        const allParticipantIds = [callerId, ...allReceiverIds];
-                        const tokenEntries = await Promise.all(
-                              allParticipantIds.map(async (userId) => {
-                                    const displayName = userId === callerId
-                                          ? callerInfo.displayName
-                                          : await this.getParticipantDisplayName(userId);
-                                    const token = await this.dailyCoService.createMeetingToken(
-                                          room.name,
-                                          userId,
-                                          displayName,
-                                          userId === callerId, // caller is owner
-                                    );
-                                    return [userId, token] as const;
-                              }),
-                        );
-                        const tokens = Object.fromEntries(tokenEntries);
-
-                        // Emit call:incoming to each receiver with Daily.co room info
-                        for (const receiverId of allReceiverIds) {
-                              const receiverSocketIds = await this.socketState.getUserSockets(receiverId);
-
-                              if (receiverSocketIds.length === 0) {
-                                    // Receiver offline — send push notification
-                                    this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
-                                          callId,
-                                          callType,
-                                          callerId,
-                                          callerName: callerInfo.displayName,
-                                          callerAvatar: callerInfo.avatarUrl,
-                                          calleeId: receiverId,
-                                          conversationId,
-                                          conversationName,
-                                          reason: 'CALLEE_OFFLINE',
-                                          isGroupCall: true,
-                                    });
-                              } else {
-                                    // Auto-join receiver sockets to the call room
-                                    for (const socketId of receiverSocketIds) {
-                                          this.server.in(socketId).socketsJoin(callRoom);
-                                    }
-
-                                    // Emit call:incoming with group + Daily.co info
-                                    this.server.to(receiverSocketIds).emit(SocketEvents.CALL_INCOMING, {
-                                          callId,
-                                          callType,
-                                          conversationId,
-                                          callerInfo,
-                                          isGroupCall: true,
-                                          participantCount: allParticipantIds.length,
-                                          conversationName,
-                                          // Daily.co room info included for group calls
-                                          dailyRoomUrl: roomUrl,
-                                          dailyToken: tokens[receiverId],
-                                    });
+                        if (receiverSocketIds.length === 0) {
+                              this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
+                                    callId, callType, callerId: callerInfo.id,
+                                    callerName: callerInfo.displayName, callerAvatar: callerInfo.avatarUrl,
+                                    calleeId: receiverId, conversationId, conversationName,
+                                    reason: 'CALLEE_OFFLINE', isGroupCall: true,
+                              });
+                        } else {
+                              for (const socketId of receiverSocketIds) {
+                                    this.server.in(socketId).socketsJoin(callRoom);
                               }
+                              this.server.to(receiverSocketIds).emit(SocketEvents.CALL_INCOMING, {
+                                    callId, callType, conversationId, callerInfo,
+                                    isGroupCall: true, participantCount: allParticipantIds.length,
+                                    conversationName, dailyRoomUrl: roomUrl, dailyToken: tokens[receiverId],
+                              });
                         }
-
-                        // Also send Daily.co room info back to caller
-                        client.emit(SocketEvents.CALL_DAILY_ROOM, {
-                              callId,
-                              roomUrl,
-                              tokens,
-                        });
-
-                  } catch (error: any) {
-                        this.logger.error(`Failed to create Daily.co room for group call ${callId}: ${error.message}`);
-                        // Clean up the session we just created
-                        await this.callHistoryService.cleanupUserActiveCalls(callerId);
-                        return this.emitError(client, 'Failed to set up group call');
                   }
-            } else {
-                  // ── 1-1 CALL: Standard P2P flow ──────────────────────────────
+
+                  client.emit(SocketEvents.CALL_DAILY_ROOM, { callId, roomUrl, tokens });
+                  return true;
+            } catch (error: any) {
+                  this.logger.error(`Failed to create Daily.co room for group call ${callId}: ${error.message}`);
+                  await this.callHistoryService.cleanupUserActiveCalls(callerInfo.id);
+                  this.emitError(client, 'Failed to set up group call');
+                  return false;
+            }
+      }
+
+      /**
+       * Handle 1-1 P2P call initiation: notify callee or send push.
+       */
+      private initiate1v1Call(
+            callId: string,
+            callRoom: string,
+            callType: any,
+            conversationId: string | undefined,
+            callerInfo: { id: string; displayName: string; avatarUrl: string | null },
+            calleeId: string,
+      ): void {
+            void (async () => {
                   const calleeSocketIds = await this.socketState.getUserSockets(calleeId);
 
                   if (calleeSocketIds.length === 0) {
-                        // Callee is offline — send push notification, keep ringing 30s
                         this.logger.log(`Call ${callId}: callee ${calleeId} offline, sending push notification`);
                         this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
-                              callId,
-                              callType,
-                              callerId,
-                              callerName: callerInfo.displayName,
-                              callerAvatar: callerInfo.avatarUrl,
-                              calleeId,
-                              conversationId,
-                              reason: 'CALLEE_OFFLINE',
+                              callId, callType, callerId: callerInfo.id,
+                              callerName: callerInfo.displayName, callerAvatar: callerInfo.avatarUrl,
+                              calleeId, conversationId, reason: 'CALLEE_OFFLINE',
                         });
-                  } else {
-                        // Callee is online — deliver call:incoming via socket
-                        // Auto-join callee sockets to the call room
-                        for (const socketId of calleeSocketIds) {
-                              this.server.in(socketId).socketsJoin(callRoom);
-                        }
-
-                        // Build ICE config for callee (STUN + TURN credentials)
-                        const calleeIceConfig = await this.iceConfigService.getIceConfig(calleeId);
-
-                        // Emit incoming call to callee (includes ICE servers for WebRTC setup)
-                        this.server.to(calleeSocketIds).emit(SocketEvents.CALL_INCOMING, {
-                              callId,
-                              callType,
-                              conversationId,
-                              callerInfo,
-                              iceServers: calleeIceConfig.iceServers,
-                              iceTransportPolicy: calleeIceConfig.iceTransportPolicy,
-                              isGroupCall: false,
-                        });
-
-                        // Start 2s ack timer — if callee doesn't ack, send backup push
-                        const ackTimer = setTimeout(() => {
-                              this.ringingAckTimeouts.delete(callId);
-                              this.logger.log(`Call ${callId}: no ringing ack after ${RINGING_ACK_TIMEOUT_MS}ms, sending backup push`);
-                              this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
-                                    callId,
-                                    callType,
-                                    callerId,
-                                    callerName: callerInfo.displayName,
-                                    callerAvatar: callerInfo.avatarUrl,
-                                    calleeId,
-                                    conversationId,
-                                    reason: 'NO_RINGING_ACK',
-                              });
-                        }, RINGING_ACK_TIMEOUT_MS);
-                        this.ringingAckTimeouts.set(callId, ackTimer);
+                        return;
                   }
-            }
 
-            // Start ringing timeout
+                  for (const socketId of calleeSocketIds) {
+                        this.server.in(socketId).socketsJoin(callRoom);
+                  }
+
+                  const calleeIceConfig = await this.iceConfigService.getIceConfig(calleeId);
+
+                  this.server.to(calleeSocketIds).emit(SocketEvents.CALL_INCOMING, {
+                        callId, callType, conversationId, callerInfo,
+                        iceServers: calleeIceConfig.iceServers,
+                        iceTransportPolicy: calleeIceConfig.iceTransportPolicy,
+                        isGroupCall: false,
+                  });
+
+                  const ackTimer = setTimeout(() => {
+                        this.ringingAckTimeouts.delete(callId);
+                        this.logger.log(`Call ${callId}: no ringing ack after ${RINGING_ACK_TIMEOUT_MS}ms, sending backup push`);
+                        this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
+                              callId, callType, callerId: callerInfo.id,
+                              callerName: callerInfo.displayName, callerAvatar: callerInfo.avatarUrl,
+                              calleeId, conversationId, reason: 'NO_RINGING_ACK',
+                        });
+                  }, RINGING_ACK_TIMEOUT_MS);
+                  this.ringingAckTimeouts.set(callId, ackTimer);
+            })();
+      }
+
+      /**
+       * Start ringing timeouts for group or 1-1 calls.
+       */
+      private startRingingTimeouts(callId: string, allReceiverIds: string[], isGroupCall: boolean): void {
             if (isGroupCall) {
-                  // Option B: Per-participant timeouts for group calls.
-                  // Each receiver gets their own 30s timer. When a receiver
-                  // accepts/rejects, only their timer is cleared. If ALL receivers
-                  // time-out or reject without anyone accepting, the call ends.
                   const perParticipantTimers = new Map<string, NodeJS.Timeout>();
                   for (const receiverId of allReceiverIds) {
                         const timer = setTimeout(() => {
@@ -579,12 +583,6 @@ export class CallSignalingGateway implements OnGatewayInit {
                   this.ringingTimeouts.set(callId, ringingTimer);
             }
 
-            this.logger.log(
-                  `Call ${callId}: ${callerId} → ${allReceiverIds.join(',')}` +
-                  ` (${callType}${isGroupCall ? ', GROUP' : ''})`,
-            );
-
-            return { callId };
       }
 
       /**
@@ -1087,50 +1085,15 @@ export class CallSignalingGateway implements OnGatewayInit {
                   });
             }
 
-            // Determine appropriate CallStatus based on reason and session state
-            let status: CallStatus;
-            switch (reason) {
-                  case CallEndReason.REJECTED:
-                        status = CallStatus.REJECTED;
-                        break;
-                  case CallEndReason.NO_ANSWER:
-                  case CallEndReason.TIMEOUT:
-                        status = session.status === 'RINGING' ? CallStatus.NO_ANSWER : CallStatus.CANCELLED;
-                        break;
-                  case CallEndReason.BLOCKED:
-                        status = CallStatus.CANCELLED;
-                        break;
-                  case CallEndReason.NETWORK_DROP:
-                        status = session.status === 'ACTIVE' ? CallStatus.COMPLETED : CallStatus.MISSED;
-                        break;
-                  case CallEndReason.USER_HANGUP:
-                  default:
-                        if (session.status === 'ACTIVE') {
-                              status = CallStatus.COMPLETED;
-                        } else if (session.status === 'RINGING') {
-                              // Caller hung up during ringing
-                              status = CallStatus.CANCELLED;
-                        } else {
-                              status = CallStatus.CANCELLED;
-                        }
-                        break;
-            }
+            const status = this.resolveCallStatus(reason, session.status);
 
             // Calculate duration
             const startedAt = new Date(session.startedAt);
             const endedAt = new Date();
-            const durationMs = endedAt.getTime() - startedAt.getTime();
-            const durationSeconds = Math.max(0, Math.round(durationMs / 1000));
+            const durationSeconds = Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 1000));
 
             // Emit call:ended to all participants in the room
-            this.server.to(callRoom).emit(SocketEvents.CALL_ENDED, {
-                  callId,
-                  reason,
-                  duration: durationSeconds,
-                  status,
-            });
-
-            // Leave all sockets from the room
+            this.server.to(callRoom).emit(SocketEvents.CALL_ENDED, { callId, reason, duration: durationSeconds, status });
             this.server.in(callRoom).socketsLeave(callRoom);
 
             // End call via service (writes to DB, emits domain event, cleans up Redis)
@@ -1148,7 +1111,6 @@ export class CallSignalingGateway implements OnGatewayInit {
                   });
             } catch (error) {
                   this.logger.error(`Failed to end call ${callId} via service:`, error);
-                  // Fallback: ensure Redis cleanup for all participants
                   const allUserIds = new Set<string>([session.callerId, session.calleeId]);
                   if (session.participantIds) {
                         for (const id of session.participantIds) allUserIds.add(id);
@@ -1219,6 +1181,43 @@ export class CallSignalingGateway implements OnGatewayInit {
                   }
             }
             return 'User';
+      }
+
+      /**
+       * Look up a user's avatar URL from their connected sockets.
+       */
+      private async lookupUserAvatar(userId: string): Promise<string | null> {
+            const socketIds = await this.socketState.getUserSockets(userId);
+            for (const sid of socketIds) {
+                  const sockets = await this.server.in(sid).fetchSockets();
+                  for (const s of sockets) {
+                        const authSocket = s as unknown as AuthenticatedSocket;
+                        if (authSocket.user?.avatarUrl) {
+                              return authSocket.user.avatarUrl;
+                        }
+                  }
+            }
+            return null;
+      }
+
+      /**
+       * Resolve CallStatus from end reason and session status.
+       */
+      private resolveCallStatus(reason: string, sessionStatus: string): CallStatus {
+            switch (reason) {
+                  case CallEndReason.REJECTED:
+                        return CallStatus.REJECTED;
+                  case CallEndReason.NO_ANSWER:
+                  case CallEndReason.TIMEOUT:
+                        return sessionStatus === 'RINGING' ? CallStatus.NO_ANSWER : CallStatus.CANCELLED;
+                  case CallEndReason.BLOCKED:
+                        return CallStatus.CANCELLED;
+                  case CallEndReason.NETWORK_DROP:
+                        return sessionStatus === 'ACTIVE' ? CallStatus.COMPLETED : CallStatus.MISSED;
+                  case CallEndReason.USER_HANGUP:
+                  default:
+                        return sessionStatus === 'ACTIVE' ? CallStatus.COMPLETED : CallStatus.CANCELLED;
+            }
       }
 
       private clearRingingTimeout(callId: string): void {

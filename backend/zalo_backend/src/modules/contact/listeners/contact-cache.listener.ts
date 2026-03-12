@@ -39,46 +39,54 @@ export class ContactCacheListener extends IdempotentListener {
        * this event, so this listener acts as an idempotent safety net for cases
        * where the event is replayed by a message broker.
        */
-      @OnEvent('contact.alias.updated')
+      @OnEvent('contact.alias.updated', { async: true })
       async handleAliasUpdated(event: ContactAliasUpdatedEvent): Promise<void> {
-            return this.withIdempotency(
-                  event.eventId,
-                  async () => {
-                        const key = RedisKeyBuilder.contactName(event.ownerId, event.contactUserId);
-                        await this.redis.del(key);
-                        this.logger.debug(
-                              `[ContactCache] Invalidated name cache: owner=${event.ownerId} contact=${event.contactUserId}`,
-                        );
-                  },
-                  'ContactCacheListener.handleAliasUpdated',
-                  event.version,
-                  event.correlationId,
-            );
+            try {
+                  return await this.withIdempotency(
+                        event.eventId,
+                        async () => {
+                              const key = RedisKeyBuilder.contactName(event.ownerId, event.contactUserId);
+                              await this.redis.del(key);
+                              this.logger.debug(
+                                    `[ContactCache] Invalidated name cache: owner=${event.ownerId} contact=${event.contactUserId}`,
+                              );
+                        },
+                        'ContactCacheListener.handleAliasUpdated',
+                        event.version,
+                        event.correlationId,
+                  );
+            } catch (error) {
+                  this.logger.error(`[ContactCache] Failed to handle contact.alias.updated`, error);
+            }
       }
 
       /**
        * Invalidate name-resolution cache when a contact is removed.
        */
-      @OnEvent('contact.removed')
+      @OnEvent('contact.removed', { async: true })
       async handleContactRemoved(event: ContactRemovedEvent): Promise<void> {
-            return this.withIdempotency(
-                  event.eventId,
-                  async () => {
-                        const key = RedisKeyBuilder.contactName(event.ownerId, event.contactUserId);
-                        await this.redis.del(key);
-                        this.logger.debug(
-                              `[ContactCache] Invalidated name cache on removal: owner=${event.ownerId} contact=${event.contactUserId}`,
-                        );
-                  },
-                  'ContactCacheListener.handleContactRemoved',
-                  event.version,
-            );
+            try {
+                  return await this.withIdempotency(
+                        event.eventId,
+                        async () => {
+                              const key = RedisKeyBuilder.contactName(event.ownerId, event.contactUserId);
+                              await this.redis.del(key);
+                              this.logger.debug(
+                                    `[ContactCache] Invalidated name cache on removal: owner=${event.ownerId} contact=${event.contactUserId}`,
+                              );
+                        },
+                        'ContactCacheListener.handleContactRemoved',
+                        event.version,
+                  );
+            } catch (error) {
+                  this.logger.error(`[ContactCache] Failed to handle contact.removed`, error);
+            }
       }
 
       /**
        * Log sync metrics (fire-and-forget analytics).
        */
-      @OnEvent('contacts.synced')
+      @OnEvent('contacts.synced', { async: true })
       async handleContactsSynced(event: ContactsSyncedEvent): Promise<void> {
             this.logger.log(
                   `[ContactCache] Sync completed: owner=${event.ownerId} total=${event.totalContacts} matched=${event.matchedCount} duration=${event.durationMs}ms`,

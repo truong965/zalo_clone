@@ -39,116 +39,151 @@ export class FriendshipNotificationListener extends IdempotentListener {
        * When User A sends a friend request to User B,
        * notify User B in real-time.
        */
-      @OnEvent('friendship.request.sent')
+      @OnEvent('friendship.request.sent', { async: true })
       async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
-            this.logger.debug(
-                  `[FriendshipNotif] Friend request sent: ${event.fromUserId} → ${event.toUserId}`,
-            );
+            try {
+                  this.logger.debug(
+                        `[FriendshipNotif] Friend request sent: ${event.fromUserId} → ${event.toUserId}`,
+                  );
 
-            await this.socketGateway.emitToUser(
-                  event.toUserId,
-                  SocketEvents.FRIEND_REQUEST_RECEIVED as string,
-                  {
-                        friendshipId: event.requestId,
-                        fromUserId: event.fromUserId,
-                        toUserId: event.toUserId,
-                  },
-            );
+                  await this.socketGateway.emitToUser(
+                        event.toUserId,
+                        SocketEvents.FRIEND_REQUEST_RECEIVED as string,
+                        {
+                              friendshipId: event.requestId,
+                              fromUserId: event.fromUserId,
+                              toUserId: event.toUserId,
+                        },
+                  );
+            } catch (error) {
+                  this.logger.error(
+                        `[FriendshipNotif] Failed to emit friendship.request.sent socket event`,
+                        error,
+                  );
+            }
       }
 
       /**
        * When User B accepts friend request from User A,
        * notify User A (the original requester).
        */
-      @OnEvent('friendship.accepted')
+      @OnEvent('friendship.accepted', { async: true })
       async handleFriendRequestAccepted(
             event: FriendRequestAcceptedEvent,
       ): Promise<void> {
-            this.logger.debug(
-                  `[FriendshipNotif] Friend request accepted: ${event.acceptedBy} accepted ${event.requesterId}'s request`,
-            );
+            try {
+                  this.logger.debug(
+                        `[FriendshipNotif] Friend request accepted: ${event.acceptedBy} accepted ${event.requesterId}'s request`,
+                  );
 
-            await this.socketGateway.emitToUser(
-                  event.requesterId,
-                  SocketEvents.FRIEND_REQUEST_ACCEPTED as string,
-                  {
-                        friendshipId: event.friendshipId,
-                        acceptedBy: event.acceptedBy,
-                        requesterId: event.requesterId,
-                  },
-            );
+                  await this.socketGateway.emitToUser(
+                        event.requesterId,
+                        SocketEvents.FRIEND_REQUEST_ACCEPTED as string,
+                        {
+                              friendshipId: event.friendshipId,
+                              acceptedBy: event.acceptedBy,
+                              requesterId: event.requesterId,
+                        },
+                  );
+            } catch (error) {
+                  this.logger.error(
+                        `[FriendshipNotif] Failed to emit friendship.accepted socket event`,
+                        error,
+                  );
+            }
       }
 
       /**
        * When User A cancels their sent friend request,
        * notify the target user (User B).
        */
-      @OnEvent('friendship.request.cancelled')
+      @OnEvent('friendship.request.cancelled', { async: true })
       async handleFriendRequestCancelled(
             event: FriendRequestCancelledEvent,
       ): Promise<void> {
-            this.logger.debug(
-                  `[FriendshipNotif] Friend request cancelled: ${event.cancelledBy} cancelled request to ${event.targetUserId}`,
-            );
+            try {
+                  this.logger.debug(
+                        `[FriendshipNotif] Friend request cancelled: ${event.cancelledBy} cancelled request to ${event.targetUserId}`,
+                  );
 
-            await this.socketGateway.emitToUser(
-                  event.targetUserId,
-                  SocketEvents.FRIEND_REQUEST_CANCELLED as string,
-                  {
-                        friendshipId: event.friendshipId,
-                        cancelledBy: event.cancelledBy,
-                        targetUserId: event.targetUserId,
-                        eventType: event.eventType,
-                  },
-            );
+                  await this.socketGateway.emitToUser(
+                        event.targetUserId,
+                        SocketEvents.FRIEND_REQUEST_CANCELLED as string,
+                        {
+                              friendshipId: event.friendshipId,
+                              cancelledBy: event.cancelledBy,
+                              targetUserId: event.targetUserId,
+                              eventType: event.eventType,
+                        },
+                  );
+            } catch (error) {
+                  this.logger.error(
+                        `[FriendshipNotif] Failed to emit friendship.request.cancelled socket event`,
+                        error,
+                  );
+            }
       }
 
       /**
        * When User B declines friend request from User A,
        * notify User A (the requester).
        */
-      @OnEvent('friendship.request.declined')
+      @OnEvent('friendship.request.declined', { async: true })
       async handleFriendRequestDeclined(
             event: FriendRequestRejectedEvent,
       ): Promise<void> {
-            this.logger.debug(
-                  `[FriendshipNotif] Friend request declined: ${event.toUserId} declined ${event.fromUserId}'s request`,
-            );
+            try {
+                  this.logger.debug(
+                        `[FriendshipNotif] Friend request declined: ${event.toUserId} declined ${event.fromUserId}'s request`,
+                  );
 
-            await this.socketGateway.emitToUser(
-                  event.fromUserId,
-                  SocketEvents.FRIEND_REQUEST_DECLINED as string,
-                  {
-                        friendshipId: event.requestId,
-                        declinedBy: event.toUserId,
-                        requesterId: event.fromUserId,
-                  },
-            );
+                  await this.socketGateway.emitToUser(
+                        event.fromUserId,
+                        SocketEvents.FRIEND_REQUEST_DECLINED as string,
+                        {
+                              friendshipId: event.requestId,
+                              declinedBy: event.toUserId,
+                              requesterId: event.fromUserId,
+                        },
+                  );
+            } catch (error) {
+                  this.logger.error(
+                        `[FriendshipNotif] Failed to emit friendship.request.declined socket event`,
+                        error,
+                  );
+            }
       }
 
       /**
        * When User A unfriends User B,
        * notify User B.
        */
-      @OnEvent('friendship.unfriended')
+      @OnEvent('friendship.unfriended', { async: true })
       async handleUnfriended(event: UnfriendedEvent): Promise<void> {
-            // The other user is whichever is NOT the initiator
-            const otherUserId =
-                  event.initiatedBy === event.user1Id ? event.user2Id : event.user1Id;
+            try {
+                  // The other user is whichever is NOT the initiator
+                  const otherUserId =
+                        event.initiatedBy === event.user1Id ? event.user2Id : event.user1Id;
 
-            this.logger.debug(
-                  `[FriendshipNotif] Unfriended: ${event.initiatedBy} unfriended ${otherUserId}`,
-            );
+                  this.logger.debug(
+                        `[FriendshipNotif] Unfriended: ${event.initiatedBy} unfriended ${otherUserId}`,
+                  );
 
-            await this.socketGateway.emitToUser(
-                  otherUserId,
-                  SocketEvents.FRIEND_UNFRIENDED as string,
-                  {
-                        friendshipId: event.friendshipId,
-                        initiatedBy: event.initiatedBy,
-                        userId: otherUserId,
-                        eventType: event.eventType,
-                  },
-            );
+                  await this.socketGateway.emitToUser(
+                        otherUserId,
+                        SocketEvents.FRIEND_UNFRIENDED as string,
+                        {
+                              friendshipId: event.friendshipId,
+                              initiatedBy: event.initiatedBy,
+                              userId: otherUserId,
+                              eventType: event.eventType,
+                        },
+                  );
+            } catch (error) {
+                  this.logger.error(
+                        `[FriendshipNotif] Failed to emit friendship.unfriended socket event`,
+                        error,
+                  );
+            }
       }
 }

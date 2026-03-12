@@ -195,7 +195,6 @@ export class SocketGateway
       });
       client.removeAllListeners();
       client._cleanupTimers = [];
-      // client.user = undefined;
     }
 
     // B. Unsubscribe Dynamic Redis Subscriptions (Phase 2 Chat)
@@ -215,19 +214,6 @@ export class SocketGateway
     client.userId = undefined;
     client.deviceId = undefined;
   }
-  /**
-   * Setup Redis adapter for multi-instance support
-   */
-  // private setupRedisAdapter(server: Server): void {
-  //   const pubClient = this.redisService.getPublisher();
-  //   const subClient = this.redisService.getSubscriber();
-
-  //   // Create Redis adapter
-  //   const adapter = createAdapter(pubClient, subClient);
-  //   server.adapter(adapter);
-
-  //   this.logger.log('✅ Redis adapter configured for Socket.IO');
-  // }
 
   /**
    * Subscribe to Redis Pub/Sub channels for cross-server communication
@@ -357,13 +343,6 @@ export class SocketGateway
       }
 
       // Check if user has other active sockets
-      // const otherSockets = await this.getOtherUserSockets(userId, client.id);
-
-      // if (otherSockets.length === 0) {
-      //   // Last socket disconnected - cleanup calls
-      //   await this.callHistoryService.cleanupUserActiveCalls(userId);
-      // }
-
       // Update state and presence
       const isOffline = await this.socketState.handleDisconnection(
         client,

@@ -15,93 +15,81 @@ export const MESSAGE_LIMITS = {
 export class MessageValidator {
   static validateMessageTypeConsistency(dto: SendMessageDto): void {
     const hasContent = !!dto.content?.trim();
-    const hasMedia = dto.mediaIds && dto.mediaIds.length > 0;
+    const hasMedia = !!(dto.mediaIds && dto.mediaIds.length > 0);
     const mediaCount = dto.mediaIds?.length || 0;
 
     switch (dto.type) {
       case MessageType.TEXT:
-        if (hasMedia) {
-          throw new BadRequestException(
-            'TEXT message cannot have media. Use IMAGE/VIDEO/FILE type for messages with attachments.',
-          );
-        }
-        if (!hasContent) {
-          throw new BadRequestException(
-            'TEXT message must have non-empty content',
-          );
-        }
+        this.validateTextMessage(hasContent, hasMedia);
         break;
-
       case MessageType.IMAGE:
       case MessageType.STICKER:
-        if (!hasMedia) {
-          throw new BadRequestException(
-            `${dto.type} message must have at least 1 media attachment`,
-          );
-        }
-        if (mediaCount > MESSAGE_LIMITS.IMAGE_MAX) {
-          throw new BadRequestException(
-            `IMAGE message can have max ${MESSAGE_LIMITS.IMAGE_MAX} photos (album limit)`,
-          );
-        }
+        this.validateImageMessage(dto.type, hasMedia, mediaCount);
         break;
-
       case MessageType.VIDEO:
-        if (!hasMedia || mediaCount !== MESSAGE_LIMITS.VIDEO_MAX) {
-          throw new BadRequestException(
-            `VIDEO message must have exactly ${MESSAGE_LIMITS.VIDEO_MAX} video file`,
-          );
-        }
+        this.validateExactMediaCount(hasMedia, mediaCount, MESSAGE_LIMITS.VIDEO_MAX, 'VIDEO', 'video file');
         break;
-
       case MessageType.FILE:
-        if (!hasMedia) {
-          throw new BadRequestException(
-            'FILE message must have at least 1 document',
-          );
-        }
-        if (mediaCount > MESSAGE_LIMITS.FILE_MAX) {
-          throw new BadRequestException(
-            `FILE message can have max ${MESSAGE_LIMITS.FILE_MAX} documents`,
-          );
-        }
+        this.validateMediaRange(hasMedia, mediaCount, MESSAGE_LIMITS.FILE_MAX, 'FILE', 'document');
         break;
-
       case MessageType.AUDIO:
-        if (!hasMedia) {
-          throw new BadRequestException(
-            'AUDIO message must have at least 1 audio file',
-          );
-        }
-        if (mediaCount > MESSAGE_LIMITS.AUDIO_MAX) {
-          throw new BadRequestException(
-            `AUDIO message can have max ${MESSAGE_LIMITS.AUDIO_MAX} audio files`,
-          );
-        }
+        this.validateMediaRange(hasMedia, mediaCount, MESSAGE_LIMITS.AUDIO_MAX, 'AUDIO', 'audio file');
         break;
-
       case MessageType.VOICE:
-        if (!hasMedia || mediaCount !== MESSAGE_LIMITS.VOICE_MAX) {
-          throw new BadRequestException(
-            `VOICE message must have exactly ${MESSAGE_LIMITS.VOICE_MAX} audio file`,
-          );
-        }
-        if (hasContent) {
-          throw new BadRequestException(
-            'VOICE message cannot have text content',
-          );
-        }
+        this.validateVoiceMessage(hasContent, hasMedia, mediaCount);
         break;
-
       case MessageType.SYSTEM:
-        throw new BadRequestException(
-          'SYSTEM messages cannot be sent by users',
-        );
-
+        throw new BadRequestException('SYSTEM messages cannot be sent by users');
       default:
-        throw new BadRequestException(
-          `Unknown message type: ${dto.type as string}`,
-        );
+        throw new BadRequestException(`Unknown message type: ${dto.type as string}`);
+    }
+  }
+
+  private static validateTextMessage(hasContent: boolean, hasMedia: boolean): void {
+    if (hasMedia) {
+      throw new BadRequestException(
+        'TEXT message cannot have media. Use IMAGE/VIDEO/FILE type for messages with attachments.',
+      );
+    }
+    if (!hasContent) {
+      throw new BadRequestException('TEXT message must have non-empty content');
+    }
+  }
+
+  private static validateImageMessage(type: string, hasMedia: boolean, mediaCount: number): void {
+    if (!hasMedia) {
+      throw new BadRequestException(`${type} message must have at least 1 media attachment`);
+    }
+    if (mediaCount > MESSAGE_LIMITS.IMAGE_MAX) {
+      throw new BadRequestException(`IMAGE message can have max ${MESSAGE_LIMITS.IMAGE_MAX} photos (album limit)`);
+    }
+  }
+
+  private static validateExactMediaCount(
+    hasMedia: boolean, mediaCount: number, exact: number, typeName: string, fileLabel: string,
+  ): void {
+    if (!hasMedia || mediaCount !== exact) {
+      throw new BadRequestException(`${typeName} message must have exactly ${exact} ${fileLabel}`);
+    }
+  }
+
+  private static validateMediaRange(
+    hasMedia: boolean, mediaCount: number, max: number, typeName: string, fileLabel: string,
+  ): void {
+    if (!hasMedia) {
+      throw new BadRequestException(`${typeName} message must have at least 1 ${fileLabel}`);
+    }
+    if (mediaCount > max) {
+      throw new BadRequestException(`${typeName} message can have max ${max} ${fileLabel}s`);
+    }
+  }
+
+  private static validateVoiceMessage(hasContent: boolean, hasMedia: boolean, mediaCount: number): void {
+    if (!hasMedia || mediaCount !== MESSAGE_LIMITS.VOICE_MAX) {
+      throw new BadRequestException(`VOICE message must have exactly ${MESSAGE_LIMITS.VOICE_MAX} audio file`);
+    }
+    if (hasContent) {
+      throw new BadRequestException('VOICE message cannot have text content');
     }
   }
 

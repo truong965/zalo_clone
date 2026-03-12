@@ -143,95 +143,104 @@ export class S3Service {
     } = {},
   ): Promise<FileExistenceResult> {
     const maxRetries = options.maxRetries ?? 5;
-    const baseDelay = options.retryDelay ?? 200; // Start with 200ms
+    const baseDelay = options.retryDelay ?? 200;
     const checkMultipart = options.checkMultipart ?? true;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const result = await this.s3Client.send(
-          new HeadObjectCommand({
-            Bucket: this.bucketName,
-            Key: key,
-          }),
-        );
-
-        this.logger.debug('File exists', {
-          key,
-          attempt: attempt + 1,
-          size: result.ContentLength,
-          contentType: result.ContentType,
-        });
-
-        return {
-          exists: true,
-          metadata: {
-            size: result.ContentLength || 0,
-            contentType: result.ContentType || 'application/octet-stream',
-            lastModified: result.LastModified || new Date(),
-          },
-        };
+        return await this.headObject(key, attempt);
       } catch (error) {
-        const errorI = error as AwsError;
-        const errorName = errorI.name;
-        const errorCode = errorI.$metadata?.httpStatusCode;
-
-        // Not found - check if it's incomplete multipart
-        if (errorName === 'NotFound' || errorCode === 404) {
-          if (checkMultipart && attempt === 0) {
-            // First attempt - check for incomplete multipart upload
-            const hasMultipart = await this.checkIncompleteMultipart(key);
-            if (hasMultipart) {
-              this.logger.warn('Incomplete multipart upload detected', {
-                key,
-                action: 'waiting_for_completion',
-              });
-              // Continue retrying - multipart might complete
-            }
-          }
-
-          if (attempt < maxRetries - 1) {
-            const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
-            this.logger.debug('File not found, retrying...', {
-              key,
-              attempt: attempt + 1,
-              maxRetries,
-              nextRetryIn: `${delay}ms`,
-            });
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            continue;
-          }
-
-          this.logger.warn('File not found after all retries', {
-            key,
-            attempts: maxRetries,
-          });
-
-          return {
-            exists: false,
-            error: 'File not found after retries',
-          };
-        }
-
-        // Other errors (permissions, network, etc.)
-        this.logger.error('Error checking file existence', {
+        const result = await this.handleHeadObjectError(
+          error,
           key,
-          attempt: attempt + 1,
-          errorName,
-          errorCode,
-          message: (error as Error).message,
-        });
-
-        return {
-          exists: false,
-          error: `S3 error: ${errorName} (${errorCode})`,
-        };
+          attempt,
+          maxRetries,
+          baseDelay,
+          checkMultipart,
+        );
+        if (result) return result;
       }
     }
 
+    return { exists: false, error: 'Max retries exceeded' };
+  }
+
+  private async headObject(
+    key: string,
+    attempt: number,
+  ): Promise<FileExistenceResult> {
+    const result = await this.s3Client.send(
+      new HeadObjectCommand({ Bucket: this.bucketName, Key: key }),
+    );
+
+    this.logger.debug('File exists', {
+      key,
+      attempt: attempt + 1,
+      size: result.ContentLength,
+      contentType: result.ContentType,
+    });
+
     return {
-      exists: false,
-      error: 'Max retries exceeded',
+      exists: true,
+      metadata: {
+        size: result.ContentLength || 0,
+        contentType: result.ContentType || 'application/octet-stream',
+        lastModified: result.LastModified || new Date(),
+      },
     };
+  }
+
+  /** Returns a result to stop retrying, or null to continue the retry loop. */
+  private async handleHeadObjectError(
+    error: unknown,
+    key: string,
+    attempt: number,
+    maxRetries: number,
+    baseDelay: number,
+    checkMultipart: boolean,
+  ): Promise<FileExistenceResult | null> {
+    const errorI = error as AwsError;
+    const errorName = errorI.name;
+    const errorCode = errorI.$metadata?.httpStatusCode;
+
+    if (errorName !== 'NotFound' && errorCode !== 404) {
+      this.logger.error('Error checking file existence', {
+        key,
+        attempt: attempt + 1,
+        errorName,
+        errorCode,
+        message: (error as Error).message,
+      });
+      return { exists: false, error: `S3 error: ${errorName} (${errorCode})` };
+    }
+
+    if (checkMultipart && attempt === 0) {
+      const hasMultipart = await this.checkIncompleteMultipart(key);
+      if (hasMultipart) {
+        this.logger.warn('Incomplete multipart upload detected', {
+          key,
+          action: 'waiting_for_completion',
+        });
+      }
+    }
+
+    if (attempt < maxRetries - 1) {
+      const delay = baseDelay * Math.pow(2, attempt);
+      this.logger.debug('File not found, retrying...', {
+        key,
+        attempt: attempt + 1,
+        maxRetries,
+        nextRetryIn: `${delay}ms`,
+      });
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return null; // continue retrying
+    }
+
+    this.logger.warn('File not found after all retries', {
+      key,
+      attempts: maxRetries,
+    });
+    return { exists: false, error: 'File not found after retries' };
   }
 
   /**

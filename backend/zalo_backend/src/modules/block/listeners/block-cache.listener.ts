@@ -25,9 +25,9 @@ export class BlockCacheListener {
   constructor(
     private readonly redisService: RedisService,
     private readonly idempotency: IdempotencyService,
-  ) {}
+  ) { }
 
-  @OnEvent('user.blocked')
+  @OnEvent('user.blocked', { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
@@ -74,11 +74,11 @@ export class BlockCacheListener {
       } catch {
         /* ignore */
       }
-      throw error;
+      // P0: swallow error — async listener must not throw (unhandled rejection → crash)
     }
   }
 
-  @OnEvent('user.unblocked')
+  @OnEvent('user.unblocked', { async: true })
   async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
@@ -125,7 +125,7 @@ export class BlockCacheListener {
       } catch {
         /* ignore */
       }
-      throw error;
+      // P0: swallow error — async listener must not throw (unhandled rejection → crash)
     }
   }
 

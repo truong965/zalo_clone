@@ -49,3 +49,36 @@ export class MessageSentEvent extends DomainEvent {
     };
   }
 }
+
+/**
+ * Emitted when a message is soft-deleted (delete for everyone).
+ *
+ * Listeners:
+ * - SearchEventListener: Invalidate conversation search cache, emit search:resultRemoved
+ *
+ * Critical Event: NO (not persisted to event store)
+ *
+ * @version 1
+ */
+export class MessageDeletedEvent extends DomainEvent {
+  readonly eventType = 'MESSAGE_DELETED';
+  readonly version = 1;
+
+  constructor(
+    readonly messageId: string,
+    readonly conversationId: string,
+    readonly deletedBy: string,
+  ) {
+    super('MessageModule', 'Message', messageId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      messageId: this.messageId,
+      conversationId: this.conversationId,
+      deletedBy: this.deletedBy,
+      eventType: this.eventType,
+    };
+  }
+}

@@ -17,7 +17,7 @@ export class AuthService {
     private readonly eventEmitter: EventEmitter2,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) {}
+  ) { }
 
   /**
    * Login user and generate tokens
@@ -32,21 +32,19 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check user status before password to avoid timing info leak
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     // Verify password
-    const isPasswordValid = this.usersService.isValidPassword(
+    const isPasswordValid = await this.usersService.isValidPassword(
       loginDto.password,
       user.passwordHash,
     );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // Check user status
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException(
-        `Account is ${user.status.toLowerCase()}`,
-      );
     }
 
     // Revoke existing token for this device (if any)

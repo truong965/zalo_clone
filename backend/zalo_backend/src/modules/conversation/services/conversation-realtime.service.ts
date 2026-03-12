@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MemberRole, MemberStatus } from '@prisma/client';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { SystemMessageBroadcasterService } from './system-message-broadcaster.service';
 import { PrismaService } from 'src/database/prisma.service';
 import { safeJSON } from '@common/utils/json.util';
 
@@ -30,7 +30,7 @@ export class ConversationRealtimeService {
     private readonly groupService: GroupService,
     private readonly groupJoinService: GroupJoinService,
     private readonly prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly broadcaster: SystemMessageBroadcasterService,
   ) { }
 
   async createGroup(
@@ -99,7 +99,7 @@ export class ConversationRealtimeService {
       });
 
       // Broadcast system message to all members
-      this.eventEmitter.emit('system-message.broadcast', {
+      await this.broadcaster.broadcast({
         conversationId,
         message: safeJSON(sysMsg),
         excludeUserIds: [],

@@ -18,9 +18,9 @@ export class PrivacyCacheListener {
   constructor(
     private readonly redisService: RedisService,
     private readonly idempotency: IdempotencyService,
-  ) {}
+  ) { }
 
-  @OnEvent('privacy.updated')
+  @OnEvent('privacy.updated', { async: true })
   async handlePrivacyUpdated(payload: {
     eventId?: string;
     userId?: string;
@@ -81,7 +81,7 @@ export class PrivacyCacheListener {
       } catch {
         /* ignore */
       }
-      throw error;
+      // P0: swallow error — async listener must not throw (unhandled rejection → crash)
     }
   }
 }

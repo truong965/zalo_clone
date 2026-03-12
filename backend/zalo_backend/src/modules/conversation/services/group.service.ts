@@ -23,6 +23,7 @@ import {
   ConversationMemberDemotedEvent,
   ConversationMemberLeftEvent,
   ConversationMemberPromotedEvent,
+  ConversationUpdatedEvent,
 } from '../events';
 import { MAX_PINNED_MESSAGES } from '../constants/conversation.constants';
 
@@ -141,6 +142,20 @@ export class GroupService {
       },
     });
 
+    await this.eventPublisher.publish(
+      new ConversationUpdatedEvent(
+        conversationId,
+        userId,
+        {
+          ...(dto.name && { name: dto.name }),
+          ...(dto.avatarUrl && { avatarUrl: dto.avatarUrl }),
+        },
+      ),
+      { fireAndForget: true },
+    ).catch((err) => {
+      this.logger.warn(`Failed to emit ConversationUpdatedEvent: ${err.message}`);
+    });
+
     this.logger.log(`Group ${conversationId} updated by admin ${userId}`);
 
     return updated;
@@ -185,12 +200,14 @@ export class GroupService {
       select: { userId: true, status: true },
     });
 
-    const existingActiveIds = existingMembers
-      .filter((m) => m.status === MemberStatus.ACTIVE)
-      .map((m) => m.userId);
+    const existingActiveIds = new Set(
+      existingMembers
+        .filter((m) => m.status === MemberStatus.ACTIVE)
+        .map((m) => m.userId),
+    );
 
     const newUserIds = dto.userIds.filter(
-      (id) => !existingActiveIds.includes(id),
+      (id) => !existingActiveIds.has(id),
     );
 
     if (newUserIds.length === 0) {

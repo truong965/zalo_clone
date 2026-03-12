@@ -233,3 +233,36 @@ export class ConversationMutedEvent extends DomainEvent {
     };
   }
 }
+
+/**
+ * Emitted when a group conversation's metadata is updated (name, avatar, settings).
+ *
+ * Listeners:
+ * - SearchEventListener: Invalidate conversation search cache
+ *
+ * Critical Event: NO (not persisted to event store)
+ *
+ * @version 1
+ */
+export class ConversationUpdatedEvent extends DomainEvent {
+  readonly eventType = 'CONVERSATION_UPDATED';
+  readonly version = 1;
+
+  constructor(
+    readonly conversationId: string,
+    readonly updatedBy: string,
+    readonly changes?: { name?: string; avatarUrl?: string },
+  ) {
+    super('ConversationModule', 'Conversation', conversationId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      conversationId: this.conversationId,
+      updatedBy: this.updatedBy,
+      changes: this.changes,
+      eventType: this.eventType,
+    };
+  }
+}

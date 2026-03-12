@@ -38,28 +38,35 @@ export class ContactNotificationListener extends IdempotentListener {
        *
        * Only the owner is notified — alias is visible to them alone.
        */
-      @OnEvent('contact.alias.updated')
+      @OnEvent('contact.alias.updated', { async: true })
       async handleContactAliasUpdated(event: ContactAliasUpdatedEvent): Promise<void> {
-            this.logger.debug(
-                  `[ContactNotif] alias.updated: owner=${event.ownerId} contact=${event.contactUserId}`,
-            );
+            try {
+                  this.logger.debug(
+                        `[ContactNotif] alias.updated: owner=${event.ownerId} contact=${event.contactUserId}`,
+                  );
 
-            await this.withIdempotency(
-                  event.eventId,
-                  async () => {
-                        await this.socketGateway.emitToUser(
-                              event.ownerId,
-                              SocketEvents.CONTACT_ALIAS_UPDATED,
-                              {
-                                    contactUserId: event.contactUserId,
-                                    aliasName: event.newAliasName,
-                                    resolvedDisplayName: event.resolvedDisplayName,
-                              },
-                        );
-                  },
-                  'ContactNotificationListener.handleContactAliasUpdated',
-                  event.version,
-                  event.correlationId,
-            );
+                  await this.withIdempotency(
+                        event.eventId,
+                        async () => {
+                              await this.socketGateway.emitToUser(
+                                    event.ownerId,
+                                    SocketEvents.CONTACT_ALIAS_UPDATED,
+                                    {
+                                          contactUserId: event.contactUserId,
+                                          aliasName: event.newAliasName,
+                                          resolvedDisplayName: event.resolvedDisplayName,
+                                    },
+                              );
+                        },
+                        'ContactNotificationListener.handleContactAliasUpdated',
+                        event.version,
+                        event.correlationId,
+                  );
+            } catch (error) {
+                  this.logger.error(
+                        `[ContactNotif] Failed to emit contact.alias.updated socket event`,
+                        error,
+                  );
+            }
       }
 }

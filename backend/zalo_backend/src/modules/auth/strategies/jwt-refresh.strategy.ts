@@ -30,7 +30,6 @@ export class JwtRefreshStrategy extends PassportStrategy(
         // Extract refresh token from HttpOnly cookie
         const cookies = req?.cookies as Record<string, string>;
         const token = cookies?.[jwtConfiguration.refreshToken.cookieName];
-        // const token = req?.cookies?.[jwtConfiguration.refreshToken.cookieName];
         if (!token) {
           throw new UnauthorizedException('Refresh token not found');
         }

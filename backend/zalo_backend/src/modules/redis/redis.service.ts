@@ -237,12 +237,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     port: number;
     db: number;
   }> {
-    return Promise.resolve({
+    return {
       connected: this.client.status === 'ready',
       host: this.config.host,
       port: this.config.port,
       db: this.config.db,
-    });
+    };
   }
   async get(key: string): Promise<string | null> {
     return this.client.get(key);

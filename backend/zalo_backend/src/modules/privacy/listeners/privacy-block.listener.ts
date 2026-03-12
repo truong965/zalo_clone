@@ -45,7 +45,7 @@ export class PrivacyBlockListener {
   constructor(
     private readonly redisService: RedisService,
     private readonly idempotency: IdempotencyService,
-  ) {}
+  ) { }
 
   /**
    * Handle user.blocked event
@@ -54,7 +54,7 @@ export class PrivacyBlockListener {
    *   1. Block status cache: social:block:blockerId:blockedId
    *   2. Permission caches: social:permission:{message|call|profile}:*
    */
-  @OnEvent('user.blocked')
+  @OnEvent('user.blocked', { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
@@ -83,18 +83,25 @@ export class PrivacyBlockListener {
       `[PRIVACY-BLOCK] Invalidating permission cache: ${blockerId} blocked ${blockedId}`,
     );
 
-    // Invalidate permission caches (Block module's BlockCacheListener handles block cache)
-    await this.invalidatePermissionCaches(blockerId, blockedId);
+    try {
+      // Invalidate permission caches (Block module's BlockCacheListener handles block cache)
+      await this.invalidatePermissionCaches(blockerId, blockedId);
 
-    await this.idempotency.recordProcessed(
-      eventId,
-      handlerId,
-      EventType.USER_BLOCKED,
-      event.correlationId,
-      event.version ?? 1,
-    );
+      await this.idempotency.recordProcessed(
+        eventId,
+        handlerId,
+        EventType.USER_BLOCKED,
+        event.correlationId,
+        event.version ?? 1,
+      );
 
-    this.logger.debug(`[PRIVACY-BLOCK] Cache invalidated for block event`);
+      this.logger.debug(`[PRIVACY-BLOCK] Cache invalidated for block event`);
+    } catch (error) {
+      this.logger.error(
+        `[PRIVACY-BLOCK] Failed to invalidate cache for block event ${eventId}`,
+        error,
+      );
+    }
   }
 
   /**
@@ -103,7 +110,7 @@ export class PrivacyBlockListener {
    * Same cache invalidation as block event
    * (Permissions need to be recalculated)
    */
-  @OnEvent('user.unblocked')
+  @OnEvent('user.unblocked', { async: true })
   async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
@@ -131,17 +138,24 @@ export class PrivacyBlockListener {
       `[PRIVACY-BLOCK] Invalidating permission cache: ${blockerId} unblocked ${blockedId}`,
     );
 
-    await this.invalidatePermissionCaches(blockerId, blockedId);
+    try {
+      await this.invalidatePermissionCaches(blockerId, blockedId);
 
-    await this.idempotency.recordProcessed(
-      eventId,
-      handlerId,
-      EventType.USER_UNBLOCKED,
-      event.correlationId,
-      event.version ?? 1,
-    );
+      await this.idempotency.recordProcessed(
+        eventId,
+        handlerId,
+        EventType.USER_UNBLOCKED,
+        event.correlationId,
+        event.version ?? 1,
+      );
 
-    this.logger.debug(`[PRIVACY-BLOCK] Cache invalidated for unblock event`);
+      this.logger.debug(`[PRIVACY-BLOCK] Cache invalidated for unblock event`);
+    } catch (error) {
+      this.logger.error(
+        `[PRIVACY-BLOCK] Failed to invalidate cache for unblock event ${eventId}`,
+        error,
+      );
+    }
   }
 
   /**

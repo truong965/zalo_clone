@@ -196,16 +196,9 @@ export class SearchCacheService {
       return { enabled: false };
     }
 
-    try {
-      return {
-        enabled: true,
-        store: 'RedisService',
-      };
-    } catch (error) {
-      return {
-        enabled: true,
-        error: error instanceof Error ? error.message : 'Unknown',
-      };
-    }
+    return {
+      enabled: true,
+      store: 'RedisService',
+    };
   }
 }

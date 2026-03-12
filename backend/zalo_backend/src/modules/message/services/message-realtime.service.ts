@@ -220,65 +220,80 @@ export class MessageRealtimeService {
       .filter((id): id is bigint => id !== null);
 
     if (conversationType === ConversationType.DIRECT) {
-      // ─── DIRECT: Update directReceipts JSONB + emit per-message receipt
-      // markDirectSeen returns ONLY the IDs that were actually updated (idempotent)
-      const { updatedIds, senderMap } = await this.receiptService.markDirectSeen(messageIds, userId);
-      await this.resetUnreadCount(dto.conversationId, userId);
-
-      // Only broadcast for messages that actually transitioned to SEEN (not already seen)
-      // Group by senderId to reduce broadcasts
-      if (updatedIds.length > 0) {
-        const bySender = new Map<string, bigint[]>();
-        for (const msgId of updatedIds) {
-          const senderId = senderMap.get(msgId);
-          if (senderId && senderId !== userId) {
-            const list = bySender.get(senderId) ?? [];
-            list.push(msgId);
-            bySender.set(senderId, list);
-          }
-        }
-
-        // Broadcast per sender (typically 1 sender in a DIRECT conversation)
-        for (const [senderId, msgIds] of bySender) {
-          for (const messageId of msgIds) {
-            await this.broadcaster.broadcastReceiptUpdate(senderId, {
-              messageId,
-              conversationId: dto.conversationId,
-              userId,
-              type: 'seen',
-              timestamp: new Date(),
-            });
-          }
-        }
-
-        this.logger.debug(
-          `Broadcasted seen receipts for ${updatedIds.length} actually-updated messages in ${dto.conversationId}`,
-        );
-      }
+      await this.handleDirectMessageSeen(dto.conversationId, messageIds, userId);
     } else {
-      // ─── GROUP: Update ConversationMember.lastReadMessageId + batch increment seenCount
-      const latestMessageId =
-        messageIds.length > 0
-          ? messageIds.reduce((a, b) => (a > b ? a : b))
-          : null;
-
-      if (latestMessageId) {
-        await this.receiptService.markGroupConversationRead(
-          userId,
-          dto.conversationId,
-          latestMessageId,
-        );
-      }
-      await this.resetUnreadCount(dto.conversationId, userId);
-
-      // Emit conversation:read event for group (lightweight — no per-message detail)
-      await this.broadcaster.broadcastConversationRead(dto.conversationId, {
-        userId,
-        conversationId: dto.conversationId,
-        messageId: latestMessageId?.toString() ?? null,
-        timestamp: new Date(),
-      });
+      await this.handleGroupMessageSeen(dto.conversationId, messageIds, userId);
     }
+  }
+
+  /**
+   * Handle seen receipts for DIRECT conversations.
+   */
+  private async handleDirectMessageSeen(
+    conversationId: string,
+    messageIds: bigint[],
+    userId: string,
+  ): Promise<void> {
+    const { updatedIds, senderMap } = await this.receiptService.markDirectSeen(messageIds, userId);
+    await this.resetUnreadCount(conversationId, userId);
+
+    if (updatedIds.length === 0) return;
+
+    const bySender = new Map<string, bigint[]>();
+    for (const msgId of updatedIds) {
+      const senderId = senderMap.get(msgId);
+      if (senderId && senderId !== userId) {
+        const list = bySender.get(senderId) ?? [];
+        list.push(msgId);
+        bySender.set(senderId, list);
+      }
+    }
+
+    for (const [senderId, msgIds] of bySender) {
+      for (const messageId of msgIds) {
+        await this.broadcaster.broadcastReceiptUpdate(senderId, {
+          messageId,
+          conversationId,
+          userId,
+          type: 'seen',
+          timestamp: new Date(),
+        });
+      }
+    }
+
+    this.logger.debug(
+      `Broadcasted seen receipts for ${updatedIds.length} actually-updated messages in ${conversationId}`,
+    );
+  }
+
+  /**
+   * Handle seen receipts for GROUP conversations.
+   */
+  private async handleGroupMessageSeen(
+    conversationId: string,
+    messageIds: bigint[],
+    userId: string,
+  ): Promise<void> {
+    const latestMessageId =
+      messageIds.length > 0
+        ? messageIds.reduce((a, b) => (a > b ? a : b), messageIds[0])
+        : null;
+
+    if (latestMessageId) {
+      await this.receiptService.markGroupConversationRead(
+        userId,
+        conversationId,
+        latestMessageId,
+      );
+    }
+    await this.resetUnreadCount(conversationId, userId);
+
+    await this.broadcaster.broadcastConversationRead(conversationId, {
+      userId,
+      conversationId,
+      messageId: latestMessageId?.toString() ?? null,
+      timestamp: new Date(),
+    });
   }
 
   async typingStart(dto: TypingIndicatorDto, userId: string): Promise<void> {

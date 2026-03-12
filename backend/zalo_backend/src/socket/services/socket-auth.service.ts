@@ -6,7 +6,6 @@ import {
   AuthenticatedSocket,
   SocketUserContext,
 } from 'src/common/interfaces/socket-client.interface';
-// import { User } from '@prisma/client';
 import { JwtPayload } from 'src/modules/auth/interfaces/jwt-payload.interface';
 import jwtConfig from 'src/config/jwt.config';
 
@@ -19,7 +18,7 @@ export class SocketAuthService {
     private readonly prisma: PrismaService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) {}
+  ) { }
 
   /**
    * Authenticate socket connection

@@ -18,6 +18,9 @@ import { UserProfileEntity } from './entities/user-profile.entity';
 import { PermissionEntity } from '../permissions/entity/permission.entity';
 import { EventPublisher } from '@shared/events';
 import { UserRegisteredEvent } from '@modules/auth/events';
+import { UserProfileUpdatedEvent } from './events/user.events';
+import { RedisService } from '@modules/redis/redis.service';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 
 @Injectable()
 export class UsersService extends BaseService<User> {
@@ -26,13 +29,13 @@ export class UsersService extends BaseService<User> {
   constructor(
     private prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
+    private readonly redis: RedisService,
   ) {
     super(prisma.extended.user as unknown as PrismaDelegate<User>);
   }
 
-  getHashPassword = (password: string) => {
-    const salt = bcrypt.genSaltSync(10);
-    return bcrypt.hashSync(password, salt);
+  getHashPassword = async (password: string): Promise<string> => {
+    return bcrypt.hash(password, 10);
   };
   /**
    *Find user by phone number
@@ -114,9 +117,8 @@ export class UsersService extends BaseService<User> {
       permissions: permissions, // Danh sách object permission đầy đủ
     });
   }
-  //helper check pass an toàn
-  isValidPassword(password: string, hash: string): boolean {
-    return bcrypt.compareSync(password, hash);
+  async isValidPassword(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
   }
 
   private async checkExistPhone(phoneNumber: string) {
@@ -135,7 +137,7 @@ export class UsersService extends BaseService<User> {
     if (!userRole)
       throw new BadRequestException('Hệ thống chưa cấu hình Role USER');
 
-    const passwordHash = this.getHashPassword(dto.password);
+    const passwordHash = await this.getHashPassword(dto.password);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...userRestData } = dto;
 
@@ -170,7 +172,7 @@ export class UsersService extends BaseService<User> {
     });
     if (!roleExist) throw new BadRequestException('Role ID không tồn tại');
 
-    const passwordHash = this.getHashPassword(dto.password);
+    const passwordHash = await this.getHashPassword(dto.password);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...userRestData } = dto;
     const newUser = await super.create({
@@ -203,6 +205,26 @@ export class UsersService extends BaseService<User> {
     // BaseService update sẽ gọi prisma update
     // DTO đã chặn password/phoneNumber nên an toàn
     const updatedUser = await super.update(id, dto);
+
+    // Invalidate JWT profile cache
+    await this.redis.del(RedisKeyBuilder.authUserProfile(id));
+
+    await this.eventPublisher.publish(
+      new UserProfileUpdatedEvent(
+        id,
+        {
+          displayName: dto.displayName,
+          avatarUrl: dto.avatarUrl,
+          bio: dto.bio,
+          gender: dto.gender,
+          dateOfBirth: dto.dateOfBirth,
+        },
+      ),
+      { fireAndForget: true },
+    ).catch((err) => {
+      this.logger.warn(`Failed to emit UserProfileUpdatedEvent: ${err.message}`);
+    });
+
     return new UserEntity(updatedUser);
   }
   async updateByAdmin(
@@ -238,7 +260,7 @@ export class UsersService extends BaseService<User> {
     // C. Nếu đổi Password -> Hash lại
     let passwordHash: string | undefined = undefined;
     if (dto.password) {
-      passwordHash = this.getHashPassword(dto.password);
+      passwordHash = await this.getHashPassword(dto.password);
     }
 
     // 3. Thực hiện Update
@@ -253,6 +275,9 @@ export class UsersService extends BaseService<User> {
         ...(passwordHash && { passwordHash }),
       },
     });
+
+    // Invalidate JWT profile cache
+    await this.redis.del(RedisKeyBuilder.authUserProfile(id));
 
     return new UserEntity(updatedUser);
   }

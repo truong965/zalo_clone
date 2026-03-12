@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
+import { OnEvent } from '@nestjs/event-emitter';
 import { EventType, Gender } from '@prisma/client';
 import type { Message } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { safeJSON } from '@common/utils/json.util';
+import { SystemMessageBroadcasterService } from '../services/system-message-broadcaster.service';
 import type { MessageSentEvent } from '@modules/message/events';
 import type {
   ConversationCreatedEvent,
@@ -33,20 +34,20 @@ export class ConversationEventHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly idempotency: IdempotencyService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly broadcaster: SystemMessageBroadcasterService,
   ) { }
 
   /**
    * Emit system-message.broadcast so the gateway can broadcast
    * message:new + conversation:list:itemUpdated to all active members.
    */
-  private emitSystemMessageBroadcast(
+  private async emitSystemMessageBroadcast(
     conversationId: string,
     message: Message,
     excludeUserIds: string[] = [],
   ) {
     try {
-      this.eventEmitter.emit('system-message.broadcast', {
+      await this.broadcaster.broadcast({
         conversationId,
         message: safeJSON(message),
         excludeUserIds,

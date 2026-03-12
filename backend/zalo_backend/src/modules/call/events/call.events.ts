@@ -30,6 +30,23 @@ export const CallEndReason = {
 export type CallEndReasonType = (typeof CallEndReason)[keyof typeof CallEndReason];
 
 /**
+ * Payload shape received by listeners of `call.ended`.
+ * Matches the fields emitted by EventPublisher after publishing CallEndedEvent.
+ */
+export interface CallEndedPayload {
+  eventId?: string;
+  callId: string;
+  callType?: 'VOICE' | 'VIDEO';
+  initiatorId: string;
+  receiverIds: string[];
+  conversationId?: string;
+  status: CallStatus;
+  reason: CallEndReasonType;
+  provider?: 'WEBRTC_P2P' | 'DAILY_CO';
+  durationSeconds: number;
+}
+
+/**
  * Emitted when User A initiates a call to User B (or group).
  *
  * Listeners:
@@ -81,11 +98,12 @@ export class CallInitiatedEvent extends DomainEvent {
  * All call terminations — user hangup, block, timeout, network drop —
  * now go through this single event with a `reason` field.
  *
- * Listeners:
- * - RedisModule: Clear active call cache
- * - SocketModule: Notify all participants
- * - CallModule (CallEventHandler): System message + push notification
- * - AnalyticsModule: Track call duration, quality, etc.
+ * Listeners (Choreography — all listen directly to call.ended):
+ * - SocketModule (CallEndedSocketListener): Notify all participants
+ * - MessageModule (CallMessageListener): Create CALL_LOG system message
+ * - NotificationsModule (CallNotificationListener): Missed call push
+ * - ConversationModule (CallConversationListener): Update lastMessageAt
+ * - AdminModule (StatsCounterListener): Track call stats
  *
  * Critical Event: YES (billing, compliance, call history)
  *
@@ -97,13 +115,13 @@ export class CallEndedEvent extends DomainEvent {
 
   constructor(
     readonly callId: string,
-    readonly callType: 'VOICE' | 'VIDEO',
+    readonly callType: 'VOICE' | 'VIDEO' | undefined,
     readonly initiatorId: string,
-    readonly receiverIds: string[], // plural, ready for group calls
+    readonly receiverIds: string[],
     readonly conversationId: string | undefined,
     readonly status: CallStatus,
     readonly reason: CallEndReasonType,
-    readonly provider: 'WEBRTC_P2P' | 'DAILY_CO',
+    readonly provider: 'WEBRTC_P2P' | 'DAILY_CO' | undefined,
     readonly durationSeconds: number,
   ) {
     super('CallModule', 'Call', callId, 2);

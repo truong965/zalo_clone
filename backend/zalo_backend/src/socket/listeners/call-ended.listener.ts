@@ -15,7 +15,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { SocketGateway } from '../socket.gateway';
 import { SocketEvents } from '@common/constants/socket-events.constant';
-import type { CallEndedPayload } from '@modules/call/listeners/call-event.handler';
+import type { CallEndedPayload } from '@modules/call/events';
 
 @Injectable()
 export class CallEndedSocketListener {
@@ -32,33 +32,40 @@ export class CallEndedSocketListener {
        * have access to the call room. The frontend should handle duplicate
        * call:ended events idempotently (based on callId).
        */
-      @OnEvent('call.ended')
+      @OnEvent('call.ended', { async: true })
       async handleCallEnded(payload: CallEndedPayload): Promise<void> {
-            const { callId, initiatorId, receiverIds, status, reason, durationSeconds } = payload;
+            try {
+                  const { callId, initiatorId, receiverIds, status, reason, durationSeconds } = payload;
 
-            this.logger.debug(
-                  `[CALL_ENDED_SOCKET] Emitting call:ended for ${callId} to ${[initiatorId, ...receiverIds].length} users`,
-            );
+                  this.logger.debug(
+                        `[CALL_ENDED_SOCKET] Emitting call:ended for ${callId} to ${[initiatorId, ...receiverIds].length} users`,
+                  );
 
-            const socketPayload = {
-                  callId,
-                  status,
-                  reason,
-                  duration: durationSeconds,
-            };
+                  const socketPayload = {
+                        callId,
+                        status,
+                        reason,
+                        duration: durationSeconds,
+                  };
 
-            // Emit to initiator
-            await this.socketGateway
-                  .emitToUser(initiatorId, SocketEvents.CALL_ENDED as string, socketPayload)
-                  .catch(() => undefined);
+                  // Emit to initiator
+                  await this.socketGateway
+                        .emitToUser(initiatorId, SocketEvents.CALL_ENDED as string, socketPayload)
+                        .catch(() => undefined);
 
-            // Emit to all receivers
-            await Promise.all(
-                  receiverIds.map((receiverId) =>
-                        this.socketGateway
-                              .emitToUser(receiverId, SocketEvents.CALL_ENDED as string, socketPayload)
-                              .catch(() => undefined),
-                  ),
-            );
+                  // Emit to all receivers
+                  await Promise.all(
+                        receiverIds.map((receiverId) =>
+                              this.socketGateway
+                                    .emitToUser(receiverId, SocketEvents.CALL_ENDED as string, socketPayload)
+                                    .catch(() => undefined),
+                        ),
+                  );
+            } catch (error) {
+                  this.logger.error(
+                        `[CALL_ENDED_SOCKET] Failed to emit call:ended socket event`,
+                        error,
+                  );
+            }
       }
 }

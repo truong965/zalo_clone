@@ -39,8 +39,6 @@ export class ImageProcessor {
    */
   async processImage(job: ImageProcessingJob): Promise<ImageProcessingResult> {
     const { mediaId, s3Key, originalWidth, originalHeight } = job;
-    // const tempFilePath: string | null = null;
-
     try {
       this.logger.log(`Starting image processing: ${mediaId}`);
 

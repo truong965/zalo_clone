@@ -1,6 +1,4 @@
 import { registerAs } from '@nestjs/config';
-import { permission } from 'process';
-
 export default registerAs('social', () => ({
   limits: {
     // Giới hạn kết bạn

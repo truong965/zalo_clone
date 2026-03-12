@@ -11,7 +11,11 @@ datasource db {
   provider   = "postgresql"
   extensions = [pgcrypto, uuidOssp(map: "uuid-ossp"), pg_trgm, unaccent]
 }
-
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "../../../doc/architecture/01-ERD.md"
+  theme    = "forest"
+}
 // ============================================================================
 // 2. ENUMS (TYPE DEFINITIONS)
 // ============================================================================

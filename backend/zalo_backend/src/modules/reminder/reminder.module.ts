@@ -18,6 +18,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from 'src/database/prisma.module';
 import { SocketModule } from 'src/socket/socket.module';
+import { ConversationModule } from '@modules/conversation/conversation.module';
 
 // Service
 import { ReminderService } from './services/reminder.service';
@@ -35,6 +36,7 @@ import { ReminderController } from './reminder.controller';
             DatabaseModule,
             EventEmitterModule,
             forwardRef(() => SocketModule),
+            ConversationModule,
       ],
       controllers: [ReminderController],
       providers: [

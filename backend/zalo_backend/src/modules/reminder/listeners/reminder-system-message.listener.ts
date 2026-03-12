@@ -11,9 +11,10 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
+import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { safeJSON } from 'src/common/utils/json.util';
+import { SystemMessageBroadcasterService } from '@modules/conversation/services/system-message-broadcaster.service';
 import { ReminderCreatedEvent } from '../events/reminder.events';
 
 @Injectable()
@@ -22,7 +23,7 @@ export class ReminderSystemMessageListener {
 
       constructor(
             private readonly prisma: PrismaService,
-            private readonly eventEmitter: EventEmitter2,
+            private readonly broadcaster: SystemMessageBroadcasterService,
       ) { }
 
       @OnEvent(ReminderCreatedEvent.eventName)
@@ -69,7 +70,7 @@ export class ReminderSystemMessageListener {
                   });
 
                   // Broadcast to all conversation members via the shared pattern
-                  this.eventEmitter.emit('system-message.broadcast', {
+                  await this.broadcaster.broadcast({
                         conversationId: event.conversationId,
                         message: safeJSON(sysMsg),
                         excludeUserIds: [],

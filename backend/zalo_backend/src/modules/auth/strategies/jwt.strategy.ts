@@ -7,6 +7,10 @@ import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { PrismaService } from 'src/database/prisma.service';
 import { User, UserStatus } from '@prisma/client';
 import { UserEntity } from 'src/modules/users/entities/user.entity';
+import { RedisService } from '@modules/redis/redis.service';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
+
+const PROFILE_CACHE_TTL = 300; // 5 minutes
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -14,6 +18,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -32,7 +37,20 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Invalid token type');
     }
 
-    // Find user
+    const cacheKey = RedisKeyBuilder.authUserProfile(payload.sub);
+
+    // Try cache first
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      const user = JSON.parse(cached);
+      // Validate password version even from cache
+      if (user.passwordVersion !== payload.pwdVer) {
+        throw new UnauthorizedException('Password changed. Please login again.');
+      }
+      return user;
+    }
+
+    // Cache miss — query DB
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: {
@@ -65,6 +83,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     // Attach user to request (remove sensitive data)
-    return new UserEntity(user);
+    const entity = new UserEntity(user);
+
+    // Cache the serialized entity
+    await this.redis.setex(cacheKey, PROFILE_CACHE_TTL, JSON.stringify(entity));
+
+    return entity;
   }
 }

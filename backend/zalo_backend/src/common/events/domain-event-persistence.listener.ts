@@ -38,9 +38,9 @@ interface PersistInput {
 export class DomainEventPersistenceListener {
   private readonly logger = new Logger(DomainEventPersistenceListener.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  @OnEvent('user.blocked')
+  @OnEvent('user.blocked', { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     await this.persist({
       eventId: event.eventId,
@@ -55,7 +55,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('user.unblocked')
+  @OnEvent('user.unblocked', { async: true })
   async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     await this.persist({
       eventId: event.eventId,
@@ -70,7 +70,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.request.sent')
+  @OnEvent('friendship.request.sent', { async: true })
   async handleFriendRequestSent(payload: {
     eventId?: string;
     eventType?: string;
@@ -98,7 +98,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.accepted')
+  @OnEvent('friendship.accepted', { async: true })
   async handleFriendshipAccepted(payload: {
     eventId?: string;
     friendshipId?: string;
@@ -127,7 +127,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.request.declined')
+  @OnEvent('friendship.request.declined', { async: true })
   async handleFriendRequestDeclined(payload: {
     eventId?: string;
     requestId?: string;
@@ -154,7 +154,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.request.cancelled')
+  @OnEvent('friendship.request.cancelled', { async: true })
   async handleFriendRequestCancelled(payload: {
     eventId?: string;
     friendshipId?: string;
@@ -183,7 +183,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.unfriended')
+  @OnEvent('friendship.unfriended', { async: true })
   async handleUnfriended(payload: {
     eventId?: string;
     friendshipId?: string;
@@ -211,7 +211,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('privacy.updated')
+  @OnEvent('privacy.updated', { async: true })
   async handlePrivacyUpdated(payload: {
     eventId?: string;
     userId?: string;

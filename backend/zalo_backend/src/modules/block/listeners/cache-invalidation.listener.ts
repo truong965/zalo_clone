@@ -33,7 +33,7 @@ import { RedisService } from '@modules/redis/redis.service';
 export class CacheInvalidationListener {
   private readonly logger = new Logger(CacheInvalidationListener.name);
 
-  constructor(private readonly redis: RedisService) {}
+  constructor(private readonly redis: RedisService) { }
 
   /**
    * Handle cache invalidation event
@@ -48,7 +48,7 @@ export class CacheInvalidationListener {
    *   reason: string - Why invalidation occurred (for logging)
    * }
    */
-  @OnEvent('cache.invalidate')
+  @OnEvent('cache.invalidate', { async: true })
   async handleCacheInvalidation(event: {
     keys: string[];
     reason: string;

@@ -22,10 +22,6 @@ import { DailyCoService } from './services/daily-co.service';
 // PHASE 3.5: Block event listener
 import { CallBlockListener } from './listeners/call-block.listener';
 
-// PHASE 3.3: Call ended event handler
-import { CallEventHandler } from './listeners/call-event.handler';
-import { IdempotencyModule } from '@common/idempotency/idempotency.module';
-
 /**
  * CallModule (PHASE 2 - REFACTORED, PHASE 3.5 - EXTENDED)
  *
@@ -72,7 +68,6 @@ import { IdempotencyModule } from '@common/idempotency/idempotency.module';
     PrivacyModule, // For privacy/block checks in CallSignalingGateway
     forwardRef(() => SocketModule), // For SocketStateService in CallSignalingGateway
     DatabaseModule, // PrismaService for group conversation type check
-    IdempotencyModule, // For CallEventHandler idempotency tracking
   ],
   controllers: [CallHistoryController],
   providers: [
@@ -88,9 +83,6 @@ import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 
     // PHASE 3.5: Block event listener
     CallBlockListener, // Listen to BlockModule events
-
-    // PHASE 3.3: Call ended event handler
-    CallEventHandler, // Listen to call.ended events → emit CALL_LOG_MESSAGE_NEEDED
   ],
   exports: [CallHistoryService],
 })

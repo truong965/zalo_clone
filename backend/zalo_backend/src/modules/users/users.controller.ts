@@ -9,30 +9,37 @@ import {
   Query,
   UseInterceptors,
   ClassSerializerInterceptor,
+  UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { ResponseMessage } from 'src/common/decorator/customize';
+import { CurrentUser, ResponseMessage } from 'src/common/decorator/customize';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateUserAdminDto } from './dto/create-user-admin.dto';
 import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
+import { Roles } from '@common/decorator/roles.decorator';
+import { RolesGuard } from '@common/guards/roles.guard';
+import type { User } from '@prisma/client';
 
 //swagger
 @ApiTags('users')
 @Controller('users')
 @UseInterceptors(ClassSerializerInterceptor) // Kích hoạt @Exclude
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
-  // 2. ADMIN CREATE (Cần bảo vệ bằng Guard sau này)
-  @Post() // Endpoint: /api/v1/users
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @ResponseMessage('Create user by Admin')
   create(@Body() createUserAdminDto: CreateUserAdminDto) {
     return this.usersService.createByAdmin(createUserAdminDto);
   }
 
   @Get()
-  // @CanRead('User')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @ResponseMessage('fetch users with pagination')
   findAll(
     @Query('current') currentPage: string,
@@ -48,35 +55,35 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
-  // @Patch('admin-update')
-  // // @CanUpdate('User')
-  // @ResponseMessage('Update User by Admin')
-  // updateByAdmin(@Body() body: UpdateUserAdminDto, @User() user: IUser) {
-  //   // Chỉ Admin mới gọi được API này
-  //   if (user.role.name !== SUPER_ADMIN) {
-  //     throw new ForbiddenException(
-  //       'Chỉ Admin mới có quyền truy cập endpoint này',
-  //     );
-  //   }
-  //   return this.usersService.updateUser(body, user);
-  // }
-
   @Patch(':id')
-  // @CanUpdate('User')
   @ResponseMessage('Update a User')
-  update(@Param('id') id: string, @Body() body: UpdateUserDto) {
+  update(
+    @Param('id') id: string,
+    @Body() body: UpdateUserDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (
+      currentUser.id !== id &&
+      (currentUser as any).role?.name !== 'ADMIN'
+    ) {
+      throw new ForbiddenException(
+        'Bạn chỉ có thể cập nhật hồ sơ của chính mình',
+      );
+    }
     return this.usersService.update(id, body);
   }
 
   @Patch(':id/admin-update')
-  // @CanUpdate('User')
-  @ResponseMessage('Update a User')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ResponseMessage('Update a User by Admin')
   adminUpdate(@Param('id') id: string, @Body() body: UpdateUserAdminDto) {
     return this.usersService.updateByAdmin(id, body);
   }
 
   @Delete(':id')
-  // @CanDelete('User')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @ResponseMessage('Delete a User')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);

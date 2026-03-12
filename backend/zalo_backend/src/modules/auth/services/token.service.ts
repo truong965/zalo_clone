@@ -19,7 +19,7 @@ export class TokenService {
     private readonly prisma: PrismaService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) {}
+  ) { }
 
   /**
    * Generate access token (short-lived, stateless)
@@ -52,7 +52,10 @@ export class TokenService {
 
     // Calculate expiration
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+    const refreshExpiresIn = this.jwtConfiguration.refreshToken.expiresIn;
+    const daysMatch = refreshExpiresIn.match(/^(\d+)d$/);
+    const days = daysMatch ? parseInt(daysMatch[1], 10) : 7;
+    expiresAt.setDate(expiresAt.getDate() + days);
 
     // Store token in database
     const userToken = await this.prisma.userToken.create({
@@ -203,34 +206,30 @@ export class TokenService {
   }
 
   /**
-   * Recursively find all tokens in family (parent + all descendants)
+   * Find all tokens in family (ancestors + descendants) using a single recursive CTE
    */
   private async findTokenFamily(tokenId: string): Promise<string[]> {
-    const token = await this.prisma.userToken.findUnique({
-      where: { id: tokenId },
-      include: {
-        childTokens: true,
-        parentToken: true,
-      },
-    });
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      WITH RECURSIVE ancestors AS (
+        SELECT id, parent_token_id FROM user_tokens WHERE id = ${tokenId}::uuid
+        UNION ALL
+        SELECT t.id, t.parent_token_id FROM user_tokens t
+        INNER JOIN ancestors a ON a.parent_token_id = t.id
+      ),
+      descendants AS (
+        SELECT id, parent_token_id FROM user_tokens WHERE id = ${tokenId}::uuid
+        UNION ALL
+        SELECT t.id, t.parent_token_id FROM user_tokens t
+        INNER JOIN descendants d ON t.parent_token_id = d.id
+      )
+      SELECT DISTINCT id FROM (
+        SELECT id FROM ancestors
+        UNION
+        SELECT id FROM descendants
+      ) family
+    `;
 
-    if (!token) return [];
-
-    const family: string[] = [token.id];
-
-    // Add parent and ancestors
-    if (token.parentToken) {
-      const ancestors = await this.findTokenFamily(token.parentToken.id);
-      family.push(...ancestors);
-    }
-
-    // Add children and descendants
-    for (const child of token.childTokens) {
-      const descendants = await this.findTokenFamily(child.id);
-      family.push(...descendants);
-    }
-
-    return [...new Set(family)]; // Remove duplicates
+    return rows.map((r) => r.id);
   }
 
   /**

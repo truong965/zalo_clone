@@ -435,7 +435,6 @@ export class ConversationGateway implements OnGatewayInit {
    * Listen for system-message.broadcast events emitted by ConversationEventHandler
    * and broadcast message:new + conversation:list:itemUpdated to all active members.
    */
-  @OnEvent('system-message.broadcast')
   async handleSystemMessageBroadcast(payload: {
     conversationId: string;
     message: Record<string, unknown>;

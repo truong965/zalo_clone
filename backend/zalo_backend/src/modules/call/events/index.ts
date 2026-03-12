@@ -8,3 +8,4 @@
  */
 
 export { CallInitiatedEvent, CallEndedEvent } from './call.events';
+export type { CallEndedPayload, CallEndReasonType } from './call.events';

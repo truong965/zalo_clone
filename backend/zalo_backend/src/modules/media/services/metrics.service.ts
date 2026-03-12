@@ -226,7 +226,7 @@ export class MetricsService {
    * Get current metrics (for admin dashboard)
    */
   async getCurrentMetrics(): Promise<QueueMetrics | null> {
-    return Promise.resolve(this.previousMetrics);
+    return this.previousMetrics;
   }
 
   /**

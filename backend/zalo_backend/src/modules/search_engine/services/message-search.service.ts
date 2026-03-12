@@ -41,12 +41,8 @@ export class MessageSearchService {
       const trimmedKeyword = request.keyword?.trim() ?? '';
       const hasTypeFilter = !!request.messageType;
 
-      // Validate keyword only when provided; allow empty keyword when messageType
-      // filter is active (filter-only browse mode)
-      if (trimmedKeyword) {
-        this.validationService.validateKeyword(request.keyword);
-      } else if (!hasTypeFilter) {
-        // No keyword AND no type filter → reject
+      // Validate keyword when provided, or when no type filter (reject empty browse)
+      if (trimmedKeyword || !hasTypeFilter) {
         this.validationService.validateKeyword(request.keyword);
       }
 
@@ -81,28 +77,28 @@ export class MessageSearchService {
       // Branch: keyword present → full-text search; empty → filter-only browse
       const rawMessages = trimmedKeyword
         ? await this.messageSearchRepository.searchInConversation(
-            userId,
-            conversationId,
-            request.keyword,
-            request.limit,
-            request.cursor,
-            request.messageType,
-            request.fromUserId,
-            request.startDate ? new Date(request.startDate) : undefined,
-            request.endDate ? new Date(request.endDate) : undefined,
-            request.hasMedia,
-          )
+          userId,
+          conversationId,
+          request.keyword,
+          request.limit,
+          request.cursor,
+          request.messageType,
+          request.fromUserId,
+          request.startDate ? new Date(request.startDate) : undefined,
+          request.endDate ? new Date(request.endDate) : undefined,
+          request.hasMedia,
+        )
         : await this.messageSearchRepository.browseInConversation(
-            userId,
-            conversationId,
-            request.limit,
-            request.cursor,
-            request.messageType,
-            request.fromUserId,
-            request.startDate ? new Date(request.startDate) : undefined,
-            request.endDate ? new Date(request.endDate) : undefined,
-            request.hasMedia,
-          );
+          userId,
+          conversationId,
+          request.limit,
+          request.cursor,
+          request.messageType,
+          request.fromUserId,
+          request.startDate ? new Date(request.startDate) : undefined,
+          request.endDate ? new Date(request.endDate) : undefined,
+          request.hasMedia,
+        );
 
       const limit = PaginationUtil.normalizeLimit(request.limit, 100);
       const { items, nextCursor } = PaginationUtil.trimAndGetNextCursor(

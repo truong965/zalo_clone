@@ -25,8 +25,8 @@ import { PushNotificationService } from '../services/push-notification.service';
 import type { FriendRequestSentEvent, FriendRequestAcceptedEvent } from '@modules/friendship/events/friendship.events';
 
 @Injectable()
-export class FriendshipNotificationListener {
-      private readonly logger = new Logger(FriendshipNotificationListener.name);
+export class FriendshipPushNotificationListener {
+      private readonly logger = new Logger(FriendshipPushNotificationListener.name);
 
       constructor(
             private readonly pushService: PushNotificationService,
@@ -38,7 +38,7 @@ export class FriendshipNotificationListener {
       // Friend request sent → push to target user
       // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('friendship.request.sent')
+      @OnEvent('friendship.request.sent', { async: true })
       async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
             if (!this.pushService.isAvailable) return;
 
@@ -79,7 +79,7 @@ export class FriendshipNotificationListener {
       // Friend request accepted → push to original requester
       // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('friendship.accepted')
+      @OnEvent('friendship.accepted', { async: true })
       async handleFriendRequestAccepted(event: FriendRequestAcceptedEvent): Promise<void> {
             if (!this.pushService.isAvailable) return;
 

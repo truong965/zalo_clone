@@ -25,7 +25,7 @@ import redisConfig from 'src/config/redis.config';
 import type { ConfigType } from '@nestjs/config';
 import { safeJSON, safeStringify } from 'src/common/utils/json.util';
 import { EventPublisher } from '@shared/events';
-import { MessageSentEvent } from '../events';
+import { MessageSentEvent, MessageDeletedEvent } from '../events';
 import { InteractionAuthorizationService } from '@modules/authorization/services/interaction-authorization.service';
 import { PermissionAction } from '@common/constants/permission-actions.constant';
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
@@ -148,27 +148,12 @@ export class MessageService {
     const idempotencyKey = RedisKeyBuilder.messageIdempotency(
       dto.clientMessageId,
     );
-    const cachedMessage = await this.redis.getClient().get(idempotencyKey);
 
-    if (cachedMessage) {
-      this.logger.debug(`Duplicate send detected: ${dto.clientMessageId}`);
-      const cached = JSON.parse(cachedMessage) as Message;
-      const existingMessage = await this.prisma.message.findUniqueOrThrow({
-        where: { id: cached.id },
-        include: {
-          sender: {
-            select: { id: true, displayName: true, avatarUrl: true },
-          },
-          parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-          mediaAttachments: {
-            select: MEDIA_ATTACHMENT_SELECT,
-            where: { deletedAt: null },
-          },
-        },
-      });
-      return safeJSON(existingMessage);
-    }
+    // Idempotency: return cached result if duplicate
+    const existing = await this.checkIdempotency(idempotencyKey);
+    if (existing) return existing;
 
+    // Validate permissions
     const isMember = await this.isMember(dto.conversationId, senderId);
     if (!isMember) {
       throw new ForbiddenException('Not a member of conversation');
@@ -179,132 +164,21 @@ export class MessageService {
       senderId,
     );
 
-    if (targetUserId) {
-      const authz = await this.interactionAuth.canInteract(
-        senderId,
-        targetUserId,
-        PermissionAction.MESSAGE,
-      );
-      if (!authz.allowed) {
-        throw new ForbiddenException(
-          authz.reason ?? 'User privacy settings do not allow messaging',
-        );
-      }
-    }
+    await this.validateSendPermissions(senderId, targetUserId);
 
     if (dto.mediaIds && dto.mediaIds.length > 0) {
       await this.validateMediaAttachments(dto.mediaIds, senderId, dto.type);
     }
 
-    let replyToId: bigint | null = null;
+    const replyToId = await this.resolveReplyToId(dto);
 
-    if (dto.replyTo?.messageId) {
-      try {
-        replyToId = BigInt(dto.replyTo.messageId);
-      } catch {
-        throw new BadRequestException('Invalid replyTo message ID format');
-      }
+    // Compute receipt fields
+    const { totalRecipients, directReceipts } = await this.computeReceiptFields(
+      targetUserId, dto.conversationId, senderId,
+    );
 
-      await this.validateReplyToMessage(replyToId, dto.conversationId);
-    }
-
-    let message: Message;
-
-    // Compute receipt fields for hybrid approach
-    const isDirect = targetUserId !== null;
-    let totalRecipients: number;
-    let directReceipts: Record<string, { delivered: null; seen: null }> | null;
-
-    if (isDirect) {
-      // 1v1: totalRecipients = 1, initialize JSONB with recipient entry
-      totalRecipients = 1;
-      directReceipts = {
-        [targetUserId]: { delivered: null, seen: null },
-      };
-    } else {
-      // Group: totalRecipients = memberCount - 1 (excluding sender)
-      const memberCount = await this.prisma.conversationMember.count({
-        where: {
-          conversationId: dto.conversationId,
-          status: MemberStatus.ACTIVE,
-          userId: { not: senderId },
-        },
-      });
-      totalRecipients = memberCount;
-      directReceipts = null;
-    }
-
-    try {
-      message = await this.prisma.$transaction(async (tx) => {
-        const msg = await tx.message.create({
-          data: {
-            conversationId: dto.conversationId,
-            senderId,
-            type: dto.type,
-            content: dto.content?.trim() || null,
-            metadata: dto.metadata || {},
-            clientMessageId: dto.clientMessageId,
-            replyToId: replyToId,
-            totalRecipients,
-            directReceipts: directReceipts ?? undefined,
-          },
-        });
-
-        if (dto.mediaIds && dto.mediaIds.length > 0) {
-          await tx.mediaAttachment.updateMany({
-            where: { id: { in: dto.mediaIds } },
-            data: { messageId: msg.id },
-          });
-        }
-
-        await tx.conversation.update({
-          where: { id: dto.conversationId },
-          data: { lastMessageAt: msg.createdAt },
-        });
-
-        return msg;
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          const target = error.meta?.target as string[] | undefined;
-          if (target?.includes('clientMessageId')) {
-            this.logger.warn(
-              `Duplicate clientMessageId detected: ${dto.clientMessageId}`,
-            );
-          }
-          const existing = await this.prisma.message.findUniqueOrThrow({
-            where: { clientMessageId: dto.clientMessageId },
-            include: {
-              sender: {
-                select: { id: true, displayName: true, avatarUrl: true },
-              },
-              parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-              mediaAttachments: {
-                select: MEDIA_ATTACHMENT_SELECT,
-                where: { deletedAt: null },
-              },
-            },
-          });
-
-          return safeJSON(existing);
-        }
-
-        if (error.code === 'P2003') {
-          this.logger.error(
-            'Foreign key constraint failed - media may have been deleted',
-            {
-              clientMessageId: dto.clientMessageId,
-              error: error.message,
-            },
-          );
-          throw new BadRequestException(
-            'One or more media files are no longer available. Please retry upload.',
-          );
-        }
-      }
-      throw error;
-    }
+    // Persist message
+    const message = await this.persistMessage(dto, senderId, replyToId, totalRecipients, directReceipts);
 
     const fullMessage = await this.prisma.message.findUniqueOrThrow({
       where: { id: message.id },
@@ -343,6 +217,163 @@ export class MessageService {
 
     this.logger.log(`Message ${message.id} sent (Type: ${dto.type})`);
     return safeJSON(fullMessage);
+  }
+
+  /**
+   * Check idempotency cache and return existing message if found.
+   */
+  private async checkIdempotency(idempotencyKey: string): Promise<Message | null> {
+    const cachedMessage = await this.redis.getClient().get(idempotencyKey);
+    if (!cachedMessage) return null;
+
+    this.logger.debug(`Duplicate send detected`);
+    const cached = JSON.parse(cachedMessage) as Message;
+    const existingMessage = await this.prisma.message.findUniqueOrThrow({
+      where: { id: cached.id },
+      include: {
+        sender: { select: { id: true, displayName: true, avatarUrl: true } },
+        parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
+        mediaAttachments: { select: MEDIA_ATTACHMENT_SELECT, where: { deletedAt: null } },
+      },
+    });
+    return safeJSON(existingMessage);
+  }
+
+  /**
+   * Validate that sender can message the target user (privacy/block check).
+   */
+  private async validateSendPermissions(senderId: string, targetUserId: string | null): Promise<void> {
+    if (!targetUserId) return;
+
+    const authz = await this.interactionAuth.canInteract(
+      senderId, targetUserId, PermissionAction.MESSAGE,
+    );
+    if (!authz.allowed) {
+      throw new ForbiddenException(
+        authz.reason ?? 'User privacy settings do not allow messaging',
+      );
+    }
+  }
+
+  /**
+   * Resolve replyToId from DTO.
+   */
+  private async resolveReplyToId(dto: SendMessageDto): Promise<bigint | null> {
+    if (!dto.replyTo?.messageId) return null;
+
+    let replyToId: bigint;
+    try {
+      replyToId = BigInt(dto.replyTo.messageId);
+    } catch {
+      throw new BadRequestException('Invalid replyTo message ID format');
+    }
+
+    await this.validateReplyToMessage(replyToId, dto.conversationId);
+    return replyToId;
+  }
+
+  /**
+   * Compute receipt fields based on conversation type.
+   */
+  private async computeReceiptFields(
+    targetUserId: string | null,
+    conversationId: string,
+    senderId: string,
+  ): Promise<{ totalRecipients: number; directReceipts: Record<string, { delivered: null; seen: null }> | null }> {
+    if (targetUserId !== null) {
+      return {
+        totalRecipients: 1,
+        directReceipts: { [targetUserId]: { delivered: null, seen: null } },
+      };
+    }
+
+    const memberCount = await this.prisma.conversationMember.count({
+      where: {
+        conversationId,
+        status: MemberStatus.ACTIVE,
+        userId: { not: senderId },
+      },
+    });
+    return { totalRecipients: memberCount, directReceipts: null };
+  }
+
+  /**
+   * Persist message in a transaction, handling Prisma-specific errors.
+   */
+  private async persistMessage(
+    dto: SendMessageDto,
+    senderId: string,
+    replyToId: bigint | null,
+    totalRecipients: number,
+    directReceipts: Record<string, { delivered: null; seen: null }> | null,
+  ): Promise<Message> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const msg = await tx.message.create({
+          data: {
+            conversationId: dto.conversationId,
+            senderId,
+            type: dto.type,
+            content: dto.content?.trim() || null,
+            metadata: dto.metadata || {},
+            clientMessageId: dto.clientMessageId,
+            replyToId: replyToId,
+            totalRecipients,
+            directReceipts: directReceipts ?? undefined,
+          },
+        });
+
+        if (dto.mediaIds && dto.mediaIds.length > 0) {
+          await tx.mediaAttachment.updateMany({
+            where: { id: { in: dto.mediaIds } },
+            data: { messageId: msg.id },
+          });
+        }
+
+        await tx.conversation.update({
+          where: { id: dto.conversationId },
+          data: { lastMessageAt: msg.createdAt },
+        });
+
+        return msg;
+      });
+    } catch (error) {
+      return this.handlePersistError(error, dto);
+    }
+  }
+
+  /**
+   * Handle Prisma-specific errors from message persistence.
+   */
+  private async handlePersistError(error: unknown, dto: SendMessageDto): Promise<Message> {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        const target = error.meta?.target as string[] | undefined;
+        if (target?.includes('clientMessageId')) {
+          this.logger.warn(`Duplicate clientMessageId detected: ${dto.clientMessageId}`);
+        }
+        const existing = await this.prisma.message.findUniqueOrThrow({
+          where: { clientMessageId: dto.clientMessageId },
+          include: {
+            sender: { select: { id: true, displayName: true, avatarUrl: true } },
+            parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
+            mediaAttachments: { select: MEDIA_ATTACHMENT_SELECT, where: { deletedAt: null } },
+          },
+        });
+        return safeJSON(existing);
+      }
+
+      if (error.code === 'P2003') {
+        this.logger.error(
+          'Foreign key constraint failed - media may have been deleted',
+          { clientMessageId: dto.clientMessageId, error: error.message },
+        );
+        throw new BadRequestException(
+          'One or more media files are no longer available. Please retry upload.',
+        );
+      }
+    }
+    throw error;
   }
 
   private async validateMediaAttachments(
@@ -705,6 +736,17 @@ export class MessageService {
           deletedAt: new Date(),
           deletedById: userId,
         },
+      });
+
+      await this.eventPublisher.publish(
+        new MessageDeletedEvent(
+          messageId.toString(),
+          message.conversationId,
+          userId,
+        ),
+        { fireAndForget: true },
+      ).catch((err) => {
+        this.logger.warn(`Failed to emit MessageDeletedEvent: ${err.message}`);
       });
 
       this.logger.log(`Message ${messageId} deleted for everyone by ${userId}`);

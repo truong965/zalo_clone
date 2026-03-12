@@ -16,6 +16,7 @@ import { ConversationService } from './services/conversation.service';
 import { GroupService } from './services/group.service';
 import { GroupJoinService } from './services/group-join.service';
 import { ConversationRealtimeService } from './services/conversation-realtime.service';
+import { SystemMessageBroadcasterService } from './services/system-message-broadcaster.service';
 
 // Listeners
 import { ConversationEventHandler } from './listeners/conversation-event.handler';
@@ -61,6 +62,7 @@ import { ConversationGateway } from './conversation.gateway';
     GroupService,
     GroupJoinService,
     ConversationRealtimeService,
+    SystemMessageBroadcasterService,
 
     // Listeners
     ConversationEventHandler,
@@ -70,6 +72,6 @@ import { ConversationGateway } from './conversation.gateway';
     // Gateway
     ConversationGateway,
   ],
-  exports: [ConversationService, GroupService, GroupJoinService],
+  exports: [ConversationService, GroupService, GroupJoinService, SystemMessageBroadcasterService],
 })
 export class ConversationModule { }

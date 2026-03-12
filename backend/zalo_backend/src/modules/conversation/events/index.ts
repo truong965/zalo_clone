@@ -6,4 +6,5 @@ export {
   ConversationMemberDemotedEvent,
   ConversationArchivedEvent,
   ConversationMutedEvent,
+  ConversationUpdatedEvent,
 } from './conversation.events';

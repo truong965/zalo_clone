@@ -122,6 +122,13 @@ export class RedisKeyBuilder {
     return `call:missed:count:${userId}`;
   }
 
+  // ============ AUTH KEYS ============
+
+  /** JWT strategy user profile cache: AUTH:USER_PROFILE:{userId} (TTL: 5min) */
+  static authUserProfile(userId: string): string {
+    return `AUTH:USER_PROFILE:${userId}`;
+  }
+
   // ============ RATE LIMIT (legacy format) ============
 
   static rateLimitContactSync(userId: string): string {

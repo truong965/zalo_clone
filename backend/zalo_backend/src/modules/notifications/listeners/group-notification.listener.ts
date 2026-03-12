@@ -58,7 +58,7 @@ export class GroupNotificationListener {
       // conversation.created → push to all members (GROUP only)
       // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('conversation.created')
+      @OnEvent('conversation.created', { async: true })
       async handleConversationCreated(event: ConversationCreatedEvent): Promise<void> {
             // Only handle GROUP conversations
             if (event.type !== 'GROUP') return;
@@ -102,7 +102,7 @@ export class GroupNotificationListener {
       // conversation.member.added → push to new + existing members
       // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('conversation.member.added')
+      @OnEvent('conversation.member.added', { async: true })
       async handleMemberAdded(event: ConversationMemberAddedEvent): Promise<void> {
             if (!this.pushService.isAvailable) return;
 
@@ -172,7 +172,7 @@ export class GroupNotificationListener {
       // conversation.member.left → push to remaining members or kicked member
       // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('conversation.member.left')
+      @OnEvent('conversation.member.left', { async: true })
       async handleMemberLeft(event: ConversationMemberLeftEvent): Promise<void> {
             if (!this.pushService.isAvailable) return;
 
@@ -246,7 +246,7 @@ export class GroupNotificationListener {
       // conversation.member.promoted → push to promoted member
       // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('conversation.member.promoted')
+      @OnEvent('conversation.member.promoted', { async: true })
       async handleMemberPromoted(event: ConversationMemberPromotedEvent): Promise<void> {
             if (!this.pushService.isAvailable) return;
 
@@ -281,7 +281,7 @@ export class GroupNotificationListener {
       // conversation.member.demoted → push to demoted member
       // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('conversation.member.demoted')
+      @OnEvent('conversation.member.demoted', { async: true })
       async handleMemberDemoted(event: ConversationMemberDemotedEvent): Promise<void> {
             if (!this.pushService.isAvailable) return;
 

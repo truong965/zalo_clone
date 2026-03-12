@@ -5,7 +5,7 @@
  * - Firebase Admin SDK lifecycle (FirebaseService)
  * - Device token CRUD (DeviceTokenService + DeviceTokenController)
  * - Push notification orchestration (PushNotificationService)
- * - Event listeners for push notifications (CallNotificationListener, MessageNotificationListener, FriendshipNotificationListener, GroupNotificationListener)
+ * - Event listeners for push notifications (CallNotificationListener, MessageNotificationListener, FriendshipPushNotificationListener, GroupNotificationListener)
  * - Redis-based notification batching (NotificationBatchService)
  * - Conversation member cache for notification decisions (ConversationMemberCacheService)
  *
@@ -20,6 +20,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from '@database/prisma.module';
+import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import firebaseConfig from '@config/firebase.config';
 
 // Services
@@ -35,7 +36,7 @@ import { DeviceTokenController } from './controllers/device-token.controller';
 // Listeners
 import { CallNotificationListener } from './listeners/call-notification.listener';
 import { MessageNotificationListener } from './listeners/message-notification.listener';
-import { FriendshipNotificationListener } from './listeners/friendship-notification.listener';
+import { FriendshipPushNotificationListener } from './listeners/friendship-notification.listener';
 import { GroupNotificationListener } from './listeners/group-notification.listener';
 
 @Module({
@@ -43,6 +44,7 @@ import { GroupNotificationListener } from './listeners/group-notification.listen
             ConfigModule.forFeature(firebaseConfig),
             DatabaseModule,
             EventEmitterModule,
+            IdempotencyModule,
       ],
       controllers: [DeviceTokenController],
       providers: [
@@ -55,7 +57,7 @@ import { GroupNotificationListener } from './listeners/group-notification.listen
             // Event listeners
             CallNotificationListener,
             MessageNotificationListener,
-            FriendshipNotificationListener,
+            FriendshipPushNotificationListener,
             GroupNotificationListener,
       ],
       exports: [PushNotificationService, DeviceTokenService],
