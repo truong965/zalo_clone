@@ -445,67 +445,85 @@ export class FriendshipService {
   /**
    * Cancel a friend request (by requester)
    *
+   * FR-R1 FIX: Added distributed lock to prevent race condition with concurrent accept/decline
    * PHASE 5: Soft delete (deletedAt) per plan, emit friendship.request.cancelled
    */
   async cancelRequest(userId: string, friendshipId: string): Promise<void> {
-    const friendship = await this.prisma.friendship.findFirst({
-      where: { id: friendshipId, deletedAt: null },
-    });
+    const lockKey = RedisKeyBuilder.friendshipLock(friendshipId, userId);
 
-    if (!friendship) {
-      throw new FriendshipNotFoundException();
-    }
+    return await this.lockService.withLock(
+      lockKey,
+      async () => {
+        const friendship = await this.prisma.friendship.findFirst({
+          where: { id: friendshipId, deletedAt: null },
+        });
 
-    if (friendship.status !== FriendshipStatus.PENDING) {
-      throw new InvalidFriendshipStateException(
-        `Cannot cancel friendship with status: ${friendship.status}`,
-      );
-    }
+        if (!friendship) {
+          throw new FriendshipNotFoundException();
+        }
 
-    if (friendship.requesterId !== userId) {
-      throw new InvalidFriendshipStateException(
-        'Only the requester can cancel friend request',
-      );
-    }
+        // Idempotency: Already soft-deleted
+        if (friendship.deletedAt) {
+          this.logger.debug(
+            `[Idempotency] Friendship ${friendshipId} already cancelled`,
+          );
+          return;
+        }
 
-    const targetUserId =
-      friendship.user1Id === userId ? friendship.user2Id : friendship.user1Id;
+        if (friendship.status !== FriendshipStatus.PENDING) {
+          throw new InvalidFriendshipStateException(
+            `Cannot cancel friendship with status: ${friendship.status}`,
+          );
+        }
 
-    // Soft delete (per plan)
-    await this.prisma.friendship.update({
-      where: { id: friendshipId },
-      data: {
-        deletedAt: new Date(),
-        lastActionAt: new Date(),
-        lastActionBy: userId,
+        if (friendship.requesterId !== userId) {
+          throw new InvalidFriendshipStateException(
+            'Only the requester can cancel friend request',
+          );
+        }
+
+        const targetUserId =
+          friendship.user1Id === userId ? friendship.user2Id : friendship.user1Id;
+
+        // Soft delete (per plan)
+        await this.prisma.friendship.update({
+          where: { id: friendshipId },
+          data: {
+            deletedAt: new Date(),
+            lastActionAt: new Date(),
+            lastActionBy: userId,
+          },
+        });
+
+        await this.invalidateFriendshipCache(
+          friendship.user1Id,
+          friendship.user2Id,
+        );
+        await this.invalidatePendingRequestsCache(targetUserId);
+
+        const eventPayload = {
+          eventId: EventIdGenerator.generate(),
+          eventType: 'FRIEND_REQUEST_CANCELLED' as const,
+          timestamp: new Date(),
+          friendshipId,
+          cancelledBy: userId,
+          targetUserId,
+        };
+
+        await this.eventPublisher.publish(
+          new FriendRequestCancelledEvent(
+            eventPayload.friendshipId,
+            eventPayload.cancelledBy,
+            eventPayload.targetUserId,
+          ),
+          { correlationId: eventPayload.eventId },
+        );
+
+        this.logger.log(`Friend request cancelled: ${friendshipId} by ${userId}`);
       },
-    });
-
-    await this.invalidateFriendshipCache(
-      friendship.user1Id,
-      friendship.user2Id,
+      30,
+      10,
     );
-    await this.invalidatePendingRequestsCache(targetUserId);
-
-    const eventPayload = {
-      eventId: EventIdGenerator.generate(),
-      eventType: 'FRIEND_REQUEST_CANCELLED' as const,
-      timestamp: new Date(),
-      friendshipId,
-      cancelledBy: userId,
-      targetUserId,
-    };
-
-    await this.eventPublisher.publish(
-      new FriendRequestCancelledEvent(
-        eventPayload.friendshipId,
-        eventPayload.cancelledBy,
-        eventPayload.targetUserId,
-      ),
-      { correlationId: eventPayload.eventId },
-    );
-
-    this.logger.log(`Friend request cancelled: ${friendshipId} by ${userId}`);
   }
 
   /**
@@ -821,12 +839,23 @@ export class FriendshipService {
   async getReceivedRequests(userId: string): Promise<FriendRequestWithUserDto[]> {
     const friendships = await this.prisma.friendship.findMany({
       where: {
-        OR: [
-          { user1Id: userId, requesterId: { not: userId } },
-          { user2Id: userId, requesterId: { not: userId } },
-        ],
         status: FriendshipStatus.PENDING,
         deletedAt: null,
+        // FR-R5 FIX: Filter out expired requests
+        AND: [
+          {
+            OR: [
+              { user1Id: userId, requesterId: { not: userId } },
+              { user2Id: userId, requesterId: { not: userId } },
+            ],
+          },
+          {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } },
+            ],
+          },
+        ],
       },
       include: {
         user1: { select: { id: true, displayName: true, avatarUrl: true } },
@@ -881,6 +910,11 @@ export class FriendshipService {
         requesterId: userId,
         status: FriendshipStatus.PENDING,
         deletedAt: null,
+        // FR-R5 FIX: Filter out expired requests
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
       },
       include: {
         user1: { select: { id: true, displayName: true, avatarUrl: true } },
@@ -928,30 +962,41 @@ export class FriendshipService {
 
   /**
    * Get mutual friends between two users
+   *
+   * FR-R3 FIX: Single query with SQL INTERSECT instead of 2 full list queries + JS filter
    */
   async getMutualFriends(
     userId: string,
     otherUserId: string,
   ): Promise<MutualFriendsDto[]> {
-    // Get friends of userId
-    const userFriends = await this.getFriendIds(userId);
-
-    // Get friends of otherUserId
-    const otherUserFriends = await this.getFriendIds(otherUserId);
-
-    // Find intersection
-    const mutualFriendIds = userFriends.filter((id) =>
-      otherUserFriends.includes(id),
-    );
+    // Single SQL query: find IDs that are friends with BOTH users
+    const mutualFriendIds = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT f1."friendId" AS id FROM (
+        SELECT CASE WHEN "user1Id" = ${userId} THEN "user2Id" ELSE "user1Id" END AS "friendId"
+        FROM "Friendship"
+        WHERE ("user1Id" = ${userId} OR "user2Id" = ${userId})
+          AND status = 'ACCEPTED'
+          AND "deletedAt" IS NULL
+      ) f1
+      INNER JOIN (
+        SELECT CASE WHEN "user1Id" = ${otherUserId} THEN "user2Id" ELSE "user1Id" END AS "friendId"
+        FROM "Friendship"
+        WHERE ("user1Id" = ${otherUserId} OR "user2Id" = ${otherUserId})
+          AND status = 'ACCEPTED'
+          AND "deletedAt" IS NULL
+      ) f2 ON f1."friendId" = f2."friendId"
+    `;
 
     if (mutualFriendIds.length === 0) {
       return [];
     }
 
+    const ids = mutualFriendIds.map((r) => r.id);
+
     // Fetch user details
     const users = await this.prisma.user.findMany({
       where: {
-        id: { in: mutualFriendIds },
+        id: { in: ids },
         status: 'ACTIVE',
       },
       select: {

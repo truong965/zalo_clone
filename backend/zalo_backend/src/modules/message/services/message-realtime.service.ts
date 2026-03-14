@@ -200,7 +200,15 @@ export class MessageRealtimeService {
     return message;
   }
 
-  async markAsSeen(dto: MarkAsReadDto, userId: string): Promise<void> {
+  async markAsSeen(
+    dto: MarkAsReadDto,
+    userId: string,
+    emitToUser?: (
+      userId: string,
+      event: string,
+      data: unknown,
+    ) => void | Promise<void>,
+  ): Promise<void> {
     const isMember = await this.isMember(dto.conversationId, userId);
     if (!isMember) {
       throw new Error('Not a member of this conversation');
@@ -209,6 +217,8 @@ export class MessageRealtimeService {
     const conversationType =
       await this.receiptService.getConversationType(dto.conversationId);
 
+    // MSG-R5: Track invalid IDs for debugging
+    const originalCount = dto.messageIds.length;
     const messageIds = dto.messageIds
       .map((id) => {
         try {
@@ -219,10 +229,17 @@ export class MessageRealtimeService {
       })
       .filter((id): id is bigint => id !== null);
 
+    const skipped = originalCount - messageIds.length;
+    if (skipped > 0) {
+      this.logger.warn(
+        `Skipped ${skipped} invalid messageIds in markAsSeen for conversation ${dto.conversationId}`,
+      );
+    }
+
     if (conversationType === ConversationType.DIRECT) {
       await this.handleDirectMessageSeen(dto.conversationId, messageIds, userId);
     } else {
-      await this.handleGroupMessageSeen(dto.conversationId, messageIds, userId);
+      await this.handleGroupMessageSeen(dto.conversationId, messageIds, userId, emitToUser);
     }
   }
 
@@ -268,11 +285,17 @@ export class MessageRealtimeService {
 
   /**
    * Handle seen receipts for GROUP conversations.
+   * MSG-R2: conversation:read delivered via direct emit instead of Pub/Sub.
    */
   private async handleGroupMessageSeen(
     conversationId: string,
     messageIds: bigint[],
     userId: string,
+    emitToUser?: (
+      userId: string,
+      event: string,
+      data: unknown,
+    ) => void | Promise<void>,
   ): Promise<void> {
     const latestMessageId =
       messageIds.length > 0
@@ -288,12 +311,38 @@ export class MessageRealtimeService {
     }
     await this.resetUnreadCount(conversationId, userId);
 
-    await this.broadcaster.broadcastConversationRead(conversationId, {
-      userId,
-      conversationId,
-      messageId: latestMessageId?.toString() ?? null,
-      timestamp: new Date(),
-    });
+    // MSG-R2: Direct emit conversation:read to all active members (except reader)
+    if (emitToUser) {
+      const members = await this.getActiveMembers(conversationId);
+      const readPayload = {
+        conversationId,
+        userId,
+        messageId: latestMessageId?.toString() ?? null,
+        timestamp: new Date(),
+      };
+
+      await Promise.all(
+        members
+          .filter((m) => m.userId !== userId)
+          .map((m) =>
+            Promise.resolve(
+              emitToUser(m.userId, SocketEvents.CONVERSATION_READ, readPayload),
+            ),
+          ),
+      );
+
+      this.logger.debug(
+        `Direct-emitted conversation:read for ${conversationId} by user ${userId} to ${members.length - 1} members`,
+      );
+    } else {
+      // Fallback: use Pub/Sub (for HTTP-only callers without socket emitter)
+      await this.broadcaster.broadcastConversationRead(conversationId, {
+        userId,
+        conversationId,
+        messageId: latestMessageId?.toString() ?? null,
+        timestamp: new Date(),
+      });
+    }
   }
 
   async typingStart(dto: TypingIndicatorDto, userId: string): Promise<void> {

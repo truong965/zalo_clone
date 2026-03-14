@@ -23,8 +23,7 @@
 // import path from 'path';
 // import ffmpeg from 'fluent-ffmpeg';
 // import { path as ffprobePath } from 'ffprobe-static';
-// import { getQueueToken } from '@nestjs/bull'; // Hoặc @nestjs/bull tuỳ version bạn dùng
-// import { Queue } from 'bull';
+
 // // ✅ CẤU HÌNH PATH CHO FFPROBE (Chỉ chạy khi debug local)
 // ffmpeg.setFfprobePath(ffprobePath);
 
@@ -35,7 +34,7 @@
 //   let s3Client: S3Client;
 //   let user: any;
 //   let accessToken: string;
-// let audioQueue: Queue;
+
 //   const s3Config = {
 //     region: process.env.AWS_REGION || 'ap-southeast-1',
 //     endpoint: process.env.S3_ENDPOINT || 'http://minio:9000',

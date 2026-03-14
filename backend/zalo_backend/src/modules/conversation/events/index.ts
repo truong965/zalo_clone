@@ -4,6 +4,7 @@ export {
   ConversationMemberLeftEvent,
   ConversationMemberPromotedEvent,
   ConversationMemberDemotedEvent,
+  ConversationDissolvedEvent,
   ConversationArchivedEvent,
   ConversationMutedEvent,
   ConversationUpdatedEvent,

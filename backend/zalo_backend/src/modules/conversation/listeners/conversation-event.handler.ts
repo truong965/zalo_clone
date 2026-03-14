@@ -9,6 +9,7 @@ import { SystemMessageBroadcasterService } from '../services/system-message-broa
 import type { MessageSentEvent } from '@modules/message/events';
 import type {
   ConversationCreatedEvent,
+  ConversationDissolvedEvent,
   ConversationMemberAddedEvent,
   ConversationMemberDemotedEvent,
   ConversationMemberLeftEvent,
@@ -648,6 +649,61 @@ export class ConversationEventHandler {
       } catch (recordError) {
         this.logger.warn(
           `[MEMBER_DEMOTED] Failed to record error in idempotency tracking`,
+          recordError,
+        );
+      }
+      throw error;
+    }
+  }
+
+  @OnEvent('conversation.dissolved')
+  async handleGroupDissolved(
+    payload: ConversationDissolvedEvent,
+  ): Promise<void> {
+    const eventId = payload.eventId;
+    const handlerId = this.constructor.name;
+
+    try {
+      const alreadyProcessed = await this.idempotency.isProcessed(
+        eventId,
+        handlerId,
+      );
+      if (alreadyProcessed) {
+        this.logger.debug(
+          `[GROUP_DISSOLVED] Skipping duplicate event: ${eventId}`,
+        );
+        return;
+      }
+    } catch (idempotencyError) {
+      this.logger.warn(
+        `[GROUP_DISSOLVED] Idempotency check failed, proceeding with caution`,
+        idempotencyError,
+      );
+    }
+
+    // System message was already created in ConversationRealtimeService.dissolveGroup()
+    // before the soft-delete. This handler only records idempotency.
+    try {
+      await this.idempotency.recordProcessed(
+        eventId,
+        handlerId,
+        EventType.CONVERSATION_DISSOLVED,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[GROUP_DISSOLVED] Failed to handle conversation.dissolved event:`,
+        error,
+      );
+      try {
+        await this.idempotency.recordError(
+          eventId,
+          handlerId,
+          error as Error,
+          EventType.CONVERSATION_DISSOLVED,
+        );
+      } catch (recordError) {
+        this.logger.warn(
+          `[GROUP_DISSOLVED] Failed to record error in idempotency tracking`,
           recordError,
         );
       }

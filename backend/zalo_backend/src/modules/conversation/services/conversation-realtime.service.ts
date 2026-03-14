@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { MemberRole, MemberStatus } from '@prisma/client';
 import { SystemMessageBroadcasterService } from './system-message-broadcaster.service';
 import { PrismaService } from 'src/database/prisma.service';
-import { safeJSON } from '@common/utils/json.util';
+import { safeJSON, safeStringify } from '@common/utils/json.util';
+import { RedisRegistryService } from 'src/modules/redis/services/redis-registry.service';
+import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 
 import { ConversationService } from './conversation.service';
 import { GroupService } from './group.service';
@@ -25,12 +28,16 @@ export type ConversationGatewayNotification = {
 
 @Injectable()
 export class ConversationRealtimeService {
+  private readonly logger = new Logger(ConversationRealtimeService.name);
+
   constructor(
     private readonly conversationService: ConversationService,
     private readonly groupService: GroupService,
     private readonly groupJoinService: GroupJoinService,
     private readonly prisma: PrismaService,
     private readonly broadcaster: SystemMessageBroadcasterService,
+    private readonly redisRegistry: RedisRegistryService,
+    private readonly redis: RedisService,
   ) { }
 
   async createGroup(
@@ -254,8 +261,44 @@ export class ConversationRealtimeService {
   ): Promise<{ notifications: ConversationGatewayNotification[] }> {
     const members =
       await this.conversationService.getActiveMembers(conversationId);
+    const memberIds = members.map((m) => m.userId);
 
-    await this.groupService.dissolveGroup(conversationId, userId);
+    // 1. Create system message BEFORE soft-delete (persistent audit trail)
+    const admin = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    });
+    const actorName = admin?.displayName ?? 'Một thành viên';
+
+    const sysMsg = await this.prisma.message.create({
+      data: {
+        conversationId,
+        type: 'SYSTEM',
+        content: `${actorName} đã giải tán nhóm`,
+        metadata: {
+          action: 'GROUP_DISSOLVED',
+          actorId: userId,
+        },
+      },
+    });
+
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: sysMsg.createdAt },
+    });
+
+    // 2. Broadcast system message to online members (before soft-delete so getActiveMembers works)
+    await this.broadcaster.broadcast({
+      conversationId,
+      message: safeJSON(sysMsg),
+      excludeUserIds: [],
+    });
+
+    // 3. Enqueue system message for offline members so they see it on reconnect
+    await this.enqueueForOfflineMembers(memberIds, sysMsg);
+
+    // 4. Soft-delete the conversation + emit domain event
+    await this.groupService.dissolveGroup(conversationId, userId, memberIds);
 
     const notifications: ConversationGatewayNotification[] = members.map(
       (member) => ({
@@ -269,6 +312,40 @@ export class ConversationRealtimeService {
     );
 
     return { notifications };
+  }
+
+  /**
+   * For members who are offline (no active sockets), enqueue the message
+   * to Redis offline queue so they receive it via syncOfflineMessages on reconnect.
+   */
+  private async enqueueForOfflineMembers(
+    memberIds: string[],
+    message: { id: bigint; conversationId: string; createdAt: Date;[key: string]: any },
+  ): Promise<void> {
+    try {
+      const client = this.redis.getClient();
+
+      for (const memberId of memberIds) {
+        const sockets = await this.redisRegistry.getUserSockets(memberId);
+        if (sockets.length > 0) continue; // user is online, already received via broadcast
+
+        const queueKey = RedisKeyBuilder.offlineMessages(memberId);
+        const score = new Date(message.createdAt).getTime();
+        const queuedMsg = {
+          messageId: message.id,
+          conversationId: message.conversationId,
+          data: message,
+          timestamp: score,
+        };
+
+        await client.zadd(queueKey, score, safeStringify(queuedMsg));
+      }
+    } catch (error) {
+      this.logger.warn(
+        `[DISSOLVE_GROUP] Failed to enqueue offline messages`,
+        (error as Error).stack,
+      );
+    }
   }
 
   async requestJoin(

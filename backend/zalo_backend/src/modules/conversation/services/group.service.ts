@@ -19,6 +19,7 @@ import { EventPublisher } from '@shared/events';
 import { DisplayNameResolver } from '@shared/services';
 import {
   ConversationCreatedEvent,
+  ConversationDissolvedEvent,
   ConversationMemberAddedEvent,
   ConversationMemberDemotedEvent,
   ConversationMemberLeftEvent,
@@ -170,19 +171,6 @@ export class GroupService {
       await this.verifyMember(dto.conversationId, requesterId);
     }
 
-    const currentSize = await this.prisma.conversationMember.count({
-      where: {
-        conversationId: dto.conversationId,
-        status: MemberStatus.ACTIVE,
-      },
-    });
-
-    if (currentSize + dto.userIds.length > this.MAX_GROUP_SIZE) {
-      throw new BadRequestException(
-        `Group size limit exceeded (max ${this.MAX_GROUP_SIZE})`,
-      );
-    }
-
     const users = await this.prisma.user.findMany({
       where: { id: { in: dto.userIds } },
       select: { id: true, displayName: true },
@@ -215,6 +203,20 @@ export class GroupService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // Count inside transaction to prevent race condition
+      const currentSize = await tx.conversationMember.count({
+        where: {
+          conversationId: dto.conversationId,
+          status: MemberStatus.ACTIVE,
+        },
+      });
+
+      if (currentSize + newUserIds.length > this.MAX_GROUP_SIZE) {
+        throw new BadRequestException(
+          `Group size limit exceeded (max ${this.MAX_GROUP_SIZE})`,
+        );
+      }
+
       for (const userId of newUserIds) {
         await tx.conversationMember.upsert({
           where: {
@@ -380,7 +382,7 @@ export class GroupService {
     return { success: true, newAdminId: dto.newAdminId };
   }
 
-  async dissolveGroup(conversationId: string, adminId: string) {
+  async dissolveGroup(conversationId: string, adminId: string, memberIds: string[]) {
     await this.verifyAdmin(conversationId, adminId);
 
     await this.prisma.conversation.update({
@@ -392,6 +394,10 @@ export class GroupService {
     });
 
     this.logger.log(`Group ${conversationId} dissolved by admin ${adminId}`);
+
+    await this.eventPublisher.publish(
+      new ConversationDissolvedEvent(conversationId, adminId, memberIds),
+    );
 
     return { success: true };
   }

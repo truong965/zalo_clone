@@ -47,20 +47,15 @@ export interface IMediaQueueService {
             payload: FileProcessingJob,
             mediaType: MediaType,
       ): Promise<string>;
-      /**
-       * Returns queue stats. SQS returns approximate counts.
-       */
-      getQueueStats(): Promise<{
-            waiting: number;
-            active: number;
-            completed: number;
-            failed: number;
-            delayed: number;
-            total: number;
-      }>;
-      /**
-       * Optional: clean up old completed/failed jobs. Only meaningful for Bull.
-       * SQS consumers should no-op or omit this.
-       */
-      cleanOldJobs?(): Promise<void>;
+  /**
+   * Returns queue stats. SQS returns approximate counts.
+   */
+  getQueueStats(): Promise<{
+    waiting: number;
+    active: number;
+    completed: number;
+    failed: number;
+    delayed: number;
+    total: number;
+  }>;
 }

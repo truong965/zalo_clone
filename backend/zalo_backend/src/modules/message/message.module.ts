@@ -19,9 +19,7 @@ import { MessageBroadcasterService } from './services/message-broadcaster.servic
 import { MessageRealtimeService } from './services/message-realtime.service';
 
 // Listeners
-import { MessageBroadcasterListener } from './listeners/message-broadcaster.listener';
 import { MessagingBlockListener } from './listeners/messaging-block.listener';
-import { MessagingUserPresenceListener } from './listeners/messaging-user-presence.listener';
 import { CallMessageListener } from './listeners/call-message.listener';
 
 // Controller & Gateway
@@ -67,9 +65,8 @@ import { MessageGateway } from './message.gateway';
     MessageRealtimeService,
 
     // Listeners
-    MessageBroadcasterListener,
+    // MSG-R6: Removed MessageBroadcasterListener and MessagingUserPresenceListener (stub-only, no business logic)
     MessagingBlockListener,
-    MessagingUserPresenceListener,
     CallMessageListener, // CALL PHASE 1: Create system message on call.ended
 
     // Gateway

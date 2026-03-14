@@ -134,19 +134,21 @@ export class MessageBroadcasterService implements OnModuleInit {
   ): Promise<() => Promise<void>> {
     const channel = RedisKeyBuilder.channels.newMessage(conversationId);
 
-    await this.redisPubSub.subscribe(channel, (ch, message) => {
+    const wrappedHandler = (ch: string, message: string) => {
       try {
         const payload = JSON.parse(message) as NewMessagePayload;
         handler(payload);
       } catch (error) {
         this.logger.error('Error parsing new message payload', error);
       }
-    });
+    };
+
+    await this.redisPubSub.subscribe(channel, wrappedHandler);
 
     this.logger.debug(`Subscribed to conversation ${conversationId}`);
 
     return async () => {
-      await this.redisPubSub.unsubscribe(channel);
+      await this.redisPubSub.unsubscribe(channel, wrappedHandler);
       this.logger.debug(`Unsubscribed from conversation ${conversationId}`);
     };
   }
@@ -157,7 +159,7 @@ export class MessageBroadcasterService implements OnModuleInit {
   ): Promise<() => Promise<void>> {
     const channel = RedisKeyBuilder.channels.receipt(userId);
 
-    await this.redisPubSub.subscribe(channel, (ch, message) => {
+    const wrappedHandler = (ch: string, message: string) => {
       try {
         const payload = JSON.parse(message) as ReceiptUpdatePayload;
         const result = handler(payload);
@@ -170,10 +172,12 @@ export class MessageBroadcasterService implements OnModuleInit {
       } catch (error) {
         this.logger.error('Error parsing receipt payload', error);
       }
-    });
+    };
+
+    await this.redisPubSub.subscribe(channel, wrappedHandler);
 
     return async () => {
-      await this.redisPubSub.unsubscribe(channel);
+      await this.redisPubSub.unsubscribe(channel, wrappedHandler);
     };
   }
 
@@ -183,17 +187,19 @@ export class MessageBroadcasterService implements OnModuleInit {
   ): Promise<() => Promise<void>> {
     const channel = RedisKeyBuilder.channels.typing(conversationId);
 
-    await this.redisPubSub.subscribe(channel, (ch, message) => {
+    const wrappedHandler = (ch: string, message: string) => {
       try {
         const payload = JSON.parse(message) as TypingStatusPayload;
         handler(payload);
       } catch (error) {
         this.logger.error('Error parsing typing payload', error);
       }
-    });
+    };
+
+    await this.redisPubSub.subscribe(channel, wrappedHandler);
 
     return async () => {
-      await this.redisPubSub.unsubscribe(channel);
+      await this.redisPubSub.unsubscribe(channel, wrappedHandler);
     };
   }
 }

@@ -671,23 +671,30 @@ export class ContactService {
     phoneBookNameMap: Map<string, string>,
     contactInfoMap: Map<string, { id: string; source: ContactSource }>,
   ): Promise<ContactResponseDto[]> {
-    return Promise.all(
-      users.map(async (user) => {
-        const hash = user.phoneNumberHash || '';
-        const phoneBookName = phoneBookNameMap.get(hash);
-        const info = contactInfoMap.get(user.id);
-        return {
-          id: info?.id ?? user.id,
-          contactUserId: user.id,
-          // L6 fix: 3-level fallback (no aliasName on fresh sync response)
-          displayName: phoneBookName ?? user.displayName,
-          avatarUrl: user.avatarUrl ?? undefined,
-          phoneBookName,
-          source: info?.source ?? ContactSource.PHONE_SYNC,
-          isFriend: await this.friendshipService.areFriends(ownerId, user.id),
-        };
-      }),
+    if (users.length === 0) return [];
+
+    // CT-R1 FIX: Batch friendship check to prevent N+1 queries
+    const userIds = users.map((u) => u.id);
+    const friendSet = await this.friendshipService.getFriendIdsFromList(
+      ownerId,
+      userIds,
     );
+
+    return users.map((user) => {
+      const hash = user.phoneNumberHash || '';
+      const phoneBookName = phoneBookNameMap.get(hash);
+      const info = contactInfoMap.get(user.id);
+      return {
+        id: info?.id ?? user.id,
+        contactUserId: user.id,
+        // L6 fix: 3-level fallback (no aliasName on fresh sync response)
+        displayName: phoneBookName ?? user.displayName,
+        avatarUrl: user.avatarUrl ?? undefined,
+        phoneBookName,
+        source: info?.source ?? ContactSource.PHONE_SYNC,
+        isFriend: friendSet.has(user.id),
+      };
+    });
   }
 
   /**

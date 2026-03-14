@@ -2,18 +2,7 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('queue', () => ({
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || 'password123',
-    db: parseInt(process.env.REDIS_QUEUE_DB || '1', 10), // Separate DB for queues
-  },
 
-  // Job retention settings
-  jobRetention: {
-    completed: 3600 * 24 * 7, // 7 days
-    failed: 3600 * 24 * 30, // 30 days
-  },
 
   // Retry strategy
   retry: {
@@ -36,8 +25,7 @@ export default registerAs('queue', () => ({
     video: 600000, // 10 minutes
   },
 
-  // Queue provider: 'bull' (local/dev) | 'sqs' (production AWS)
-  provider: process.env.QUEUE_PROVIDER || 'bull',
+
 
   // AWS SQS configuration (used when QUEUE_PROVIDER=sqs)
   sqs: {

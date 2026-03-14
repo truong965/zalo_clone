@@ -33,8 +33,7 @@ FROM node:25-alpine AS production
 WORKDIR /app
 
 # Install runtime dependencies
-# ffmpeg includes ffprobe — needed by VideoProcessor and FileValidationService
-RUN apk add --no-cache libc6-compat curl dumb-init ffmpeg
+RUN apk add --no-cache libc6-compat curl dumb-init
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \

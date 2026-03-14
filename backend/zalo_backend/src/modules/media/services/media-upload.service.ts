@@ -11,14 +11,12 @@ import type { ConfigType } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { S3Service } from './s3.service';
-import { FileValidationService } from './file-validation.service';
 import {
   MediaProcessingStatus,
   MediaType,
   MemberStatus,
   MediaAttachment,
 } from '@prisma/client';
-import { createHash } from 'crypto';
 import { createId } from '@paralleldrive/cuid2';
 import uploadConfig from '../../../config/upload.config';
 import {
@@ -41,7 +39,6 @@ export class MediaUploadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3Service: S3Service,
-    private readonly fileValidation: FileValidationService,
     @Inject(MEDIA_QUEUE_PROVIDER) private readonly mediaQueue: IMediaQueueService,
     private readonly eventEmitter: EventEmitter2,
     @Inject(uploadConfig.KEY)
@@ -155,10 +152,7 @@ export class MediaUploadService {
     const mediaType = this.inferMediaType(dto.mimeType);
     const limitMB = this.getLimitForType(mediaType);
 
-    const sizeValidation = this.fileValidation.validateFileSize(
-      dto.fileSize,
-      limitMB,
-    );
+    const sizeValidation = this.validateFileSize(dto.fileSize, limitMB);
     if (!sizeValidation.isValid)
       throw new BadRequestException(sizeValidation.reason);
 
@@ -276,21 +270,31 @@ export class MediaUploadService {
 
       const actualSize = fileCheck.metadata?.size || 0;
 
-      // Inline Processing for Audio/Doc
-      if (this.isInlineProcessing(media.mediaType)) {
-        return await this.processInline(media, actualSize);
-      }
+      // ── Move file to permanent location immediately ──────────────────
+      const ext = this.getFileExtension(media.mimeType, media.originalName);
+      const permanentKey = this.generatePermanentKey(media.uploadId!, ext);
 
-      // Worker Processing for Image/Video
+      await this.s3Service.moveObjectAtomic(media.s3KeyTemp!, permanentKey);
+
+      const cdnUrl = this.s3Service.getCloudFrontUrl(permanentKey);
+
+      // ── Mark as READY with cdnUrl — user sees original file immediately ──
       const updated = await this.prisma.mediaAttachment.update({
         where: { id: media.id },
         data: {
-          processingStatus: MediaProcessingStatus.PROCESSING,
+          processingStatus: MediaProcessingStatus.READY,
+          s3Key: permanentKey,
+          s3KeyTemp: null,
+          cdnUrl,
           size: BigInt(actualSize),
+          mimeType: fileCheck.metadata?.contentType || media.mimeType,
         },
       });
 
-      await this.enqueueProcessing(updated);
+      // ── Enqueue background work only for IMAGE/VIDEO (thumbnails, optimization) ──
+      if (media.mediaType === MediaType.IMAGE || media.mediaType === MediaType.VIDEO) {
+        await this.enqueueProcessing(updated);
+      }
 
       this.eventEmitter.emit(MEDIA_EVENTS.UPLOADED, {
         mediaId: updated.id,
@@ -333,99 +337,7 @@ export class MediaUploadService {
     }
   }
 
-  private isInlineProcessing(type: MediaType): boolean {
-    return type === MediaType.AUDIO || type === MediaType.DOCUMENT;
-  }
 
-  /**
-   * Logic xử lý Inline cho Audio và Document
-   * 1. Download file tạm về Local
-   * 2. Validate nội dung (Deep Scan)
-   * 3. Move sang S3 Permanent (Atomic)
-   * 4. Update DB
-   * 5. Cleanup file tạm
-   */
-  private async processInline(
-    media: MediaAttachment,
-    size: number,
-  ): Promise<MediaResponseDto> {
-    this.logger.debug(
-      `Inline processing started for ${media.mediaType}: ${media.uploadId}`,
-    );
-
-    let tempFilePath: string | null = null;
-    try {
-      // 1. Download temp file
-      tempFilePath = await this.s3Service.downloadToLocalTemp(media.s3KeyTemp!);
-
-      // 2. Deep Validation
-      const validation =
-        await this.fileValidation.validateFileOnDisk(tempFilePath);
-      if (!validation.isValid) {
-        throw new Error(`Validation failed: ${validation.reason}`);
-      }
-
-      // 3. Generate Permanent Key
-      const realExt = validation.extension || 'bin';
-      const realMime = validation.mimeType || 'application/octet-stream';
-      const permanentKey = this.generatePermanentKey(media.uploadId!, realExt);
-
-      // 4. Move to Permanent S3
-      await this.s3Service.moveObjectAtomic(media.s3KeyTemp!, permanentKey);
-
-      // 5. Update DB (Finalize)
-      const updated = await this.prisma.mediaAttachment.update({
-        where: { id: media.id },
-        data: {
-          s3Key: permanentKey,
-          s3KeyTemp: null,
-          mimeType: realMime,
-          cdnUrl: this.s3Service.getCloudFrontUrl(permanentKey),
-          processingStatus: MediaProcessingStatus.READY,
-          size: BigInt(size),
-        },
-      });
-
-      this.logger.log(
-        `${media.mediaType} processed inline successfully: ${media.uploadId}`,
-      );
-
-      this.eventEmitter.emit(MEDIA_EVENTS.UPLOADED, {
-        mediaId: updated.id,
-        uploadId: updated.uploadId || '',
-        userId: updated.uploadedBy,
-        mimeType: updated.mimeType,
-        mediaType: updated.mediaType,
-      } satisfies MediaUploadedEvent);
-
-      // Inline processing = immediate READY, so also emit processed
-      this.eventEmitter.emit(MEDIA_EVENTS.PROCESSED, {
-        mediaId: updated.id,
-        uploadId: updated.uploadId || '',
-        userId: updated.uploadedBy,
-        thumbnailUrl: updated.thumbnailUrl ?? null,
-        cdnUrl: updated.cdnUrl ?? null,
-      });
-
-      return this.formatMediaResponse(updated);
-    } catch (error) {
-      // Cleanup S3 temp file on failure
-      await this.s3Service.deleteFile(media.s3KeyTemp!).catch(() => { });
-
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      await this.markAsFailed(media.id, msg);
-      throw new BadRequestException(
-        `${media.mediaType} processing failed: ${msg}`,
-      );
-    } finally {
-      // Cleanup local temp file
-      if (tempFilePath) {
-        await import('fs')
-          .then((fs) => fs.promises.unlink(tempFilePath!))
-          .catch(() => { });
-      }
-    }
-  }
 
   private async enqueueProcessing(media: MediaAttachment): Promise<void> {
     const jobPayload = {
@@ -451,7 +363,8 @@ export class MediaUploadService {
         break;
       case MediaType.AUDIO:
       case MediaType.DOCUMENT:
-        // Logic inline ở trên đã xử lý rồi, nhưng giữ lại case này cho fallback hoặc manual re-queue
+        // MD-R3 fix: Audio/Document now go through Worker queue
+        // instead of inline processing in the HTTP request
         await this.mediaQueue.enqueueFileProcessing(
           {
             ...jobPayload,
@@ -484,6 +397,18 @@ export class MediaUploadService {
     this.logger.warn('Media marked as failed', { mediaId, reason });
   }
 
+  private validateFileSize(
+    fileSize: number,
+    maxSizeMB: number,
+  ): { isValid: boolean; reason?: string } {
+    const maxBytes = maxSizeMB * 1024 * 1024;
+    if (fileSize > maxBytes)
+      return { isValid: false, reason: `Exceeds ${maxSizeMB}MB` };
+    if (fileSize <= 0)
+      return { isValid: false, reason: 'File size must be greater than 0' };
+    return { isValid: true };
+  }
+
   private formatMediaResponse(media: MediaAttachment): MediaResponseDto {
     return new MediaResponseDto({
       id: media.id,
@@ -507,14 +432,37 @@ export class MediaUploadService {
     });
   }
 
+  // ── Permanent S3 key generation (moved from worker) ─────────────────────
+
   private generatePermanentKey(uploadId: string, extension: string): string {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
-    const fileHash = createHash('md5')
-      .update(uploadId)
-      .digest('hex')
-      .substring(0, 12);
+    const { createHash } = require('crypto');
+    const fileHash = createHash('md5').update(uploadId).digest('hex').substring(0, 12);
     return `permanent/${year}/${month}/unlinked/${fileHash}.${extension}`;
   }
+
+  private getFileExtension(mimeType: string, originalName: string): string {
+    // Try to extract from original filename first
+    const dotIdx = originalName.lastIndexOf('.');
+    if (dotIdx > 0) {
+      return originalName.substring(dotIdx + 1).toLowerCase();
+    }
+    // Fallback: derive from MIME type
+    const mimeExtMap: Record<string, string> = {
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif',
+      'image/webp': 'webp', 'image/svg+xml': 'svg',
+      'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+      'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg',
+      'audio/webm': 'weba', 'audio/mp4': 'm4a',
+      'application/pdf': 'pdf',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.ms-excel': 'xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    };
+    return mimeExtMap[mimeType] || 'bin';
+  }
 }
+

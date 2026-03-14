@@ -54,6 +54,15 @@ export class MessageGateway implements OnGatewayInit {
     (() => void | Promise<void>)[]
   >();
 
+  // MSG-R3: Only 1 receipt subscription per user, tracked by refCount
+  private userReceiptSubscriptions = new Map<
+    string,
+    { teardown: () => void | Promise<void>; refCount: number }
+  >();
+
+  // MSG-R7: Debounced typing timeouts per user-conversation
+  private typingTimeouts = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private readonly messageService: MessageService,
     private readonly receiptService: ReceiptService,
@@ -89,15 +98,24 @@ export class MessageGateway implements OnGatewayInit {
         return;
       }
 
-      // Subscribe user to their personal receipt channel
-      const unsubReceipts = await this.realtime.subscribeToReceipts(
-        userId,
-        async (payload) =>
-          this.emitToUser(userId, SocketEvents.MESSAGE_RECEIPT_UPDATE, payload),
-      );
+      // MSG-R3: Only subscribe once per user (refCount pattern)
+      const existing = this.userReceiptSubscriptions.get(userId);
+      if (existing) {
+        existing.refCount++;
+        this.logger.debug(`Receipt subscription refCount++ for user ${userId} (now ${existing.refCount})`);
+      } else {
+        const unsubReceipts = await this.realtime.subscribeToReceipts(
+          userId,
+          async (payload) =>
+            this.emitToUser(userId, SocketEvents.MESSAGE_RECEIPT_UPDATE, payload),
+        );
 
-      this.addSubscription(socket.id, unsubReceipts);
-      this.logger.debug(`✅ User ${userId} subscribed to receipt channel`);
+        this.userReceiptSubscriptions.set(userId, {
+          teardown: unsubReceipts,
+          refCount: 1,
+        });
+        this.logger.debug(`✅ User ${userId} subscribed to receipt channel (refCount=1)`);
+      }
     } catch (error) {
       this.logger.error(
         `Error subscribing user ${userId} to message channels`,
@@ -114,6 +132,26 @@ export class MessageGateway implements OnGatewayInit {
     userId: string;
     socketId: string;
   }) {
+    // MSG-R3: Decrement refCount, only unsubscribe when last socket disconnects
+    const existing = this.userReceiptSubscriptions.get(payload.userId);
+    if (existing) {
+      existing.refCount--;
+      if (existing.refCount <= 0) {
+        try {
+          await existing.teardown();
+        } catch (error) {
+          const msg = (error as Error).message;
+          if (!msg?.includes('Connection is closed') && !msg?.includes('ECONNABORTED')) {
+            this.logger.error(`Error unsubscribing receipts for user ${payload.userId}`, error);
+          }
+        }
+        this.userReceiptSubscriptions.delete(payload.userId);
+        this.logger.debug(`Receipt subscription removed for user ${payload.userId}`);
+      } else {
+        this.logger.debug(`Receipt subscription refCount-- for user ${payload.userId} (now ${existing.refCount})`);
+      }
+    }
+
     await this.cleanupSubscriptions(payload.socketId);
     this.logger.log(`📴 User ${payload.userId} disconnected - cleaned up message subscriptions`);
   }
@@ -232,7 +270,11 @@ export class MessageGateway implements OnGatewayInit {
         throw new Error('Unauthenticated');
       }
 
-      await this.realtime.markAsSeen(dto, userId);
+      await this.realtime.markAsSeen(
+        dto,
+        userId,
+        (uid, event, data) => this.emitToUser(uid, event, data),
+      );
 
       return true;
     } catch (error) {
@@ -264,7 +306,16 @@ export class MessageGateway implements OnGatewayInit {
         this.emitToUser(uid, event, data),
       );
 
-      setTimeout(() => {
+      // MSG-R7: Cancel any existing timeout for this user-conversation
+      const timeoutKey = `${userId}:${dto.conversationId}`;
+      const existingTimeout = this.typingTimeouts.get(timeoutKey);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      // Set new auto-stop timeout
+      const timeout = setTimeout(() => {
+        this.typingTimeouts.delete(timeoutKey);
         this.realtime
           .broadcastTypingToMembers(
             { ...dto, isTyping: false },
@@ -278,6 +329,7 @@ export class MessageGateway implements OnGatewayInit {
             );
           });
       }, 3000);
+      this.typingTimeouts.set(timeoutKey, timeout);
     } catch (error) {
       this.logger.error('Error handling typing start', error);
     }
@@ -297,61 +349,21 @@ export class MessageGateway implements OnGatewayInit {
       await this.realtime.broadcastTypingToMembers(dto, userId, (uid, event, data) =>
         this.emitToUser(uid, event, data),
       );
+
+      // MSG-R7: Cancel auto-stop timeout when user explicitly stops typing
+      const timeoutKey = `${userId}:${dto.conversationId}`;
+      const existingTimeout = this.typingTimeouts.get(timeoutKey);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        this.typingTimeouts.delete(timeoutKey);
+      }
     } catch (error) {
       this.logger.error('Error handling typing stop', error);
     }
   }
 
-  async subscribeToConversation(
-    client: AuthenticatedSocket,
-    conversationId: string,
-  ) {
-    const userId = client.userId;
-
-    if (!userId) {
-      throw new Error('Unauthenticated');
-    }
-
-    const { unsubMessages, unsubTyping } =
-      await this.realtime.subscribeToConversation(
-        conversationId,
-        userId,
-        (payload) => {
-          // Handle conversation:read events (group read broadcasts)
-          if (payload._type === 'conversation:read') {
-            if (payload.userId !== userId) {
-              client.emit(SocketEvents.CONVERSATION_READ, {
-                conversationId: payload.conversationId,
-                userId: payload.userId,
-                messageId: payload.messageId,
-                timestamp: payload.timestamp,
-              });
-            }
-            return;
-          }
-
-          // Normal new message payload
-          if (payload.recipientIds.includes(userId)) {
-            client.emit(SocketEvents.MESSAGE_NEW, {
-              message: payload.message,
-              conversationId,
-            });
-          }
-        },
-        (payload) => {
-          if (payload.userId !== userId) {
-            client.emit(SocketEvents.TYPING_STATUS, payload);
-          }
-        },
-      );
-
-    this.addSubscription(client.id, unsubMessages);
-    this.addSubscription(client.id, unsubTyping);
-
-    this.logger.debug(
-      `User ${userId} subscribed to conversation ${conversationId}`,
-    );
-  }
+  // MSG-R2: subscribeToConversation removed — was dead code (no call site).
+  // conversation:read now delivered via direct emit in handleGroupMessageSeen.
 
   private async emitToUser(userId: string, event: string, data: unknown) {
     const socketIds = await this.socketState.getUserSockets(userId);

@@ -235,6 +235,39 @@ export class ConversationMutedEvent extends DomainEvent {
 }
 
 /**
+ * Emitted when a group conversation is dissolved (soft-deleted) by admin.
+ *
+ * Listeners:
+ * - ConversationEventHandler: Record idempotency (system message was already created before soft-delete)
+ *
+ * Critical Event: YES (audit trail for group dissolution)
+ *
+ * @version 1
+ */
+export class ConversationDissolvedEvent extends DomainEvent {
+  readonly eventType = 'CONVERSATION_DISSOLVED';
+  readonly version = 1;
+
+  constructor(
+    readonly conversationId: string,
+    readonly dissolvedBy: string,
+    readonly memberIds: string[],
+  ) {
+    super('ConversationModule', 'Conversation', conversationId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      conversationId: this.conversationId,
+      dissolvedBy: this.dissolvedBy,
+      memberIds: this.memberIds,
+      eventType: this.eventType,
+    };
+  }
+}
+
+/**
  * Emitted when a group conversation's metadata is updated (name, avatar, settings).
  *
  * Listeners:

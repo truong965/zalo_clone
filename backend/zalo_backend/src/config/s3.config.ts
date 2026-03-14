@@ -8,8 +8,8 @@ export default registerAs('s3', () => ({
   // so the SDK falls back to the instance metadata credential provider.
   // When set (IAM User or local dev with MinIO), explicit creds are used.
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    accessKeyId: process.env.MINIO_ROOT_USER || process.env.AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.MINIO_ROOT_PASSWORD || process.env.AWS_SECRET_ACCESS_KEY || '',
   },
   cloudFront: {
     domain: process.env.CLOUDFRONT_DOMAIN || '',

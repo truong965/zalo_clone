@@ -232,7 +232,7 @@ export class S3CleanupService {
   /**
    * Helper: Xóa toàn diện (File gốc, Temp, Thumbnails, HLS Folders)
    */
-  private async deleteMediaAssets(media: MediaAttachment) {
+  private async deleteMediaAssets(media: MediaAttachment): Promise<void> {
     const promises: Promise<void>[] = [];
 
     // 1. Xóa Temp Key
@@ -244,10 +244,7 @@ export class S3CleanupService {
     if (media.s3Key) {
       if (media.mediaType === MediaType.VIDEO && media.hlsPlaylistUrl) {
         // Nếu là video HLS, s3Key thường trỏ đến file gốc mp4 hoặc folder
-        // Logic generate key của bạn: `${dir}/${name}-hls/`
-        // Cần xóa cả folder HLS
         const parsed = path.parse(media.s3Key);
-        // Giả định cấu trúc folder HLS dựa trên logic trong video.processor.ts
         const hlsPrefix = `${parsed.dir}/${parsed.name}-hls/`;
         promises.push(this.s3Service.deleteFolder(hlsPrefix));
       }
@@ -262,12 +259,17 @@ export class S3CleanupService {
 
     // 4. Xóa Optimized Image
     if (media.mediaType === MediaType.IMAGE && media.optimizedUrl) {
-      // Cần logic suy diễn key từ URL hoặc lưu optimizedS3Key vào DB
-      // Ở đây giả định bạn có thể parse được key từ optimizedUrl hoặc nên thêm optimizedS3Key vào DB
-      // promises.push(this.s3Service.deleteFile(derivedOptimizedKey));
+      // Logic suy diễn key (to be implemented)
     }
 
-    await Promise.allSettled(promises);
+    // Thêm check lỗi MD-R1 (Orphaned Files Bug)
+    const results = await Promise.allSettled(promises);
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    
+    if (failures.length > 0) {
+      const errorMsgs = failures.map(f => (f.reason as Error)?.message || String(f.reason)).join('; ');
+      throw new Error(`S3 Asset Deletion Failed: ${errorMsgs}`);
+    }
   }
 
   /**

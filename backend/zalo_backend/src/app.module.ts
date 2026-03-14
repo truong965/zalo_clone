@@ -16,7 +16,6 @@ import { SocketModule } from './socket/socket.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { MessageModule } from './modules/message/message.module';
 import { MediaModule } from './modules/media/media.module';
-import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter'; // [CRITICAL IMPORT]
 
@@ -44,6 +43,7 @@ import s3Config from './config/s3.config';
 import uploadConfig from './config/upload.config';
 import queueConfig from './config/queue.config';
 import socialConfig from './config/social.config';
+import workerConfig from './config/worker.config';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -61,6 +61,7 @@ import { HealthModule } from './modules/health/health.module';
         queueConfig,
         uploadConfig,
         socialConfig, // [CHECKED] Đã load config social
+        workerConfig,
       ],
       envFilePath: '.env.development.local',
     }),
@@ -78,21 +79,6 @@ import { HealthModule } from './modules/health/health.module';
     // Global rate-limiting (10req/min default; per-endpoint @Throttle overrides apply)
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
 
-    // Async Queue — Bull (Redis) for local dev, skipped when QUEUE_PROVIDER=sqs
-    ...(process.env.QUEUE_PROVIDER !== 'sqs'
-      ? [
-        BullModule.forRootAsync({
-          useFactory: (configService: ConfigService) => ({
-            redis: {
-              host: configService.get('queue.redis.host'),
-              port: configService.get('queue.redis.port'),
-              password: configService.get('queue.redis.password'),
-            },
-          }),
-          inject: [ConfigService],
-        }),
-      ]
-      : []),
 
     // Cron Jobs
     ScheduleModule.forRoot(),
@@ -137,7 +123,7 @@ import { HealthModule } from './modules/health/health.module';
     AuthorizationModule, // PHASE 2: canInteract, InteractionGuard
     CallModule, // CALL PHASE 1: Call history + signaling gateway
     NotificationsModule, // PHASE 5: Push Notifications (FCM + Web Push)
-    ReminderModule, // PHASE 4: Reminders (Bull Queue scheduler)
+    ReminderModule, // PHASE 4: Reminders (PostgreSQL polling scheduler)
     FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
     PrivacyModule, SearchEngineModule, // Privacy settings & permissions (Independent)
 

@@ -144,3 +144,56 @@ volumes:
 networks:
   default:
     driver: bridge
+# Thêm media-worker module vào docker-compose (copy/paste into actual compose file later)
+  media-worker:
+    build:
+      context: ./backend/zalo_media_worker
+      dockerfile: Dockerfile.worker
+    container_name: zalo_media_worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      - IMAGE_WORKER_CONCURRENCY=4
+      - VIDEO_WORKER_CONCURRENCY=2
+      - QUEUE_PROVIDER=sqs
+      - API_INTERNAL_URL=http://api:8000
+      - API_INTERNAL_KEY=${API_INTERNAL_KEY}
+      - SQS_IMAGE_QUEUE_URL=${SQS_IMAGE_QUEUE_URL}
+      - SQS_IMAGE_DLQ_URL=${SQS_IMAGE_DLQ_URL}
+      - SQS_VIDEO_QUEUE_URL=${SQS_VIDEO_QUEUE_URL}
+      - SQS_VIDEO_DLQ_URL=${SQS_VIDEO_DLQ_URL}
+      - SQS_VISIBILITY_TIMEOUT_IMAGE=${SQS_VISIBILITY_TIMEOUT_IMAGE}
+      - SQS_VISIBILITY_TIMEOUT_VIDEO=${SQS_VISIBILITY_TIMEOUT_VIDEO}
+      - SQS_WAIT_TIME=${SQS_WAIT_TIME}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - S3_FORCE_PATH_STYLE=${S3_FORCE_PATH_STYLE}
+      - CLOUDFRONT_DOMAIN=${CLOUDFRONT_DOMAIN}
+      - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB}
+      - MAX_VIDEO_SIZE_MB=${MAX_VIDEO_SIZE_MB}
+      - MAX_VIDEO_DURATION_SECONDS=${MAX_VIDEO_DURATION_SECONDS}
+      - MAX_AUDIO_SIZE_MB=${MAX_AUDIO_SIZE_MB}
+      - MAX_DOCUMENT_SIZE_MB=${MAX_DOCUMENT_SIZE_MB}
+      - MAX_AUDIO_DURATION_SECONDS=${MAX_AUDIO_DURATION_SECONDS}
+      - STREAM_THRESHOLD_MB=${STREAM_THRESHOLD_MB}
+      - MAX_IMAGE_DIMENSION=${MAX_IMAGE_DIMENSION}
+      - MAX_VIDEO_DIMENSION=${MAX_VIDEO_DIMENSION}
+      - CLAMAV_ENABLED=${CLAMAV_ENABLED:-false}
+      - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
+      - CLAMAV_PORT=${CLAMAV_PORT:-3310}
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    networks:
+      - zalo-network

@@ -49,13 +49,7 @@ export default registerAs('upload', () => ({
       10,
     ),
   },
-  // Cấu hình ClamAV
-  clamav: {
-    enabled: process.env.CLAMAV_ENABLED === 'true',
-    host: process.env.CLAMAV_HOST || 'clamav', // Tên service trong docker-compose
-    port: parseInt(process.env.CLAMAV_PORT || '3310', 10),
-    timeout: 60000,
-  },
+
   allowedMimeTypes: {
     image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     video: ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'],

@@ -19,6 +19,7 @@ import { GetMessagesDto } from './dto/get-messages.dto';
 import { RecentMediaQueryDto } from './dto/recent-media.dto';
 import { CurrentUser } from 'src/common/decorator/customize';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ParseBigIntPipe } from 'src/common/pipes/parse-bigint.pipe';
 
 @ApiTags('messages')
 @Controller('messages')
@@ -82,12 +83,12 @@ export class MessageController {
   @ApiOperation({ summary: 'Delete message' })
   async deleteMessage(
     @CurrentUser() user,
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseBigIntPipe) messageId: bigint,
     @Query('deleteForEveryone', new ParseBoolPipe({ optional: true }))
     deleteForEveryone: boolean = false,
   ) {
     await this.messageService.deleteMessage(
-      BigInt(messageId),
+      messageId,
       user.id,
       deleteForEveryone,
     );

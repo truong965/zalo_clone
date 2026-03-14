@@ -213,14 +213,7 @@ export class MetricsService {
     }
   }
 
-  /**
-   * Clean old completed jobs (weekly)
-   */
-  @Cron(CronExpression.EVERY_WEEK)
-  async cleanOldJobs(): Promise<void> {
-    await this.queueService.cleanOldJobs?.();
-    this.logger.log('Old jobs cleaned');
-  }
+
 
   /**
    * Get current metrics (for admin dashboard)
