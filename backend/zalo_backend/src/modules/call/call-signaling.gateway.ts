@@ -66,7 +66,6 @@ import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
 import { WsJwtGuard } from 'src/socket/guards/ws-jwt.guard';
 import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
 import { CallHistoryService } from './call-history.service';
-import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
 import { CallEndReason } from './events/call.events';
 import {
       canTransition,
@@ -87,6 +86,8 @@ import { CallProvider, CallStatus, ConversationType } from '@prisma/client';
 import { IceConfigService } from './services/ice-config.service';
 import { DailyCoService } from './services/daily-co.service';
 import { PrismaService } from 'src/database/prisma.service';
+import { InteractionAuthorizationService } from '../authorization/services/interaction-authorization.service';
+import { PermissionAction } from 'src/common/constants/permission-actions.constant';
 
 /** 30s timeout for ringing before auto NO_ANSWER */
 const RINGING_TIMEOUT_MS = 30_000;
@@ -144,19 +145,19 @@ export class CallSignalingGateway implements OnGatewayInit {
        */
       private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
 
-      /**
+       /**
        * ICE candidate batch buffers: `${callId}:${userId}` → { candidates[], timer }
        * Server-side batching reduces relay frequency during ICE gathering.
        */
       private readonly iceBatchBuffers = new Map<
             string,
-            { candidates: string[]; timer: NodeJS.Timeout }
+            { candidates: any[]; timer: NodeJS.Timeout }
       >();
 
       constructor(
             private readonly callHistoryService: CallHistoryService,
             private readonly socketState: SocketStateService,
-            private readonly privacyService: PrivacyService,
+            private readonly interactionAuth: InteractionAuthorizationService,
             private readonly iceConfigService: IceConfigService,
             private readonly dailyCoService: DailyCoService,
             private readonly eventEmitter: EventEmitter2,
@@ -384,26 +385,32 @@ export class CallSignalingGateway implements OnGatewayInit {
       ): Promise<{ allowed: boolean; reason?: string; conversationName: string | null }> {
             let conversationName: string | null = null;
 
-            if (isGroupCall && conversationId) {
-                  const conv = await this.prisma.conversation.findUnique({
-                        where: { id: conversationId },
-                        select: { type: true, name: true },
-                  });
-                  if (conv?.type === ConversationType.GROUP) {
-                        return { allowed: true, conversationName: conv.name ?? null };
+            // Group calls bypass individual privacy settings
+            if (isGroupCall) {
+                  if (conversationId) {
+                        const conv = await this.prisma.conversation.findUnique({
+                              where: { id: conversationId },
+                              select: { type: true, name: true },
+                        });
+                        conversationName = conv?.name ?? null;
                   }
-                  conversationName = conv?.name ?? null;
+                  return { allowed: true, conversationName };
             }
 
-            for (const receiverId of allReceiverIds) {
-                  const canCall = await this.privacyService.canUserCallMe(callerId, receiverId);
-                  if (!canCall) {
-                        return {
-                              allowed: false,
-                              reason: `Call not allowed: user ${receiverId} has blocked or restricted calls`,
-                              conversationName,
-                        };
-                  }
+            // 1-1 Call: Check privacy settings for the receiver
+            const receiverId = allReceiverIds[0];
+            const result = await this.interactionAuth.canInteract(
+                  callerId,
+                  receiverId,
+                  PermissionAction.CALL,
+            );
+
+            if (!result.allowed) {
+                  return {
+                        allowed: false,
+                        reason: result.reason ?? `Call not allowed by receiver's privacy settings`,
+                        conversationName,
+                  };
             }
 
             return { allowed: true, conversationName };
@@ -839,25 +846,34 @@ export class CallSignalingGateway implements OnGatewayInit {
             const session = await this.getValidatedSession(dto.callId, userId);
             if (!session) return;
 
+            // Robust JSON parsing for candidates (handles single or array)
+            let incomingCandidates: any[];
+            try {
+                  const parsed = JSON.parse(dto.candidates);
+                  incomingCandidates = Array.isArray(parsed) ? parsed : [parsed];
+            } catch (err) {
+                  this.logger.warn(`Failed to parse ICE candidates from ${userId}: ${err.message}`);
+                  return;
+            }
+
             // Buffer candidates for server-side batching
             const batchKey = `${dto.callId}:${userId}`;
             const existing = this.iceBatchBuffers.get(batchKey);
 
             if (existing) {
                   // Append to existing batch
-                  existing.candidates.push(dto.candidates);
+                  existing.candidates.push(...incomingCandidates);
             } else {
                   // Start new batch with a flush timer
                   const callRoom = this.getCallRoom(dto.callId);
                   const buffer = {
-                        candidates: [dto.candidates],
+                        candidates: [...incomingCandidates],
                         timer: setTimeout(() => {
                               this.iceBatchBuffers.delete(batchKey);
-                              // Flush: merge all buffered candidate arrays into one relay
-                              const merged = buffer.candidates.join(',');
+                              // Flush: serialize ALL buffered candidates into a single JSON array string
                               client.to(callRoom).emit(SocketEvents.CALL_ICE_CANDIDATE, {
                                     callId: dto.callId,
-                                    candidates: `[${merged}]`,
+                                    candidates: JSON.stringify(buffer.candidates),
                                     fromUserId: userId,
                               });
                         }, ICE_BATCH_WINDOW_MS),
