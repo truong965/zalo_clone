@@ -715,6 +715,7 @@ export class RealTimeSearchService implements OnModuleInit {
    * - GLOBAL → GlobalSearchService.globalSearch() (messages + contacts + groups + media)
    * - CONVERSATION → MessageSearchService.searchInConversation()
    * - CONTACT → ContactSearchService.searchContacts()
+  * - GROUP → GroupSearchService.searchGroups()
    * - MEDIA → MediaSearchService.searchMedia()
    */
   private async executeInitialSearch(
@@ -769,6 +770,30 @@ export class RealTimeSearchService implements OnModuleInit {
             totalCount: contactResults.data.length,
             executionTimeMs,
             searchType: 'CONTACT',
+          };
+        }
+
+        case 'GROUP': {
+          const groupResults = await this.groupSearchService.searchGroups(
+            userId,
+            payload.keyword,
+            groupLimit,
+          );
+          const executionTimeMs = Date.now() - startTime;
+
+          return {
+            keyword: payload.keyword,
+            results: {
+              messages: [],
+              contacts: [],
+              groups: groupResults.data,
+              media: [],
+              totalCount: groupResults.data.length,
+              executionTimeMs,
+            },
+            totalCount: groupResults.data.length,
+            executionTimeMs,
+            searchType: 'GROUP',
           };
         }
 

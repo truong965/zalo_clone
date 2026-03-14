@@ -19,7 +19,7 @@ import {
 export interface SearchSubscribePayload {
   keyword: string;
   conversationId?: string; // Optional: scope search to specific conversation
-  searchType?: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'MEDIA';
+  searchType?: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'GROUP' | 'MEDIA';
   filters?: {
     messageType?: MessageType;
     mediaType?: MediaType;
@@ -80,7 +80,7 @@ export interface SearchResultsPayload {
   results: GlobalSearchResultsDto;
   totalCount: number;
   executionTimeMs: number;
-  searchType: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'MEDIA';
+  searchType: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'GROUP' | 'MEDIA';
 }
 
 /**
@@ -136,7 +136,7 @@ export interface SearchSubscription {
   userId: string;
   keyword: string;
   conversationId?: string;
-  searchType: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'MEDIA';
+  searchType: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'GROUP' | 'MEDIA';
   filters?: {
     messageType?: MessageType;
     mediaType?: MediaType;

@@ -15,6 +15,7 @@ import { PrivacyFriendshipListener } from './listeners/privacy-friendship.listen
 import { PrivacyBlockListener } from './listeners/privacy-block.listener';
 import { PrivacyUserRegisteredListener } from './listeners/privacy-user-registered.listener';
 import { DatabaseModule } from '@database/prisma.module';
+import { BlockModule } from '@modules/block/block.module';
 
 /**
  * PrivacyModule (PHASE 7 - REFACTORED EVENT-DRIVEN)
@@ -24,10 +25,10 @@ import { DatabaseModule } from '@database/prisma.module';
  * - Check permissions (message, call, profile visibility)
  * - Handle cache invalidation
  *
- * PHASE 7 Changes: Remove Direct Service Call Dependencies
- * - ✅ Removed BlockModule import (breaks RULE 9)
- * - ✅ Implement event-driven cache invalidation
- * - ✅ Privacy checks use Redis cache + listener events
+ * PHASE 7+ Changes: Keep module boundaries while supporting read-through checks
+ * - ✅ Uses BlockChecker contract from BlockModule (no BlockService direct call)
+ * - ✅ Keeps event-driven cache invalidation
+ * - ✅ Privacy checks use Redis cache with BlockChecker fallback on miss
  *
  * Event-driven architecture:
  * - Listen to friendship events (friend_request.accepted, unfriended)
@@ -37,8 +38,8 @@ import { DatabaseModule } from '@database/prisma.module';
  * Cache Hierarchy:
  * 1. BlockService owns block status cache (redis: social:block:*)
  * 2. PrivacyService owns permission cache (redis: social:permission:*)
- * 3. PrivacyBlockListener invalidates on events (no DB fallback)
- * 4. PrivacyService queries Redis, falls back to DB if cache miss
+ * 3. PrivacyBlockListener invalidates on events
+ * 4. PrivacyService queries Redis, falls back via BlockChecker if cache miss
  *
  * Exports:
  * - PrivacyService: Core service for other modules to check permissions
@@ -49,8 +50,7 @@ import { DatabaseModule } from '@database/prisma.module';
     RedisModule,
     EventsModule,
     IdempotencyModule,
-    // REMOVED: BlockModule - Breaks RULE 9 (no direct service calls across modules)
-    // Events provide decoupled communication instead
+    BlockModule,
   ],
   controllers: [PrivacyController],
   providers: [

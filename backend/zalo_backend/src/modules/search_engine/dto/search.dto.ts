@@ -18,6 +18,7 @@ export enum SearchType {
   GLOBAL = 'GLOBAL',
   CONVERSATION = 'CONVERSATION',
   CONTACT = 'CONTACT',
+  GROUP = 'GROUP',
   MEDIA = 'MEDIA',
 }
 

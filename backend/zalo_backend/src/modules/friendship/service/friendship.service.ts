@@ -125,10 +125,6 @@ export class FriendshipService {
     // Validation 2: Check if either user is blocked
     await this.validateNotBlocked(requesterId, targetUserId);
 
-    // Validation 3: Check privacy settings (R12: InteractionAuthorizationService integration)
-    // TODO: Integrate InteractionAuthorizationService
-    // await this.authService.checkCanInteract(requesterId, targetUserId, 'FRIEND_REQUEST');
-
     // Validation 4: Check rate limits
     await this.validateRateLimits(requesterId);
 

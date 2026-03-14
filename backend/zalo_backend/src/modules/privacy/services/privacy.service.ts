@@ -6,6 +6,8 @@ import {
   PrivacyLevel,
   FriendshipStatus,
 } from '@prisma/client';
+import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
+import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { PermissionAction } from '@common/constants/permission-actions.constant';
 import socialConfig from '@config/social.config';
@@ -29,10 +31,10 @@ import { PrivacySettingsUpdatedEvent } from '../events/privacy.events';
  * - Query block status from CACHED data (not direct BlockService calls)
  *
  * PHASE 7 Changes:
- * - ✅ Removed BlockService dependency (breaks RULE 9)
+ * - ✅ Removed BlockService direct dependency (use BlockChecker contract)
  * - ✅ Check block status via Redis cache (populated by BlockService)
  * - ✅ Cache invalidated by PrivacyBlockListener (event-driven)
- * - ✅ If cache miss, assume NOT blocked (conservative, safe default)
+ * - ✅ On cache miss, fallback via BlockChecker read-through
  *
  * Cache Architecture:
  * - BlockService → emits user.blocked/unblocked events
@@ -48,9 +50,11 @@ export class PrivacyService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly eventPublisher: EventPublisher,
+    @Inject(BLOCK_CHECKER)
+    private readonly blockChecker: IBlockChecker,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) {}
+  ) { }
 
   /**
    * Batch get privacy settings for multiple users
@@ -93,17 +97,11 @@ export class PrivacyService {
         let settings = settingsMap.get(userId);
 
         if (!settings) {
-          settings = {
-            userId,
-            showProfile: PrivacyLevel.EVERYONE,
-            whoCanMessageMe: PrivacyLevel.CONTACTS,
-            whoCanCallMe: PrivacyLevel.CONTACTS,
-            showOnlineStatus: true,
-            showLastSeen: true,
-            updatedAt: new Date(),
-            createdAt: new Date(),
-            updatedById: null,
-          };
+          settings = await this.prisma.privacySettings.upsert({
+            where: { userId },
+            create: { userId },
+            update: {},
+          });
         }
 
         const dto = this.mapToResponseDto(settings);
@@ -359,11 +357,6 @@ export class PrivacyService {
     return this.prisma.privacySettings.create({
       data: {
         userId,
-        showProfile: PrivacyLevel.EVERYONE,
-        whoCanMessageMe: PrivacyLevel.CONTACTS,
-        whoCanCallMe: PrivacyLevel.CONTACTS,
-        showOnlineStatus: true,
-        showLastSeen: true,
       },
     });
   }
@@ -413,14 +406,10 @@ export class PrivacyService {
    *   3. PrivacyBlockListener.handleUserBlocked() → listens to events, invalidates permission cache
    *
    * Returns:
-   *   - true: User is blocked (cache hit)
-   *   - false: User is not blocked OR cache miss (conservative default)
+   *   - true: User is blocked
+   *   - false: User is not blocked
    *
-   * Note: If Redis cache expires or is not yet written, assume NOT blocked
-   * This is safe because:
-   *   - Permission checks are cached separately (social:permission:*)
-   *   - PrivacyBlockListener will invalidate permission cache when block changes
-   *   - Worst case: Brief window where permission allows, then listener invalidates
+   * Note: Cache miss is delegated to BlockChecker (Redis read-through + DB fallback)
    */
   private async isBlockedFromCache(
     userId1: string,
@@ -434,9 +423,7 @@ export class PrivacyService {
       return cached === '1';
     }
 
-    // Cache miss - assume NOT blocked (safe default)
-    // BlockService will populate cache on first check
-    // Events will invalidate permission cache if block status changes
-    return false;
+    // Cache miss - fall back to BlockChecker read-through strategy
+    return this.blockChecker.isBlocked(userId1, userId2);
   }
 }

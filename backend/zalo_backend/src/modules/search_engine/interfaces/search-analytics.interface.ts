@@ -13,7 +13,7 @@ import { SearchFilters } from '../dto/search.dto';
 export interface SearchQueryLog {
   userId: string;
   keyword: string;
-  searchType: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'MEDIA';
+  searchType: 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'GROUP' | 'MEDIA';
   resultCount: number;
   executionTimeMs: number;
   filters?: SearchFilters;

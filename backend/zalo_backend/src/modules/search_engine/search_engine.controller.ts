@@ -11,6 +11,8 @@ import {
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { IsString, IsNotEmpty } from 'class-validator';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { Roles } from '@common/decorator/roles.decorator';
 import { CurrentUserId } from '@common/decorator/customize';
 import { SearchAnalyticsService } from './services/search-analytics.service';
 import { ContactSearchService } from './services/contact-search.service';
@@ -63,7 +65,9 @@ export class SearchEngineController {
    */
   @Get('contacts')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Search contacts (REST endpoint for group creation)' })
+  @ApiOperation({
+    summary: 'Search contacts (REST endpoint for group creation)',
+  })
   async searchContacts(
     @CurrentUserId() userId: string,
     @Query() query: ContactSearchRequestDto,
@@ -77,24 +81,26 @@ export class SearchEngineController {
 
   /**
    * Get trending search keywords
-   * Phase C (TD-21): Restricted to ADMIN and SUPER_ADMIN roles
+   * Phase C (TD-21): Restricted to ADMIN  roles
    */
   @Get('analytics/trending')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get trending search keywords (last 7 days) — Admin only',
   })
-  async getTrendingKeywords(
-    @Query('limit') limit?: number,
-  ) {
+  async getTrendingKeywords(@Query('limit') limit?: number) {
     return this.analyticsService.getTrendingKeywords(limit || 50);
   }
 
   /**
    * Get search performance metrics
-   * Phase C (TD-21): Restricted to ADMIN and SUPER_ADMIN roles
+   * Phase C (TD-21): Restricted to ADMIN  roles
    */
   @Get('analytics/performance')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get search performance metrics — Admin only' })
   async getSearchPerformance() {
@@ -111,10 +117,7 @@ export class SearchEngineController {
     @CurrentUserId() userId: string,
     @Query('limit') limit?: number,
   ) {
-    return this.analyticsService.getUserSearchHistory(
-      userId,
-      limit || 50,
-    );
+    return this.analyticsService.getUserSearchHistory(userId, limit || 50);
   }
 
   /**

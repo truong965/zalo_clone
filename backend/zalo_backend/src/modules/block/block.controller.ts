@@ -61,7 +61,7 @@ export class BlockController {
    * @param dto - Block request with targetUserId and optional reason
    * @returns BlockResponseDto with block record details
    */
-  @Post('block')
+  @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Block a user',
@@ -120,7 +120,7 @@ export class BlockController {
    * @param targetUserId - UUID of user to unblock
    * @returns 204 No Content
    */
-  @Delete('block/:targetUserId')
+  @Delete(':targetUserId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Unblock a user',

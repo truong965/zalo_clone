@@ -7,17 +7,22 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { CreatePermissionDto } from './dto/create-permission.dto';
 import { UpdatePermissionDto } from './dto/update-permission.dto';
 import { ResponseMessage } from 'src/common/decorator/customize';
 import { ApiTags } from '@nestjs/swagger';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { Roles } from '@common/decorator/roles.decorator';
 
 @ApiTags('Permissions')
+@UseGuards(RolesGuard)
+@Roles('ADMIN')
 @Controller('permissions')
 export class PermissionsController {
-  constructor(private readonly permissionsService: PermissionsService) {}
+  constructor(private readonly permissionsService: PermissionsService) { }
 
   @Post()
   @ResponseMessage('Create a new permission')

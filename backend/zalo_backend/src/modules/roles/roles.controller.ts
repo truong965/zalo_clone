@@ -7,17 +7,22 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { ResponseMessage } from 'src/common/decorator/customize';
 import { ApiTags } from '@nestjs/swagger';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { Roles } from '@common/decorator/roles.decorator';
 
 @ApiTags('Roles')
+@UseGuards(RolesGuard)
+@Roles('ADMIN')
 @Controller('roles')
 export class RolesController {
-  constructor(private readonly rolesService: RolesService) {}
+  constructor(private readonly rolesService: RolesService) { }
 
   @Post()
   @ResponseMessage('Create a new role')
