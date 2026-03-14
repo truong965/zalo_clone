@@ -43,15 +43,28 @@ export function VideoAttachment({ attachment, className }: VideoAttachmentProps)
                   )}
             >
                   {thumbSrc ? (
-                        <img
-                              src={thumbSrc}
-                              alt={attachment.originalName}
-                              loading="lazy"
-                              className={cn(
-                                    'h-full w-full object-cover',
-                                    isProcessing && 'opacity-50 blur-[1px]',
-                              )}
-                        />
+                        thumbSrc.startsWith('blob:') ? (
+                              <video
+                                    src={thumbSrc}
+                                    preload="metadata"
+                                    muted
+                                    playsInline
+                                    className={cn(
+                                          'h-full w-full object-cover',
+                                          isProcessing && 'opacity-50 blur-[1px]',
+                                    )}
+                              />
+                        ) : (
+                              <img
+                                    src={thumbSrc}
+                                    alt={attachment.originalName}
+                                    loading="lazy"
+                                    className={cn(
+                                          'h-full w-full object-cover',
+                                          isProcessing && 'opacity-50 blur-[1px]',
+                                    )}
+                              />
+                        )
                   ) : (
                         /* Fallback: video-file icon when no thumbnail available */
                         <div className="flex h-full w-full items-center justify-center">

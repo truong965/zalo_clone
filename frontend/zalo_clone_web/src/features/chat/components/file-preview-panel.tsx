@@ -167,15 +167,29 @@ function VisualFileCard({
       return (
             <div className="relative flex-shrink-0 w-20 h-20 group">
                   {/* Thumbnail */}
-                  <img
-                        src={file.localUrl}
-                        alt={file.file.name}
-                        className={cn(
-                              'w-full h-full object-cover rounded-lg',
-                              file.state === 'error' ? 'opacity-50' : '',
-                              isActive ? 'opacity-70' : '',
-                        )}
-                  />
+                  {isVideo ? (
+                        <video
+                              src={file.localUrl}
+                              className={cn(
+                                    'w-full h-full object-cover rounded-lg',
+                                    file.state === 'error' ? 'opacity-50' : '',
+                                    isActive ? 'opacity-70' : '',
+                              )}
+                              preload="metadata"
+                              muted
+                              playsInline
+                        />
+                  ) : (
+                        <img
+                              src={file.localUrl}
+                              alt={file.file.name}
+                              className={cn(
+                                    'w-full h-full object-cover rounded-lg',
+                                    file.state === 'error' ? 'opacity-50' : '',
+                                    isActive ? 'opacity-70' : '',
+                              )}
+                        />
+                  )}
 
                   {/* Video play icon (only when queued/confirmed) */}
                   {isVideo && !isActive && file.state !== 'error' ? (
