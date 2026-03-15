@@ -12,7 +12,8 @@
  * - `conversation.member.demoted`   → push to demoted member
  *
  * Business rules:
- * - Skip if recipient is online (socket event already delivered)
+ * - Do not skip by online socket presence: online tabs may still be hidden/unfocused.
+ *   Service Worker decides whether to surface OS notification.
  * - Skip if recipient has muted/archived this conversation (except critical events)
  * - Critical events (kicked/removed) always push regardless of mute/archive
  * - No batching — group admin actions are low-frequency
@@ -22,7 +23,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { RedisPresenceService } from '@modules/redis/services/redis-presence.service';
 import { PushNotificationService, GroupEventPushParams } from '../services/push-notification.service';
 import { ConversationMemberCacheService, CachedMemberState } from '../services/conversation-member-cache.service';
 import type {
@@ -49,7 +49,6 @@ export class GroupNotificationListener {
 
       constructor(
             private readonly pushService: PushNotificationService,
-            private readonly presenceService: RedisPresenceService,
             private readonly prisma: PrismaService,
             private readonly memberCache: ConversationMemberCacheService,
       ) { }
@@ -82,9 +81,9 @@ export class GroupNotificationListener {
 
             // Send to all participants except creator
             const recipientIds = participantIds.filter((id) => id !== createdBy);
-            const offlineRecipients = await this.filterOfflineUsers(recipientIds);
+            const pushRecipients = recipientIds;
 
-            const pushPromises = offlineRecipients.map((recipientId) =>
+            const pushPromises = pushRecipients.map((recipientId) =>
                   this.safeSendGroupPush({
                         recipientId,
                         conversationId,
@@ -129,8 +128,7 @@ export class GroupNotificationListener {
             const pushPromises: Promise<void>[] = [];
 
             // 1. Push to new members: "Bạn đã được thêm vào nhóm"
-            const offlineNewMembers = await this.filterOfflineUsers(memberIds);
-            for (const recipientId of offlineNewMembers) {
+            for (const recipientId of memberIds) {
                   pushPromises.push(
                         this.safeSendGroupPush({
                               recipientId,
@@ -147,12 +145,10 @@ export class GroupNotificationListener {
             const existingRecipientIds = memberStates
                   .filter((m) => !newMemberSet.has(m.userId) && m.userId !== addedBy && !m.isMuted && !m.isArchived)
                   .map((m) => m.userId);
-
-            const offlineExisting = await this.filterOfflineUsers(existingRecipientIds);
             const addedCount = memberIds.length;
             const memberLabel = addedCount === 1 ? 'thành viên' : `${addedCount} thành viên`;
 
-            for (const recipientId of offlineExisting) {
+            for (const recipientId of existingRecipientIds) {
                   pushPromises.push(
                         this.safeSendGroupPush({
                               recipientId,
@@ -198,19 +194,16 @@ export class GroupNotificationListener {
 
             if (isKicked) {
                   // Critical push to kicked member — always send regardless of mute/archive
-                  const isKickedOnline = await this.presenceService.isUserOnline(memberId);
-                  if (!isKickedOnline) {
-                        pushPromises.push(
-                              this.safeSendGroupPush({
-                                    recipientId: memberId,
-                                    conversationId,
-                                    subtype: GROUP_SUBTYPE.MEMBER_REMOVED,
-                                    groupName,
-                                    title: 'Đã bị xóa khỏi nhóm',
-                                    body: `Bạn đã bị xóa khỏi nhóm "${groupName}"`,
-                              }),
-                        );
-                  }
+                  pushPromises.push(
+                        this.safeSendGroupPush({
+                              recipientId: memberId,
+                              conversationId,
+                              subtype: GROUP_SUBTYPE.MEMBER_REMOVED,
+                              groupName,
+                              title: 'Đã bị xóa khỏi nhóm',
+                              body: `Bạn đã bị xóa khỏi nhóm "${groupName}"`,
+                        }),
+                  );
             }
 
             // Notify remaining members (with mute/archive gate)
@@ -220,13 +213,11 @@ export class GroupNotificationListener {
                   .filter((m) => m.userId !== memberId && m.userId !== actorId && !m.isMuted && !m.isArchived)
                   .map((m) => m.userId);
 
-            const offlineRemaining = await this.filterOfflineUsers(remainingIds);
-
             const body = isKicked
                   ? `${memberProfile.displayName} đã bị xóa khỏi nhóm`
                   : `${memberProfile.displayName} đã rời khỏi nhóm`;
 
-            for (const recipientId of offlineRemaining) {
+            for (const recipientId of remainingIds) {
                   pushPromises.push(
                         this.safeSendGroupPush({
                               recipientId,
@@ -262,9 +253,6 @@ export class GroupNotificationListener {
       private async processMemberPromoted(event: ConversationMemberPromotedEvent): Promise<void> {
             const { conversationId, memberId } = event;
 
-            const isOnline = await this.presenceService.isUserOnline(memberId);
-            if (isOnline) return;
-
             const groupName = await this.resolveGroupName(conversationId);
 
             await this.safeSendGroupPush({
@@ -297,9 +285,6 @@ export class GroupNotificationListener {
       private async processMemberDemoted(event: ConversationMemberDemotedEvent): Promise<void> {
             const { conversationId, memberId } = event;
 
-            const isOnline = await this.presenceService.isUserOnline(memberId);
-            if (isOnline) return;
-
             const groupName = await this.resolveGroupName(conversationId);
 
             await this.safeSendGroupPush({
@@ -326,28 +311,6 @@ export class GroupNotificationListener {
                         `[GROUP_NOTIF] Push failed for user=${params.recipientId.slice(0, 8)}… conv=${params.conversationId.slice(0, 8)}… subtype=${params.subtype}: ${(error as Error).message}`,
                   );
             }
-      }
-
-      /**
-       * Filter user IDs to only those currently offline.
-       * Uses parallel presence checks via Promise.allSettled for performance.
-       */
-      private async filterOfflineUsers(userIds: string[]): Promise<string[]> {
-            if (userIds.length === 0) return [];
-
-            const results = await Promise.allSettled(
-                  userIds.map(async (id) => ({
-                        id,
-                        online: await this.presenceService.isUserOnline(id),
-                  })),
-            );
-
-            return results
-                  .filter(
-                        (r): r is PromiseFulfilledResult<{ id: string; online: boolean }> =>
-                              r.status === 'fulfilled' && !r.value.online,
-                  )
-                  .map((r) => r.value.id);
       }
 
       /**

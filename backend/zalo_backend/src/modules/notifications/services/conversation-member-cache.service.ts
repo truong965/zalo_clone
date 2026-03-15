@@ -15,6 +15,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { MemberStatus } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
 import { RedisService } from '@modules/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
@@ -109,7 +110,10 @@ export class ConversationMemberCacheService {
 
       private async queryFromDb(conversationId: string): Promise<CachedMemberState[]> {
             const members = await this.prisma.conversationMember.findMany({
-                  where: { conversationId },
+                  where: {
+                        conversationId,
+                        status: MemberStatus.ACTIVE,
+                  },
                   select: {
                         userId: true,
                         isMuted: true,

@@ -11,7 +11,8 @@
  * No batching needed — friendship events are low-frequency and each one is important.
  *
  * Business rules:
- * - Skip if recipient is online (socket event already delivered)
+ * - Do not skip by online socket presence: online tabs may still be hidden/unfocused.
+ *   Service Worker decides whether to show OS notification based on focused clients.
  * - No mute/archive gate (friendship is 1:1 event, not conversation-scoped)
  * - Tag push by requestId/friendshipId for potential replacement
  * - Fire-and-forget — never block domain flow
@@ -20,7 +21,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { RedisPresenceService } from '@modules/redis/services/redis-presence.service';
 import { PushNotificationService } from '../services/push-notification.service';
 import type { FriendRequestSentEvent, FriendRequestAcceptedEvent } from '@modules/friendship/events/friendship.events';
 
@@ -30,7 +30,6 @@ export class FriendshipPushNotificationListener {
 
       constructor(
             private readonly pushService: PushNotificationService,
-            private readonly presenceService: RedisPresenceService,
             private readonly prisma: PrismaService,
       ) { }
 
@@ -53,15 +52,6 @@ export class FriendshipPushNotificationListener {
 
       private async processFriendRequest(event: FriendRequestSentEvent): Promise<void> {
             const { toUserId, fromUserId, requestId } = event;
-
-            // Skip if recipient is online — socket event already delivers notification
-            const isOnline = await this.presenceService.isUserOnline(toUserId);
-            if (isOnline) {
-                  this.logger.debug(
-                        `[FRIEND_NOTIF] Skipping friend request push — recipient ${toUserId.slice(0, 8)}… is online`,
-                  );
-                  return;
-            }
 
             // Resolve sender profile for push content
             const senderProfile = await this.resolveUserProfile(fromUserId);
@@ -94,15 +84,6 @@ export class FriendshipPushNotificationListener {
 
       private async processFriendAccepted(event: FriendRequestAcceptedEvent): Promise<void> {
             const { requesterId, acceptedBy, friendshipId } = event;
-
-            // Push goes to the original requester (they sent the request, someone accepted)
-            const isOnline = await this.presenceService.isUserOnline(requesterId);
-            if (isOnline) {
-                  this.logger.debug(
-                        `[FRIEND_NOTIF] Skipping friend accepted push — requester ${requesterId.slice(0, 8)}… is online`,
-                  );
-                  return;
-            }
 
             // Resolve accepter profile for push content
             const accepterProfile = await this.resolveUserProfile(acceptedBy);

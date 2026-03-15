@@ -16,7 +16,11 @@ export class DeviceTokenService {
 
       /**
        * Register (upsert) a device token for a user.
-       * If the same (userId, deviceId) already exists, update the token + lastActiveAt.
+       * Policy A: one browser profile/token should be active for one account at a time.
+       *
+       * Steps:
+       * 1) Remove cross-user mappings for the same deviceId OR fcmToken
+       * 2) Upsert current user's (userId, deviceId) row
        */
       async registerToken(params: {
             userId: string;
@@ -26,19 +30,37 @@ export class DeviceTokenService {
       }): Promise<void> {
             const { userId, deviceId, fcmToken, platform } = params;
 
-            await this.prisma.userDevice.upsert({
-                  where: { userId_deviceId: { userId, deviceId } },
-                  update: {
-                        fcmToken,
-                        platform: platform ?? undefined,
-                        lastActiveAt: new Date(),
-                  },
-                  create: {
-                        userId,
-                        deviceId,
-                        fcmToken,
-                        platform: platform ?? null,
-                  },
+            await this.prisma.$transaction(async (tx) => {
+                  // Policy A de-duplication:
+                  // If another account on the same browser profile registers,
+                  // move ownership to the currently authenticated user.
+                  const removed = await tx.userDevice.deleteMany({
+                        where: {
+                              userId: { not: userId },
+                              OR: [{ deviceId }, { fcmToken }],
+                        },
+                  });
+
+                  await tx.userDevice.upsert({
+                        where: { userId_deviceId: { userId, deviceId } },
+                        update: {
+                              fcmToken,
+                              platform: platform ?? undefined,
+                              lastActiveAt: new Date(),
+                        },
+                        create: {
+                              userId,
+                              deviceId,
+                              fcmToken,
+                              platform: platform ?? null,
+                        },
+                  });
+
+                  if (removed.count > 0) {
+                        this.logger.log(
+                              `Policy A token handover: removed ${removed.count} cross-user device mapping(s) for device=${deviceId.slice(0, 12)}…`,
+                        );
+                  }
             });
 
             this.logger.debug(

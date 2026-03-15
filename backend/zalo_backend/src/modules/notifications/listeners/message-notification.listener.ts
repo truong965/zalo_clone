@@ -7,8 +7,8 @@
  * Flow:
  * 1. `message.sent` event fires
  * 2. Get conversation members (cached via ConversationMemberCacheService)
- * 3. Filter: skip sender, skip online, skip muted, skip archived
- * 4. For each offline recipient: addToBatch (Redis)
+ * 3. Filter: skip sender, skip muted, skip archived
+ * 4. For each eligible recipient: addToBatch (Redis)
  * 5. If new batch → schedule delayed push (setTimeout)
  * 6. When timer fires → flush batch → send FCM push
  *
@@ -21,7 +21,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { RedisPresenceService } from '@modules/redis/services/redis-presence.service';
 import { PushNotificationService } from '../services/push-notification.service';
 import { NotificationBatchService, type BatchState } from '../services/notification-batch.service';
 import { ConversationMemberCacheService, type CachedMemberState } from '../services/conversation-member-cache.service';
@@ -56,7 +55,6 @@ export class MessageNotificationListener {
             private readonly pushService: PushNotificationService,
             private readonly batchService: NotificationBatchService,
             private readonly memberCache: ConversationMemberCacheService,
-            private readonly presenceService: RedisPresenceService,
             private readonly prisma: PrismaService,
       ) { }
 
@@ -101,11 +99,12 @@ export class MessageNotificationListener {
             const recipients = members.filter((m) => m.userId !== senderId);
             if (recipients.length === 0) return;
 
-            // 4. Batch online check — single Redis pipeline for all recipients
-            const offlineRecipients = await this.filterOfflineRecipients(recipients);
-            if (offlineRecipients.length === 0) {
+            // 4. Filter by per-conversation notification preferences
+            // (do not gate by socket online status; online tabs may still be hidden/unfocused)
+            const pushRecipients = this.filterPushRecipients(recipients);
+            if (pushRecipients.length === 0) {
                   this.logger.debug(
-                        `[MSG_NOTIF] Skipping push for message ${messageId}: all ${recipients.length} recipient(s) are online (socket connected) or muted/archived`,
+                        `[MSG_NOTIF] Skipping push for message ${messageId}: all ${recipients.length} recipient(s) are muted/archived`,
                   );
                   return;
             }
@@ -120,7 +119,7 @@ export class MessageNotificationListener {
             const windowSeconds = BATCH_WINDOW[conversationType] ?? BATCH_WINDOW.DIRECT;
 
             await Promise.all(
-                  offlineRecipients.map((member) =>
+                  pushRecipients.map((member) =>
                         this.addRecipientToBatch({
                               recipientId: member.userId,
                               conversationId,
@@ -135,27 +134,19 @@ export class MessageNotificationListener {
             );
 
             this.logger.debug(
-                  `[MSG_NOTIF] Processed ${messageId}: ${offlineRecipients.length} offline recipient(s) batched`,
+                  `[MSG_NOTIF] Processed ${messageId}: ${pushRecipients.length} recipient(s) batched`,
             );
       }
 
       /**
-       * Filter recipients: keep only offline + not-muted + not-archived.
-       * Uses batch Redis presence check for performance.
+       * Filter recipients: keep only not-muted + not-archived.
+       * Online socket status is intentionally ignored so background tabs
+       * still receive OS-level notifications via Service Worker.
        */
-      private async filterOfflineRecipients(
+      private filterPushRecipients(
             recipients: CachedMemberState[],
-      ): Promise<CachedMemberState[]> {
-            // First filter: muted/archived (no Redis call needed)
-            const eligible = recipients.filter((m) => !m.isMuted && !m.isArchived);
-            if (eligible.length === 0) return [];
-
-            // Batch online check
-            const onlineResults = await Promise.all(
-                  eligible.map((m) => this.presenceService.isUserOnline(m.userId)),
-            );
-
-            return eligible.filter((_, idx) => !onlineResults[idx]);
+      ): CachedMemberState[] {
+            return recipients.filter((m) => !m.isMuted && !m.isArchived);
       }
 
       /**
