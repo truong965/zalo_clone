@@ -71,8 +71,8 @@ export const API_ENDPOINTS = {
 
   // Block
   BLOCK: {
-    BLOCK_USER: '/api/v1/block/block',
-    UNBLOCK_USER: (targetUserId: string) => `/api/v1/block/block/${targetUserId}`,
+    BLOCK_USER: '/api/v1/block',
+    UNBLOCK_USER: (targetUserId: string) => `/api/v1/block/${targetUserId}`,
     GET_BLOCKED_LIST: '/api/v1/block/blocked',
   },
 

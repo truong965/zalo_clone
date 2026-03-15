@@ -17,7 +17,7 @@ import type { MessageType, MediaType } from '@/types/api';
 // ============================================================================
 
 /** Search scope — maps to backend SearchType enum */
-export type SearchType = 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'MEDIA';
+export type SearchType = 'GLOBAL' | 'CONVERSATION' | 'CONTACT' | 'GROUP' | 'MEDIA';
 
 /** Error codes from SearchGateway */
 export type SearchErrorCode =
@@ -418,7 +418,7 @@ export const SEARCH_TAB_TO_TYPE: Record<SearchTab, SearchType> = {
       all: 'GLOBAL',
       messages: 'CONVERSATION',
       contacts: 'CONTACT',
-      groups: 'GLOBAL', // No GROUP-specific search type — use GLOBAL
+      groups: 'GROUP',
       media: 'MEDIA',
 } as const;
 

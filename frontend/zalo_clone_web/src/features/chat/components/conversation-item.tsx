@@ -43,8 +43,8 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
       const isMuted = !!data.isMuted;
       const isArchived = !!data.isArchived;
 
-      // Muted conversations suppress all unread visual indicators
-      const showUnreadVisual = isUnread && !isMuted;
+      // Muted conversations still show unread badge (neutral), but do not use strong unread emphasis.
+      const showUnreadHighlight = isUnread && !isMuted;
 
       // Logic màu nền: 
       // 1. Nếu đang chọn -> Màu đậm hơn (blue-100)
@@ -53,7 +53,7 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
       let bgClass = 'hover:bg-gray-100 bg-white';
       if (isSelected) {
             bgClass = 'bg-blue-100 hover:bg-blue-200';
-      } else if (showUnreadVisual) {
+      } else if (showUnreadHighlight) {
             bgClass = 'bg-blue-50 hover:bg-blue-100';
       }
 
@@ -126,8 +126,8 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
                               <div className="flex justify-between items-baseline mb-0.5">
                                     <div className="flex items-center min-w-0 mr-2">
                                           <Text
-                                                strong={showUnreadVisual}
-                                                className={`truncate text-[15px] ${showUnreadVisual ? 'text-gray-900' : 'text-gray-800'}`}
+                                                strong={showUnreadHighlight}
+                                                className={`truncate text-[15px] ${showUnreadHighlight ? 'text-gray-900' : 'text-gray-800'}`}
                                           >
                                                 {data.name || 'Người dùng ẩn danh'}
                                           </Text>
@@ -137,7 +137,7 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
                                     </div>
 
                                     {/* Timestamp: Luôn nằm cùng dòng, không xuống dòng */}
-                                    <Text className={`text-xs whitespace-nowrap flex-shrink-0 ${showUnreadVisual ? 'font-medium text-blue-600' : 'text-gray-400'}`}>
+                                    <Text className={`text-xs whitespace-nowrap flex-shrink-0 ${showUnreadHighlight ? 'font-medium text-blue-600' : 'text-gray-400'}`}>
                                           {data.timestamp}
                                     </Text>
                               </div>
@@ -145,16 +145,28 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
                               {/* Row 2: Message Preview + Badge */}
                               <div className="flex justify-between items-center">
                                     <Text
-                                          className={`truncate text-sm pr-2 flex-1 ${showUnreadVisual ? 'font-semibold text-gray-800' : 'text-gray-500'}`}
+                                          className={`truncate text-sm pr-2 flex-1 ${showUnreadHighlight ? 'font-semibold text-gray-800' : 'text-gray-500'}`}
                                           ellipsis
                                     >
                                           {data.isPinned && <PushpinOutlined className="text-gray-400 mr-1 rotate-45" />}
                                           {preview}
                                     </Text>
 
-                                    {/* Unread Badge: hidden when muted */}
-                                    {showUnreadVisual && unreadCount > 0 && (
-                                          <Badge count={unreadCount} size="small" className="site-badge-count-4 ml-2 flex-shrink-0" />
+                                    {/* Unread Badge: muted uses neutral tone; unmuted uses attention color. */}
+                                    {isUnread && (
+                                          <Badge
+                                                count={
+                                                      isMuted
+                                                            ? (
+                                                                  <span className="inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-gray-400 text-white text-[10px] font-medium leading-none">
+                                                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                                                  </span>
+                                                            )
+                                                            : unreadCount
+                                                }
+                                                size="small"
+                                                className={isMuted ? 'ml-2 flex-shrink-0' : 'site-badge-count-4 ml-2 flex-shrink-0'}
+                                          />
                                     )}
                               </div>
                         </div>

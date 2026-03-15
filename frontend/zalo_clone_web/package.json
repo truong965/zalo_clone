@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "generate:firebase-sw": "node scripts/generate-firebase-sw.mjs",
+    "verify:firebase-sw": "node scripts/verify-firebase-sw.mjs",
+    "predev": "npm run generate:firebase-sw -- --mode development",
+    "prebuild": "npm run generate:firebase-sw -- --mode production && npm run verify:firebase-sw",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
