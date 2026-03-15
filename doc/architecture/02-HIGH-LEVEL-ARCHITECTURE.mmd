@@ -1,0 +1,42 @@
+---
+id: 1f1d3e3d-e6bc-4a8f-8838-7d6625e35503
+---
+graph TD
+    ClientWeb["🖥️ Client\n(Web / Mobile)"]
+
+    subgraph EC2["EC2 Instance — Production"]
+        Nginx["Nginx\n(Reverse Proxy / TLS termination)"]
+
+        subgraph NestJS["NestJS API — Single Process"]
+            RestAPI["REST Controllers\n(19+ controllers)"]
+            WsGateway["Socket.IO Gateways\n(socket · message · conversation · call-signaling · search)"]
+            Services["Business Logic\n(Services)"]
+            EventBus["EventEmitter2\n(In-process Domain Events)"]
+            Listeners["Event Listeners\n(friendship · call · contact · notification)"]
+        end
+    end
+
+    Postgres[("🐘 PostgreSQL\n(Source of truth)")]
+    Redis[("⚡ Redis\nCache / Pub-Sub / Presence")]
+    S3["☁️ AWS S3\n+ CloudFront CDN\n(Media storage)"]
+    DailyCo["📹 Daily.co\n(Group call WebRTC)"]
+    FCM["🔔 Firebase FCM\n(Push notifications)"]
+    STUN["🔄 STUN / TURN\n(ICE for P2P calls)"]
+
+    ClientWeb -->|"HTTPS"| Nginx
+    Nginx -->|"HTTP proxy\n/api/v1/*"| RestAPI
+    Nginx -->|"WebSocket upgrade\n/socket.io/*"| WsGateway
+
+    RestAPI --> Services
+    WsGateway --> Services
+    Services --> EventBus
+    EventBus --> Listeners
+
+    Listeners -->|"FCM push"| FCM
+    Listeners -->|"Socket.IO emit\n(via Redis adapter)"| WsGateway
+
+    Services --> Postgres
+    Services --> Redis
+    Services -->|"Presigned PUT URL\nConfirm / Delete"| S3
+    Services -->|"Create room\nGenerate tokens"| DailyCo
+    WsGateway -->|"ICE config"| STUN
