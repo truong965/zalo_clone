@@ -23,6 +23,15 @@ export const STORAGE_KEYS = {
       // --- Push Notifications (localStorage) ---
       FCM_TOKEN: 'fcm_token',
       DEVICE_ID: 'device_id',
+
+      // --- Notification sound settings (Option A: frontend-only) ---
+      NOTIF_SOUND_MASTER: 'notif_sound_master',
+      NOTIF_SOUND_CALL: 'notif_sound_call',
+      NOTIF_SOUND_MESSAGE_DIRECT: 'notif_sound_message_direct',
+      NOTIF_SOUND_MESSAGE_GROUP: 'notif_sound_message_group',
+      NOTIF_SOUND_SOCIAL: 'notif_sound_social',
+      NOTIF_SOUND_VOLUME: 'notif_sound_volume',
+      NOTIF_SOUND_LEADER: 'notif_sound_leader',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

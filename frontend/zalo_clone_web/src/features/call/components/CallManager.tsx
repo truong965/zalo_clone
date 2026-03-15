@@ -45,6 +45,15 @@ interface InitiateCallDetail {
       initialCameraOff?: boolean;
 }
 
+interface IncomingCallFromPushDetail {
+      callId: string;
+      callType: CallType;
+      callerId: string;
+      callerName: string;
+      callerAvatar: string | null;
+      conversationId: string | null;
+}
+
 export function CallManager() {
       // ── Wire hooks ──────────────────────────────────────────────────────
       // Refs for circular deps: useCallSocket ↔ useWebRTCCall ↔ useDailyCall
@@ -244,16 +253,44 @@ export function CallManager() {
                   }
             };
 
+            const handleIncomingFromPush = (e: Event) => {
+                  const detail = (e as CustomEvent<IncomingCallFromPushDetail>).detail;
+                  if (!detail?.callId || !detail?.callerId || !detail?.callType) return;
+
+                  // Do not override an existing call lifecycle.
+                  const currentStatus = useCallStore.getState().callStatus;
+                  if (currentStatus !== 'IDLE') return;
+
+                  // Fallback ICE config for restoration path from push click.
+                  // Backend will continue normal signaling once user accepts.
+                  useCallStore.getState().setIncomingCall({
+                        callId: detail.callId,
+                        callType: detail.callType,
+                        conversationId: detail.conversationId,
+                        callerInfo: {
+                              id: detail.callerId,
+                              displayName: detail.callerName || 'Unknown',
+                              avatarUrl: detail.callerAvatar,
+                        },
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+                        iceTransportPolicy: 'all',
+                        receivedAt: Date.now(),
+                        isGroupCall: false,
+                  });
+            };
+
             window.addEventListener('call:initiate', handleInitiate);
             window.addEventListener('call:accept-incoming', handleAccept);
             window.addEventListener('call:reject-incoming', handleReject);
             window.addEventListener('call:hangup', handleHangup);
+            window.addEventListener('call:incoming-from-push', handleIncomingFromPush);
 
             return () => {
                   window.removeEventListener('call:initiate', handleInitiate);
                   window.removeEventListener('call:accept-incoming', handleAccept);
                   window.removeEventListener('call:reject-incoming', handleReject);
                   window.removeEventListener('call:hangup', handleHangup);
+                  window.removeEventListener('call:incoming-from-push', handleIncomingFromPush);
             };
       }, [socketEmitters]);
 

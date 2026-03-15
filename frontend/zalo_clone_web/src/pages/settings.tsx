@@ -32,7 +32,9 @@ import {
       GlobalOutlined,
       LockOutlined,
       SaveOutlined,
+      SoundOutlined,
 } from '@ant-design/icons';
+import { NotificationSoundSection } from '@/features/notification/components/notification-sound-section';
 import { useAppStore } from '@/stores/use-app-store';
 import { usePrivacySettings, useUpdatePrivacySettings } from '@/features/privacy/api/privacy.api';
 import type { PrivacyLevel } from '@/features/privacy/types';
@@ -322,12 +324,13 @@ function PrivacySection() {
 // Section switcher (lazy — hooks only run for the active section)
 // ============================================================================
 
-type SectionKey = 'appearance' | 'language' | 'privacy';
+type SectionKey = 'appearance' | 'language' | 'privacy' | 'notifications';
 
 const MENU_ITEMS = [
       { key: 'appearance' as SectionKey, icon: <BgColorsOutlined />, label: 'Giao diện' },
       { key: 'language' as SectionKey, icon: <GlobalOutlined />, label: 'Ngôn ngữ' },
       { key: 'privacy' as SectionKey, icon: <LockOutlined />, label: 'Quyền riêng tư' },
+      { key: 'notifications' as SectionKey, icon: <SoundOutlined />, label: 'Âm thanh thông báo' },
 ];
 
 function ActiveSection({ activeKey }: { activeKey: SectionKey }) {
@@ -338,6 +341,8 @@ function ActiveSection({ activeKey }: { activeKey: SectionKey }) {
                   return <LanguageSection />;
             case 'privacy':
                   return <PrivacySection />;
+            case 'notifications':
+                  return <NotificationSoundSection />;
       }
 }
 

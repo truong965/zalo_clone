@@ -25,6 +25,23 @@ const NAVIGATION_HANDLERS: Record<string, (data: Record<string, string>, navigat
             const path = data.tab ? `/contacts?tab=${data.tab}` : '/contacts';
             navigate(path);
       },
+      NAVIGATE_TO_INCOMING_CALL: (data, navigate) => {
+            // Ensure app shell is visible; CallManager will render incoming overlay.
+            navigate('/');
+
+            window.dispatchEvent(
+                  new CustomEvent('call:incoming-from-push', {
+                        detail: {
+                              callId: data.callId,
+                              callType: data.callType,
+                              callerId: data.callerId,
+                              callerName: data.callerName,
+                              callerAvatar: data.callerAvatar || null,
+                              conversationId: data.conversationId || null,
+                        },
+                  }),
+            );
+      },
 };
 
 export function usePushNotificationNavigation(): void {

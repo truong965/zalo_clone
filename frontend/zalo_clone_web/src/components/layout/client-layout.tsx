@@ -12,7 +12,11 @@ import { CallManager } from '@/features/call/components/CallManager';
 import { IncomingCallOverlay } from '@/features/call/components/IncomingCallOverlay';
 import { OutgoingCallOverlay } from '@/features/call/components/OutgoingCallOverlay';
 import { ActiveCallFloating } from '@/features/call/components/ActiveCallFloating';
-import { useNotificationPermission, usePushNotificationNavigation } from '@/features/notification';
+import {
+      useNotificationPermission,
+      usePushNotificationNavigation,
+      useNotificationSound,
+} from '@/features/notification';
 import { useReminderNotifications } from '@/features/reminder';
 
 const { Content } = Layout;
@@ -34,6 +38,9 @@ export function ClientLayout() {
 
       // Mount push notification click → navigate handler (SW postMessage)
       usePushNotificationNavigation();
+
+      // Mount hybrid sound policy manager (SW push event -> app sound decisions)
+      useNotificationSound();
 
       // Mount global reminder notification listener (singleton — all routes)
       useReminderNotifications();

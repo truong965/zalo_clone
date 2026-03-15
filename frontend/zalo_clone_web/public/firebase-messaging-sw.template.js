@@ -42,6 +42,21 @@ if (!isConfigured) {
             });
       }
 
+      async function broadcastPushEventToApp(data) {
+            const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+            const payload = {
+                  type: 'PUSH_EVENT_RECEIVED',
+                  notificationType: data.type || 'GENERIC',
+                  data,
+                  receivedAt: Date.now(),
+            };
+
+            for (const client of clients) {
+                  if (!client.url.includes(self.location.origin)) continue;
+                  client.postMessage(payload);
+            }
+      }
+
       self.addEventListener('push', (event) => {
             if (!event.data) return;
 
@@ -56,6 +71,8 @@ if (!isConfigured) {
             const data = payload.data || {};
 
             event.waitUntil((async function () {
+                  await broadcastPushEventToApp(data);
+
                   const focused = await hasFocusedAppClient();
                   if (focused) return Promise.resolve();
 
@@ -73,7 +90,11 @@ if (!isConfigured) {
                               data: {
                                     type: 'INCOMING_CALL',
                                     callId: data.callId,
+                                    callType: data.callType,
                                     callerId: data.callerId,
+                                    callerName: data.callerName,
+                                    callerAvatar: data.callerAvatar,
+                                    conversationId: data.conversationId,
                                     url: '/',
                               },
                               vibrate: [500, 200, 500, 200, 500],
@@ -112,6 +133,7 @@ if (!isConfigured) {
                               data: {
                                     type: 'NEW_MESSAGE',
                                     conversationId: data.conversationId,
+                                    conversationType: data.conversationType,
                                     senderId: data.senderId,
                                     url: data.conversationId ? `/chat/${data.conversationId}` : '/',
                               },
@@ -218,6 +240,16 @@ if (!isConfigured) {
                                                 type: 'NAVIGATE_TO_CONVERSATION',
                                                 conversationId: data.conversationId,
                                           });
+                                    } else if (data.type === 'INCOMING_CALL' && data.callId) {
+                                          client.postMessage({
+                                                type: 'NAVIGATE_TO_INCOMING_CALL',
+                                                callId: data.callId,
+                                                callType: data.callType,
+                                                callerId: data.callerId,
+                                                callerName: data.callerName,
+                                                callerAvatar: data.callerAvatar,
+                                                conversationId: data.conversationId,
+                                          });
                                     } else {
                                           client.postMessage({
                                                 type: data.type || 'NOTIFICATION_CLICK',
@@ -228,7 +260,20 @@ if (!isConfigured) {
                               }
                         }
                         if (self.clients.openWindow) {
-                              return self.clients.openWindow(urlToOpen);
+                              return self.clients.openWindow(urlToOpen).then((newClient) => {
+                                    if (newClient && data.type === 'INCOMING_CALL' && data.callId) {
+                                          newClient.postMessage({
+                                                type: 'NAVIGATE_TO_INCOMING_CALL',
+                                                callId: data.callId,
+                                                callType: data.callType,
+                                                callerId: data.callerId,
+                                                callerName: data.callerName,
+                                                callerAvatar: data.callerAvatar,
+                                                conversationId: data.conversationId,
+                                          });
+                                    }
+                                    return undefined;
+                              });
                         }
                   }),
             );
