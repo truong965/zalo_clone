@@ -37,6 +37,26 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Invalid token type');
     }
 
+    // Enforce session binding so revoked device sessions are denied immediately.
+    if (!payload.sid || !payload.deviceId) {
+      throw new UnauthorizedException('Invalid session token');
+    }
+
+    const activeSession = await this.prisma.userToken.findFirst({
+      where: {
+        id: payload.sid,
+        userId: payload.sub,
+        deviceId: payload.deviceId,
+        isRevoked: false,
+        expiresAt: { gte: new Date() },
+      },
+      select: { id: true },
+    });
+
+    if (!activeSession) {
+      throw new UnauthorizedException('Session revoked. Please login again.');
+    }
+
     const cacheKey = RedisKeyBuilder.authUserProfile(payload.sub);
 
     // Try cache first
@@ -84,9 +104,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     // Attach user to request (remove sensitive data)
     const entity = new UserEntity(user);
+    
+    // Attach the current device context specifically for this token's runtime
+    entity.currentDeviceId = payload.deviceId;
 
-    // Cache the serialized entity
-    await this.redis.setex(cacheKey, PROFILE_CACHE_TTL, JSON.stringify(entity));
+    // Cache the pristine serialized entity (without the dynamic token context)
+    await this.redis.setex(cacheKey, PROFILE_CACHE_TTL, JSON.stringify(new UserEntity(user)));
 
     return entity;
   }

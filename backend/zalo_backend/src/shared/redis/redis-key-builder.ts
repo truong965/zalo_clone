@@ -34,6 +34,7 @@ export class RedisKeyBuilder {
   static readonly DOMAIN_PRESENCE = 'PRESENCE';
   static readonly DOMAIN_CONTACT = 'CONTACT';
   static readonly DOMAIN_NOTIFICATION = 'NOTIFICATION';
+  static readonly DOMAIN_AUTH = 'AUTH';
 
   /**
    * DOMAIN_SOCIAL: Namespace prefix cho social graph (Block, Friendship, Privacy).
@@ -127,6 +128,23 @@ export class RedisKeyBuilder {
   /** JWT strategy user profile cache: AUTH:USER_PROFILE:{userId} (TTL: 5min) */
   static authUserProfile(userId: string): string {
     return `AUTH:USER_PROFILE:${userId}`;
+  }
+
+  // ============ QR LOGIN KEYS ============
+
+  /** QR session data: AUTH:QR_SESSION:{qrSessionId} (TTL: 180s) */
+  static qrSession(qrSessionId: string): string {
+    return `${this.DOMAIN_AUTH}:QR_SESSION:${qrSessionId}`;
+  }
+
+  /** Distributed lock for token exchange: AUTH:QR_LOCK:{userId} (TTL: 5s) */
+  static qrSessionLock(userId: string): string {
+    return `${this.DOMAIN_AUTH}:QR_LOCK:${userId}`;
+  }
+
+  /** Rate-limit for QR exchange: AUTH:QR_RATE_LIMIT:{qrSessionId} */
+  static qrExchangeRateLimit(qrSessionId: string): string {
+    return `${this.DOMAIN_AUTH}:QR_RATE_LIMIT:${qrSessionId}`;
   }
 
   // ============ RATE LIMIT (legacy format) ============

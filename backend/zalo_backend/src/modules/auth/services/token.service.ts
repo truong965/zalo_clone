@@ -10,7 +10,12 @@ import {
 import { DeviceInfo } from '../interfaces/device-info.interface';
 import { PrismaService } from 'src/database/prisma.service';
 import jwtConfig from 'src/config/jwt.config';
-import { TokenRevocationReason, User } from '@prisma/client/index-browser';
+import {
+  DeviceType,
+  LoginMethod,
+  TokenRevocationReason,
+  User,
+} from '@prisma/client';
 
 @Injectable()
 export class TokenService {
@@ -24,11 +29,13 @@ export class TokenService {
   /**
    * Generate access token (short-lived, stateless)
    */
-  createAccessToken(user: User): string {
+  createAccessToken(user: User, sessionId: string, deviceId: string): string {
     const payload: JwtPayload = {
       sub: user.id,
       type: 'access',
       pwdVer: user.passwordVersion,
+      sid: sessionId,
+      deviceId,
     };
 
     return this.jwtService.sign(payload, {
@@ -45,6 +52,7 @@ export class TokenService {
     user: User,
     deviceInfo: DeviceInfo,
     parentTokenId?: string,
+    loginMethod: LoginMethod = LoginMethod.PASSWORD,
   ): Promise<{ token: string; tokenId: string }> {
     // Generate random token
     const refreshToken = crypto.randomBytes(32).toString('hex');
@@ -62,6 +70,7 @@ export class TokenService {
       data: {
         userId: user.id,
         refreshTokenHash: tokenHash,
+        loginMethod,
         deviceId: deviceInfo.deviceId,
         deviceName: deviceInfo.deviceName,
         deviceType: deviceInfo.deviceType,
@@ -171,11 +180,16 @@ export class TokenService {
     });
 
     // Generate new tokens (child of old token)
-    const accessToken = this.createAccessToken(oldToken.user);
-    const { token: refreshToken } = await this.createRefreshToken(
+    const { token: refreshToken, tokenId } = await this.createRefreshToken(
       oldToken.user,
       deviceInfo,
       oldToken.id, // Set parent
+      oldToken.loginMethod,
+    );
+    const accessToken = this.createAccessToken(
+      oldToken.user,
+      tokenId,
+      deviceInfo.deviceId,
     );
 
     return { accessToken, refreshToken };
@@ -251,6 +265,47 @@ export class TokenService {
   }
 
   /**
+   * Revoke all existing PC/Desktop sessions for a user (enforce 1PC rule).
+   * Used by both Password login and QR login flows.
+   * Returns list of revoked deviceIds for force-logout notification.
+   */
+  async revokeExistingPCSessions(
+    userId: string,
+    options?: { excludeDeviceIds?: string[] },
+  ): Promise<string[]> {
+    const excludeDeviceIds = options?.excludeDeviceIds ?? [];
+    const whereClause = {
+      userId,
+      deviceType: { in: [DeviceType.WEB, DeviceType.DESKTOP] },
+      isRevoked: false,
+      ...(excludeDeviceIds.length > 0
+        ? { deviceId: { notIn: excludeDeviceIds } }
+        : {}),
+    };
+
+    // Find active PC sessions to get their deviceIds before revoking
+    const activePCSessions = await this.prisma.userToken.findMany({
+      where: whereClause,
+      select: { deviceId: true },
+      distinct: ['deviceId'],
+    });
+
+    if (activePCSessions.length === 0) return [];
+
+    // Revoke all PC sessions
+    await this.prisma.userToken.updateMany({
+      where: whereClause,
+      data: {
+        isRevoked: true,
+        revokedAt: new Date(),
+        revokedReason: TokenRevocationReason.NEW_LOGIN_OVERRIDE,
+      },
+    });
+
+    return activePCSessions.map((s) => s.deviceId);
+  }
+
+  /**
    * Revoke all user sessions (e.g., on password change)
    */
   async revokeAllUserSessions(
@@ -286,6 +341,7 @@ export class TokenService {
         deviceName: true,
         deviceType: true,
         platform: true,
+        loginMethod: true,
         ipAddress: true,
         lastUsedAt: true,
       },
@@ -332,5 +388,19 @@ export class TokenService {
     });
 
     return result.count;
+  }
+
+  /**
+   * Parse JWT expiresIn string into seconds
+   */
+  parseExpiresIn(expiresIn: string): number {
+    const match = expiresIn.match(/^(\d+)([smhd])$/);
+    if (!match) return 900; // Default 15 minutes
+
+    const [, value, unit] = match;
+    const num = parseInt(value, 10);
+
+    const multipliers: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+    return num * (multipliers[unit] || 60);
   }
 }

@@ -28,6 +28,7 @@ import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { WsValidationPipe } from './pipes/ws-validation.pipe';
 import { EventPublisher } from 'src/shared/events/event-publisher.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
 import { FriendshipService } from 'src/modules/friendship/service/friendship.service';
 import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
 import { PrismaService } from 'src/database/prisma.service';
@@ -253,6 +254,14 @@ export class SocketGateway
       const user = await this.socketAuth.authenticateSocket(client);
 
       if (!user) {
+        // Allow unauthenticated connection for specific use cases (like QR login)
+        if (client.handshake?.query?.type === 'public') {
+          this.logger.log(`Socket connecting as public (unauthenticated): ${client.id}`);
+          client.authenticated = false;
+          await this.socketState.handleConnection(client);
+          return;
+        }
+
         this.logger.warn(`Socket ${client.id}: Authentication failed`);
         client.emit(SocketEvents.AUTH_FAILED, {
           message: 'Authentication failed',
@@ -522,6 +531,18 @@ export class SocketGateway
   }
 
   /**
+   * Emit event to a specific socket connection directly by socketId
+   * Target: Single WebSocket Connection
+   */
+  emitToSocket(socketId: string, event: string, data: any): void {
+    try {
+      this.server.to(socketId).emit(event, data);
+    } catch (error) {
+      this.logger.error(`Failed to emit to socket ${socketId}`, error);
+    }
+  }
+
+  /**
    * Emit event to multiple users
    */
   async emitToUsers(
@@ -563,15 +584,43 @@ export class SocketGateway
     reason: string = 'Forced logout',
   ): Promise<void> {
     const socketIds = await this.socketState.getUserSockets(userId);
-    socketIds.forEach((socketId) => {
-      // Tìm socket object thực tế trên node này
-      const socket = this.server.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit(SocketEvents.AUTH_FORCE_LOGOUT, { reason });
-        socket.disconnect(true);
-      }
-    });
+    await Promise.all(
+      socketIds.map(async (socketId) => {
+        // Emit via adapter so multi-instance setups can deliver to remote sockets.
+        this.server.to(socketId).emit(SocketEvents.AUTH_FORCE_LOGOUT, { reason });
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        this.server.in(socketId).disconnectSockets(true);
+      }),
+    );
   }
+
+  /**
+   * Force disconnect specific devices for a user (enforce 1PC rule)
+   */
+  async forceDisconnectDevices(
+    userId: string,
+    deviceIds: string[],
+    reason: string = 'Forced logout',
+  ): Promise<void> {
+    const socketIds = await this.socketState.getUserSockets(userId);
+
+    for (const socketId of socketIds) {
+      // Get metadata to check the deviceId of this socket
+      const metadata = await this.socketState.getSocketMetadata(socketId);
+
+      if (metadata && deviceIds.includes(metadata.deviceId)) {
+        this.server.to(socketId).emit(SocketEvents.AUTH_FORCE_LOGOUT, {
+          reason,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        this.server.in(socketId).disconnectSockets(true);
+        this.logger.log(
+          `Force disconnected socket ${socketId} (Device: ${metadata.deviceId}) for user ${userId}`,
+        );
+      }
+    }
+  }
+
   /**
    * [NEW] Force remove a user from a specific room
    * Used when: Block user, Unfriend, Privacy change

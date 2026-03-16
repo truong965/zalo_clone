@@ -29,16 +29,17 @@ export class SocketStateService {
     try {
       // Extract device info from socket handshake
       const deviceInfo = this.extractDeviceInfo(client);
+      const resolvedDeviceId = client.deviceId || deviceInfo.deviceId;
 
       // Store deviceId on socket for later use
-      client.deviceId = deviceInfo.deviceId;
+      client.deviceId = resolvedDeviceId;
 
       // Build socket metadata
       if (client.userId !== undefined) {
         const metadata: SocketMetadata = {
           socketId: client.id,
           userId: client.userId,
-          deviceId: deviceInfo.deviceId,
+          deviceId: resolvedDeviceId,
           ipAddress: deviceInfo.ipAddress,
           userAgent: deviceInfo.userAgent,
           connectedAt: new Date(),
@@ -49,14 +50,10 @@ export class SocketStateService {
         await this.redisRegistry.registerSocket(metadata);
 
         // Mark user as online with this device
-        await this.redisPresence.setUserOnline(
-          client.userId,
-          deviceInfo.deviceId,
-        );
-
+        await this.redisPresence.setUserOnline(client.userId, resolvedDeviceId);
       }
       this.logger.log(
-        `Socket connected: ${client.id} | User: ${client.userId} | Device: ${deviceInfo.deviceId}`,
+        `Socket connected: ${client.id} | User: ${client.userId} | Device: ${resolvedDeviceId}`,
       );
     } catch (error) {
       this.logger.error('Error handling socket connection:', error);
@@ -139,6 +136,21 @@ export class SocketStateService {
     ipAddress: string;
     userAgent: string;
   } {
+    // Manually parse cookies from handshake headers
+    const rawCookies = client.handshake.headers.cookie || '';
+    const parsedCookies = rawCookies
+      .split(';')
+      .map((v) => v.split('='))
+      .reduce(
+        (acc, v) => {
+          const key = v[0]?.trim();
+          const val = v[1]?.trim();
+          if (key && val) acc[key] = decodeURIComponent(val);
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
+
     // Create a mock Express request object for device fingerprint service
     const mockRequest = {
       headers: {
@@ -153,6 +165,7 @@ export class SocketStateService {
         'x-forwarded-for': client.handshake.headers['x-forwarded-for'],
         'x-real-ip': client.handshake.headers['x-real-ip'],
       },
+      cookies: parsedCookies,
       ip: client.handshake.address,
       socket: {
         remoteAddress: client.handshake.address,

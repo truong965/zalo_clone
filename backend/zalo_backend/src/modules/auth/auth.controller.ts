@@ -28,6 +28,7 @@ import {
   AuthResponseDto,
   RefreshTokenResponseDto,
 } from './dto/auth-response.dto';
+import { DeviceListItemDto } from './dto/device-list.dto';
 
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import type { User } from '@prisma/client';
@@ -49,7 +50,7 @@ export class AuthController {
     private readonly deviceFingerprintService: DeviceFingerprintService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) {}
+  ) { }
 
   @Public()
   @Post('register')
@@ -78,8 +79,16 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<Omit<AuthResponseDto, 'user'> & { user: Partial<User> }> {
+    // Get or create stable tracking ID
+    const trackingId = this.deviceFingerprintService.getOrCreateTrackingId(
+      req,
+      res,
+    );
+
     // Extract device information
     const deviceInfo = this.deviceFingerprintService.extractDeviceInfo(req);
+    // Use the stable tracking ID as the master device ID for the session
+    deviceInfo.deviceId = trackingId;
 
     // Authenticate user
     const result = await this.authService.login(loginDto, deviceInfo);
@@ -171,9 +180,10 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
     const deviceInfo = this.deviceFingerprintService.extractDeviceInfo(req);
+    const targetDeviceId = (user as any).currentDeviceId || deviceInfo.deviceId;
 
     // Revoke current device session
-    await this.authService.logout(user.id, deviceInfo.deviceId);
+    await this.authService.logout(user.id, targetDeviceId);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { maxAge, ...options } =
@@ -199,8 +209,8 @@ export class AuthController {
   @Get('sessions')
   @ApiOperation({ summary: 'Get all active sessions' })
   @ApiBearerAuth()
-  @ApiResponse({ status: 200, description: 'Active sessions retrieved' })
-  async getSessions(@CurrentUser() user: User) {
+  @ApiResponse({ status: 200, type: [DeviceListItemDto] })
+  async getSessions(@CurrentUser() user: User): Promise<DeviceListItemDto[]> {
     return this.authService.getSessions(user.id);
   }
 

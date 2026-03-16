@@ -6,8 +6,11 @@ import { LoginDto } from './dto/login.dto';
 import { DeviceInfo } from './interfaces/device-info.interface';
 import jwtConfig from '../../config/jwt.config';
 import { UserEntity } from '../users/entities/user.entity';
-import { UserStatus } from '@prisma/client';
+import { DeviceType, LoginMethod, UserStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
+import { RedisRegistryService } from 'src/modules/redis/services/redis-registry.service';
+import { DeviceListItemDto } from './dto/device-list.dto';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +18,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly tokenService: TokenService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly redisRegistry: RedisRegistryService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
   ) { }
@@ -47,20 +51,47 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Revoke existing token for this device (if any)
-    await this.tokenService.revokeDeviceSession(user.id, deviceInfo.deviceId);
+    // Phase 4: Enforce 1PC rule for WEB/DESKTOP logins
+    if (
+      deviceInfo.deviceType === DeviceType.WEB ||
+      deviceInfo.deviceType === DeviceType.DESKTOP
+    ) {
+      // Revoke all existing PC sessions and get their IDs
+      const revokedDeviceIds = await this.tokenService.revokeExistingPCSessions(
+        user.id,
+      );
+
+      // Kick old PC sessions via Socket heartbeat/event
+      if (revokedDeviceIds.length > 0) {
+        this.eventEmitter.emit(QR_INTERNAL_EVENTS.FORCE_LOGOUT_DEVICES, {
+          userId: user.id,
+          deviceIds: revokedDeviceIds,
+          reason: 'New login from another computer',
+        });
+      }
+    } else {
+      // Mobile/Other devices: Normal behavior (only revoke this specific device)
+      await this.tokenService.revokeDeviceSession(user.id, deviceInfo.deviceId);
+    }
 
     // Generate tokens
-    const accessToken = this.tokenService.createAccessToken(user);
-    const { token: refreshToken } = await this.tokenService.createRefreshToken(
+    const { token: refreshToken, tokenId } =
+      await this.tokenService.createRefreshToken(
+        user,
+        deviceInfo,
+        undefined,
+        LoginMethod.PASSWORD,
+      );
+    const accessToken = this.tokenService.createAccessToken(
       user,
-      deviceInfo,
+      tokenId,
+      deviceInfo.deviceId,
     );
     return {
       accessToken,
       refreshToken,
-      expiresIn: this.parseExpiresIn(
-        this.jwtConfiguration.accessToken.expiresIn,
+      expiresIn: this.tokenService.parseExpiresIn(
+        this.jwtConfiguration.accessToken.expiresIn as string,
       ),
       tokenType: 'Bearer',
       user: new UserEntity(user),
@@ -77,8 +108,8 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      expiresIn: this.parseExpiresIn(
-        this.jwtConfiguration.accessToken.expiresIn,
+      expiresIn: this.tokenService.parseExpiresIn(
+        this.jwtConfiguration.accessToken.expiresIn as string,
       ),
       tokenType: 'Bearer',
     };
@@ -100,10 +131,31 @@ export class AuthService {
   }
 
   /**
-   * Get all active sessions
+   * Get all active sessions mapped to DeviceListItemDto
    */
-  async getSessions(userId: string) {
-    return this.tokenService.getUserSessions(userId);
+  async getSessions(userId: string): Promise<DeviceListItemDto[]> {
+    const sessions = await this.tokenService.getUserSessions(userId);
+
+    // Get all socket metadata to check which devices are currently connected
+    const socketIds = await this.redisRegistry.getUserSockets(userId);
+    const connectedDeviceIds = new Set<string>();
+
+    for (const socketId of socketIds) {
+      const metadata = await this.redisRegistry.getSocketMetadata(socketId);
+      if (metadata) {
+        connectedDeviceIds.add(metadata.deviceId);
+      }
+    }
+
+    return sessions.map((session) => ({
+      deviceId: session.deviceId,
+      deviceName: session.deviceName || 'Unknown Device',
+      platform: session.platform || 'UNKNOWN',
+      loginMethod: session.loginMethod,
+      lastUsedAt: session.lastUsedAt,
+      ipAddress: session.ipAddress || 'Unknown IP',
+      isOnline: connectedDeviceIds.has(session.deviceId),
+    }));
   }
 
   /**
@@ -111,19 +163,12 @@ export class AuthService {
    */
   async revokeSession(userId: string, deviceId: string): Promise<void> {
     await this.tokenService.revokeDeviceSession(userId, deviceId);
-  }
 
-  /**
-   * Parse JWT expiresIn to seconds
-   */
-  private parseExpiresIn(expiresIn: string): number {
-    const match = expiresIn.match(/^(\d+)([smhd])$/);
-    if (!match) return 900; // Default 15 minutes
-
-    const [, value, unit] = match;
-    const num = parseInt(value, 10);
-
-    const multipliers = { s: 1, m: 60, h: 3600, d: 86400 };
-    return num * (multipliers[unit] || 60);
+    // Phase 6: Force disconnect the revoked device via Socket Gateway listener
+    this.eventEmitter.emit(QR_INTERNAL_EVENTS.FORCE_LOGOUT_DEVICES, {
+      userId,
+      deviceIds: [deviceId],
+      reason: 'Logged out from another device (Device Management)',
+    });
   }
 }

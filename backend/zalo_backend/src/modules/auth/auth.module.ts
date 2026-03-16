@@ -14,6 +14,12 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import { SecurityEventHandler } from './listeners/security-event.handler';
 
+// Phase 1-6: QR Login & Device Management
+import { QrLoginController } from './qr-login.controller';
+import { QrLoginService } from './services/qr-login.service';
+import { QrSessionRedisService } from './services/qr-session-redis.service';
+import { RedisModule } from 'src/modules/redis/redis.module';
+
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
@@ -22,12 +28,15 @@ import { SecurityEventHandler } from './listeners/security-event.handler';
     UsersModule,
     EventEmitterModule,
     IdempotencyModule, // ✅ PHASE 3.3: Idempotency tracking for event handlers
+    RedisModule, // Needed for RedisRegistryService in AuthService.getSessions
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, QrLoginController],
   providers: [
     AuthService,
     TokenService,
     DeviceFingerprintService,
+    QrLoginService,
+    QrSessionRedisService,
     JwtStrategy,
     JwtRefreshStrategy,
     // PHASE 3 Action 3.2: Event listener for security-related events

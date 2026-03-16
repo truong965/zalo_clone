@@ -193,6 +193,7 @@ enum TokenRevocationReason {
   SUSPICIOUS_ACTIVITY
   TOKEN_ROTATION
   ADMIN_ACTION
+  NEW_LOGIN_OVERRIDE
 
   @@map("token_revocation_reason")
 }
@@ -267,6 +268,12 @@ enum ContactSource {
   MANUAL
 
   @@map("contact_source")
+}
+enum LoginMethod {
+  PASSWORD
+  QR_CODE
+
+  @@map("login_method")
 }
 // ============================================================================
 // 3. IAM MODULE (USER, AUTH, RBAC)
@@ -370,7 +377,8 @@ model UserToken {
 
   // Token Storage (Hashed for security)
   refreshTokenHash String @unique @map("refresh_token_hash") @db.VarChar(64)
-
+  loginMethod LoginMethod @default(PASSWORD) @map("login_method")
+  
   // Device Fingerprint
   deviceId   String      @map("device_id") @db.VarChar(255)
   deviceName String?     @map("device_name") @db.VarChar(100)

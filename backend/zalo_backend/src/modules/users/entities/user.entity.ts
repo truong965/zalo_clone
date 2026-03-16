@@ -49,6 +49,10 @@ export class UserEntity implements User {
 
   lastSeenAt: Date | null;
 
+  // 🔹 ID của thiết bị đang gửi request (Lấy trực tiếp từ Access Token Payload)
+  // Non-persistent field, only exists in req.user
+  currentDeviceId?: string;
+
   // ==============================
   // 4. Authorization (RBAC)
   // ==============================

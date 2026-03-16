@@ -123,6 +123,12 @@ export const SocketEvents = {
   SERVER_HEARTBEAT: 'server_heartbeat',
   AUTH_FORCE_LOGOUT: 'auth.force_logout',
 
+  // === QR LOGIN EVENTS (Server → Web, targeted by socketId) ===
+  QR_SCANNED: 'qr.scanned',
+  QR_APPROVED: 'qr.approved',
+  QR_EXPIRED: 'qr.expired',
+  QR_CANCELLED: 'qr.cancelled',
+
   // === FRIENDSHIP EVENTS (Server → Client) ===
   FRIEND_REQUEST_RECEIVED: 'friendship:requestReceived',
   FRIEND_REQUEST_ACCEPTED: 'friendship:requestAccepted',

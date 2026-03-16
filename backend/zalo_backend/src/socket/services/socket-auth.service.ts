@@ -47,6 +47,11 @@ export class SocketAuthService {
         return null;
       }
 
+      // Use token-bound device identity as authoritative source for this socket.
+      if (payload.deviceId) {
+        client.deviceId = payload.deviceId;
+      }
+
       // Find user
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },

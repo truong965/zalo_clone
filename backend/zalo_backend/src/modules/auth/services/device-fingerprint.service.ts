@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import * as crypto from 'crypto';
 import { DeviceInfo } from '../interfaces/device-info.interface';
 import { DeviceType, Platform } from '@prisma/client';
+
+export const DEVICE_TRACKING_COOKIE = 'device_tracking_id';
+export const DEVICE_TRACKING_MAX_AGE = 365 * 24 * 60 * 60 * 1000; // 1 year
 
 @Injectable()
 export class DeviceFingerprintService {
@@ -45,10 +48,50 @@ export class DeviceFingerprintService {
   }
 
   /**
+   * Set the device tracking cookie on the response
+   */
+  setTrackingCookie(res: Response, trackingId: string): void {
+    res.cookie(DEVICE_TRACKING_COOKIE, trackingId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: DEVICE_TRACKING_MAX_AGE,
+      path: '/',
+    });
+  }
+
+  /**
+   * Get existing tracking ID from cookie, or create and set a new one.
+   * This provides a stable device identifier that survives normal browser clearing
+   * and fingerprint changes, while protecting against XSS (HttpOnly).
+   */
+  getOrCreateTrackingId(req: Request, res: Response): string {
+    const existing = req.cookies?.[DEVICE_TRACKING_COOKIE] as
+      | string
+      | undefined;
+
+    if (existing) {
+      return existing;
+    }
+
+    // Generate new tracking ID
+    const trackingId = crypto.randomUUID();
+
+    // Set cookie
+    this.setTrackingCookie(res, trackingId);
+
+    return trackingId;
+  }
+
+  /**
    * Extract device information from request
    */
   extractDeviceInfo(req: Request): DeviceInfo {
-    const deviceId = this.generateDeviceId(req);
+    const trackingId = req.cookies?.[DEVICE_TRACKING_COOKIE] as
+      | string
+      | undefined;
+    const deviceId = trackingId || this.generateDeviceId(req);
+
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const ipAddress = this.extractIpAddress(req);
 

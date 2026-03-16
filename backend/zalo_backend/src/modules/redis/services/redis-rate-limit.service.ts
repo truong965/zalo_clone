@@ -45,6 +45,20 @@ export class RedisRateLimitService {
   }
 
   /**
+   * Check rate limit for QR Exchange (3 attempts per minute per IP + Session)
+   */
+  async checkQrExchangeRateLimit(
+    ip: string, // parameter kept for backward interface but omitted from key to block IP-rotation brute forces
+    qrSessionId: string,
+  ): Promise<RateLimitResult> {
+    const key = RedisKeyBuilder.qrExchangeRateLimit(qrSessionId);
+    const limit = 3; // 3 attempts
+    const window = 60; // per minute
+
+    return this.checkRateLimit(key, limit, window);
+  }
+
+  /**
    * Generic rate limit check with sliding window
    */
   private async checkRateLimit(
@@ -117,16 +131,24 @@ export class RedisRateLimitService {
     const client = this.redisService.getClient();
     const pattern = `${this.config.prefixes.rateLimit}:*`;
 
-    const keys = await client.keys(pattern);
     let cleaned = 0;
+    let cursor: string | number = '0';
 
-    for (const key of keys) {
-      const ttl = await client.ttl(key);
-      if (ttl < 0) {
-        await client.del(key);
-        cleaned++;
+    do {
+      const result = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = Array.isArray(result) ? result[0] : (result as any).cursor;
+      const keys = Array.isArray(result) ? result[1] : (result as any).keys;
+
+      if (keys && keys.length > 0) {
+        for (const key of keys) {
+          const ttl = await client.ttl(key);
+          if (ttl < 0) {
+            await client.del(key);
+            cleaned++;
+          }
+        }
       }
-    }
+    } while (cursor !== '0' && cursor !== 0);
 
     if (cleaned > 0) {
       this.logger.log(`Cleaned up ${cleaned} expired rate limit keys`);
