@@ -45,7 +45,8 @@ class SocketManager {
     this.socket = io(`${env.SOCKET_URL}/socket.io`, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
-      auth: { token: this.token ?? '' },
+      auth: this.token ? { token: this.token } : {},
+      query: this.token ? {} : { type: 'public' },
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 1000,
@@ -136,8 +137,35 @@ class SocketManager {
 
   connect(token: string): Socket {
     this.token = token;
+    
+    // Nếu token thay đổi, disconnect socket cũ để tạo kết nối xác thực mới
+    if (this.socket && (!this.socket.auth || (this.socket.auth as any).token !== token)) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
     const socket = this.ensureSocket();
     socket.auth = { token };
+    socket.io.opts.query = {};
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    return socket;
+  }
+
+  connectUnauthenticated(): Socket {
+    this.token = null;
+
+    if (this.socket && (this.socket.auth as any)?.token) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    const socket = this.ensureSocket();
+    socket.auth = {};
+    socket.io.opts.query = { type: 'public' };
 
     if (!socket.connected) {
       socket.connect();

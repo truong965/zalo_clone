@@ -18,6 +18,7 @@ import {
       useNotificationSound,
 } from '@/features/notification';
 import { useReminderNotifications } from '@/features/reminder';
+import { useAuthForceLogout } from '@/features/auth/hooks/use-auth-force-logout';
 
 const { Content } = Layout;
 
@@ -44,6 +45,9 @@ export function ClientLayout() {
 
       // Mount global reminder notification listener (singleton — all routes)
       useReminderNotifications();
+
+      // Mount the Auth Force Logout listener (enforces 1PC rule & remote logout)
+      useAuthForceLogout();
 
       return (
             <Layout className="h-screen w-screen overflow-hidden bg-white">

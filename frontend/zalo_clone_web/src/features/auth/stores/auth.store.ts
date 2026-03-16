@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import { authService, type AuthResponseData, type SessionInfo } from '../api/auth.service';
+import { authService, type AuthResponseData, type DeviceSession } from '../api/auth.service';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import type { User } from '@/types/api';
 import { ApiError } from '@/lib/api-error';
@@ -20,13 +20,13 @@ export interface AuthState {
       isAuthenticated: boolean;
       isLoading: boolean;
       error: string | null;
-      sessions: SessionInfo[];
+      sessions: DeviceSession[];
 
       // Actions
       setUser: (user: User | null) => void;
       setLoading: (loading: boolean) => void;
       setError: (error: string | null) => void;
-      setSessions: (sessions: SessionInfo[]) => void;
+      setSessions: (sessions: DeviceSession[]) => void;
 
       // Auth Operations
       register: (payload: Parameters<typeof authService.register>[0]) => Promise<void>;

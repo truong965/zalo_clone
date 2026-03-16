@@ -11,6 +11,13 @@ export const SocketEvents = {
       // Authentication
       AUTHENTICATED: 'authenticated',
       AUTH_FAILED: 'auth_failed',
+      AUTH_FORCE_LOGOUT: 'auth.force_logout',
+
+      // QR Login
+      QR_SCANNED: 'qr.scanned',
+      QR_APPROVED: 'qr.approved',
+      QR_EXPIRED: 'qr.expired',
+      QR_CANCELLED: 'qr.cancelled',
 
       // Server events
       SERVER_SHUTDOWN: 'server:shutdown',

@@ -13,6 +13,11 @@ export const API_ENDPOINTS = {
     ME: '/api/v1/auth/me',
     SESSIONS: '/api/v1/auth/sessions',
     REVOKE_SESSION: (deviceId: string) => `/api/v1/auth/sessions/${deviceId}`,
+
+    // QR Login
+    QR_GENERATE: '/api/v1/auth/qr/generate',
+    QR_STATUS: (qrSessionId: string) => `/api/v1/auth/qr/status/${qrSessionId}`,
+    QR_EXCHANGE: '/api/v1/auth/qr/exchange',
   },
 
   // Users

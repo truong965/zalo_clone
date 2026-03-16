@@ -20,17 +20,20 @@ export interface AuthResponseData {
       user: User;
 }
 
-export interface SessionInfo {
-      id: string;
-      userId: string;
+
+export interface QrStatusResponse {
+      status: 'PENDING' | 'SCANNED' | 'APPROVED' | 'EXPIRED';
+      ticket?: string;
+}
+
+export interface DeviceSession {
       deviceId: string;
       deviceName: string;
-      deviceType: string;
       platform: string;
-      ipAddress: string;
+      loginMethod: string;
       lastUsedAt: string;
-      createdAt: string;
-      isActive: boolean;
+      ipAddress: string;
+      isOnline: boolean;
 }
 
 // ============================================================================
@@ -79,6 +82,42 @@ export const authService = {
       },
 
       /**
+       * Generate new QR login session
+       * @param socketId Web's socket ID (unauthenticated) to receive real-time updates
+       */
+      async generateQr(socketId: string) {
+            const response = await api.post(`${API_ENDPOINTS.AUTH.QR_GENERATE}?socketId=${socketId}`);
+            return response.data.data as { qrSessionId: string; deviceTrackingId: string };
+      },
+
+      /**
+       * Fallback polling if WebSocket drops
+       */
+      async getQrStatus(qrSessionId: string) {
+            const response = await api.get(API_ENDPOINTS.AUTH.QR_STATUS(qrSessionId));
+            return response.data.data as QrStatusResponse;
+      },
+
+      /**
+       * Exchange QR ticket for tokens
+       * @param deviceId - deviceTrackingId from generate response
+       */
+      async exchangeQrTicket(ticket: string, qrSessionId: string, deviceId?: string) {
+            const response = await api.post(API_ENDPOINTS.AUTH.QR_EXCHANGE, {
+                  ticket,
+                  qrSessionId,
+                  deviceId: deviceId || 'unknown',
+            });
+            const data = response.data.data as AuthResponseData;
+
+            // Store access token
+            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.accessToken);
+            localStorage.setItem(STORAGE_KEYS.EXPIRES_IN, data.expiresIn.toString());
+
+            return data;
+      },
+
+      /**
        * Get current user profile
        */
       async getProfile() {
@@ -91,7 +130,7 @@ export const authService = {
        */
       async getSessions() {
             const response = await api.get(API_ENDPOINTS.AUTH.SESSIONS);
-            return response.data.data as SessionInfo[];
+            return response.data.data as DeviceSession[];
       },
 
       /**

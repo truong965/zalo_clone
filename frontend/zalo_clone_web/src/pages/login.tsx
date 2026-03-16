@@ -5,11 +5,13 @@
  */
 
 // [THAY ĐỔI 1]: Import 'notification' thay vì 'Alert' và 'message'
-import { Form, Input, Button, Card, Space, Typography, Divider, notification } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Card, Space, Typography, Divider, notification, Tabs } from 'antd';
+import { UserOutlined, LockOutlined, QrcodeOutlined, MobileOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuth } from '@/features/auth';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { QrLoginView } from '@/features/auth/components/qr-login-view';
 import { ROUTES } from '@/config/routes';
 import { ApiError } from '@/lib/api-error';
 
@@ -20,6 +22,13 @@ export function LoginPage() {
   const [form] = Form.useForm();
   // [THAY ĐỔI 2]: Khởi tạo hook notification
   const [api, contextHolder] = notification.useNotification();
+
+  const redirectAfterAuth = () => {
+    const currentUser = useAuthStore.getState().user;
+    navigate(currentUser?.role === 'ADMIN' ? ROUTES.ADMIN_DASHBOARD : ROUTES.CHAT, {
+      replace: true,
+    });
+  };
 
   const {
     login,
@@ -32,7 +41,9 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(user?.role === 'ADMIN' ? ROUTES.ADMIN_DASHBOARD : ROUTES.CHAT);
+      navigate(user?.role === 'ADMIN' ? ROUTES.ADMIN_DASHBOARD : ROUTES.CHAT, {
+        replace: true,
+      });
     }
   }, [isAuthenticated, navigate, user]);
 
@@ -78,62 +89,108 @@ export function LoginPage() {
 
           {/* [THAY ĐỔI 6]: Đã XÓA đoạn code <Alert /> ở đây */}
 
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={onFinish}
-            requiredMark="optional"
-            size="large"
-          >
-            <Form.Item
-              label="Số Điện Thoại"
-              name="phoneNumber"
-              rules={[
-                { required: true, message: 'Vui lòng nhập số điện thoại' },
-                {
-                  // pattern: /(84|0[3|5|7|8|9])+([0-9]{8})\b/g,
-                  message: 'Số điện thoại không đúng định dạng (VD: 0987654321)',
-                },
-              ]}
-            >
-              <Input
-                prefix={<UserOutlined />}
-                placeholder="Nhập số điện thoại (VD: 0987654321)"
-                disabled={isLoading}
-              />
-            </Form.Item>
+          <Tabs
+            centered
+            className="mt-2"
+            items={[
+              {
+                key: 'qr',
+                label: (
+                  <span className="flex items-center gap-1">
+                    <QrcodeOutlined />
+                    Quét Mã QR
+                  </span>
+                ),
+                children: (
+                  <QrLoginView
+                    onLoginSuccess={async () => {
+                      api.success({
+                        message: 'Thành công',
+                        description: 'Đăng nhập thành công qua QR!',
+                        placement: 'bottomRight',
+                      });
+                      // Fetch user profile to update auth state → triggers useEffect redirect
+                      await useAuthStore.getState().initializeAuth();
+                      redirectAfterAuth();
+                    }}
+                    onError={(msg) => {
+                      api.error({
+                        message: 'Lỗi',
+                        description: msg,
+                        placement: 'bottomRight',
+                      });
+                    }}
+                  />
+                ),
+              },
+              {
+                key: 'password',
+                label: (
+                  <span className="flex items-center gap-1">
+                    <MobileOutlined />
+                    Số Điện Thoại
+                  </span>
+                ),
+                children: (
+                  <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={onFinish}
+                    requiredMark="optional"
+                    size="large"
+                  >
+                    <Form.Item
+                      label="Số Điện Thoại"
+                      name="phoneNumber"
+                      rules={[
+                        { required: true, message: 'Vui lòng nhập số điện thoại' },
+                        {
+                          message: 'Số điện thoại không đúng định dạng (VD: 0987654321)',
+                        },
+                      ]}
+                    >
+                      <Input
+                        prefix={<UserOutlined />}
+                        placeholder="Nhập số điện thoại (VD: 0987654321)"
+                        disabled={isLoading}
+                      />
+                    </Form.Item>
 
-            <Form.Item
-              label="Mật Khẩu"
-              name="password"
-              rules={[
-                { required: true, message: 'Vui lòng nhập mật khẩu' },
-                {
-                  min: 6,
-                  message: 'Mật khẩu phải có ít nhất 6 ký tự',
-                },
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Nhập mật khẩu"
-                disabled={isLoading}
-              />
-            </Form.Item>
+                    <Form.Item
+                      label="Mật Khẩu"
+                      name="password"
+                      rules={[
+                        { required: true, message: 'Vui lòng nhập mật khẩu' },
+                        {
+                          min: 6,
+                          message: 'Mật khẩu phải có ít nhất 6 ký tự',
+                        },
+                      ]}
+                    >
+                      <Input.Password
+                        prefix={<LockOutlined />}
+                        placeholder="Nhập mật khẩu"
+                        disabled={isLoading}
+                      />
+                    </Form.Item>
 
-            <Form.Item>
-              <Button
-                type="primary"
-                htmlType="submit"
-                block
-                size="large"
-                loading={isLoading}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
-              </Button>
-            </Form.Item>
-          </Form>
+                    <Form.Item>
+                      <Button
+                        type="primary"
+                        htmlType="submit"
+                        block
+                        size="large"
+                        loading={isLoading}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
+                      </Button>
+                    </Form.Item>
+                  </Form>
+                ),
+              },
+            ]}
+          />
 
           <Divider>Hoặc</Divider>
 
