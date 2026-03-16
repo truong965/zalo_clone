@@ -1,0 +1,143 @@
+{
+      "common": {
+            "cancel": "Hủy",
+            "success": "Thành công",
+            "error": "Lỗi",
+            "unknown": "Không xác định",
+            "loading": "Đang xử lý..."
+      },
+      "auth": {
+            "loginTitle": "Đăng nhập Zalo",
+            "loginSubtitle": "Đăng nhập tài khoản để tiếp tục",
+            "phoneNumber": "Số điện thoại",
+            "password": "Mật khẩu",
+            "login": "Đăng nhập",
+            "registerNow": "Chưa có tài khoản? Đăng ký ngay",
+            "missingInfoTitle": "Thiếu thông tin",
+            "missingInfoLogin": "Vui lòng nhập số điện thoại và mật khẩu.",
+            "loginFailed": "Đăng nhập thất bại",
+            "registerTitle": "Đăng ký tài khoản",
+            "displayName": "Tên hiển thị",
+            "confirmPassword": "Xác nhận mật khẩu",
+            "createAccount": "Tạo tài khoản",
+            "hasAccountLogin": "Đã có tài khoản? Đăng nhập",
+            "missingInfoRegister": "Vui lòng nhập đầy đủ thông tin bắt buộc.",
+            "confirmErrorTitle": "Lỗi xác nhận",
+            "confirmPasswordMismatch": "Mật khẩu xác nhận không khớp.",
+            "registerSuccessMessage": "Đăng ký thành công. Hãy đăng nhập tài khoản mới.",
+            "registerFailed": "Đăng ký thất bại",
+            "validation": {
+                  "displayNameRequired": "Vui lòng nhập tên hiển thị",
+                  "phoneRequired": "Vui lòng nhập số điện thoại",
+                  "passwordRequired": "Vui lòng nhập mật khẩu",
+                  "confirmPasswordRequired": "Vui lòng xác nhận mật khẩu",
+                  "passwordMismatch": "Mật khẩu xác nhận không khớp"
+            }
+      },
+      "tabs": {
+            "chats": "Tin nhắn",
+            "contacts": "Danh bạ",
+            "calls": "Cuộc gọi",
+            "profile": "Cá nhân"
+      },
+      "chats": {
+            "searchPlaceholder": "Tìm cuộc trò chuyện",
+            "empty": "Chưa có cuộc trò chuyện.",
+            "directMessage": "Tin nhắn cá nhân",
+            "conversation": "Cuộc trò chuyện",
+            "noMessage": "Chưa có tin nhắn"
+      },
+      "contacts": {
+            "empty": "Chưa có danh bạ.",
+            "defaultUser": "Người dùng",
+            "noPhone": "Không có số"
+      },
+      "calls": {
+            "title": "Lịch sử cuộc gọi",
+            "empty": "Chưa có lịch sử cuộc gọi.",
+            "type": "Loại",
+            "status": "Trạng thái",
+            "na": "N/A"
+      },
+      "profile": {
+            "title": "Cá nhân",
+            "phone": "Số điện thoại",
+            "role": "Vai trò",
+            "defaultRole": "USER",
+            "scanQr": "Quét QR đăng nhập web",
+            "logoutMobile": "Đăng xuất trên mobile",
+            "deviceManagement": "Quản lý thiết bị",
+            "noSession": "Chưa có phiên đăng nhập nào.",
+            "online": "Online",
+            "offline": "Offline",
+            "revoke": "Thu hồi",
+            "revokeTitle": "Thu hồi phiên đăng nhập",
+            "revokeConfirm": "Bạn có chắc chắn muốn thu hồi phiên trên thiết bị \"{{deviceName}}\"?",
+            "revokeSuccess": "Đã thu hồi phiên đăng nhập thiết bị.",
+            "revokeFailed": "Thu hồi phiên thất bại",
+            "defaultUser": "Người dùng"
+      },
+      "qr": {
+            "cameraPermissionTitle": "Cần cấp quyền camera",
+            "cameraPermissionSubtitle": "Tính năng quét QR cần truy cập camera trên máy thật.",
+            "grantCameraPermission": "Cấp quyền camera",
+            "invalidQrTitle": "QR không hợp lệ",
+            "invalidQrMessage": "Không tìm thấy qrSessionId trong mã QR.",
+            "expiredHint": " (Phiên đã hết hạn).",
+            "invalidOrExpiredMessage": "Mã QR lỗi hoặc hết hạn. Vui lòng bấm làm mới mã trên máy tính và thử lại{{statusText}}",
+            "scanErrorTitle": "Lỗi quét QR",
+            "scanErrorFallback": "Không thể quét QR",
+            "confirmFailed": "Xác nhận thất bại",
+            "scanTitle": "Quét QR đăng nhập Web",
+            "scanSubtitle": "Quét mã từ web. Sau khi quét, mobile sẽ yêu cầu xác nhận nếu đây là thiết bị mới.",
+            "confirmRequired": "Yêu cầu xác nhận",
+            "browser": "Trình duyệt",
+            "os": "Hệ điều hành",
+            "ip": "IP",
+            "createdAt": "Tạo lúc",
+            "confirmLogin": "Xác nhận đăng nhập",
+            "scanAnother": "Quét mã khác"
+      },
+      "modal": {
+            "title": "Đây là màn hình modal",
+            "backHome": "Về màn hình chính"
+      },
+      "explore": {
+            "title": "Khám phá",
+            "intro": "Ứng dụng này bao gồm mã ví dụ để giúp bạn bắt đầu.",
+            "learnMore": "Tìm hiểu thêm",
+            "sections": {
+                  "fileRouting": {
+                        "title": "Điều hướng theo tệp",
+                        "descriptionPrefix": "Ứng dụng này có hai màn hình:",
+                        "and": "và",
+                        "layoutPrefix": "Tệp layout trong",
+                        "layoutSuffix": "thiết lập tab navigator."
+                  },
+                  "crossPlatform": {
+                        "title": "Hỗ trợ Android, iOS và web",
+                        "descriptionPrefix": "Bạn có thể mở dự án này trên Android, iOS và web. Để mở bản web, nhấn",
+                        "descriptionSuffix": "trong terminal đang chạy dự án."
+                  },
+                  "images": {
+                        "title": "Hình ảnh",
+                        "descriptionPrefix": "Với ảnh tĩnh, bạn có thể dùng hậu tố",
+                        "and": "và",
+                        "descriptionSuffix": "để cung cấp tệp cho các mật độ màn hình khác nhau"
+                  },
+                  "theme": {
+                        "title": "Thành phần sáng và tối",
+                        "descriptionPrefix": "Template này hỗ trợ giao diện sáng và tối. Hook",
+                        "descriptionSuffix": "giúp bạn biết chế độ màu hiện tại của người dùng để điều chỉnh giao diện phù hợp."
+                  },
+                  "animation": {
+                        "title": "Hiệu ứng động",
+                        "descriptionPrefix": "Template này có ví dụ về thành phần có animation. Thành phần",
+                        "descriptionMiddle": "sử dụng thư viện mạnh mẽ",
+                        "descriptionSuffix": "để tạo animation vẫy tay.",
+                        "iosPrefix": "Thành phần",
+                        "iosSuffix": "cung cấp hiệu ứng parallax cho ảnh header."
+                  }
+            }
+      }
+}

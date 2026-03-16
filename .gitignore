@@ -37,7 +37,6 @@ yarn-error.log*
 /.vscode/
 
 /zalo_clone.code-workspace
-
-/.agent/
+/.agents/
 
 /firebase-messaging-sw.js

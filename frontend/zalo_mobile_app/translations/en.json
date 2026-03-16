@@ -1,0 +1,143 @@
+{
+      "common": {
+            "cancel": "Cancel",
+            "success": "Success",
+            "error": "Error",
+            "unknown": "Unknown",
+            "loading": "Processing..."
+      },
+      "auth": {
+            "loginTitle": "Sign in to Zalo Clone",
+            "loginSubtitle": "Sign in to continue",
+            "phoneNumber": "Phone number",
+            "password": "Password",
+            "login": "Sign in",
+            "registerNow": "No account yet? Register now",
+            "missingInfoTitle": "Missing information",
+            "missingInfoLogin": "Please enter phone number and password.",
+            "loginFailed": "Login failed",
+            "registerTitle": "Create account",
+            "displayName": "Display name",
+            "confirmPassword": "Confirm password",
+            "createAccount": "Create account",
+            "hasAccountLogin": "Already have an account? Sign in",
+            "missingInfoRegister": "Please fill in all required information.",
+            "confirmErrorTitle": "Confirmation error",
+            "confirmPasswordMismatch": "Confirm password does not match.",
+            "registerSuccessMessage": "Registration successful. Please sign in with your new account.",
+            "registerFailed": "Registration failed",
+            "validation": {
+                  "displayNameRequired": "Display name is required",
+                  "phoneRequired": "Phone number is required",
+                  "passwordRequired": "Password is required",
+                  "confirmPasswordRequired": "Please confirm your password",
+                  "passwordMismatch": "Confirm password does not match"
+            }
+      },
+      "tabs": {
+            "chats": "Chats",
+            "contacts": "Contacts",
+            "calls": "Calls",
+            "profile": "Profile"
+      },
+      "chats": {
+            "searchPlaceholder": "Search conversations",
+            "empty": "No conversations yet.",
+            "directMessage": "Direct message",
+            "conversation": "Conversation",
+            "noMessage": "No messages yet"
+      },
+      "contacts": {
+            "empty": "No contacts yet.",
+            "defaultUser": "User",
+            "noPhone": "No phone"
+      },
+      "calls": {
+            "title": "Call history",
+            "empty": "No call history yet.",
+            "type": "Type",
+            "status": "Status",
+            "na": "N/A"
+      },
+      "profile": {
+            "title": "Profile",
+            "phone": "Phone",
+            "role": "Role",
+            "defaultRole": "USER",
+            "scanQr": "Scan QR to login web",
+            "logoutMobile": "Logout on mobile",
+            "deviceManagement": "Device management",
+            "noSession": "No active sessions.",
+            "online": "Online",
+            "offline": "Offline",
+            "revoke": "Revoke",
+            "revokeTitle": "Revoke session",
+            "revokeConfirm": "Are you sure you want to revoke session on device \"{{deviceName}}\"?",
+            "revokeSuccess": "Device session revoked.",
+            "revokeFailed": "Failed to revoke session",
+            "defaultUser": "User"
+      },
+      "qr": {
+            "cameraPermissionTitle": "Camera permission required",
+            "cameraPermissionSubtitle": "QR scanning requires camera access on a real device.",
+            "grantCameraPermission": "Grant camera permission",
+            "invalidQrTitle": "Invalid QR",
+            "invalidQrMessage": "Cannot find qrSessionId in the QR code.",
+            "expiredHint": " (Session expired).",
+            "invalidOrExpiredMessage": "Invalid or expired QR code. Please refresh the code on web and try again{{statusText}}",
+            "scanErrorTitle": "QR scan error",
+            "scanErrorFallback": "Cannot scan QR",
+            "confirmFailed": "Confirmation failed",
+            "scanTitle": "Scan QR to login Web",
+            "scanSubtitle": "Scan the code from web. Mobile will ask for confirmation if this is a new device.",
+            "confirmRequired": "Confirmation required",
+            "browser": "Browser",
+            "os": "OS",
+            "ip": "IP",
+            "createdAt": "Created at",
+            "confirmLogin": "Confirm login",
+            "scanAnother": "Scan another code"
+      },
+      "modal": {
+            "title": "This is a modal",
+            "backHome": "Go to home screen"
+      },
+      "explore": {
+            "title": "Explore",
+            "intro": "This app includes example code to help you get started.",
+            "learnMore": "Learn more",
+            "sections": {
+                  "fileRouting": {
+                        "title": "File-based routing",
+                        "descriptionPrefix": "This app has two screens:",
+                        "and": "and",
+                        "layoutPrefix": "The layout file in",
+                        "layoutSuffix": "sets up the tab navigator."
+                  },
+                  "crossPlatform": {
+                        "title": "Android, iOS, and web support",
+                        "descriptionPrefix": "You can open this project on Android, iOS, and the web. To open the web version, press",
+                        "descriptionSuffix": "in the terminal running this project."
+                  },
+                  "images": {
+                        "title": "Images",
+                        "descriptionPrefix": "For static images, you can use the",
+                        "and": "and",
+                        "descriptionSuffix": "suffixes to provide files for different screen densities"
+                  },
+                  "theme": {
+                        "title": "Light and dark mode components",
+                        "descriptionPrefix": "This template has light and dark mode support. The",
+                        "descriptionSuffix": "hook lets you inspect what the user's current color scheme is, and so you can adjust UI colors accordingly."
+                  },
+                  "animation": {
+                        "title": "Animations",
+                        "descriptionPrefix": "This template includes an example of an animated component. The",
+                        "descriptionMiddle": "component uses the powerful",
+                        "descriptionSuffix": "library to create a waving hand animation.",
+                        "iosPrefix": "The",
+                        "iosSuffix": "component provides a parallax effect for the header image."
+                  }
+            }
+      }
+}
