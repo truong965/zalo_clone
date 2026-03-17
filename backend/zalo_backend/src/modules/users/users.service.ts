@@ -149,16 +149,18 @@ export class UsersService extends BaseService<User> {
     });
 
     // Emit domain event for stats counters & downstream listeners
-    await this.eventPublisher.publish(
-      new UserRegisteredEvent(
-        newUser.id,
-        newUser.phoneNumber,
-        newUser.displayName,
-      ),
-      { fireAndForget: true },
-    ).catch((err) => {
-      this.logger.warn(`Failed to emit UserRegisteredEvent: ${err.message}`);
-    });
+    await this.eventPublisher
+      .publish(
+        new UserRegisteredEvent(
+          newUser.id,
+          newUser.phoneNumber,
+          newUser.displayName,
+        ),
+        { fireAndForget: true },
+      )
+      .catch((err) => {
+        this.logger.warn(`Failed to emit UserRegisteredEvent: ${err.message}`);
+      });
 
     return new UserEntity(newUser);
   }
@@ -209,21 +211,22 @@ export class UsersService extends BaseService<User> {
     // Invalidate JWT profile cache
     await this.redis.del(RedisKeyBuilder.authUserProfile(id));
 
-    await this.eventPublisher.publish(
-      new UserProfileUpdatedEvent(
-        id,
-        {
+    await this.eventPublisher
+      .publish(
+        new UserProfileUpdatedEvent(id, {
           displayName: dto.displayName,
           avatarUrl: dto.avatarUrl,
           bio: dto.bio,
           gender: dto.gender,
           dateOfBirth: dto.dateOfBirth,
-        },
-      ),
-      { fireAndForget: true },
-    ).catch((err) => {
-      this.logger.warn(`Failed to emit UserProfileUpdatedEvent: ${err.message}`);
-    });
+        }),
+        { fireAndForget: true },
+      )
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to emit UserProfileUpdatedEvent: ${err.message}`,
+        );
+      });
 
     return new UserEntity(updatedUser);
   }

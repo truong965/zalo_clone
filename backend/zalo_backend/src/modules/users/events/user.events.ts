@@ -22,28 +22,28 @@ import { DomainEvent } from '@shared/events';
  * @version 1
  */
 export class UserProfileUpdatedEvent extends DomainEvent {
-      readonly eventType = 'USER_PROFILE_UPDATED';
-      readonly version = 1;
+  readonly eventType = 'USER_PROFILE_UPDATED';
+  readonly version = 1;
 
-      constructor(
-            readonly userId: string,
-            readonly updates: {
-                  displayName?: string;
-                  avatarUrl?: string;
-                  bio?: string;
-                  gender?: string;
-                  dateOfBirth?: Date;
-            },
-      ) {
-            super('UsersModule', 'User', userId, 1);
-      }
+  constructor(
+    readonly userId: string,
+    readonly updates: {
+      displayName?: string;
+      avatarUrl?: string;
+      bio?: string;
+      gender?: string;
+      dateOfBirth?: Date;
+    },
+  ) {
+    super('UsersModule', 'User', userId, 1);
+  }
 
-      toJSON() {
-            return {
-                  ...super.toJSON(),
-                  userId: this.userId,
-                  updates: this.updates,
-                  eventType: this.eventType,
-            };
-      }
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      userId: this.userId,
+      updates: this.updates,
+      eventType: this.eventType,
+    };
+  }
 }

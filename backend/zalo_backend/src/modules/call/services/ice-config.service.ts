@@ -33,66 +33,66 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as NestConfig from '@nestjs/config';
 import callConfig from 'src/config/call.config';
 import {
-      IceServerConfig,
-      TurnCredentialService,
+  IceServerConfig,
+  TurnCredentialService,
 } from './turn-credential.service';
 
 /** Complete ICE configuration sent to WebRTC client */
 export interface IceConfig {
-      iceServers: IceServerConfig[];
-      iceTransportPolicy: 'relay' | 'all';
+  iceServers: IceServerConfig[];
+  iceTransportPolicy: 'relay' | 'all';
 }
 
 @Injectable()
 export class IceConfigService {
-      private readonly logger = new Logger(IceConfigService.name);
+  private readonly logger = new Logger(IceConfigService.name);
 
-      constructor(
-            @Inject(callConfig.KEY)
-            private readonly config: NestConfig.ConfigType<typeof callConfig>,
-            private readonly turnCredentialService: TurnCredentialService,
-      ) { }
+  constructor(
+    @Inject(callConfig.KEY)
+    private readonly config: NestConfig.ConfigType<typeof callConfig>,
+    private readonly turnCredentialService: TurnCredentialService,
+  ) {}
 
-      /**
-       * Build ICE configuration for a specific user.
-       *
-       * @param userId - User who will use this ICE config
-       * @returns Complete ICE server list + transport policy
-       */
-      async getIceConfig(userId: string): Promise<IceConfig> {
-            const iceServers: IceServerConfig[] = [];
+  /**
+   * Build ICE configuration for a specific user.
+   *
+   * @param userId - User who will use this ICE config
+   * @returns Complete ICE server list + transport policy
+   */
+  async getIceConfig(userId: string): Promise<IceConfig> {
+    const iceServers: IceServerConfig[] = [];
 
-            // 1. STUN server (free, for ICE candidate gathering)
-            //    Always included even in relay mode — needed for server-reflexive candidates
-            const stunUrl = this.config.stunServerUrl;
-            if (stunUrl) {
-                  iceServers.push({ urls: stunUrl });
-            }
+    // 1. STUN server (free, for ICE candidate gathering)
+    //    Always included even in relay mode — needed for server-reflexive candidates
+    const stunUrl = this.config.stunServerUrl;
+    if (stunUrl) {
+      iceServers.push({ urls: stunUrl });
+    }
 
-            // 2. TURN server (authenticated, for media relay)
-            const turnCredentials =
-                  this.turnCredentialService.generateCredentials(userId);
-            iceServers.push(turnCredentials);
+    // 2. TURN server (authenticated, for media relay)
+    const turnCredentials =
+      this.turnCredentialService.generateCredentials(userId);
+    iceServers.push(turnCredentials);
 
-            // 3. Determine transport policy based on user privacy settings
-            //
-            // PRODUCTION TODO: When `allowDirectConnection` is added to PrivacySettings schema:
-            // ──────────────────────────────────────────────────────────────────────────
-            // const settings = await this.prisma.privacySettings.findUnique({
-            //   where: { userId },
-            //   select: { allowDirectConnection: true },
-            // });
-            // const userAllowsDirect = settings?.allowDirectConnection ?? false;
-            // const iceTransportPolicy = userAllowsDirect ? 'all' : 'relay';
-            // ──────────────────────────────────────────────────────────────────────────
-            //
-            // For now, use the global default from config:
-            const iceTransportPolicy = this.config.defaultIceTransportPolicy;
+    // 3. Determine transport policy based on user privacy settings
+    //
+    // PRODUCTION TODO: When `allowDirectConnection` is added to PrivacySettings schema:
+    // ──────────────────────────────────────────────────────────────────────────
+    // const settings = await this.prisma.privacySettings.findUnique({
+    //   where: { userId },
+    //   select: { allowDirectConnection: true },
+    // });
+    // const userAllowsDirect = settings?.allowDirectConnection ?? false;
+    // const iceTransportPolicy = userAllowsDirect ? 'all' : 'relay';
+    // ──────────────────────────────────────────────────────────────────────────
+    //
+    // For now, use the global default from config:
+    const iceTransportPolicy = this.config.defaultIceTransportPolicy;
 
-            this.logger.debug(
-                  `ICE config for user ${userId}: ${iceServers.length} servers, policy=${iceTransportPolicy}`,
-            );
+    this.logger.debug(
+      `ICE config for user ${userId}: ${iceServers.length} servers, policy=${iceTransportPolicy}`,
+    );
 
-            return { iceServers, iceTransportPolicy };
-      }
+    return { iceServers, iceTransportPolicy };
+  }
 }

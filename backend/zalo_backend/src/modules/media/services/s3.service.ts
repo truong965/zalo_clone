@@ -574,7 +574,7 @@ export class S3Service {
       return tempFilePath;
     } catch (error) {
       if (fs.existsSync(tempFilePath)) {
-        await fs.promises.unlink(tempFilePath).catch(() => { });
+        await fs.promises.unlink(tempFilePath).catch(() => {});
       }
       this.logger.error(`Failed to download to temp file: ${key}`, error);
       throw error;

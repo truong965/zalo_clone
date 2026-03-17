@@ -17,12 +17,12 @@ import {
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
-import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
-import { WsJwtGuard } from 'src/socket/guards/ws-jwt.guard';
+import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
+import { WsJwtGuard } from 'src/common/guards/ws-jwt.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
 import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
-import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
+import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { ConversationType } from '@prisma/client';
 
 import { MessageService } from './services/message.service';
@@ -97,13 +97,17 @@ export class MessageGateway implements OnGatewayInit {
       return;
     }
 
-    this.logger.log(`📱 User ${userId} authenticated - setting up message subscriptions`);
+    this.logger.log(
+      `📱 User ${userId} authenticated - setting up message subscriptions`,
+    );
 
     try {
       await this.realtime.syncOfflineMessages(socket);
 
       if (!userId) {
-        this.logger.warn(`Cannot subscribe receipts: userId is undefined for socket ${socket.id}`);
+        this.logger.warn(
+          `Cannot subscribe receipts: userId is undefined for socket ${socket.id}`,
+        );
         return;
       }
 
@@ -111,19 +115,27 @@ export class MessageGateway implements OnGatewayInit {
       const existing = this.userReceiptSubscriptions.get(userId);
       if (existing) {
         existing.refCount++;
-        this.logger.debug(`Receipt subscription refCount++ for user ${userId} (now ${existing.refCount})`);
+        this.logger.debug(
+          `Receipt subscription refCount++ for user ${userId} (now ${existing.refCount})`,
+        );
       } else {
         const unsubReceipts = await this.realtime.subscribeToReceipts(
           userId,
           async (payload) =>
-            this.emitToUser(userId, SocketEvents.MESSAGE_RECEIPT_UPDATE, payload),
+            this.emitToUser(
+              userId,
+              SocketEvents.MESSAGE_RECEIPT_UPDATE,
+              payload,
+            ),
         );
 
         this.userReceiptSubscriptions.set(userId, {
           teardown: unsubReceipts,
           refCount: 1,
         });
-        this.logger.debug(`✅ User ${userId} subscribed to receipt channel (refCount=1)`);
+        this.logger.debug(
+          `✅ User ${userId} subscribed to receipt channel (refCount=1)`,
+        );
       }
     } catch (error) {
       this.logger.error(
@@ -137,10 +149,7 @@ export class MessageGateway implements OnGatewayInit {
    * Listen to USER_SOCKET_DISCONNECTED event from SocketGateway
    */
   @OnEvent(SocketEvents.USER_SOCKET_DISCONNECTED)
-  async handleUserDisconnected(payload: {
-    userId: string;
-    socketId: string;
-  }) {
+  async handleUserDisconnected(payload: { userId: string; socketId: string }) {
     // MSG-R3: Decrement refCount, only unsubscribe when last socket disconnects
     const existing = this.userReceiptSubscriptions.get(payload.userId);
     if (existing) {
@@ -150,19 +159,31 @@ export class MessageGateway implements OnGatewayInit {
           await existing.teardown();
         } catch (error) {
           const msg = (error as Error).message;
-          if (!msg?.includes('Connection is closed') && !msg?.includes('ECONNABORTED')) {
-            this.logger.error(`Error unsubscribing receipts for user ${payload.userId}`, error);
+          if (
+            !msg?.includes('Connection is closed') &&
+            !msg?.includes('ECONNABORTED')
+          ) {
+            this.logger.error(
+              `Error unsubscribing receipts for user ${payload.userId}`,
+              error,
+            );
           }
         }
         this.userReceiptSubscriptions.delete(payload.userId);
-        this.logger.debug(`Receipt subscription removed for user ${payload.userId}`);
+        this.logger.debug(
+          `Receipt subscription removed for user ${payload.userId}`,
+        );
       } else {
-        this.logger.debug(`Receipt subscription refCount-- for user ${payload.userId} (now ${existing.refCount})`);
+        this.logger.debug(
+          `Receipt subscription refCount-- for user ${payload.userId} (now ${existing.refCount})`,
+        );
       }
     }
 
     await this.cleanupSubscriptions(payload.socketId);
-    this.logger.log(`📴 User ${payload.userId} disconnected - cleaned up message subscriptions`);
+    this.logger.log(
+      `📴 User ${payload.userId} disconnected - cleaned up message subscriptions`,
+    );
   }
 
   @SubscribeMessage(SocketEvents.MESSAGE_SEND)
@@ -279,10 +300,8 @@ export class MessageGateway implements OnGatewayInit {
         throw new Error('Unauthenticated');
       }
 
-      await this.realtime.markAsSeen(
-        dto,
-        userId,
-        (uid, event, data) => this.emitToUser(uid, event, data),
+      await this.realtime.markAsSeen(dto, userId, (uid, event, data) =>
+        this.emitToUser(uid, event, data),
       );
 
       return true;
@@ -311,8 +330,10 @@ export class MessageGateway implements OnGatewayInit {
         throw new Error('Unauthenticated');
       }
 
-      await this.realtime.broadcastTypingToMembers(dto, userId, (uid, event, data) =>
-        this.emitToUser(uid, event, data),
+      await this.realtime.broadcastTypingToMembers(
+        dto,
+        userId,
+        (uid, event, data) => this.emitToUser(uid, event, data),
       );
 
       // MSG-R7: Cancel any existing timeout for this user-conversation
@@ -355,8 +376,10 @@ export class MessageGateway implements OnGatewayInit {
       if (!userId) {
         throw new Error('Unauthenticated');
       }
-      await this.realtime.broadcastTypingToMembers(dto, userId, (uid, event, data) =>
-        this.emitToUser(uid, event, data),
+      await this.realtime.broadcastTypingToMembers(
+        dto,
+        userId,
+        (uid, event, data) => this.emitToUser(uid, event, data),
       );
 
       // MSG-R7: Cancel auto-stop timeout when user explicitly stops typing

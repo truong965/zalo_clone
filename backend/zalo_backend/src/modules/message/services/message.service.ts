@@ -85,10 +85,11 @@ export class MessageService {
     private readonly displayNameResolver: DisplayNameResolver,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
-  ) { }
+  ) {}
 
-
-  private async enrichMessagesWithMedia<T extends { id: bigint; parentMessage?: { id: bigint } | null }>(
+  private async enrichMessagesWithMedia<
+    T extends { id: bigint; parentMessage?: { id: bigint } | null },
+  >(
     messages: T[],
   ): Promise<(T & { mediaAttachments: any[]; parentMessage?: any })[]> {
     if (!messages.length) return messages as any;
@@ -121,16 +122,18 @@ export class MessageService {
       if (enriched.parentMessage) {
         enriched.parentMessage = {
           ...enriched.parentMessage,
-          mediaAttachments: mediaMap.get(enriched.parentMessage.id.toString())?.slice(0, 1) || [],
+          mediaAttachments:
+            mediaMap.get(enriched.parentMessage.id.toString())?.slice(0, 1) ||
+            [],
         };
       }
       return enriched;
     });
   }
 
-  private async enrichSingleMessageWithMedia<T extends { id: bigint; parentMessage?: { id: bigint } | null }>(
-    message: T,
-  ): Promise<T & { mediaAttachments: any[]; parentMessage?: any }> {
+  private async enrichSingleMessageWithMedia<
+    T extends { id: bigint; parentMessage?: { id: bigint } | null },
+  >(message: T): Promise<T & { mediaAttachments: any[]; parentMessage?: any }> {
     const [enriched] = await this.enrichMessagesWithMedia([message]);
     return enriched;
   }
@@ -187,7 +190,9 @@ export class MessageService {
     `);
   }
 
-  private async getSenderProfilesMap(userIds: string[]): Promise<Map<string, SenderProfile>> {
+  private async getSenderProfilesMap(
+    userIds: string[],
+  ): Promise<Map<string, SenderProfile>> {
     if (userIds.length === 0) {
       return new Map();
     }
@@ -204,7 +209,10 @@ export class MessageService {
     return new Map(users.map((u) => [u.id, u]));
   }
 
-  private async hydrateMessagesWithSenders(messages: any[], viewerId: string): Promise<any[]> {
+  private async hydrateMessagesWithSenders(
+    messages: any[],
+    viewerId: string,
+  ): Promise<any[]> {
     if (messages.length === 0) {
       return messages;
     }
@@ -246,18 +254,23 @@ export class MessageService {
       sender: composeSender(message.senderId),
       parentMessage: message.parentMessage
         ? {
-          ...message.parentMessage,
-          sender: composeSender(message.parentMessage.senderId),
-        }
+            ...message.parentMessage,
+            sender: composeSender(message.parentMessage.senderId),
+          }
         : message.parentMessage,
     }));
   }
 
-  private async hydrateSingleMessageWithSender(message: any, viewerId: string): Promise<any> {
-    const [hydrated] = await this.hydrateMessagesWithSenders([message], viewerId);
+  private async hydrateSingleMessageWithSender(
+    message: any,
+    viewerId: string,
+  ): Promise<any> {
+    const [hydrated] = await this.hydrateMessagesWithSenders(
+      [message],
+      viewerId,
+    );
     return hydrated;
   }
-
 
   private async getDirectTargetUserId(
     conversationId: string,
@@ -346,11 +359,19 @@ export class MessageService {
 
     // Compute receipt fields
     const { totalRecipients, directReceipts } = await this.computeReceiptFields(
-      targetUserId, dto.conversationId, senderId,
+      targetUserId,
+      dto.conversationId,
+      senderId,
     );
 
     // Persist message
-    const message = await this.persistMessage(dto, senderId, replyToId, totalRecipients, directReceipts);
+    const message = await this.persistMessage(
+      dto,
+      senderId,
+      replyToId,
+      totalRecipients,
+      directReceipts,
+    );
 
     const _fullMessage = await this.prisma.message.findUniqueOrThrow({
       where: { id: message.id },
@@ -358,7 +379,8 @@ export class MessageService {
         parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
       },
     });
-    const fullMessageWithMedia = await this.enrichSingleMessageWithMedia(_fullMessage);
+    const fullMessageWithMedia =
+      await this.enrichSingleMessageWithMedia(_fullMessage);
     const fullMessage = await this.hydrateSingleMessageWithSender(
       fullMessageWithMedia,
       senderId,
@@ -392,7 +414,10 @@ export class MessageService {
   /**
    * Check idempotency cache and return existing message if found.
    */
-  private async checkIdempotency(idempotencyKey: string, viewerId: string): Promise<Message | null> {
+  private async checkIdempotency(
+    idempotencyKey: string,
+    viewerId: string,
+  ): Promise<Message | null> {
     const cachedMessage = await this.redis.getClient().get(idempotencyKey);
     if (!cachedMessage) return null;
 
@@ -404,7 +429,8 @@ export class MessageService {
         parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
       },
     });
-    const existingMessageWithMedia = await this.enrichSingleMessageWithMedia(_existingMessage);
+    const existingMessageWithMedia =
+      await this.enrichSingleMessageWithMedia(_existingMessage);
     const existingMessage = await this.hydrateSingleMessageWithSender(
       existingMessageWithMedia,
       viewerId,
@@ -415,11 +441,16 @@ export class MessageService {
   /**
    * Validate that sender can message the target user (privacy/block check).
    */
-  private async validateSendPermissions(senderId: string, targetUserId: string | null): Promise<void> {
+  private async validateSendPermissions(
+    senderId: string,
+    targetUserId: string | null,
+  ): Promise<void> {
     if (!targetUserId) return;
 
     const authz = await this.interactionAuth.canInteract(
-      senderId, targetUserId, PermissionAction.MESSAGE,
+      senderId,
+      targetUserId,
+      PermissionAction.MESSAGE,
     );
     if (!authz.allowed) {
       throw new ForbiddenException(
@@ -452,7 +483,10 @@ export class MessageService {
     targetUserId: string | null,
     conversationId: string,
     senderId: string,
-  ): Promise<{ totalRecipients: number; directReceipts: Record<string, { delivered: null; seen: null }> | null }> {
+  ): Promise<{
+    totalRecipients: number;
+    directReceipts: Record<string, { delivered: null; seen: null }> | null;
+  }> {
     if (targetUserId !== null) {
       return {
         totalRecipients: 1,
@@ -527,7 +561,9 @@ export class MessageService {
       if (error.code === 'P2002') {
         const target = error.meta?.target as string[] | undefined;
         if (target?.includes('clientMessageId')) {
-          this.logger.warn(`Duplicate clientMessageId detected: ${dto.clientMessageId}`);
+          this.logger.warn(
+            `Duplicate clientMessageId detected: ${dto.clientMessageId}`,
+          );
         }
         const _existing = await this.prisma.message.findUniqueOrThrow({
           where: { clientMessageId: dto.clientMessageId },
@@ -535,7 +571,8 @@ export class MessageService {
             parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
           },
         });
-        const existingWithMedia = await this.enrichSingleMessageWithMedia(_existing);
+        const existingWithMedia =
+          await this.enrichSingleMessageWithMedia(_existing);
         const existing = await this.hydrateSingleMessageWithSender(
           existingWithMedia,
           viewerId,
@@ -673,7 +710,10 @@ export class MessageService {
       },
     });
     const messagesWithMedia = await this.enrichMessagesWithMedia(_messages);
-    const messages = await this.hydrateMessagesWithSenders(messagesWithMedia, userId);
+    const messages = await this.hydrateMessagesWithSenders(
+      messagesWithMedia,
+      userId,
+    );
 
     const result = CursorPaginationHelper.buildResult({
       items: messages,
@@ -770,12 +810,16 @@ export class MessageService {
 
     // Combine: before (reversed to ASC) + target + after — all in DESC order for consistency
     const allMessagesRaw = [
-      ...afterMsgs.reverse(),  // newest first
+      ...afterMsgs.reverse(), // newest first
       ...(targetMsg ? [targetMsg] : []),
-      ...beforeMsgs,           // already DESC order from query
+      ...beforeMsgs, // already DESC order from query
     ];
-    const allMessagesWithMedia = await this.enrichMessagesWithMedia(allMessagesRaw);
-    const allMessages = await this.hydrateMessagesWithSenders(allMessagesWithMedia, userId);
+    const allMessagesWithMedia =
+      await this.enrichMessagesWithMedia(allMessagesRaw);
+    const allMessages = await this.hydrateMessagesWithSenders(
+      allMessagesWithMedia,
+      userId,
+    );
 
     const hasOlderMessages = beforeMsgs.length >= before;
     const hasNewerMessages = afterMsgs.length >= after;
@@ -836,16 +880,20 @@ export class MessageService {
         },
       });
 
-      await this.eventPublisher.publish(
-        new MessageDeletedEvent(
-          messageId.toString(),
-          message.conversationId,
-          userId,
-        ),
-        { fireAndForget: true },
-      ).catch((err) => {
-        this.logger.warn(`Failed to emit MessageDeletedEvent: ${err.message}`);
-      });
+      await this.eventPublisher
+        .publish(
+          new MessageDeletedEvent(
+            messageId.toString(),
+            message.conversationId,
+            userId,
+          ),
+          { fireAndForget: true },
+        )
+        .catch((err) => {
+          this.logger.warn(
+            `Failed to emit MessageDeletedEvent: ${err.message}`,
+          );
+        });
 
       this.logger.log(`Message ${messageId} deleted for everyone by ${userId}`);
     } else {

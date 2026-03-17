@@ -19,7 +19,6 @@ import workerConfig from 'src/config/worker.config';
 
 @Module({
   imports: [
-
     ConfigModule.forFeature(s3Config),
     ConfigModule.forFeature(uploadConfig),
     ConfigModule.forFeature(queueConfig),
@@ -45,10 +44,6 @@ import workerConfig from 'src/config/worker.config';
     // Concrete class also registered so MetricsService can inject it
     SqsMediaQueueService,
   ],
-  exports: [
-    MediaUploadService,
-    S3Service,
-    MEDIA_QUEUE_PROVIDER,
-  ],
+  exports: [MediaUploadService, S3Service, MEDIA_QUEUE_PROVIDER],
 })
-export class MediaModule { }
+export class MediaModule {}

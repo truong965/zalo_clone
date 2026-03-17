@@ -25,7 +25,7 @@ export class BlockCacheListener {
   constructor(
     private readonly redisService: RedisService,
     private readonly idempotency: IdempotencyService,
-  ) { }
+  ) {}
 
   @OnEvent('user.blocked', { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {

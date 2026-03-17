@@ -71,7 +71,11 @@ export class RealTimeSearchService implements OnModuleInit {
   private readonly BATCH_INTERVAL_MS = 100;
   private batchBuffer = new Map<
     string, // socketId
-    Array<{ keyword: string; userId: string; message: MessageWithSearchContext }>
+    Array<{
+      keyword: string;
+      userId: string;
+      message: MessageWithSearchContext;
+    }>
   >();
   private batchTimer: NodeJS.Timeout | null = null;
 
@@ -90,7 +94,7 @@ export class RealTimeSearchService implements OnModuleInit {
     private readonly eventEmitter: EventEmitter2,
     private readonly configService: ConfigService,
     @Optional() private readonly redis: RedisService,
-  ) { }
+  ) {}
 
   private getInitialLimits(): {
     messageLimit: number;
@@ -120,7 +124,13 @@ export class RealTimeSearchService implements OnModuleInit {
       50,
     );
 
-    return { messageLimit, contactLimit, globalLimitPerType, mediaLimit, groupLimit };
+    return {
+      messageLimit,
+      contactLimit,
+      globalLimitPerType,
+      mediaLimit,
+      groupLimit,
+    };
   }
 
   /**
@@ -270,7 +280,11 @@ export class RealTimeSearchService implements OnModuleInit {
       // Phase 1: Do NOT perform search when keyword is too short (1-2 chars).
       // Return empty results (no error) to avoid noisy UX while the user is typing.
       // Exception: filter-only browse is allowed with empty keyword.
-      if (trimmedKeyword.length > 0 && trimmedKeyword.length < 3 && !isFilterOnlyBrowse) {
+      if (
+        trimmedKeyword.length > 0 &&
+        trimmedKeyword.length < 3 &&
+        !isFilterOnlyBrowse
+      ) {
         const executionTimeMs = Date.now() - startTime;
         return {
           keyword: payload.keyword,
@@ -549,14 +563,11 @@ export class RealTimeSearchService implements OnModuleInit {
 
     switch (payload.searchType) {
       case 'CONTACT': {
-        const result = await this.contactSearchService.searchContacts(
-          userId,
-          {
-            keyword: payload.keyword,
-            limit,
-            cursor: payload.cursor,
-          },
-        );
+        const result = await this.contactSearchService.searchContacts(userId, {
+          keyword: payload.keyword,
+          limit,
+          cursor: payload.cursor,
+        });
         return {
           searchType: 'CONTACT',
           data: result.data,
@@ -674,15 +685,24 @@ export class RealTimeSearchService implements OnModuleInit {
       if (entries.length === 0) continue;
 
       // Group by keyword to emit per-keyword batches
-      const byKeyword = new Map<string, { message: MessageWithSearchContext; userId: string }>();
+      const byKeyword = new Map<
+        string,
+        { message: MessageWithSearchContext; userId: string }
+      >();
 
       for (const entry of entries) {
         // Keep the latest message per keyword
-        byKeyword.set(entry.keyword, { message: entry.message, userId: entry.userId });
+        byKeyword.set(entry.keyword, {
+          message: entry.message,
+          userId: entry.userId,
+        });
       }
 
       // Emit one event per keyword-socketId pair (with the latest message)
-      for (const [keyword, { message: latestMessage, userId }] of byKeyword.entries()) {
+      for (const [
+        keyword,
+        { message: latestMessage, userId },
+      ] of byKeyword.entries()) {
         this.eventEmitter.emit(SocketEvents.SEARCH_INTERNAL_NEW_MATCH, {
           message: latestMessage,
           subscriptions: [{ socketId, keyword, userId }],
@@ -715,7 +735,7 @@ export class RealTimeSearchService implements OnModuleInit {
    * - GLOBAL → GlobalSearchService.globalSearch() (messages + contacts + groups + media)
    * - CONVERSATION → MessageSearchService.searchInConversation()
    * - CONTACT → ContactSearchService.searchContacts()
-  * - GROUP → GroupSearchService.searchGroups()
+   * - GROUP → GroupSearchService.searchGroups()
    * - MEDIA → MediaSearchService.searchMedia()
    */
   private async executeInitialSearch(
@@ -725,8 +745,13 @@ export class RealTimeSearchService implements OnModuleInit {
   ): Promise<SearchResultsPayload> {
     try {
       const searchType = payload.searchType || 'CONVERSATION';
-      const { messageLimit, contactLimit, globalLimitPerType, mediaLimit, groupLimit } =
-        this.getInitialLimits();
+      const {
+        messageLimit,
+        contactLimit,
+        globalLimitPerType,
+        mediaLimit,
+        groupLimit,
+      } = this.getInitialLimits();
 
       switch (searchType) {
         case 'GLOBAL': {
@@ -951,7 +976,10 @@ export class RealTimeSearchService implements OnModuleInit {
     // 6. Multi-entity keyword matching (diacritics-insensitive, case-insensitive)
     // FIX-VIET: Strip Vietnamese diacritics to match behavior of SQL unaccent()
     const normalizeText = (text: string) =>
-      text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      text
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
 
     const keyword = normalizeText(subscription.keyword);
 

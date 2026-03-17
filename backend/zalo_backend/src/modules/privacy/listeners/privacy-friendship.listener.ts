@@ -19,7 +19,7 @@ import type { UnfriendedPayload } from '@shared/events/contracts/friendship-even
 export class PrivacyFriendshipListener {
   private readonly logger = new Logger(PrivacyFriendshipListener.name);
 
-  constructor(private readonly redisService: RedisService) { }
+  constructor(private readonly redisService: RedisService) {}
 
   @OnEvent('friendship.accepted', { async: true })
   async handleFriendshipAccepted(

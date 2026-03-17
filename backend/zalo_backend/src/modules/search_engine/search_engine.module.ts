@@ -89,4 +89,4 @@ import searchConfig from './config/search.config';
     RealTimeSearchService, // Phase 4: Export for other modules
   ],
 })
-export class SearchEngineModule { }
+export class SearchEngineModule {}

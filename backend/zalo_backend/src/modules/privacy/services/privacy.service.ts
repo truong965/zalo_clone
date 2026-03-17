@@ -54,7 +54,7 @@ export class PrivacyService {
     private readonly blockChecker: IBlockChecker,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) { }
+  ) {}
 
   /**
    * Batch get privacy settings for multiple users

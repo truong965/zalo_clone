@@ -83,4 +83,4 @@ import { BlockCheckerService } from './services/block-checker.service';
     BLOCK_CHECKER, // For FriendshipModule & AuthorizationModule (avoid circular dep)
   ],
 })
-export class BlockModule { }
+export class BlockModule {}

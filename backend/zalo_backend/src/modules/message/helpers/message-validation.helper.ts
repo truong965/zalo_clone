@@ -27,25 +27,50 @@ export class MessageValidator {
         this.validateImageMessage(dto.type, hasMedia, mediaCount);
         break;
       case MessageType.VIDEO:
-        this.validateExactMediaCount(hasMedia, mediaCount, MESSAGE_LIMITS.VIDEO_MAX, 'VIDEO', 'video file');
+        this.validateExactMediaCount(
+          hasMedia,
+          mediaCount,
+          MESSAGE_LIMITS.VIDEO_MAX,
+          'VIDEO',
+          'video file',
+        );
         break;
       case MessageType.FILE:
-        this.validateMediaRange(hasMedia, mediaCount, MESSAGE_LIMITS.FILE_MAX, 'FILE', 'document');
+        this.validateMediaRange(
+          hasMedia,
+          mediaCount,
+          MESSAGE_LIMITS.FILE_MAX,
+          'FILE',
+          'document',
+        );
         break;
       case MessageType.AUDIO:
-        this.validateMediaRange(hasMedia, mediaCount, MESSAGE_LIMITS.AUDIO_MAX, 'AUDIO', 'audio file');
+        this.validateMediaRange(
+          hasMedia,
+          mediaCount,
+          MESSAGE_LIMITS.AUDIO_MAX,
+          'AUDIO',
+          'audio file',
+        );
         break;
       case MessageType.VOICE:
         this.validateVoiceMessage(hasContent, hasMedia, mediaCount);
         break;
       case MessageType.SYSTEM:
-        throw new BadRequestException('SYSTEM messages cannot be sent by users');
+        throw new BadRequestException(
+          'SYSTEM messages cannot be sent by users',
+        );
       default:
-        throw new BadRequestException(`Unknown message type: ${dto.type as string}`);
+        throw new BadRequestException(
+          `Unknown message type: ${dto.type as string}`,
+        );
     }
   }
 
-  private static validateTextMessage(hasContent: boolean, hasMedia: boolean): void {
+  private static validateTextMessage(
+    hasContent: boolean,
+    hasMedia: boolean,
+  ): void {
     if (hasMedia) {
       throw new BadRequestException(
         'TEXT message cannot have media. Use IMAGE/VIDEO/FILE type for messages with attachments.',
@@ -56,37 +81,65 @@ export class MessageValidator {
     }
   }
 
-  private static validateImageMessage(type: string, hasMedia: boolean, mediaCount: number): void {
+  private static validateImageMessage(
+    type: string,
+    hasMedia: boolean,
+    mediaCount: number,
+  ): void {
     if (!hasMedia) {
-      throw new BadRequestException(`${type} message must have at least 1 media attachment`);
+      throw new BadRequestException(
+        `${type} message must have at least 1 media attachment`,
+      );
     }
     if (mediaCount > MESSAGE_LIMITS.IMAGE_MAX) {
-      throw new BadRequestException(`IMAGE message can have max ${MESSAGE_LIMITS.IMAGE_MAX} photos (album limit)`);
+      throw new BadRequestException(
+        `IMAGE message can have max ${MESSAGE_LIMITS.IMAGE_MAX} photos (album limit)`,
+      );
     }
   }
 
   private static validateExactMediaCount(
-    hasMedia: boolean, mediaCount: number, exact: number, typeName: string, fileLabel: string,
+    hasMedia: boolean,
+    mediaCount: number,
+    exact: number,
+    typeName: string,
+    fileLabel: string,
   ): void {
     if (!hasMedia || mediaCount !== exact) {
-      throw new BadRequestException(`${typeName} message must have exactly ${exact} ${fileLabel}`);
+      throw new BadRequestException(
+        `${typeName} message must have exactly ${exact} ${fileLabel}`,
+      );
     }
   }
 
   private static validateMediaRange(
-    hasMedia: boolean, mediaCount: number, max: number, typeName: string, fileLabel: string,
+    hasMedia: boolean,
+    mediaCount: number,
+    max: number,
+    typeName: string,
+    fileLabel: string,
   ): void {
     if (!hasMedia) {
-      throw new BadRequestException(`${typeName} message must have at least 1 ${fileLabel}`);
+      throw new BadRequestException(
+        `${typeName} message must have at least 1 ${fileLabel}`,
+      );
     }
     if (mediaCount > max) {
-      throw new BadRequestException(`${typeName} message can have max ${max} ${fileLabel}s`);
+      throw new BadRequestException(
+        `${typeName} message can have max ${max} ${fileLabel}s`,
+      );
     }
   }
 
-  private static validateVoiceMessage(hasContent: boolean, hasMedia: boolean, mediaCount: number): void {
+  private static validateVoiceMessage(
+    hasContent: boolean,
+    hasMedia: boolean,
+    mediaCount: number,
+  ): void {
     if (!hasMedia || mediaCount !== MESSAGE_LIMITS.VOICE_MAX) {
-      throw new BadRequestException(`VOICE message must have exactly ${MESSAGE_LIMITS.VOICE_MAX} audio file`);
+      throw new BadRequestException(
+        `VOICE message must have exactly ${MESSAGE_LIMITS.VOICE_MAX} audio file`,
+      );
     }
     if (hasContent) {
       throw new BadRequestException('VOICE message cannot have text content');
@@ -110,7 +163,7 @@ export class MessageValidator {
       if (!expectedMediaTypes.includes(media.mediaType)) {
         throw new BadRequestException(
           `${messageType} message cannot contain ${media.mediaType} files. ` +
-          `Expected: ${expectedMediaTypes.join(' or ')}`,
+            `Expected: ${expectedMediaTypes.join(' or ')}`,
         );
       }
     }

@@ -27,7 +27,7 @@ import type { User } from '@prisma/client';
 @Controller('users')
 @UseInterceptors(ClassSerializerInterceptor) // Kích hoạt @Exclude
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -62,10 +62,7 @@ export class UsersController {
     @Body() body: UpdateUserDto,
     @CurrentUser() currentUser: User,
   ) {
-    if (
-      currentUser.id !== id &&
-      (currentUser as any).role?.name !== 'ADMIN'
-    ) {
+    if (currentUser.id !== id && (currentUser as any).role?.name !== 'ADMIN') {
       throw new ForbiddenException(
         'Bạn chỉ có thể cập nhật hồ sơ của chính mình',
       );

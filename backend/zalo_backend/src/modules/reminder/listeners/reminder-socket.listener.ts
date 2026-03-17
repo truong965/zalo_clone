@@ -19,44 +19,54 @@ import { ReminderTriggeredEvent } from '../events/reminder.events';
 
 @Injectable()
 export class ReminderSocketListener {
-      private readonly logger = new Logger(ReminderSocketListener.name);
+  private readonly logger = new Logger(ReminderSocketListener.name);
 
-      constructor(
-            private readonly socketGateway: SocketGateway,
-            private readonly prisma: PrismaService,
-      ) { }
+  constructor(
+    private readonly socketGateway: SocketGateway,
+    private readonly prisma: PrismaService,
+  ) {}
 
-      @OnEvent(ReminderTriggeredEvent.eventName)
-      async onReminderTriggered(event: ReminderTriggeredEvent) {
-            const payload = {
-                  reminderId: event.reminderId,
-                  conversationId: event.conversationId,
-                  messageId: event.messageId,
-                  content: event.content,
-                  creatorId: event.userId, // lets frontend know who created the reminder
-            };
+  @OnEvent(ReminderTriggeredEvent.eventName)
+  async onReminderTriggered(event: ReminderTriggeredEvent) {
+    const payload = {
+      reminderId: event.reminderId,
+      conversationId: event.conversationId,
+      messageId: event.messageId,
+      content: event.content,
+      creatorId: event.userId, // lets frontend know who created the reminder
+    };
 
-            // If reminder belongs to a conversation → notify ALL active members
-            if (event.conversationId) {
-                  const members = await this.prisma.conversationMember.findMany({
-                        where: {
-                              conversationId: event.conversationId,
-                              status: MemberStatus.ACTIVE,
-                              isMuted: false,
-                        },
-                        select: { userId: true },
-                  });
+    // If reminder belongs to a conversation → notify ALL active members
+    if (event.conversationId) {
+      const members = await this.prisma.conversationMember.findMany({
+        where: {
+          conversationId: event.conversationId,
+          status: MemberStatus.ACTIVE,
+          isMuted: false,
+        },
+        select: { userId: true },
+      });
 
-                  const memberIds = members.map((m) => m.userId);
-                  this.logger.log(
-                        `Pushing reminder ${event.reminderId} to ${memberIds.length} conversation members`,
-                  );
+      const memberIds = members.map((m) => m.userId);
+      this.logger.log(
+        `Pushing reminder ${event.reminderId} to ${memberIds.length} conversation members`,
+      );
 
-                  await this.socketGateway.emitToUsers(memberIds, SocketEvents.REMINDER_TRIGGERED, payload);
-            } else {
-                  // Personal reminder (no conversation) → only notify creator
-                  this.logger.log(`Pushing personal reminder ${event.reminderId} to user ${event.userId}`);
-                  await this.socketGateway.emitToUser(event.userId, SocketEvents.REMINDER_TRIGGERED, payload);
-            }
-      }
+      await this.socketGateway.emitToUsers(
+        memberIds,
+        SocketEvents.REMINDER_TRIGGERED,
+        payload,
+      );
+    } else {
+      // Personal reminder (no conversation) → only notify creator
+      this.logger.log(
+        `Pushing personal reminder ${event.reminderId} to user ${event.userId}`,
+      );
+      await this.socketGateway.emitToUser(
+        event.userId,
+        SocketEvents.REMINDER_TRIGGERED,
+        payload,
+      );
+    }
+  }
 }

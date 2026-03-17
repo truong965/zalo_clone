@@ -427,7 +427,10 @@ export class RedisKeyBuilder {
    * Pattern: `NOTIFICATION:BATCH:{recipientId}:{conversationId}`
    * TTL: batch window seconds (5-10s) — auto-cleanup.
    */
-  static notificationBatch(recipientId: string, conversationId: string): string {
+  static notificationBatch(
+    recipientId: string,
+    conversationId: string,
+  ): string {
     return `${this.DOMAIN_NOTIFICATION}:BATCH:${recipientId}:${conversationId}`;
   }
 

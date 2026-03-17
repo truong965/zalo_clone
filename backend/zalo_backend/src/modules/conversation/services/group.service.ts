@@ -9,7 +9,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { ConversationType, MemberRole, MemberStatus, Prisma } from '@prisma/client';
+import {
+  ConversationType,
+  MemberRole,
+  MemberStatus,
+  Prisma,
+} from '@prisma/client';
 import { CreateGroupDto } from '../dto/create-group.dto';
 import { UpdateGroupDto } from '../dto/update-group.dto';
 import { AddMembersDto } from '../dto/add-members.dto';
@@ -43,7 +48,7 @@ export class GroupService {
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) { }
+  ) {}
 
   async createGroup(dto: CreateGroupDto, creatorId: string) {
     if (dto.memberIds.includes(creatorId)) {
@@ -116,7 +121,11 @@ export class GroupService {
     return group;
   }
 
-  async updateGroup(conversationId: string, dto: UpdateGroupDto, userId: string) {
+  async updateGroup(
+    conversationId: string,
+    dto: UpdateGroupDto,
+    userId: string,
+  ) {
     await this.verifyAdmin(conversationId, userId);
 
     let newSettings: GroupSettings | undefined;
@@ -143,19 +152,19 @@ export class GroupService {
       },
     });
 
-    await this.eventPublisher.publish(
-      new ConversationUpdatedEvent(
-        conversationId,
-        userId,
-        {
+    await this.eventPublisher
+      .publish(
+        new ConversationUpdatedEvent(conversationId, userId, {
           ...(dto.name && { name: dto.name }),
           ...(dto.avatarUrl && { avatarUrl: dto.avatarUrl }),
-        },
-      ),
-      { fireAndForget: true },
-    ).catch((err) => {
-      this.logger.warn(`Failed to emit ConversationUpdatedEvent: ${err.message}`);
-    });
+        }),
+        { fireAndForget: true },
+      )
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to emit ConversationUpdatedEvent: ${err.message}`,
+        );
+      });
 
     this.logger.log(`Group ${conversationId} updated by admin ${userId}`);
 
@@ -194,9 +203,7 @@ export class GroupService {
         .map((m) => m.userId),
     );
 
-    const newUserIds = dto.userIds.filter(
-      (id) => !existingActiveIds.has(id),
-    );
+    const newUserIds = dto.userIds.filter((id) => !existingActiveIds.has(id));
 
     if (newUserIds.length === 0) {
       throw new BadRequestException('All users are already members');
@@ -246,7 +253,11 @@ export class GroupService {
     );
 
     await this.eventPublisher.publish(
-      new ConversationMemberAddedEvent(dto.conversationId, requesterId, newUserIds),
+      new ConversationMemberAddedEvent(
+        dto.conversationId,
+        requesterId,
+        newUserIds,
+      ),
     );
 
     return { addedCount: newUserIds.length };
@@ -294,9 +305,9 @@ export class GroupService {
           ...(isSelf
             ? { leftAt: new Date() }
             : {
-              kickedBy: requesterId,
-              kickedAt: new Date(),
-            }),
+                kickedBy: requesterId,
+                kickedAt: new Date(),
+              }),
         },
       });
     });
@@ -382,7 +393,11 @@ export class GroupService {
     return { success: true, newAdminId: dto.newAdminId };
   }
 
-  async dissolveGroup(conversationId: string, adminId: string, memberIds: string[]) {
+  async dissolveGroup(
+    conversationId: string,
+    adminId: string,
+    memberIds: string[],
+  ) {
     await this.verifyAdmin(conversationId, adminId);
 
     await this.prisma.conversation.update({
@@ -457,7 +472,11 @@ export class GroupService {
    * Unpin a message from a conversation.
    * Any ACTIVE member can unpin (both DIRECT + GROUP).
    */
-  async unpinMessage(conversationId: string, messageId: bigint, userId: string) {
+  async unpinMessage(
+    conversationId: string,
+    messageId: bigint,
+    userId: string,
+  ) {
     await this.verifyMember(conversationId, userId);
 
     const settings = await this.getConversationSettings(conversationId);
@@ -527,7 +546,10 @@ export class GroupService {
     }
   }
 
-  private async isAdmin(conversationId: string, userId: string): Promise<boolean> {
+  private async isAdmin(
+    conversationId: string,
+    userId: string,
+  ): Promise<boolean> {
     const member = await this.prisma.conversationMember.findUnique({
       where: {
         conversationId_userId: { conversationId, userId },
@@ -535,7 +557,8 @@ export class GroupService {
     });
 
     return (
-      member?.status === MemberStatus.ACTIVE && member?.role === MemberRole.ADMIN
+      member?.status === MemberStatus.ACTIVE &&
+      member?.role === MemberRole.ADMIN
     );
   }
 
@@ -551,11 +574,15 @@ export class GroupService {
     }
   }
 
-  private async getGroupSettings(conversationId: string): Promise<GroupSettings> {
+  private async getGroupSettings(
+    conversationId: string,
+  ): Promise<GroupSettings> {
     return this.getConversationSettings(conversationId);
   }
 
-  async getConversationSettings(conversationId: string): Promise<GroupSettings> {
+  async getConversationSettings(
+    conversationId: string,
+  ): Promise<GroupSettings> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       select: { settings: true },
@@ -608,14 +635,19 @@ export class GroupService {
     const userMap = new Map(users.map((u) => [u.id, u]));
 
     // Batch resolve display names per viewer
-    const nameMap = await this.displayNameResolver.batchResolve(userId, userIds);
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      userIds,
+    );
 
     return members.map((m) => ({
       ...m,
       user: {
         id: m.userId,
         displayName:
-          nameMap.get(m.userId) ?? userMap.get(m.userId)?.displayName ?? 'Unknown User',
+          nameMap.get(m.userId) ??
+          userMap.get(m.userId)?.displayName ??
+          'Unknown User',
         avatarUrl: userMap.get(m.userId)?.avatarUrl ?? null,
       },
     }));

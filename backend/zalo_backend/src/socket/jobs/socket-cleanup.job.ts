@@ -10,7 +10,7 @@ export class SocketCleanupJob {
   constructor(
     private readonly redisRegistry: RedisRegistryService,
     private readonly redisPresence: RedisPresenceService,
-  ) { }
+  ) {}
 
   /**
    * Chạy mỗi giờ (Every Hour)

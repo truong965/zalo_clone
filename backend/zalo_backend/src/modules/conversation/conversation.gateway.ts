@@ -17,11 +17,11 @@ import {
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
-import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
+import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
 import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
-import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
+import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 
 import { ConversationService } from './services/conversation.service';
 import { GroupService } from './services/group.service';
@@ -547,14 +547,10 @@ export class ConversationGateway implements OnGatewayInit {
     payload: ConversationMutedEvent,
   ): Promise<void> {
     try {
-      await this.emitToUser(
-        payload.userId,
-        SocketEvents.CONVERSATION_MUTED,
-        {
-          conversationId: payload.conversationId,
-          isMuted: payload.isMuted,
-        },
-      );
+      await this.emitToUser(payload.userId, SocketEvents.CONVERSATION_MUTED, {
+        conversationId: payload.conversationId,
+        isMuted: payload.isMuted,
+      });
       this.logger.debug(
         `[CONVERSATION_MUTED] Emitted to user ${payload.userId} (isMuted=${payload.isMuted})`,
       );

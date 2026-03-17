@@ -12,13 +12,11 @@ export class SocketNotificationListener extends IdempotentListener {
   //     this.logger.debug(
   //       `[SocketNotif] Processing message.sent event: ${event.messageId}`,
   //     );
-
   //     this.logger.debug(
   //       `[SocketNotif] Processed message.sent for message ${event.messageId}`,
   //     );
   //   });
   // }
-
   // @OnEvent('conversation.created')
   // async handleConversationCreated(event: ConversationCreatedEvent): Promise<void> {
   //   return this.withIdempotency(
@@ -27,7 +25,6 @@ export class SocketNotificationListener extends IdempotentListener {
   //       this.logger.debug(
   //         `[SocketNotif] Processing conversation.created: ${event.conversationId}`,
   //       );
-
   //       this.logger.debug(
   //         `[SocketNotif] Processed conversation.created for ${event.conversationId}`,
   //       );

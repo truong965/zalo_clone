@@ -75,4 +75,3 @@ export const MEDIA_EVENTS = {
   /** Fired after a media record is soft-deleted by the owner */
   DELETED: 'media.deleted',
 } as const;
-

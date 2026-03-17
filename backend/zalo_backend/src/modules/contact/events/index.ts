@@ -1,5 +1,5 @@
 export {
-      ContactAliasUpdatedEvent,
-      ContactsSyncedEvent,
-      ContactRemovedEvent,
+  ContactAliasUpdatedEvent,
+  ContactsSyncedEvent,
+  ContactRemovedEvent,
 } from './contact.events';

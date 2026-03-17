@@ -18,18 +18,17 @@ import type { ConfigType } from '@nestjs/config';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { DisconnectReason } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
-import { WsExceptionFilter } from './filters/ws-exception.filter';
+import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { SocketAuthService } from './services/socket-auth.service';
 import { SocketStateService } from './services/socket-state.service';
 import { RedisPubSubService } from 'src/modules/redis/services/redis-pub-sub.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socketConfig from 'src/config/socket.config';
-import { WsThrottleGuard } from './guards/ws-throttle.guard';
-import { WsValidationPipe } from './pipes/ws-validation.pipe';
+import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
+import { WsValidationPipe } from 'src/common/pipes/ws-validation.pipe';
 import { EventPublisher } from 'src/shared/events/event-publisher.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OnEvent } from '@nestjs/event-emitter';
-import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
 import type { ISocketEmitEvent } from '@common/events/outbound-socket.event';
 import { OUTBOUND_SOCKET_EVENT } from '@common/events/outbound-socket.event';
 
@@ -120,7 +119,9 @@ export class SocketGateway
    */
   @OnEvent(OUTBOUND_SOCKET_EVENT)
   async handleStandardOutboundEvent(payload: ISocketEmitEvent) {
-    this.logger.debug(`[SocketGateway] Emitting standard event: ${payload.event}`);
+    this.logger.debug(
+      `[SocketGateway] Emitting standard event: ${payload.event}`,
+    );
 
     if (payload.socketId) {
       this.emitToSocket(payload.socketId, payload.event, payload.data);
@@ -129,13 +130,17 @@ export class SocketGateway
     } else if (payload.userIds && payload.userIds.length > 0) {
       await Promise.all(
         payload.userIds.map((uid) =>
-          this.emitToUser(uid, payload.event, payload.data).catch(() => undefined),
+          this.emitToUser(uid, payload.event, payload.data).catch(
+            () => undefined,
+          ),
         ),
       );
     } else if (payload.room) {
       this.server.to(payload.room).emit(payload.event, payload.data);
     } else {
-      this.logger.warn(`[SocketGateway] Received outbound event without target: ${payload.event}`);
+      this.logger.warn(
+        `[SocketGateway] Received outbound event without target: ${payload.event}`,
+      );
     }
   }
 
@@ -143,9 +148,19 @@ export class SocketGateway
    * Internal command to force disconnect devices
    */
   @OnEvent('socket.internal.command.force_disconnect_devices')
-  async handleForceDisconnectCommand(payload: { userId: string, deviceIds: string[], reason: string }) {
-    this.logger.debug(`[SocketGateway] Internal command: Force disconnecting ${payload.deviceIds?.length} devices for ${payload.userId}`);
-    await this.forceDisconnectDevices(payload.userId, payload.deviceIds, payload.reason);
+  async handleForceDisconnectCommand(payload: {
+    userId: string;
+    deviceIds: string[];
+    reason: string;
+  }) {
+    this.logger.debug(
+      `[SocketGateway] Internal command: Force disconnecting ${payload.deviceIds?.length} devices for ${payload.userId}`,
+    );
+    await this.forceDisconnectDevices(
+      payload.userId,
+      payload.deviceIds,
+      payload.reason,
+    );
   }
 
   // =========================================================================
@@ -259,7 +274,9 @@ export class SocketGateway
       if (!user) {
         // Allow unauthenticated connection for specific use cases (like QR login)
         if (client.handshake?.query?.type === 'public') {
-          this.logger.log(`Socket connecting as public (unauthenticated): ${client.id}`);
+          this.logger.log(
+            `Socket connecting as public (unauthenticated): ${client.id}`,
+          );
           client.authenticated = false;
           await this.socketState.handleConnection(client);
           return;
@@ -309,10 +326,16 @@ export class SocketGateway
       // Socket.IO có ping/pong riêng, nhưng cái này dùng để sync time hoặc check app state
       this.registerSafeInterval(
         client,
-        async () => {
+        () => {
           if (client.connected && client.userId) {
-            await this.socketState.refreshHeartbeat(client.id, client.userId);
-            client.emit(SocketEvents.SERVER_HEARTBEAT, { ts: Date.now() });
+            void this.socketState
+              .refreshHeartbeat(client.id, client.userId)
+              .then(() => {
+                client.emit(SocketEvents.SERVER_HEARTBEAT, { ts: Date.now() });
+              })
+              .catch((error: unknown) => {
+                this.logger.warn('Failed to refresh socket heartbeat', error);
+              });
           }
         },
         30_000,
@@ -401,10 +424,10 @@ export class SocketGateway
     }
   }
 
-  private async handlePresenceOnline(
+  private handlePresenceOnline(
     channel: string,
     message: string,
-  ): Promise<void> {
+  ): void {
     try {
       const data = JSON.parse(message) as { userId?: string };
       this.logger.debug(`Presence online (cross-server): ${data.userId}`);
@@ -415,7 +438,7 @@ export class SocketGateway
         this.eventEmitter.emit(SocketEvents.USER_SOCKET_CONNECTED, {
           userId: data.userId,
           socketId: null, // Cross-server doesn't matter
-          connectedAt: new Date()
+          connectedAt: new Date(),
         });
       }
     } catch (error) {
@@ -423,10 +446,10 @@ export class SocketGateway
     }
   }
 
-  private async handlePresenceOffline(
+  private handlePresenceOffline(
     channel: string,
     message: string,
-  ): Promise<void> {
+  ): void {
     try {
       const data = JSON.parse(message) as { userId?: string };
       this.logger.debug(`Presence offline (cross-server): ${data.userId}`);
@@ -435,7 +458,7 @@ export class SocketGateway
         this.eventEmitter.emit(SocketEvents.USER_SOCKET_DISCONNECTED, {
           userId: data.userId,
           socketId: null,
-          reason: 'cross-server offline'
+          reason: 'cross-server offline',
         });
       }
     } catch (error) {
@@ -455,7 +478,7 @@ export class SocketGateway
 
       try {
         // Stop accepting new connections
-        this.server.close();
+        void this.server.close();
 
         // Notify all connected clients
         this.server.emit(SocketEvents.SERVER_SHUTDOWN, {
@@ -589,7 +612,9 @@ export class SocketGateway
     await Promise.all(
       socketIds.map(async (socketId) => {
         // Emit via adapter so multi-instance setups can deliver to remote sockets.
-        this.server.to(socketId).emit(SocketEvents.AUTH_FORCE_LOGOUT, { reason });
+        this.server
+          .to(socketId)
+          .emit(SocketEvents.AUTH_FORCE_LOGOUT, { reason });
         await new Promise((resolve) => setTimeout(resolve, 120));
         this.server.in(socketId).disconnectSockets(true);
       }),

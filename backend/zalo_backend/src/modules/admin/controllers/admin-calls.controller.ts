@@ -20,21 +20,23 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @UseGuards(RolesGuard)
 @Roles('ADMIN')
 export class AdminCallsController {
-      constructor(private readonly callsService: AdminCallsService) { }
+  constructor(private readonly callsService: AdminCallsService) {}
 
-      @ApiOperation({ summary: 'Get paginated call history with filters' })
-      @Get('calls')
-      getCalls(@Query() dto: CallListQueryDto) {
-            return this.callsService.getCalls(dto);
-      }
+  @ApiOperation({ summary: 'Get paginated call history with filters' })
+  @Get('calls')
+  getCalls(@Query() dto: CallListQueryDto) {
+    return this.callsService.getCalls(dto);
+  }
 
-      @ApiOperation({ summary: 'Get conversation list (metadata only, no message content)' })
-      @Get('conversations')
-      getConversations(
-            @Query('type') type?: string,
-            @Query('page') page?: number,
-            @Query('limit') limit?: number,
-      ) {
-            return this.callsService.getConversations(type, page, limit);
-      }
+  @ApiOperation({
+    summary: 'Get conversation list (metadata only, no message content)',
+  })
+  @Get('conversations')
+  getConversations(
+    @Query('type') type?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.callsService.getConversations(type, page, limit);
+  }
 }

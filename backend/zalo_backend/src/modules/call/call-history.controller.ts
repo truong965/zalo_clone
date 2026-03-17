@@ -17,7 +17,7 @@ import { GetCallHistoryQueryDto } from './dto/call-history.dto';
 @ApiTags('Calls')
 @Controller('calls')
 export class CallHistoryController {
-  constructor(private readonly callService: CallHistoryService) { }
+  constructor(private readonly callService: CallHistoryService) {}
 
   @Get('history')
   @ApiOperation({ summary: 'Get call history with pagination' })
@@ -49,5 +49,4 @@ export class CallHistoryController {
     // Note: Cần implement thêm function này trong service
     return await this.callService.deleteCallLog(user.id, callId);
   }
-
 }

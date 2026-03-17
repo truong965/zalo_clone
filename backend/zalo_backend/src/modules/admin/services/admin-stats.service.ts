@@ -15,70 +15,70 @@ import { UserStatus } from '@prisma/client';
  */
 @Injectable()
 export class AdminStatsService {
-      private readonly logger = new Logger(AdminStatsService.name);
+  private readonly logger = new Logger(AdminStatsService.name);
 
-      constructor(
-            private readonly prisma: PrismaService,
-            private readonly redis: RedisService,
-            private readonly presence: RedisPresenceService,
-      ) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    private readonly presence: RedisPresenceService,
+  ) {}
 
-      /**
-       * Real-time KPI overview from Redis counters.
-       * Falls back to Prisma COUNT for stats:users:total if Redis key missing.
-       */
-      async getOverview() {
-            const client = this.redis.getClient();
-            const today = todayICT();
+  /**
+   * Real-time KPI overview from Redis counters.
+   * Falls back to Prisma COUNT for stats:users:total if Redis key missing.
+   */
+  async getOverview() {
+    const client = this.redis.getClient();
+    const today = todayICT();
 
-            const [totalUsersRaw, onlineUsers, messagesTodayRaw, callsTodayRaw] =
-                  await Promise.all([
-                        client.get(STATS_KEYS.USERS_TOTAL),
-                        this.presence.getOnlineUserCount(),
-                        client.get(STATS_KEYS.MESSAGES_DAILY(today)),
-                        client.get(STATS_KEYS.CALLS_DAILY(today)),
-                  ]);
+    const [totalUsersRaw, onlineUsers, messagesTodayRaw, callsTodayRaw] =
+      await Promise.all([
+        client.get(STATS_KEYS.USERS_TOTAL),
+        this.presence.getOnlineUserCount(),
+        client.get(STATS_KEYS.MESSAGES_DAILY(today)),
+        client.get(STATS_KEYS.CALLS_DAILY(today)),
+      ]);
 
-            // Fallback: if Redis key is missing, count from Postgres and re-seed
-            let totalUsers = totalUsersRaw ? parseInt(totalUsersRaw, 10) : 0;
-            if (!totalUsersRaw) {
-                  totalUsers = await this.prisma.user.count({
-                        where: { status: { not: UserStatus.DELETED } },
-                  });
-                  await client.set(STATS_KEYS.USERS_TOTAL, totalUsers).catch((err) => {
-                        this.logger.warn(`Failed to re-seed stats:users:total: ${err}`);
-                  });
-            }
+    // Fallback: if Redis key is missing, count from Postgres and re-seed
+    let totalUsers = totalUsersRaw ? parseInt(totalUsersRaw, 10) : 0;
+    if (!totalUsersRaw) {
+      totalUsers = await this.prisma.user.count({
+        where: { status: { not: UserStatus.DELETED } },
+      });
+      await client.set(STATS_KEYS.USERS_TOTAL, totalUsers).catch((err) => {
+        this.logger.warn(`Failed to re-seed stats:users:total: ${err}`);
+      });
+    }
 
-            return {
-                  totalUsers,
-                  onlineUsers,
-                  messagesToday: messagesTodayRaw ? parseInt(messagesTodayRaw, 10) : 0,
-                  callsToday: callsTodayRaw ? parseInt(callsTodayRaw, 10) : 0,
-            };
-      }
+    return {
+      totalUsers,
+      onlineUsers,
+      messagesToday: messagesTodayRaw ? parseInt(messagesTodayRaw, 10) : 0,
+      callsToday: callsTodayRaw ? parseInt(callsTodayRaw, 10) : 0,
+    };
+  }
 
-      /**
-       * Historical daily stats from DailyStats table.
-       * Default: last 30 days.
-       */
-      async getDailyStats(dto: DailyStatsQueryDto) {
-            const to = dto.to ? new Date(dto.to) : new Date();
-            const from = dto.from
-                  ? new Date(dto.from)
-                  : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  /**
+   * Historical daily stats from DailyStats table.
+   * Default: last 30 days.
+   */
+  async getDailyStats(dto: DailyStatsQueryDto) {
+    const to = dto.to ? new Date(dto.to) : new Date();
+    const from = dto.from
+      ? new Date(dto.from)
+      : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-            const rows = await this.prisma.dailyStats.findMany({
-                  where: {
-                        date: { gte: from, lte: to },
-                  },
-                  orderBy: { date: 'asc' },
-            });
+    const rows = await this.prisma.dailyStats.findMany({
+      where: {
+        date: { gte: from, lte: to },
+      },
+      orderBy: { date: 'asc' },
+    });
 
-            // Serialize BigInt → string for JSON safety
-            return rows.map((r) => ({
-                  ...r,
-                  mediaBytes: r.mediaBytes.toString(),
-            }));
-      }
+    // Serialize BigInt → string for JSON safety
+    return rows.map((r) => ({
+      ...r,
+      mediaBytes: r.mediaBytes.toString(),
+    }));
+  }
 }

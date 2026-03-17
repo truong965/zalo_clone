@@ -23,29 +23,29 @@ import { DomainEvent } from '@shared/events';
  *   v1: ownerId, contactUserId, newAliasName, resolvedDisplayName
  */
 export class ContactAliasUpdatedEvent extends DomainEvent {
-      readonly eventType = 'CONTACT_ALIAS_UPDATED' as const;
+  readonly eventType = 'CONTACT_ALIAS_UPDATED' as const;
 
-      constructor(
-            readonly ownerId: string,
-            readonly contactUserId: string,
-            /** null means alias was reset to phoneBookName / displayName */
-            readonly newAliasName: string | null,
-            /** Pre-resolved display name (aliasName ?? phoneBookName ?? displayName) */
-            readonly resolvedDisplayName: string,
-      ) {
-            super('ContactModule', 'UserContact', ownerId, 1);
-      }
+  constructor(
+    readonly ownerId: string,
+    readonly contactUserId: string,
+    /** null means alias was reset to phoneBookName / displayName */
+    readonly newAliasName: string | null,
+    /** Pre-resolved display name (aliasName ?? phoneBookName ?? displayName) */
+    readonly resolvedDisplayName: string,
+  ) {
+    super('ContactModule', 'UserContact', ownerId, 1);
+  }
 
-      toJSON() {
-            return {
-                  ...super.toJSON(),
-                  eventType: this.eventType,
-                  ownerId: this.ownerId,
-                  contactUserId: this.contactUserId,
-                  newAliasName: this.newAliasName,
-                  resolvedDisplayName: this.resolvedDisplayName,
-            };
-      }
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      eventType: this.eventType,
+      ownerId: this.ownerId,
+      contactUserId: this.contactUserId,
+      newAliasName: this.newAliasName,
+      resolvedDisplayName: this.resolvedDisplayName,
+    };
+  }
 }
 
 /**
@@ -58,27 +58,27 @@ export class ContactAliasUpdatedEvent extends DomainEvent {
  *   v1: ownerId, totalContacts, matchedCount, durationMs
  */
 export class ContactsSyncedEvent extends DomainEvent {
-      readonly eventType = 'CONTACTS_SYNCED' as const;
+  readonly eventType = 'CONTACTS_SYNCED' as const;
 
-      constructor(
-            readonly ownerId: string,
-            readonly totalContacts: number,
-            readonly matchedCount: number,
-            readonly durationMs: number,
-      ) {
-            super('ContactModule', 'UserContact', ownerId, 1);
-      }
+  constructor(
+    readonly ownerId: string,
+    readonly totalContacts: number,
+    readonly matchedCount: number,
+    readonly durationMs: number,
+  ) {
+    super('ContactModule', 'UserContact', ownerId, 1);
+  }
 
-      toJSON() {
-            return {
-                  ...super.toJSON(),
-                  eventType: this.eventType,
-                  ownerId: this.ownerId,
-                  totalContacts: this.totalContacts,
-                  matchedCount: this.matchedCount,
-                  durationMs: this.durationMs,
-            };
-      }
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      eventType: this.eventType,
+      ownerId: this.ownerId,
+      totalContacts: this.totalContacts,
+      matchedCount: this.matchedCount,
+      durationMs: this.durationMs,
+    };
+  }
 }
 
 /**
@@ -91,21 +91,21 @@ export class ContactsSyncedEvent extends DomainEvent {
  *   v1: ownerId, contactUserId
  */
 export class ContactRemovedEvent extends DomainEvent {
-      readonly eventType = 'CONTACT_REMOVED' as const;
+  readonly eventType = 'CONTACT_REMOVED' as const;
 
-      constructor(
-            readonly ownerId: string,
-            readonly contactUserId: string,
-      ) {
-            super('ContactModule', 'UserContact', ownerId, 1);
-      }
+  constructor(
+    readonly ownerId: string,
+    readonly contactUserId: string,
+  ) {
+    super('ContactModule', 'UserContact', ownerId, 1);
+  }
 
-      toJSON() {
-            return {
-                  ...super.toJSON(),
-                  eventType: this.eventType,
-                  ownerId: this.ownerId,
-                  contactUserId: this.contactUserId,
-            };
-      }
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      eventType: this.eventType,
+      ownerId: this.ownerId,
+      contactUserId: this.contactUserId,
+    };
+  }
 }

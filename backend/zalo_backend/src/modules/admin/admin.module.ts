@@ -38,25 +38,25 @@ import { DailyStatsCron } from './cron/daily-stats.cron';
  * - AuthModule → TokenService (for session revocation in suspend/force-logout)
  */
 @Module({
-      imports: [AuthModule],
-      controllers: [
-            AdminStatsController,
-            AdminUsersController,
-            AdminCallsController,
-            AdminActivityController,
-            AdminSystemController,
-      ],
-      providers: [
-            // Services
-            AdminStatsService,
-            AdminUsersService,
-            AdminCallsService,
-            AdminActivityService,
-            AdminSystemService,
+  imports: [AuthModule],
+  controllers: [
+    AdminStatsController,
+    AdminUsersController,
+    AdminCallsController,
+    AdminActivityController,
+    AdminSystemController,
+  ],
+  providers: [
+    // Services
+    AdminStatsService,
+    AdminUsersService,
+    AdminCallsService,
+    AdminActivityService,
+    AdminSystemService,
 
-            // Event-driven (Phase 1)
-            StatsCounterListener,
-            DailyStatsCron,
-      ],
+    // Event-driven (Phase 1)
+    StatsCounterListener,
+    DailyStatsCron,
+  ],
 })
-export class AdminModule { }
+export class AdminModule {}

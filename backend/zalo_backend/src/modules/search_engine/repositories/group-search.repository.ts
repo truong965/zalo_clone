@@ -10,7 +10,7 @@ import type { RawGroupSearchResult } from '../interfaces/search-raw-result.inter
  */
 @Injectable()
 export class GroupSearchRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Search GROUP conversations by name
@@ -54,7 +54,11 @@ export class GroupSearchRepository {
             )
           )
         `;
-        cursorParams.push(payload.prefixMatch, payload.lastMessageAt, payload.lastId);
+        cursorParams.push(
+          payload.prefixMatch,
+          payload.lastMessageAt,
+          payload.lastId,
+        );
       }
     }
 
@@ -118,10 +122,7 @@ export class GroupSearchRepository {
       LIMIT $3::int
     `;
 
-    const results = await this.prisma.$queryRawUnsafe(
-      query,
-      ...params,
-    );
+    const results = await this.prisma.$queryRawUnsafe(query, ...params);
 
     return results as RawGroupSearchResult[];
   }

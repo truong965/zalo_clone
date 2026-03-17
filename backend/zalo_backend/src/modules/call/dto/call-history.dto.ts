@@ -1,10 +1,12 @@
-import {
-  IsEnum,
-  IsOptional,
-  IsBoolean,
-} from 'class-validator';
+import { IsEnum, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CallStatus, CallType, CallProvider, CallParticipantRole, CallParticipantStatus } from '@prisma/client';
+import {
+  CallStatus,
+  CallType,
+  CallProvider,
+  CallParticipantRole,
+  CallParticipantStatus,
+} from '@prisma/client';
 import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
 import { Type } from 'class-transformer';
 

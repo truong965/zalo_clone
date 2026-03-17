@@ -80,13 +80,25 @@ export class SearchCacheService {
   getTtl(category: 'global' | 'user' | 'contact' | 'media'): number {
     switch (category) {
       case 'global':
-        return this.configService.get<number>('search.cache.ttlGlobalSearch', 30);
+        return this.configService.get<number>(
+          'search.cache.ttlGlobalSearch',
+          30,
+        );
       case 'user':
-        return this.configService.get<number>('search.cache.ttlUserScopedSearch', 30);
+        return this.configService.get<number>(
+          'search.cache.ttlUserScopedSearch',
+          30,
+        );
       case 'contact':
-        return this.configService.get<number>('search.cache.ttlContactSearch', 30);
+        return this.configService.get<number>(
+          'search.cache.ttlContactSearch',
+          30,
+        );
       case 'media':
-        return this.configService.get<number>('search.cache.ttlMediaSearch', 30);
+        return this.configService.get<number>(
+          'search.cache.ttlMediaSearch',
+          30,
+        );
       default:
         return 30;
     }
@@ -168,7 +180,6 @@ export class SearchCacheService {
       await this.delByPattern(`search:*`);
     }
   }
-
 
   /**
    * Alias for invalidateMessageSearchCache (event-driven naming)

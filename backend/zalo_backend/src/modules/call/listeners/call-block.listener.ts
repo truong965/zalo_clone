@@ -19,7 +19,7 @@ import { CallHistoryService } from '../call-history.service';
 export class CallBlockListener {
   private readonly logger = new Logger(CallBlockListener.name);
 
-  constructor(private readonly callHistoryService: CallHistoryService) { }
+  constructor(private readonly callHistoryService: CallHistoryService) {}
 
   /**
    * Handle UserBlockedEvent

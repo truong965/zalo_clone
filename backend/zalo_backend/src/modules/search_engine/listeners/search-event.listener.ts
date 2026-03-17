@@ -124,7 +124,13 @@ export class SearchEventListener extends IdempotentListener {
     correlationId?: string,
   ): Promise<T> {
     try {
-      return await super.withIdempotency(eventId, handler, handlerId, eventVersion, correlationId);
+      return await super.withIdempotency(
+        eventId,
+        handler,
+        handlerId,
+        eventVersion,
+        correlationId,
+      );
     } catch (error) {
       this.logger.error(
         `[SearchEvent] Idempotency wrapper failed for event ${eventId}: ${error instanceof Error ? error.message : 'Unknown'}`,
@@ -194,14 +200,14 @@ export class SearchEventListener extends IdempotentListener {
 
           const sender = message.senderId
             ? await this.prisma.user.findUnique({
-              where: { id: message.senderId },
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-                phoneNumber: true,
-              },
-            })
+                where: { id: message.senderId },
+                select: {
+                  id: true,
+                  displayName: true,
+                  avatarUrl: true,
+                  phoneNumber: true,
+                },
+              })
             : null;
 
           // [Phase 2.1 DECOUPLED]: Fetch media attachments manually
@@ -218,8 +224,9 @@ export class SearchEventListener extends IdempotentListener {
 
           // A4: Single-pass matching (replaces notifyActiveSearches + getMatchingSubscriptions)
           const { matches, notifiedCount } =
-            this.realTimeSearchService.findMatchingSubscriptions(messageWithMedia);
-
+            this.realTimeSearchService.findMatchingSubscriptions(
+              messageWithMedia,
+            );
 
           this.logger.debug(
             `[SearchEvent] Found ${notifiedCount} matching subscribers for message ${event.messageId}`,
@@ -228,7 +235,10 @@ export class SearchEventListener extends IdempotentListener {
           // Emit internal event for SearchGateway to handle socket emission
           // C5: Use batch notification to buffer matches within 100ms window
           if (matches.length > 0) {
-            this.realTimeSearchService.queueBatchNotification(messageWithMedia, matches);
+            this.realTimeSearchService.queueBatchNotification(
+              messageWithMedia,
+              matches,
+            );
           }
         } catch (error) {
           this.logger.error(
@@ -720,50 +730,48 @@ export class SearchEventListener extends IdempotentListener {
    */
   @OnEvent('media.deleted', { async: true })
   async handleMediaDeleted(event: MediaDeletedEvent): Promise<void> {
-    return this.withIdempotency(
-      `media-deleted-${event.mediaId}`,
-      async () => {
-        this.logger.debug(
-          `[SearchEvent] Processing media.deleted: ${event.mediaId} by user ${event.userId}`,
-        );
+    return this.withIdempotency(`media-deleted-${event.mediaId}`, async () => {
+      this.logger.debug(
+        `[SearchEvent] Processing media.deleted: ${event.mediaId} by user ${event.userId}`,
+      );
 
-        try {
-          // Fetch the mediaAttachment to find which conversation it belongs to
-          const media = await this.prisma.mediaAttachment.findUnique({
-            where: { id: event.mediaId },
-            select: { messageId: true },
+      try {
+        // Fetch the mediaAttachment to find which conversation it belongs to
+        const media = await this.prisma.mediaAttachment.findUnique({
+          where: { id: event.mediaId },
+          select: { messageId: true },
+        });
+
+        if (media?.messageId) {
+          const message = await this.prisma.message.findUnique({
+            where: { id: media.messageId },
+            select: { conversationId: true },
           });
 
-          if (media?.messageId) {
-            const message = await this.prisma.message.findUnique({
-              where: { id: media.messageId },
-              select: { conversationId: true },
-            });
-
-            if (message?.conversationId) {
-              // Invalidate conversation-level search cache
-              await this.searchCacheService.invalidateConversationCache(
-                message.conversationId,
-              );
-            }
+          if (message?.conversationId) {
+            // Invalidate conversation-level search cache
+            await this.searchCacheService.invalidateConversationCache(
+              message.conversationId,
+            );
           }
-
-          // Invalidate global search cache for the deleting user
-          await this.searchCacheService.delByPattern(
-            `search:global:${event.userId}:*`,
-          );
-
-          this.logger.debug(
-            `[SearchEvent] Invalidated caches for media.deleted: ${event.mediaId}`,
-          );
-        } catch (error) {
-          this.logger.error(
-            `[SearchEvent] Failed to process media.deleted: ${error instanceof Error ? error.message : 'Unknown error'
-            }`,
-          );
         }
-      },
-    );
+
+        // Invalidate global search cache for the deleting user
+        await this.searchCacheService.delByPattern(
+          `search:global:${event.userId}:*`,
+        );
+
+        this.logger.debug(
+          `[SearchEvent] Invalidated caches for media.deleted: ${event.mediaId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `[SearchEvent] Failed to process media.deleted: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
+        );
+      }
+    });
   }
 
   /**
@@ -783,7 +791,8 @@ export class SearchEventListener extends IdempotentListener {
     event: ContactAliasUpdatedEvent,
   ): Promise<void> {
     const eventId =
-      event.eventId ?? `contact-alias-updated-${event.ownerId}-${event.contactUserId}-${Date.now()}`;
+      event.eventId ??
+      `contact-alias-updated-${event.ownerId}-${event.contactUserId}-${Date.now()}`;
 
     return this.withIdempotency(
       eventId,

@@ -4,7 +4,10 @@ export class DeviceListItemDto {
   @ApiProperty({ description: 'Unique device ID' })
   deviceId: string;
 
-  @ApiProperty({ description: 'Human-readable device name', example: 'Chrome Windows' })
+  @ApiProperty({
+    description: 'Human-readable device name',
+    example: 'Chrome Windows',
+  })
   deviceName: string;
 
   @ApiProperty({ description: 'Device platform', example: 'WEB' })

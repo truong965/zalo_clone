@@ -92,7 +92,7 @@ export class FriendshipService {
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) { }
+  ) {}
 
   /**
    * Send a friend request
@@ -479,7 +479,9 @@ export class FriendshipService {
         }
 
         const targetUserId =
-          friendship.user1Id === userId ? friendship.user2Id : friendship.user1Id;
+          friendship.user1Id === userId
+            ? friendship.user2Id
+            : friendship.user1Id;
 
         // Soft delete (per plan)
         await this.prisma.friendship.update({
@@ -515,7 +517,9 @@ export class FriendshipService {
           { correlationId: eventPayload.eventId },
         );
 
-        this.logger.log(`Friend request cancelled: ${friendshipId} by ${userId}`);
+        this.logger.log(
+          `Friend request cancelled: ${friendshipId} by ${userId}`,
+        );
       },
       30,
       10,
@@ -764,9 +768,7 @@ export class FriendshipService {
     const where: Prisma.FriendshipWhereInput = {
       status,
       deletedAt: null,
-      AND: [
-        ownerFilter,
-      ],
+      AND: [ownerFilter],
     };
 
     // 3. Thực thi Query Prisma
@@ -792,29 +794,33 @@ export class FriendshipService {
       f.user1Id === userId ? f.user2Id : f.user1Id,
     );
 
-    const friendUsers = friendUserIds.length > 0
-      ? await this.prisma.user.findMany({
-        where: { id: { in: friendUserIds } },
-        select: {
-          id: true,
-          displayName: true,
-          avatarUrl: true,
-          phoneNumber: true,
-        },
-      })
-      : [];
+    const friendUsers =
+      friendUserIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: friendUserIds } },
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+              phoneNumber: true,
+            },
+          })
+        : [];
     const friendUserMap = new Map(friendUsers.map((u) => [u.id, u]));
 
-    const contactEntries = friendUserIds.length > 0
-      ? await this.prisma.userContact.findMany({
-        where: { ownerId: userId, contactUserId: { in: friendUserIds } },
-        select: { contactUserId: true, aliasName: true, phoneBookName: true },
-      })
-      : [];
+    const contactEntries =
+      friendUserIds.length > 0
+        ? await this.prisma.userContact.findMany({
+            where: { ownerId: userId, contactUserId: { in: friendUserIds } },
+            select: {
+              contactUserId: true,
+              aliasName: true,
+              phoneBookName: true,
+            },
+          })
+        : [];
 
-    const contactMap = new Map(
-      contactEntries.map((c) => [c.contactUserId, c]),
-    );
+    const contactMap = new Map(contactEntries.map((c) => [c.contactUserId, c]));
 
     return CursorPaginationHelper.buildResult({
       items: friendships,
@@ -822,7 +828,9 @@ export class FriendshipService {
       getCursor: (f) => f.id,
       mapToDto: (friendship) => {
         const friendId =
-          friendship.user1Id === userId ? friendship.user2Id : friendship.user1Id;
+          friendship.user1Id === userId
+            ? friendship.user2Id
+            : friendship.user1Id;
         const friend = friendUserMap.get(friendId);
         const contactInfo = contactMap.get(friendId);
 
@@ -850,7 +858,9 @@ export class FriendshipService {
   /**
    * Get pending friend requests (received)
    */
-  async getReceivedRequests(userId: string): Promise<FriendRequestWithUserDto[]> {
+  async getReceivedRequests(
+    userId: string,
+  ): Promise<FriendRequestWithUserDto[]> {
     const friendships = await this.prisma.friendship.findMany({
       where: {
         status: FriendshipStatus.PENDING,
@@ -864,10 +874,7 @@ export class FriendshipService {
             ],
           },
           {
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gt: new Date() } },
-            ],
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
           },
         ],
       },
@@ -911,12 +918,16 @@ export class FriendshipService {
         expiresAt: friendship.expiresAt ?? undefined,
         requester: {
           userId: requesterId,
-          displayName: nameMap.get(requesterId) ?? requester?.displayName ?? 'Unknown User',
+          displayName:
+            nameMap.get(requesterId) ??
+            requester?.displayName ??
+            'Unknown User',
           avatarUrl: requester?.avatarUrl ?? undefined,
         },
         target: {
           userId: targetId,
-          displayName: nameMap.get(targetId) ?? target?.displayName ?? 'Unknown User',
+          displayName:
+            nameMap.get(targetId) ?? target?.displayName ?? 'Unknown User',
           avatarUrl: target?.avatarUrl ?? undefined,
         },
       };
@@ -933,10 +944,7 @@ export class FriendshipService {
         status: FriendshipStatus.PENDING,
         deletedAt: null,
         // FR-R5 FIX: Filter out expired requests
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } },
-        ],
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
       select: {
         id: true,
@@ -978,12 +986,16 @@ export class FriendshipService {
         expiresAt: friendship.expiresAt ?? undefined,
         requester: {
           userId: requesterId,
-          displayName: nameMap.get(requesterId) ?? requester?.displayName ?? 'Unknown User',
+          displayName:
+            nameMap.get(requesterId) ??
+            requester?.displayName ??
+            'Unknown User',
           avatarUrl: requester?.avatarUrl ?? undefined,
         },
         target: {
           userId: targetId,
-          displayName: nameMap.get(targetId) ?? target?.displayName ?? 'Unknown User',
+          displayName:
+            nameMap.get(targetId) ?? target?.displayName ?? 'Unknown User',
           avatarUrl: target?.avatarUrl ?? undefined,
         },
       };
@@ -1038,7 +1050,10 @@ export class FriendshipService {
 
     // Batch resolve display names per viewer
     const userIds = users.map((u) => u.id);
-    const nameMap = await this.displayNameResolver.batchResolve(userId, userIds);
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      userIds,
+    );
 
     return users.map((user) => ({
       userId: user.id,

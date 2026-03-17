@@ -1,5 +1,11 @@
 // src/common/guards/internal-auth.guard.ts
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+  Inject,
+} from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import workerConfig from '../../config/worker.config';
 

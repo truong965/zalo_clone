@@ -13,7 +13,7 @@ import type {
  */
 @Injectable()
 export class MediaSearchRepository {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Search media attachments by filename

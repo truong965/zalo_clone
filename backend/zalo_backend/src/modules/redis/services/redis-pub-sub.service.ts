@@ -12,8 +12,7 @@ export class RedisPubSubService implements OnModuleInit {
   private readonly logger = new Logger(RedisPubSubService.name);
   private handlers = new Map<string, Set<MessageHandler>>();
 
-  constructor(private readonly redisService: RedisService) {
-  }
+  constructor(private readonly redisService: RedisService) {}
 
   onModuleInit() {
     this.setupSubscriber();

@@ -13,7 +13,7 @@ export class RedisRegistryService {
     private readonly redisService: RedisService,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
-  ) { }
+  ) {}
 
   /**
    * Register socket connection

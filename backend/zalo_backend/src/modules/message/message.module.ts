@@ -79,4 +79,4 @@ import { MessageGateway } from './message.gateway';
     MessageBroadcasterService,
   ],
 })
-export class MessageModule { }
+export class MessageModule {}

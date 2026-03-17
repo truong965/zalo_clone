@@ -18,7 +18,7 @@ import { UpdatePrivacySettingsDto } from './dto/privacy.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('privacy')
 export class PrivacyController {
-  constructor(private readonly privacyService: PrivacyService) { }
+  constructor(private readonly privacyService: PrivacyService) {}
 
   /**
    * Get privacy settings for current user

@@ -15,7 +15,7 @@ import { GetFriendsQueryDto } from '../dto/friendship.dto';
 @ApiTags('Social - Friendships')
 @Controller('friendships')
 export class FriendshipsController {
-  constructor(private readonly friendshipService: FriendshipService) { }
+  constructor(private readonly friendshipService: FriendshipService) {}
   // ==============================
   // 2. FRIEND LIST & MANAGEMENT
   // ==============================

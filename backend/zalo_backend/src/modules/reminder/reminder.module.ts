@@ -32,19 +32,19 @@ import { ReminderSystemMessageListener } from './listeners/reminder-system-messa
 import { ReminderController } from './reminder.controller';
 
 @Module({
-      imports: [
-            DatabaseModule,
-            EventEmitterModule,
-            forwardRef(() => SocketModule),
-            ConversationModule,
-      ],
-      controllers: [ReminderController],
-      providers: [
-            ReminderService,
-            ReminderSchedulerService,
-            ReminderSocketListener,
-            ReminderSystemMessageListener,
-      ],
-      exports: [ReminderService],
+  imports: [
+    DatabaseModule,
+    EventEmitterModule,
+    forwardRef(() => SocketModule),
+    ConversationModule,
+  ],
+  controllers: [ReminderController],
+  providers: [
+    ReminderService,
+    ReminderSchedulerService,
+    ReminderSocketListener,
+    ReminderSystemMessageListener,
+  ],
+  exports: [ReminderService],
 })
-export class ReminderModule { }
+export class ReminderModule {}

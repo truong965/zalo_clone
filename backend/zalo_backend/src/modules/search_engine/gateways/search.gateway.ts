@@ -21,12 +21,14 @@ import type {
   SearchNewMatchPayload,
   SearchErrorPayload,
   SearchLoadMorePayload,
+  SearchResultRemovedPayload,
 } from 'src/common/interfaces/search-socket.interface';
+import { MessageType } from '@prisma/client';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
-import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
+import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
 import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
-import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
+import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { safeJSON } from 'src/common/utils/json.util';
 import { DisplayNameResolver } from '@shared/services';
 /**
@@ -167,9 +169,9 @@ export class SearchGateway {
    * Event: search:unsubscribe
    */
   @SubscribeMessage(SocketEvents.SEARCH_UNSUBSCRIBE)
-  async handleSearchUnsubscribe(
+  handleSearchUnsubscribe(
     @ConnectedSocket() client: AuthenticatedSocket,
-  ): Promise<{ status: string }> {
+  ): { status: string } {
     try {
       const userId = client.userId;
 
@@ -353,7 +355,7 @@ export class SearchGateway {
             senderName,
             senderAvatarUrl: message.sender?.avatarUrl || undefined,
             content: message.content || '',
-            type: message.type as any,
+            type: message.type as MessageType,
             createdAt: message.createdAt,
             conversationType: message.conversation?.type || 'DIRECT',
             conversationName: message.conversation?.name || undefined,
@@ -387,10 +389,10 @@ export class SearchGateway {
    * Phase A (TD-05): Implements the TODO that was left in message.deleted handler.
    */
   @OnEvent(SocketEvents.SEARCH_INTERNAL_RESULT_REMOVED)
-  async handleInternalResultRemoved(event: {
+  handleInternalResultRemoved(event: {
     messageId: string;
     conversationId: string;
-  }): Promise<void> {
+  }): void {
     try {
       // A2: Only notify subscribers whose search scope includes this conversation
       const affectedSubscriptions =
@@ -402,7 +404,7 @@ export class SearchGateway {
         return;
       }
 
-      const payload = {
+      const payload: SearchResultRemovedPayload = {
         messageId: event.messageId,
         conversationId: event.conversationId,
         removedAt: new Date(),

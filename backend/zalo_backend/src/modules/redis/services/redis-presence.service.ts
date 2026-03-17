@@ -13,7 +13,7 @@ export class RedisPresenceService {
     private readonly redisService: RedisService,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
-  ) { }
+  ) {}
 
   /**
    * Mark user as online with device
@@ -25,11 +25,7 @@ export class RedisPresenceService {
     const pipeline = client.pipeline();
 
     // Add to online users sorted set
-    pipeline.zadd(
-      RedisKeyBuilder.presenceOnlineUsers(),
-      timestamp,
-      userId,
-    );
+    pipeline.zadd(RedisKeyBuilder.presenceOnlineUsers(), timestamp, userId);
 
     // Set user status
     pipeline.set(
@@ -145,11 +141,7 @@ export class RedisPresenceService {
     const pipeline = client.pipeline();
 
     // Update score in sorted set
-    pipeline.zadd(
-      RedisKeyBuilder.presenceOnlineUsers(),
-      timestamp,
-      userId,
-    );
+    pipeline.zadd(RedisKeyBuilder.presenceOnlineUsers(), timestamp, userId);
 
     // Refresh status TTL
     pipeline.expire(

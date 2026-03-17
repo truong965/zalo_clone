@@ -64,4 +64,4 @@ import { BlockModule } from '@modules/block/block.module';
   ],
   exports: [PrivacyService], // Export for other modules to use
 })
-export class PrivacyModule { }
+export class PrivacyModule {}

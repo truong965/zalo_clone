@@ -37,6 +37,8 @@ export class CreateUserDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @Type(() => Date)
-  @MaxDate(() => new Date(), { message: 'Ngày sinh không được là ngày trong tương lai' })
+  @MaxDate(() => new Date(), {
+    message: 'Ngày sinh không được là ngày trong tương lai',
+  })
   dateOfBirth?: Date;
 }

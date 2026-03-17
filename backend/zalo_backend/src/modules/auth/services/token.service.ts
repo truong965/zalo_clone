@@ -24,7 +24,7 @@ export class TokenService {
     private readonly prisma: PrismaService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) { }
+  ) {}
 
   /**
    * Generate access token (short-lived, stateless)
@@ -400,7 +400,12 @@ export class TokenService {
     const [, value, unit] = match;
     const num = parseInt(value, 10);
 
-    const multipliers: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+    const multipliers: Record<string, number> = {
+      s: 1,
+      m: 60,
+      h: 3600,
+      d: 86400,
+    };
     return num * (multipliers[unit] || 60);
   }
 }

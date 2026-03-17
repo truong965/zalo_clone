@@ -36,7 +36,7 @@ export interface TypingStatusPayload {
 export class MessageBroadcasterService implements OnModuleInit {
   private readonly logger = new Logger(MessageBroadcasterService.name);
 
-  constructor(private readonly redisPubSub: RedisPubSubService) { }
+  constructor(private readonly redisPubSub: RedisPubSubService) {}
 
   onModuleInit() {
     this.logger.log('Message Broadcaster Service initialized');

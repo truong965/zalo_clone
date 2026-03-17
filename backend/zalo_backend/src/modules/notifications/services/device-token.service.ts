@@ -10,118 +10,118 @@ import { PrismaService } from '@database/prisma.service';
 
 @Injectable()
 export class DeviceTokenService {
-      private readonly logger = new Logger(DeviceTokenService.name);
+  private readonly logger = new Logger(DeviceTokenService.name);
 
-      constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-      /**
-       * Register (upsert) a device token for a user.
-       * Policy A: one browser profile/token should be active for one account at a time.
-       *
-       * Steps:
-       * 1) Remove cross-user mappings for the same deviceId OR fcmToken
-       * 2) Upsert current user's (userId, deviceId) row
-       */
-      async registerToken(params: {
-            userId: string;
-            deviceId: string;
-            fcmToken: string;
-            platform?: string;
-      }): Promise<void> {
-            const { userId, deviceId, fcmToken, platform } = params;
+  /**
+   * Register (upsert) a device token for a user.
+   * Policy A: one browser profile/token should be active for one account at a time.
+   *
+   * Steps:
+   * 1) Remove cross-user mappings for the same deviceId OR fcmToken
+   * 2) Upsert current user's (userId, deviceId) row
+   */
+  async registerToken(params: {
+    userId: string;
+    deviceId: string;
+    fcmToken: string;
+    platform?: string;
+  }): Promise<void> {
+    const { userId, deviceId, fcmToken, platform } = params;
 
-            await this.prisma.$transaction(async (tx) => {
-                  // Policy A de-duplication:
-                  // If another account on the same browser profile registers,
-                  // move ownership to the currently authenticated user.
-                  const removed = await tx.userDevice.deleteMany({
-                        where: {
-                              userId: { not: userId },
-                              OR: [{ deviceId }, { fcmToken }],
-                        },
-                  });
+    await this.prisma.$transaction(async (tx) => {
+      // Policy A de-duplication:
+      // If another account on the same browser profile registers,
+      // move ownership to the currently authenticated user.
+      const removed = await tx.userDevice.deleteMany({
+        where: {
+          userId: { not: userId },
+          OR: [{ deviceId }, { fcmToken }],
+        },
+      });
 
-                  await tx.userDevice.upsert({
-                        where: { userId_deviceId: { userId, deviceId } },
-                        update: {
-                              fcmToken,
-                              platform: platform ?? undefined,
-                              lastActiveAt: new Date(),
-                        },
-                        create: {
-                              userId,
-                              deviceId,
-                              fcmToken,
-                              platform: platform ?? null,
-                        },
-                  });
+      await tx.userDevice.upsert({
+        where: { userId_deviceId: { userId, deviceId } },
+        update: {
+          fcmToken,
+          platform: platform ?? undefined,
+          lastActiveAt: new Date(),
+        },
+        create: {
+          userId,
+          deviceId,
+          fcmToken,
+          platform: platform ?? null,
+        },
+      });
 
-                  if (removed.count > 0) {
-                        this.logger.log(
-                              `Policy A token handover: removed ${removed.count} cross-user device mapping(s) for device=${deviceId.slice(0, 12)}…`,
-                        );
-                  }
-            });
-
-            this.logger.debug(
-                  `Device token registered: user=${userId.slice(0, 8)}… device=${deviceId.slice(0, 12)}…`,
-            );
+      if (removed.count > 0) {
+        this.logger.log(
+          `Policy A token handover: removed ${removed.count} cross-user device mapping(s) for device=${deviceId.slice(0, 12)}…`,
+        );
       }
+    });
 
-      /**
-       * Remove a specific device for a user (e.g. on logout).
-       */
-      async removeToken(userId: string, deviceId: string): Promise<void> {
-            await this.prisma.userDevice
-                  .delete({
-                        where: { userId_deviceId: { userId, deviceId } },
-                  })
-                  .catch(() => {
-                        // Ignore if already removed
-                  });
-      }
+    this.logger.debug(
+      `Device token registered: user=${userId.slice(0, 8)}… device=${deviceId.slice(0, 12)}…`,
+    );
+  }
 
-      /**
-       * Get all FCM tokens for a user (may have multiple devices).
-       * Only returns tokens that are not null.
-       */
-      async getTokensByUserId(userId: string): Promise<string[]> {
-            const devices = await this.prisma.userDevice.findMany({
-                  where: { userId },
-                  select: { fcmToken: true },
-            });
+  /**
+   * Remove a specific device for a user (e.g. on logout).
+   */
+  async removeToken(userId: string, deviceId: string): Promise<void> {
+    await this.prisma.userDevice
+      .delete({
+        where: { userId_deviceId: { userId, deviceId } },
+      })
+      .catch(() => {
+        // Ignore if already removed
+      });
+  }
 
-            return devices
-                  .map((d) => d.fcmToken)
-                  .filter((token): token is string => !!token);
-      }
+  /**
+   * Get all FCM tokens for a user (may have multiple devices).
+   * Only returns tokens that are not null.
+   */
+  async getTokensByUserId(userId: string): Promise<string[]> {
+    const devices = await this.prisma.userDevice.findMany({
+      where: { userId },
+      select: { fcmToken: true },
+    });
 
-      /**
-       * Remove invalid/expired tokens after a failed FCM delivery.
-       */
-      async cleanupInvalidTokens(invalidTokens: string[]): Promise<void> {
-            if (invalidTokens.length === 0) return;
+    return devices
+      .map((d) => d.fcmToken)
+      .filter((token): token is string => !!token);
+  }
 
-            const result = await this.prisma.userDevice.deleteMany({
-                  where: { fcmToken: { in: invalidTokens } },
-            });
+  /**
+   * Remove invalid/expired tokens after a failed FCM delivery.
+   */
+  async cleanupInvalidTokens(invalidTokens: string[]): Promise<void> {
+    if (invalidTokens.length === 0) return;
 
-            if (result.count > 0) {
-                  this.logger.log(`Cleaned ${result.count} invalid FCM token(s)`);
-            }
-      }
+    const result = await this.prisma.userDevice.deleteMany({
+      where: { fcmToken: { in: invalidTokens } },
+    });
 
-      /**
-       * Update lastActiveAt to keep device record fresh.
-       */
-      async touchDevice(userId: string, deviceId: string): Promise<void> {
-            await this.prisma.userDevice
-                  .update({
-                        where: { userId_deviceId: { userId, deviceId } },
-                        data: { lastActiveAt: new Date() },
-                  })
-                  .catch(() => {
-                        // Ignore if device doesn't exist
-                  });
-      }
+    if (result.count > 0) {
+      this.logger.log(`Cleaned ${result.count} invalid FCM token(s)`);
+    }
+  }
+
+  /**
+   * Update lastActiveAt to keep device record fresh.
+   */
+  async touchDevice(userId: string, deviceId: string): Promise<void> {
+    await this.prisma.userDevice
+      .update({
+        where: { userId_deviceId: { userId, deviceId } },
+        data: { lastActiveAt: new Date() },
+      })
+      .catch(() => {
+        // Ignore if device doesn't exist
+      });
+  }
 }

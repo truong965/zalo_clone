@@ -136,8 +136,8 @@ export class RedisRateLimitService {
 
     do {
       const result = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-      cursor = Array.isArray(result) ? result[0] : (result as any).cursor;
-      const keys = Array.isArray(result) ? result[1] : (result as any).keys;
+      cursor = Array.isArray(result) ? result[0] : result.cursor;
+      const keys = Array.isArray(result) ? result[1] : result.keys;
 
       if (keys && keys.length > 0) {
         for (const key of keys) {

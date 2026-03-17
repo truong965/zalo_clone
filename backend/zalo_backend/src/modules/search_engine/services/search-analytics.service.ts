@@ -28,7 +28,7 @@ export type { SearchQueryLog, TrendingKeyword, SearchPerformanceMetrics };
 export class SearchAnalyticsService {
   private readonly logger = new Logger(SearchAnalyticsService.name);
 
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   /**
    * Log a search query for analytics
@@ -59,7 +59,7 @@ export class SearchAnalyticsService {
   /**
    * Track result click - CREATE new query log instead of UPDATE
    * (Phase 3 refactor: Only log searches that result in clicks)
-   * 
+   *
    * This reduces DB writes by 90-95% vs logging every search.
    * Analytics now represent actual user engagement (CTR = 100%).
    */
@@ -227,9 +227,7 @@ export class SearchAnalyticsService {
     prefix: string,
     limit = 10,
   ): Promise<string[]> {
-    const results = await this.prisma.$queryRaw<
-      Array<{ keyword: string }>
-    >`
+    const results = await this.prisma.$queryRaw<Array<{ keyword: string }>>`
       SELECT keyword
       FROM (
         SELECT keyword, MAX(created_at) as last_used

@@ -40,26 +40,26 @@ import { FriendshipPushNotificationListener } from './listeners/friendship-notif
 import { GroupNotificationListener } from './listeners/group-notification.listener';
 
 @Module({
-      imports: [
-            ConfigModule.forFeature(firebaseConfig),
-            DatabaseModule,
-            EventEmitterModule,
-            IdempotencyModule,
-      ],
-      controllers: [DeviceTokenController],
-      providers: [
-            // Core services
-            FirebaseService,
-            DeviceTokenService,
-            PushNotificationService,
-            NotificationBatchService,
-            ConversationMemberCacheService,
-            // Event listeners
-            CallNotificationListener,
-            MessageNotificationListener,
-            FriendshipPushNotificationListener,
-            GroupNotificationListener,
-      ],
-      exports: [PushNotificationService, DeviceTokenService],
+  imports: [
+    ConfigModule.forFeature(firebaseConfig),
+    DatabaseModule,
+    EventEmitterModule,
+    IdempotencyModule,
+  ],
+  controllers: [DeviceTokenController],
+  providers: [
+    // Core services
+    FirebaseService,
+    DeviceTokenService,
+    PushNotificationService,
+    NotificationBatchService,
+    ConversationMemberCacheService,
+    // Event listeners
+    CallNotificationListener,
+    MessageNotificationListener,
+    FriendshipPushNotificationListener,
+    GroupNotificationListener,
+  ],
+  exports: [PushNotificationService, DeviceTokenService],
 })
-export class NotificationsModule { }
+export class NotificationsModule {}

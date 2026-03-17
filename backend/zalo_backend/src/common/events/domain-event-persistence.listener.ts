@@ -38,7 +38,7 @@ interface PersistInput {
 export class DomainEventPersistenceListener {
   private readonly logger = new Logger(DomainEventPersistenceListener.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   @OnEvent('user.blocked', { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {

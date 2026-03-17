@@ -92,4 +92,4 @@ import { UserPresenceListener } from './listeners/user-presence.listener';
   ],
   exports: [FriendshipService],
 })
-export class FriendshipModule { }
+export class FriendshipModule {}

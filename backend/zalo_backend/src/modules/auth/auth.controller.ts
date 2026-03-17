@@ -50,7 +50,7 @@ export class AuthController {
     private readonly deviceFingerprintService: DeviceFingerprintService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) { }
+  ) {}
 
   @Public()
   @Post('register')

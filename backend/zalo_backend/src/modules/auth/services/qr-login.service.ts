@@ -41,7 +41,7 @@ export class QrLoginService {
     private readonly rateLimitService: RedisRateLimitService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) { }
+  ) {}
 
   // ═══════════════════════ Pha 1: Generate QR ═══════════════════════
 
@@ -172,7 +172,9 @@ export class QrLoginService {
     }
 
     if (session.status === QrSessionStatus.PENDING) {
-      throw new UnauthorizedException('Cannot cancel a pending session directly');
+      throw new UnauthorizedException(
+        'Cannot cancel a pending session directly',
+      );
     }
 
     if (session.userId !== mobileUserId) {
@@ -366,7 +368,7 @@ export class QrLoginService {
         accessToken,
         refreshToken,
         expiresIn: this.tokenService.parseExpiresIn(
-          this.jwtConfiguration.accessToken.expiresIn as string,
+          this.jwtConfiguration.accessToken.expiresIn,
         ),
         tokenType: 'Bearer',
       };

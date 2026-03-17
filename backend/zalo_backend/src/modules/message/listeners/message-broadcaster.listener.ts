@@ -28,7 +28,9 @@ export class MessageBroadcasterListener extends IdempotentListener {
   }
 
   @OnEvent('conversation.created')
-  async handleConversationCreated(event: ConversationCreatedEvent): Promise<void> {
+  async handleConversationCreated(
+    event: ConversationCreatedEvent,
+  ): Promise<void> {
     return this.withIdempotency(
       `conversation-created-${event.conversationId}`,
       async () => {

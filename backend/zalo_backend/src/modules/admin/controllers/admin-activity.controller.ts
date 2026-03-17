@@ -23,32 +23,34 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @UseGuards(RolesGuard)
 @Roles('ADMIN')
 export class AdminActivityController {
-      constructor(private readonly activityService: AdminActivityService) { }
+  constructor(private readonly activityService: AdminActivityService) {}
 
-      @ApiOperation({ summary: 'List suspended users' })
-      @Get('suspended')
-      getSuspendedUsers() {
-            return this.activityService.getSuspendedUsers();
-      }
+  @ApiOperation({ summary: 'List suspended users' })
+  @Get('suspended')
+  getSuspendedUsers() {
+    return this.activityService.getSuspendedUsers();
+  }
 
-      @ApiOperation({ summary: 'List inactive users (not seen in N days)' })
-      @Get('inactive')
-      getInactiveUsers(@Query('days') days?: number) {
-            return this.activityService.getInactiveUsers(days);
-      }
+  @ApiOperation({ summary: 'List inactive users (not seen in N days)' })
+  @Get('inactive')
+  getInactiveUsers(@Query('days') days?: number) {
+    return this.activityService.getInactiveUsers(days);
+  }
 
-      @ApiOperation({ summary: 'List outlier users with unusually high activity (potential spam)' })
-      @Get('high-activity')
-      getHighActivityUsers(
-            @Query('hours') hours?: number,
-            @Query('threshold') threshold?: number,
-      ) {
-            return this.activityService.getHighActivityUsers(hours, threshold);
-      }
+  @ApiOperation({
+    summary: 'List outlier users with unusually high activity (potential spam)',
+  })
+  @Get('high-activity')
+  getHighActivityUsers(
+    @Query('hours') hours?: number,
+    @Query('threshold') threshold?: number,
+  ) {
+    return this.activityService.getHighActivityUsers(hours, threshold);
+  }
 
-      @ApiOperation({ summary: 'List users with unusually many active sessions' })
-      @Get('multi-device')
-      getMultiDeviceUsers(@Query('minSessions') minSessions?: number) {
-            return this.activityService.getMultiDeviceUsers(minSessions);
-      }
+  @ApiOperation({ summary: 'List users with unusually many active sessions' })
+  @Get('multi-device')
+  getMultiDeviceUsers(@Query('minSessions') minSessions?: number) {
+    return this.activityService.getMultiDeviceUsers(minSessions);
+  }
 }

@@ -22,13 +22,13 @@ import type { BaseEvent } from './base-event.interface';
  *   - ContactNotificationListener (SocketModule) — push real-time update to owner
  */
 export interface ContactAliasUpdatedPayload extends BaseEvent {
-      eventType: 'CONTACT_ALIAS_UPDATED';
-      ownerId: string;
-      contactUserId: string;
-      /** New aliasName value; null means the alias was reset */
-      newAliasName: string | null;
-      /** Resolved display name after the change (aliasName ?? phoneBookName ?? displayName) */
-      resolvedDisplayName: string;
+  eventType: 'CONTACT_ALIAS_UPDATED';
+  ownerId: string;
+  contactUserId: string;
+  /** New aliasName value; null means the alias was reset */
+  newAliasName: string | null;
+  /** Resolved display name after the change (aliasName ?? phoneBookName ?? displayName) */
+  resolvedDisplayName: string;
 }
 
 /**
@@ -38,11 +38,11 @@ export interface ContactAliasUpdatedPayload extends BaseEvent {
  *   - ContactCacheListener — analytics / optional cache warm-up
  */
 export interface ContactsSyncedPayload extends BaseEvent {
-      eventType: 'CONTACTS_SYNCED';
-      ownerId: string;
-      totalContacts: number;
-      matchedCount: number;
-      durationMs: number;
+  eventType: 'CONTACTS_SYNCED';
+  ownerId: string;
+  totalContacts: number;
+  matchedCount: number;
+  durationMs: number;
 }
 
 /**
@@ -52,7 +52,7 @@ export interface ContactsSyncedPayload extends BaseEvent {
  *   - ContactCacheListener — invalidate Redis name-resolution cache
  */
 export interface ContactRemovedPayload extends BaseEvent {
-      eventType: 'CONTACT_REMOVED';
-      ownerId: string;
-      contactUserId: string;
+  eventType: 'CONTACT_REMOVED';
+  ownerId: string;
+  contactUserId: string;
 }

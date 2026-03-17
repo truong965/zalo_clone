@@ -4,38 +4,38 @@
 
 /** Real-time progress update pushed to the uploading user via SocketGateway. */
 export interface ProgressUpdate {
-      status: 'processing' | 'completed' | 'failed';
-      /** Completion percentage 0-100 */
-      progress: number;
-      thumbnailUrl?: string;
-      hlsPlaylistUrl?: string;
-      error?: string;
+  status: 'processing' | 'completed' | 'failed';
+  /** Completion percentage 0-100 */
+  progress: number;
+  thumbnailUrl?: string;
+  hlsPlaylistUrl?: string;
+  error?: string;
 }
 
 export interface MediaUploadedEvent {
-      mediaId: string;
-      uploadId: string;
-      userId: string;
-      mimeType: string;
-      mediaType: string;
+  mediaId: string;
+  uploadId: string;
+  userId: string;
+  mimeType: string;
+  mediaType: string;
 }
 
 export interface MediaProcessedEvent {
-      mediaId: string;
-      uploadId: string;
-      userId: string;
-      thumbnailUrl: string | null;
-      cdnUrl: string | null;
+  mediaId: string;
+  uploadId: string;
+  userId: string;
+  thumbnailUrl: string | null;
+  cdnUrl: string | null;
 }
 
 export interface MediaFailedEvent {
-      mediaId: string;
-      uploadId: string;
-      userId: string;
-      reason: string;
+  mediaId: string;
+  uploadId: string;
+  userId: string;
+  reason: string;
 }
 
 export interface MediaDeletedEvent {
-      mediaId: string;
-      userId: string;
+  mediaId: string;
+  userId: string;
 }

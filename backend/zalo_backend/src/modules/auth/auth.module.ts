@@ -47,4 +47,4 @@ import { RedisModule } from 'src/modules/redis/redis.module';
   ],
   exports: [AuthService, TokenService, DeviceFingerprintService],
 })
-export class AuthModule { }
+export class AuthModule {}

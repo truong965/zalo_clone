@@ -40,7 +40,7 @@ const QR_TICKET_TTL = 15; // 15 seconds
 export class QrSessionRedisService {
   private readonly logger = new Logger(QrSessionRedisService.name);
 
-  constructor(private readonly redis: RedisService) { }
+  constructor(private readonly redis: RedisService) {}
 
   // ────────────── Session CRUD ──────────────
 

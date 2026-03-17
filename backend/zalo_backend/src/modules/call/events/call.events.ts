@@ -27,7 +27,8 @@ export const CallEndReason = {
   RELATIONSHIP_CHANGED: 'RELATIONSHIP_CHANGED',
 } as const;
 
-export type CallEndReasonType = (typeof CallEndReason)[keyof typeof CallEndReason];
+export type CallEndReasonType =
+  (typeof CallEndReason)[keyof typeof CallEndReason];
 
 /**
  * Payload shape received by listeners of `call.ended`.

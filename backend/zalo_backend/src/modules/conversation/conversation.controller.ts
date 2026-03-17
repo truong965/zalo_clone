@@ -28,7 +28,7 @@ export class ConversationController {
   constructor(
     private readonly conversationService: ConversationService,
     private readonly groupService: GroupService,
-  ) { }
+  ) {}
 
   @Post('direct')
   @UseGuards(InteractionGuard)

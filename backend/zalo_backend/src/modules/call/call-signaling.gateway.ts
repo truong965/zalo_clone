@@ -57,21 +57,26 @@ import {
       OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import { Logger, UseFilters, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import {
+      Logger,
+      UseFilters,
+      UseGuards,
+      UsePipes,
+      ValidationPipe,
+      ConflictException,
+} from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
-import { WsThrottleGuard } from 'src/socket/guards/ws-throttle.guard';
-import { WsJwtGuard } from 'src/socket/guards/ws-jwt.guard';
-import { WsExceptionFilter } from 'src/socket/filters/ws-exception.filter';
+import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
+import { WsJwtGuard } from 'src/common/guards/ws-jwt.guard';
+import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { CallHistoryService } from './call-history.service';
 import { CallEndReason } from './events/call.events';
 import {
       canTransition,
       sessionStatusToCallState,
-      transition,
-      type CallState,
 } from './services/call-state-machine';
 import {
       InitiateCallDto,
@@ -82,7 +87,7 @@ import {
       SwitchToDailyDto,
 } from './dto/call-signaling.dto';
 import type { ActiveCallSession } from './dto/call-history.dto';
-import { CallProvider, CallStatus, ConversationType } from '@prisma/client';
+import { CallProvider, CallStatus, CallType } from '@prisma/client';
 import { IceConfigService } from './services/ice-config.service';
 import { DailyCoService } from './services/daily-co.service';
 import { PrismaService } from 'src/database/prisma.service';
@@ -101,6 +106,11 @@ const RINGING_ACK_TIMEOUT_MS = 2_000;
  * Reduces ~30 individual relays to ~5-6 batched relays per peer.
  */
 const ICE_BATCH_WINDOW_MS = 50;
+
+type IceCandidateBatch = {
+      candidates: unknown[];
+      timer: NodeJS.Timeout;
+};
 
 @WebSocketGateway({
       cors: { origin: '*', credentials: true },
@@ -146,12 +156,12 @@ export class CallSignalingGateway implements OnGatewayInit {
       private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
 
       /**
-      * ICE candidate batch buffers: `${callId}:${userId}` → { candidates[], timer }
-      * Server-side batching reduces relay frequency during ICE gathering.
-      */
+       * ICE candidate batch buffers: `${callId}:${userId}` → { candidates[], timer }
+       * Server-side batching reduces relay frequency during ICE gathering.
+       */
       private readonly iceBatchBuffers = new Map<
             string,
-            { candidates: any[]; timer: NodeJS.Timeout }
+            IceCandidateBatch
       >();
 
       constructor(
@@ -190,20 +200,17 @@ export class CallSignalingGateway implements OnGatewayInit {
 
             const callId = session.callId;
             const callRoom = this.getCallRoom(callId);
-            const isInitiator = session.callerId === userId;
-
             // If still RINGING (caller disconnected before callee accepted)
             if (session.status === 'RINGING') {
                   // Notify callee that caller disconnected
-                  this.server.to(callRoom).emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
+                  this.server
+                        .to(callRoom)
+                        .emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
 
                   // End call after short grace period
                   const timer = setTimeout(() => {
                         this.disconnectTimers.delete(callId);
-                        void this.endCallInternal(
-                              session,
-                              CallEndReason.NETWORK_DROP,
-                        );
+                        void this.endCallInternal(session, CallEndReason.NETWORK_DROP);
                   }, DISCONNECT_GRACE_MS);
                   this.disconnectTimers.set(callId, timer);
                   return;
@@ -213,10 +220,15 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (session.status === 'ACTIVE') {
                   const currentState = sessionStatusToCallState(session.status);
                   if (canTransition(currentState, 'DISCONNECT')) {
-                        await this.callHistoryService.updateCallStatus(callId, 'RECONNECTING' as any);
+                        await this.callHistoryService.updateCallStatus(
+                              callId,
+                              'RECONNECTING',
+                        );
                   }
 
-                  this.server.to(callRoom).emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
+                  this.server
+                        .to(callRoom)
+                        .emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
 
                   const timer = setTimeout(() => {
                         this.disconnectTimers.delete(callId);
@@ -255,18 +267,24 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (timer) {
                   clearTimeout(timer);
                   this.disconnectTimers.delete(callId);
-                  this.logger.log(`Call ${callId}: user ${userId} reconnected, grace timer cancelled`);
+                  this.logger.log(
+                        `Call ${callId}: user ${userId} reconnected, grace timer cancelled`,
+                  );
             }
 
             // Re-join the call room
-            socket.join(callRoom);
+            await socket.join(callRoom);
 
             // If callee reconnects while call is still RINGING, re-emit call:incoming
             // This handles the push notification flow: callee was offline → got push → opened app → socket connected
             if (session.status === 'RINGING' && session.calleeId === userId) {
-                  this.logger.log(`Call ${callId}: callee ${userId} reconnected during RINGING, re-emitting call:incoming`);
+                  this.logger.log(
+                        `Call ${callId}: callee ${userId} reconnected during RINGING, re-emitting call:incoming`,
+                  );
 
-                  const callerDisplayName = await this.getParticipantDisplayName(session.callerId);
+                  const callerDisplayName = await this.getParticipantDisplayName(
+                        session.callerId,
+                  );
                   const calleeIceConfig = await this.iceConfigService.getIceConfig(userId);
                   const callerAvatarUrl = await this.lookupUserAvatar(session.callerId);
 
@@ -329,8 +347,9 @@ export class CallSignalingGateway implements OnGatewayInit {
             const { calleeId, callType, conversationId, receiverIds } = dto;
 
             // Build complete receiver list: merge calleeId + receiverIds, dedupe, exclude caller
-            const allReceiverIds = [...new Set([calleeId, ...(receiverIds ?? [])])]
-                  .filter((id) => id !== callerId);
+            const allReceiverIds = [
+                  ...new Set([calleeId, ...(receiverIds ?? [])]),
+            ].filter((id) => id !== callerId);
 
             if (allReceiverIds.length === 0) {
                   return this.emitError(client, 'Cannot call yourself');
@@ -340,34 +359,69 @@ export class CallSignalingGateway implements OnGatewayInit {
 
             // Group calls require Daily.co
             if (isGroupCall && !this.dailyCoService.available) {
-                  return this.emitError(client, 'Group calls require Daily.co configuration');
+                  return this.emitError(
+                        client,
+                        'Group calls require Daily.co configuration',
+                  );
             }
 
             // Privacy & block check
-            const privacyResult = await this.validateCallPrivacy(callerId, allReceiverIds, isGroupCall, conversationId);
+            const privacyResult = await this.validateCallPrivacy(
+                  callerId,
+                  allReceiverIds,
+                  isGroupCall,
+                  conversationId,
+            );
             if (!privacyResult.allowed) {
                   return this.emitError(client, privacyResult.reason!);
             }
             const conversationName = privacyResult.conversationName;
 
             // Start call session
-            const session = await this.startCallSession(client, callerId, allReceiverIds, callType, isGroupCall, conversationId);
+            const session = await this.startCallSession(
+                  client,
+                  callerId,
+                  allReceiverIds,
+                  callType,
+                  isGroupCall,
+                  conversationId,
+            );
             if (!session) return;
 
             const callId = session.callId;
             const callRoom = this.getCallRoom(callId);
-            client.join(callRoom);
+            await client.join(callRoom);
 
             const callerInfo = client.user
-                  ? { id: callerId, displayName: client.user.displayName, avatarUrl: client.user.avatarUrl }
+                  ? {
+                        id: callerId,
+                        displayName: client.user.displayName,
+                        avatarUrl: client.user.avatarUrl,
+                  }
                   : { id: callerId, displayName: 'Unknown', avatarUrl: null };
 
             // Dispatch to group or 1-1 flow
             if (isGroupCall) {
-                  const result = await this.initiateGroupCall(client, callId, callRoom, callType, conversationId, conversationName, callerInfo, allReceiverIds);
+                  const result = await this.initiateGroupCall(
+                        client,
+                        callId,
+                        callRoom,
+                        callType,
+                        conversationId,
+                        conversationName,
+                        callerInfo,
+                        allReceiverIds,
+                  );
                   if (!result) return;
             } else {
-                  this.initiate1v1Call(callId, callRoom, callType, conversationId, callerInfo, calleeId);
+                  this.initiate1v1Call(
+                        callId,
+                        callRoom,
+                        callType,
+                        conversationId,
+                        callerInfo,
+                        calleeId,
+                  );
             }
 
             // Start ringing timeouts
@@ -389,7 +443,11 @@ export class CallSignalingGateway implements OnGatewayInit {
             allReceiverIds: string[],
             isGroupCall: boolean,
             conversationId?: string,
-      ): Promise<{ allowed: boolean; reason?: string; conversationName: string | null }> {
+      ): Promise<{
+            allowed: boolean;
+            reason?: string;
+            conversationName: string | null;
+      }> {
             let conversationName: string | null = null;
 
             // Group calls bypass individual privacy settings
@@ -415,7 +473,8 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (!result.allowed) {
                   return {
                         allowed: false,
-                        reason: result.reason ?? `Call not allowed by receiver's privacy settings`,
+                        reason:
+                              result.reason ?? `Call not allowed by receiver's privacy settings`,
                         conversationName,
                   };
             }
@@ -430,13 +489,12 @@ export class CallSignalingGateway implements OnGatewayInit {
             client: AuthenticatedSocket,
             callerId: string,
             allReceiverIds: string[],
-            callType: any,
+            callType: CallType,
             isGroupCall: boolean,
             conversationId?: string,
       ): Promise<ActiveCallSession | null> {
-            const additionalReceiverIds = allReceiverIds.length > 1
-                  ? allReceiverIds.slice(1)
-                  : undefined;
+            const additionalReceiverIds =
+                  allReceiverIds.length > 1 ? allReceiverIds.slice(1) : undefined;
 
             try {
                   return await this.callHistoryService.startCall(
@@ -447,12 +505,15 @@ export class CallSignalingGateway implements OnGatewayInit {
                         conversationId,
                         additionalReceiverIds,
                   );
-            } catch (error: any) {
-                  if (error.status === 409) {
+            } catch (error: unknown) {
+                  if (error instanceof ConflictException) {
                         client.emit(SocketEvents.CALL_BUSY, { calleeId: allReceiverIds[0] });
                         return null;
                   }
-                  this.emitError(client, error.message ?? 'Failed to start call');
+                  this.emitError(
+                        client,
+                        this.getErrorMessage(error, 'Failed to start call'),
+                  );
                   return null;
             }
       }
@@ -464,7 +525,7 @@ export class CallSignalingGateway implements OnGatewayInit {
             client: AuthenticatedSocket,
             callId: string,
             callRoom: string,
-            callType: any,
+            callType: CallType,
             conversationId: string | undefined,
             conversationName: string | null,
             callerInfo: { id: string; displayName: string; avatarUrl: string | null },
@@ -476,49 +537,78 @@ export class CallSignalingGateway implements OnGatewayInit {
                         expireSeconds: 3600,
                   });
 
-                  await this.callHistoryService.updateCallProvider(callId, CallProvider.DAILY_CO, room.name);
+                  await this.callHistoryService.updateCallProvider(
+                        callId,
+                        CallProvider.DAILY_CO,
+                        room.name,
+                  );
                   const roomUrl = this.dailyCoService.getRoomUrl(room.name);
 
                   const allParticipantIds = [callerInfo.id, ...allReceiverIds];
                   const tokenEntries = await Promise.all(
                         allParticipantIds.map(async (userId) => {
-                              const displayName = userId === callerInfo.id
-                                    ? callerInfo.displayName
-                                    : await this.getParticipantDisplayName(userId);
+                              const displayName =
+                                    userId === callerInfo.id
+                                          ? callerInfo.displayName
+                                          : await this.getParticipantDisplayName(userId);
                               const token = await this.dailyCoService.createMeetingToken(
-                                    room.name, userId, displayName, userId === callerInfo.id,
+                                    room.name,
+                                    userId,
+                                    displayName,
+                                    userId === callerInfo.id,
                               );
                               return [userId, token] as const;
                         }),
                   );
-                  const tokens = Object.fromEntries(tokenEntries);
+                  const tokens = tokenEntries.reduce<Record<string, string>>(
+                        (accumulator, [userId, token]) => {
+                              accumulator[userId] = token;
+                              return accumulator;
+                        },
+                        {},
+                  );
 
                   for (const receiverId of allReceiverIds) {
-                        const receiverSocketIds = await this.socketState.getUserSockets(receiverId);
+                        const receiverSocketIds =
+                              await this.socketState.getUserSockets(receiverId);
 
                         if (receiverSocketIds.length === 0) {
                               this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
-                                    callId, callType, callerId: callerInfo.id,
-                                    callerName: callerInfo.displayName, callerAvatar: callerInfo.avatarUrl,
-                                    calleeId: receiverId, conversationId, conversationName,
-                                    reason: 'CALLEE_OFFLINE', isGroupCall: true,
+                                    callId,
+                                    callType,
+                                    callerId: callerInfo.id,
+                                    callerName: callerInfo.displayName,
+                                    callerAvatar: callerInfo.avatarUrl,
+                                    calleeId: receiverId,
+                                    conversationId,
+                                    conversationName,
+                                    reason: 'CALLEE_OFFLINE',
+                                    isGroupCall: true,
                               });
                         } else {
                               for (const socketId of receiverSocketIds) {
                                     this.server.in(socketId).socketsJoin(callRoom);
                               }
                               this.server.to(receiverSocketIds).emit(SocketEvents.CALL_INCOMING, {
-                                    callId, callType, conversationId, callerInfo,
-                                    isGroupCall: true, participantCount: allParticipantIds.length,
-                                    conversationName, dailyRoomUrl: roomUrl, dailyToken: tokens[receiverId],
+                                    callId,
+                                    callType,
+                                    conversationId,
+                                    callerInfo,
+                                    isGroupCall: true,
+                                    participantCount: allParticipantIds.length,
+                                    conversationName,
+                                    dailyRoomUrl: roomUrl,
+                                    dailyToken: tokens[receiverId],
                               });
                         }
                   }
 
                   client.emit(SocketEvents.CALL_DAILY_ROOM, { callId, roomUrl, tokens });
                   return true;
-            } catch (error: any) {
-                  this.logger.error(`Failed to create Daily.co room for group call ${callId}: ${error.message}`);
+            } catch (error: unknown) {
+                  this.logger.error(
+                        `Failed to create Daily.co room for group call ${callId}: ${this.getErrorMessage(error)}`,
+                  );
                   await this.callHistoryService.cleanupUserActiveCalls(callerInfo.id);
                   this.emitError(client, 'Failed to set up group call');
                   return false;
@@ -531,7 +621,7 @@ export class CallSignalingGateway implements OnGatewayInit {
       private initiate1v1Call(
             callId: string,
             callRoom: string,
-            callType: any,
+            callType: CallType,
             conversationId: string | undefined,
             callerInfo: { id: string; displayName: string; avatarUrl: string | null },
             calleeId: string,
@@ -540,11 +630,18 @@ export class CallSignalingGateway implements OnGatewayInit {
                   const calleeSocketIds = await this.socketState.getUserSockets(calleeId);
 
                   if (calleeSocketIds.length === 0) {
-                        this.logger.log(`Call ${callId}: callee ${calleeId} offline, sending push notification`);
+                        this.logger.log(
+                              `Call ${callId}: callee ${calleeId} offline, sending push notification`,
+                        );
                         this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
-                              callId, callType, callerId: callerInfo.id,
-                              callerName: callerInfo.displayName, callerAvatar: callerInfo.avatarUrl,
-                              calleeId, conversationId, reason: 'CALLEE_OFFLINE',
+                              callId,
+                              callType,
+                              callerId: callerInfo.id,
+                              callerName: callerInfo.displayName,
+                              callerAvatar: callerInfo.avatarUrl,
+                              calleeId,
+                              conversationId,
+                              reason: 'CALLEE_OFFLINE',
                         });
                         return;
                   }
@@ -553,10 +650,14 @@ export class CallSignalingGateway implements OnGatewayInit {
                         this.server.in(socketId).socketsJoin(callRoom);
                   }
 
-                  const calleeIceConfig = await this.iceConfigService.getIceConfig(calleeId);
+                  const calleeIceConfig =
+                        await this.iceConfigService.getIceConfig(calleeId);
 
                   this.server.to(calleeSocketIds).emit(SocketEvents.CALL_INCOMING, {
-                        callId, callType, conversationId, callerInfo,
+                        callId,
+                        callType,
+                        conversationId,
+                        callerInfo,
                         iceServers: calleeIceConfig.iceServers,
                         iceTransportPolicy: calleeIceConfig.iceTransportPolicy,
                         isGroupCall: false,
@@ -564,11 +665,18 @@ export class CallSignalingGateway implements OnGatewayInit {
 
                   const ackTimer = setTimeout(() => {
                         this.ringingAckTimeouts.delete(callId);
-                        this.logger.log(`Call ${callId}: no ringing ack after ${RINGING_ACK_TIMEOUT_MS}ms, sending backup push`);
+                        this.logger.log(
+                              `Call ${callId}: no ringing ack after ${RINGING_ACK_TIMEOUT_MS}ms, sending backup push`,
+                        );
                         this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
-                              callId, callType, callerId: callerInfo.id,
-                              callerName: callerInfo.displayName, callerAvatar: callerInfo.avatarUrl,
-                              calleeId, conversationId, reason: 'NO_RINGING_ACK',
+                              callId,
+                              callType,
+                              callerId: callerInfo.id,
+                              callerName: callerInfo.displayName,
+                              callerAvatar: callerInfo.avatarUrl,
+                              calleeId,
+                              conversationId,
+                              reason: 'NO_RINGING_ACK',
                         });
                   }, RINGING_ACK_TIMEOUT_MS);
                   this.ringingAckTimeouts.set(callId, ackTimer);
@@ -578,7 +686,11 @@ export class CallSignalingGateway implements OnGatewayInit {
       /**
        * Start ringing timeouts for group or 1-1 calls.
        */
-      private startRingingTimeouts(callId: string, allReceiverIds: string[], isGroupCall: boolean): void {
+      private startRingingTimeouts(
+            callId: string,
+            allReceiverIds: string[],
+            isGroupCall: boolean,
+      ): void {
             if (isGroupCall) {
                   const perParticipantTimers = new Map<string, NodeJS.Timeout>();
                   for (const receiverId of allReceiverIds) {
@@ -596,7 +708,6 @@ export class CallSignalingGateway implements OnGatewayInit {
                   }, RINGING_TIMEOUT_MS);
                   this.ringingTimeouts.set(callId, ringingTimer);
             }
-
       }
 
       /**
@@ -614,16 +725,21 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (!userId) return this.emitError(client, 'Unauthenticated');
 
             const session = await this.getValidatedSession(dto.callId, userId);
-            if (!session) return this.emitError(client, 'Call not found or not authorized');
+            if (!session)
+                  return this.emitError(client, 'Call not found or not authorized');
 
             // Validate state transition: RINGING → ACTIVE
             const currentState = sessionStatusToCallState(session.status);
             if (!canTransition(currentState, 'ACCEPT')) {
-                  return this.emitError(client, `Cannot accept call in ${session.status} state`);
+                  return this.emitError(
+                        client,
+                        `Cannot accept call in ${session.status} state`,
+                  );
             }
 
             // Must be a receiver (callee or group participant)
-            const isReceiver = session.calleeId === userId ||
+            const isReceiver =
+                  session.calleeId === userId ||
                   (session.participantIds?.includes(userId) ?? false);
             if (!isReceiver) {
                   return this.emitError(client, 'Only a receiver can accept');
@@ -652,7 +768,9 @@ export class CallSignalingGateway implements OnGatewayInit {
                         displayName,
                   });
 
-                  this.logger.log(`Call ${dto.callId}: participant ${userId} joined (group)`);
+                  this.logger.log(
+                        `Call ${dto.callId}: participant ${userId} joined (group)`,
+                  );
             } else {
                   // 1-1 P2P call: emit call:accepted with ICE config
                   const callerIceConfig = await this.iceConfigService.getIceConfig(
@@ -661,7 +779,9 @@ export class CallSignalingGateway implements OnGatewayInit {
 
                   // Emit call:accepted only to the CALLER (not the whole room)
                   // to prevent callee from triggering startCallAsCaller.
-                  const callerSocketIds = await this.socketState.getUserSockets(session.callerId);
+                  const callerSocketIds = await this.socketState.getUserSockets(
+                        session.callerId,
+                  );
                   if (callerSocketIds.length > 0) {
                         this.server.to(callerSocketIds).emit(SocketEvents.CALL_ACCEPTED, {
                               callId: dto.callId,
@@ -687,15 +807,20 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (!userId) return this.emitError(client, 'Unauthenticated');
 
             const session = await this.getValidatedSession(dto.callId, userId);
-            if (!session) return this.emitError(client, 'Call not found or not authorized');
+            if (!session)
+                  return this.emitError(client, 'Call not found or not authorized');
 
             const currentState = sessionStatusToCallState(session.status);
             if (!canTransition(currentState, 'REJECT')) {
-                  return this.emitError(client, `Cannot reject call in ${session.status} state`);
+                  return this.emitError(
+                        client,
+                        `Cannot reject call in ${session.status} state`,
+                  );
             }
 
             // Must be a receiver
-            const isReceiver = session.calleeId === userId ||
+            const isReceiver =
+                  session.calleeId === userId ||
                   (session.participantIds?.includes(userId) ?? false);
             if (!isReceiver) {
                   return this.emitError(client, 'Only a receiver can reject');
@@ -704,7 +829,7 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (session.isGroupCall) {
                   // Group call: this participant leaves, call continues for others
                   const callRoom = this.getCallRoom(dto.callId);
-                  client.leave(callRoom);
+                  await client.leave(callRoom);
 
                   // Clear this participant's individual ringing timer
                   this.clearParticipantRingingTimeout(dto.callId, userId);
@@ -721,7 +846,9 @@ export class CallSignalingGateway implements OnGatewayInit {
                   // Check if all participants have rejected/timed out (no one accepted)
                   await this.checkAllParticipantsResponded(dto.callId);
 
-                  this.logger.log(`Call ${dto.callId}: participant ${userId} rejected (group call continues)`);
+                  this.logger.log(
+                        `Call ${dto.callId}: participant ${userId} rejected (group call continues)`,
+                  );
             } else {
                   // 1-1: end the entire call
                   this.clearRingingTimeout(dto.callId);
@@ -746,7 +873,8 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (!userId) return this.emitError(client, 'Unauthenticated');
 
             const session = await this.getValidatedSession(dto.callId, userId);
-            if (!session) return this.emitError(client, 'Call not found or not authorized');
+            if (!session)
+                  return this.emitError(client, 'Call not found or not authorized');
 
             const currentState = sessionStatusToCallState(session.status);
             const isHost = session.callerId === userId;
@@ -754,7 +882,7 @@ export class CallSignalingGateway implements OnGatewayInit {
             // Group call: participant (non-host) hangs up → just leave
             if (session.isGroupCall && !isHost) {
                   const callRoom = this.getCallRoom(dto.callId);
-                  client.leave(callRoom);
+                  await client.leave(callRoom);
                   await this.callHistoryService.removeUserFromCall(userId);
 
                   this.server.to(callRoom).emit(SocketEvents.CALL_PARTICIPANT_LEFT, {
@@ -854,12 +982,14 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (!session) return;
 
             // Robust JSON parsing for candidates (handles single or array)
-            let incomingCandidates: any[];
+            let incomingCandidates: unknown[];
             try {
-                  const parsed = JSON.parse(dto.candidates);
+                  const parsed: unknown = JSON.parse(dto.candidates);
                   incomingCandidates = Array.isArray(parsed) ? parsed : [parsed];
-            } catch (err) {
-                  this.logger.warn(`Failed to parse ICE candidates from ${userId}: ${err.message}`);
+            } catch (error: unknown) {
+                  this.logger.warn(
+                        `Failed to parse ICE candidates from ${userId}: ${this.getErrorMessage(error)}`,
+                  );
                   return;
             }
 
@@ -986,7 +1116,8 @@ export class CallSignalingGateway implements OnGatewayInit {
             }
 
             const session = await this.getValidatedSession(dto.callId, userId);
-            if (!session) return this.emitError(client, 'Call not found or not authorized');
+            if (!session)
+                  return this.emitError(client, 'Call not found or not authorized');
 
             // Only switch from an active/reconnecting P2P call
             if (session.provider === CallProvider.DAILY_CO) {
@@ -994,7 +1125,10 @@ export class CallSignalingGateway implements OnGatewayInit {
             }
 
             if (session.status !== 'ACTIVE' && session.status !== 'RECONNECTING') {
-                  return this.emitError(client, `Cannot switch to Daily.co in ${session.status} state`);
+                  return this.emitError(
+                        client,
+                        `Cannot switch to Daily.co in ${session.status} state`,
+                  );
             }
 
             try {
@@ -1020,7 +1154,13 @@ export class CallSignalingGateway implements OnGatewayInit {
                               return [uid, token] as const;
                         }),
                   );
-                  const tokens = Object.fromEntries(tokenEntries);
+                  const tokens = tokenEntries.reduce<Record<string, string>>(
+                        (accumulator, [userId, token]) => {
+                              accumulator[userId] = token;
+                              return accumulator;
+                        },
+                        {},
+                  );
 
                   // Update session: provider → DAILY_CO, store room name
                   await this.callHistoryService.updateCallProvider(
@@ -1042,9 +1182,9 @@ export class CallSignalingGateway implements OnGatewayInit {
                   this.logger.log(
                         `Call ${dto.callId}: switched to Daily.co (room: ${room.name})`,
                   );
-            } catch (error: any) {
+            } catch (error: unknown) {
                   this.logger.error(
-                        `Failed to switch call ${dto.callId} to Daily.co: ${error.message}`,
+                        `Failed to switch call ${dto.callId} to Daily.co: ${this.getErrorMessage(error)}`,
                   );
                   return this.emitError(client, 'Failed to switch to Daily.co');
             }
@@ -1091,6 +1231,17 @@ export class CallSignalingGateway implements OnGatewayInit {
             return null;
       }
 
+      private getErrorMessage(
+            error: unknown,
+            fallback: string = 'Unknown error',
+      ): string {
+            if (error instanceof Error && error.message) {
+                  return error.message;
+            }
+
+            return fallback;
+      }
+
       /**
        * End a call and notify all participants via the call room.
        */
@@ -1103,9 +1254,13 @@ export class CallSignalingGateway implements OnGatewayInit {
 
             // Clean up Daily.co room if provider is DAILY_CO
             if (session.provider === CallProvider.DAILY_CO && session.dailyRoomName) {
-                  void this.dailyCoService.deleteRoom(session.dailyRoomName).catch((err) => {
-                        this.logger.warn(`Failed to delete Daily.co room ${session.dailyRoomName}: ${err.message}`);
-                  });
+                  void this.dailyCoService
+                        .deleteRoom(session.dailyRoomName)
+                        .catch((error: unknown) => {
+                              this.logger.warn(
+                                    `Failed to delete Daily.co room ${session.dailyRoomName}: ${this.getErrorMessage(error)}`,
+                              );
+                        });
             }
 
             const status = this.resolveCallStatus(reason, session.status);
@@ -1113,10 +1268,18 @@ export class CallSignalingGateway implements OnGatewayInit {
             // Calculate duration
             const startedAt = new Date(session.startedAt);
             const endedAt = new Date();
-            const durationSeconds = Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 1000));
+            const durationSeconds = Math.max(
+                  0,
+                  Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+            );
 
             // Emit call:ended to all participants in the room
-            this.server.to(callRoom).emit(SocketEvents.CALL_ENDED, { callId, reason, duration: durationSeconds, status });
+            this.server.to(callRoom).emit(SocketEvents.CALL_ENDED, {
+                  callId,
+                  reason,
+                  duration: durationSeconds,
+                  status,
+            });
             this.server.in(callRoom).socketsLeave(callRoom);
 
             // End call via service (writes to DB, emits domain event, cleans up Redis)
@@ -1155,7 +1318,9 @@ export class CallSignalingGateway implements OnGatewayInit {
        * Now uses getSessionByCallId for direct lookup (no userId needed).
        */
       private async handleRingingTimeout(callId: string): Promise<void> {
-            this.logger.log(`Call ${callId}: ringing timeout (${RINGING_TIMEOUT_MS / 1000}s)`);
+            this.logger.log(
+                  `Call ${callId}: ringing timeout (${RINGING_TIMEOUT_MS / 1000}s)`,
+            );
 
             // Direct session lookup — no userId needed
             const session = await this.callHistoryService.getSessionByCallId(callId);
@@ -1232,14 +1397,20 @@ export class CallSignalingGateway implements OnGatewayInit {
                         return CallStatus.REJECTED;
                   case CallEndReason.NO_ANSWER:
                   case CallEndReason.TIMEOUT:
-                        return sessionStatus === 'RINGING' ? CallStatus.NO_ANSWER : CallStatus.CANCELLED;
+                        return sessionStatus === 'RINGING'
+                              ? CallStatus.NO_ANSWER
+                              : CallStatus.CANCELLED;
                   case CallEndReason.BLOCKED:
                         return CallStatus.CANCELLED;
                   case CallEndReason.NETWORK_DROP:
-                        return sessionStatus === 'ACTIVE' ? CallStatus.COMPLETED : CallStatus.MISSED;
+                        return sessionStatus === 'ACTIVE'
+                              ? CallStatus.COMPLETED
+                              : CallStatus.MISSED;
                   case CallEndReason.USER_HANGUP:
                   default:
-                        return sessionStatus === 'ACTIVE' ? CallStatus.COMPLETED : CallStatus.CANCELLED;
+                        return sessionStatus === 'ACTIVE'
+                              ? CallStatus.COMPLETED
+                              : CallStatus.CANCELLED;
             }
       }
 
@@ -1343,7 +1514,9 @@ export class CallSignalingGateway implements OnGatewayInit {
             if (session.status === 'ACTIVE') return;
 
             // Still RINGING and all participants responded without anyone accepting → end call
-            this.logger.log(`Call ${callId}: all group participants timed out / rejected — ending call`);
+            this.logger.log(
+                  `Call ${callId}: all group participants timed out / rejected — ending call`,
+            );
             await this.endCallInternal(session, CallEndReason.TIMEOUT);
       }
 

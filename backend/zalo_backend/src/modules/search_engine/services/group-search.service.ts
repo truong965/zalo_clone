@@ -19,7 +19,7 @@ export class GroupSearchService {
     private readonly groupSearchRepository: GroupSearchRepository,
     private readonly validationService: SearchValidationService,
     private readonly cacheService: SearchCacheService,
-  ) { }
+  ) {}
 
   /**
    * Search group conversations by name
@@ -41,7 +41,9 @@ export class GroupSearchService {
       const cursorStr = cursor || 'initial';
       const cacheKey = `search:groups:${userId}:${keyword}:${limit}:${cursorStr}`;
       const cached =
-        await this.cacheService.get<CursorPaginatedResult<GroupSearchResultDto>>(cacheKey);
+        await this.cacheService.get<
+          CursorPaginatedResult<GroupSearchResultDto>
+        >(cacheKey);
       if (cached) {
         return cached;
       }

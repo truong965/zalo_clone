@@ -13,42 +13,42 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
 
 interface UserRegisteredPayload {
-      userId?: string;
-      [key: string]: unknown;
+  userId?: string;
+  [key: string]: unknown;
 }
 
 @Injectable()
 export class PrivacyUserRegisteredListener {
-      private readonly logger = new Logger(PrivacyUserRegisteredListener.name);
+  private readonly logger = new Logger(PrivacyUserRegisteredListener.name);
 
-      constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-      @OnEvent('user.registered', { async: true })
-      async handleUserRegistered(payload: UserRegisteredPayload): Promise<void> {
-            const userId = payload?.userId;
+  @OnEvent('user.registered', { async: true })
+  async handleUserRegistered(payload: UserRegisteredPayload): Promise<void> {
+    const userId = payload?.userId;
 
-            if (!userId) {
-                  this.logger.warn(
-                        `[PRIVACY_REG] Invalid user.registered payload: missing userId`,
-                  );
-                  return;
-            }
+    if (!userId) {
+      this.logger.warn(
+        `[PRIVACY_REG] Invalid user.registered payload: missing userId`,
+      );
+      return;
+    }
 
-            try {
-                  await this.prisma.privacySettings.upsert({
-                        where: { userId },
-                        create: { userId },
-                        update: {},
-                  });
+    try {
+      await this.prisma.privacySettings.upsert({
+        where: { userId },
+        create: { userId },
+        update: {},
+      });
 
-                  this.logger.log(
-                        `[PRIVACY_REG] PrivacySettings created for user ${userId}`,
-                  );
-            } catch (error) {
-                  this.logger.error(
-                        `[PRIVACY_REG] Failed to create PrivacySettings for user ${userId}:`,
-                        error,
-                  );
-            }
-      }
+      this.logger.log(
+        `[PRIVACY_REG] PrivacySettings created for user ${userId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[PRIVACY_REG] Failed to create PrivacySettings for user ${userId}:`,
+        error,
+      );
+    }
+  }
 }

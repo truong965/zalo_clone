@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
 import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
-import { OUTBOUND_SOCKET_EVENT, ISocketEmitEvent } from '@common/events/outbound-socket.event';
+import {
+  OUTBOUND_SOCKET_EVENT,
+  ISocketEmitEvent,
+} from '@common/events/outbound-socket.event';
 import { SocketEvents } from '@common/constants/socket-events.constant';
 
 @Injectable()
@@ -24,9 +27,9 @@ export class QrLoginSocketListener {
     );
 
     const socketEvent: ISocketEmitEvent = {
-        event: payload.event as any,
-        socketId: payload.targetSocketId,
-        data: payload.data
+      event: payload.event as any,
+      socketId: payload.targetSocketId,
+      data: payload.data,
     };
     this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
   }
@@ -46,6 +49,9 @@ export class QrLoginSocketListener {
 
     // This is a special case: Since Socket isn't a domain, but Force Disconnect is a Core Socket command
     // We emit a special internal socket outbound to trigger the force disconnect internally in gateway
-    this.eventEmitter.emit('socket.internal.command.force_disconnect_devices', payload);
+    this.eventEmitter.emit(
+      'socket.internal.command.force_disconnect_devices',
+      payload,
+    );
   }
 }

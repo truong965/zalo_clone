@@ -72,6 +72,11 @@ import { ConversationGateway } from './conversation.gateway';
     // Gateway
     ConversationGateway,
   ],
-  exports: [ConversationService, GroupService, GroupJoinService, SystemMessageBroadcasterService],
+  exports: [
+    ConversationService,
+    GroupService,
+    GroupJoinService,
+    SystemMessageBroadcasterService,
+  ],
 })
-export class ConversationModule { }
+export class ConversationModule {}

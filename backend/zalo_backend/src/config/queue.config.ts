@@ -2,7 +2,6 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('queue', () => ({
-
   // Retry strategy
   retry: {
     attempts: 3,
@@ -18,7 +17,6 @@ export default registerAs('queue', () => ({
     video: 600000, // 10 minutes
   },
 
-
   // AWS SQS configuration (used when QUEUE_PROVIDER=sqs)
   sqs: {
     region: process.env.AWS_REGION || 'ap-southeast-1',
@@ -27,8 +25,14 @@ export default registerAs('queue', () => ({
     videoQueueUrl: process.env.SQS_VIDEO_QUEUE_URL || '',
     videoDeadLetterQueueUrl: process.env.SQS_VIDEO_DLQ_URL || '',
     // Visibility timeout must be > job processing time
-    visibilityTimeoutImage: parseInt(process.env.SQS_VISIBILITY_TIMEOUT_IMAGE || '120', 10),   // 2 min
-    visibilityTimeoutVideo: parseInt(process.env.SQS_VISIBILITY_TIMEOUT_VIDEO || '900', 10),   // 15 min
+    visibilityTimeoutImage: parseInt(
+      process.env.SQS_VISIBILITY_TIMEOUT_IMAGE || '120',
+      10,
+    ), // 2 min
+    visibilityTimeoutVideo: parseInt(
+      process.env.SQS_VISIBILITY_TIMEOUT_VIDEO || '900',
+      10,
+    ), // 15 min
     longPollingWaitSeconds: parseInt(process.env.SQS_WAIT_TIME || '20', 10),
     maxMessages: parseInt(process.env.SQS_MAX_MESSAGES || '1', 10), // 1 = serialize per worker
   },

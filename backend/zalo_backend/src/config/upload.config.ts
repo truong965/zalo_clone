@@ -24,24 +24,51 @@ export default registerAs('upload', () => ({
   },
   retry: {
     dbFetchMaxAttempts: parseInt(process.env.RETRY_DB_MAX_ATTEMPTS || '5', 10),
-    dbFetchBaseDelayMs: parseInt(process.env.RETRY_DB_BASE_DELAY_MS || '500', 10),
+    dbFetchBaseDelayMs: parseInt(
+      process.env.RETRY_DB_BASE_DELAY_MS || '500',
+      10,
+    ),
     s3CheckMaxAttempts: parseInt(process.env.RETRY_S3_MAX_ATTEMPTS || '5', 10),
-    s3CheckRetryDelayMs: parseInt(process.env.RETRY_S3_RETRY_DELAY_MS || '300', 10),
+    s3CheckRetryDelayMs: parseInt(
+      process.env.RETRY_S3_RETRY_DELAY_MS || '300',
+      10,
+    ),
   },
   cleanup: {
-    tempFileMaxAgeHours: parseInt(process.env.CLEANUP_TEMP_MAX_AGE_HOURS || '24', 10),
-    failedUploadMaxAgeDays: parseInt(process.env.CLEANUP_FAILED_MAX_AGE_DAYS || '7', 10),
-    softDeletedMaxAgeDays: parseInt(process.env.CLEANUP_SOFT_DELETE_MAX_AGE_DAYS || '30', 10),
+    tempFileMaxAgeHours: parseInt(
+      process.env.CLEANUP_TEMP_MAX_AGE_HOURS || '24',
+      10,
+    ),
+    failedUploadMaxAgeDays: parseInt(
+      process.env.CLEANUP_FAILED_MAX_AGE_DAYS || '7',
+      10,
+    ),
+    softDeletedMaxAgeDays: parseInt(
+      process.env.CLEANUP_SOFT_DELETE_MAX_AGE_DAYS || '30',
+      10,
+    ),
     batchSize: parseInt(process.env.CLEANUP_BATCH_SIZE || '100', 10),
-    concurrentBatches: parseInt(process.env.CLEANUP_CONCURRENT_BATCHES || '5', 10),
+    concurrentBatches: parseInt(
+      process.env.CLEANUP_CONCURRENT_BATCHES || '5',
+      10,
+    ),
   },
   // Image processing quality settings
   processing: {
     // Thumbnail size for chat previews (only 'small' is actively used)
-    thumbnailSmallWidth: parseInt(process.env.THUMBNAIL_SMALL_WIDTH || '150', 10),
-    thumbnailSmallHeight: parseInt(process.env.THUMBNAIL_SMALL_HEIGHT || '150', 10),
+    thumbnailSmallWidth: parseInt(
+      process.env.THUMBNAIL_SMALL_WIDTH || '150',
+      10,
+    ),
+    thumbnailSmallHeight: parseInt(
+      process.env.THUMBNAIL_SMALL_HEIGHT || '150',
+      10,
+    ),
     // Max dimension before generating an optimized WebP variant
-    maxOptimizedDimension: parseInt(process.env.MAX_OPTIMIZED_DIMENSION || '2048', 10),
+    maxOptimizedDimension: parseInt(
+      process.env.MAX_OPTIMIZED_DIMENSION || '2048',
+      10,
+    ),
   },
   rateLimit: {
     uploadsPerMinute: parseInt(

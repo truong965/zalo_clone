@@ -22,7 +22,7 @@ import { Roles } from '@common/decorator/roles.decorator';
 @Roles('ADMIN')
 @Controller('roles')
 export class RolesController {
-  constructor(private readonly rolesService: RolesService) { }
+  constructor(private readonly rolesService: RolesService) {}
 
   @Post()
   @ResponseMessage('Create a new role')

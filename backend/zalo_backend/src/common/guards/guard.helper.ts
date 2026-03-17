@@ -18,9 +18,7 @@ export function extractTargetUserId(context: ExecutionContext): string {
 
   // 2. Lấy từ Body (targetUserId hoặc recipientId)
   if (isHasTargetUser(request.body)) {
-    return (
-      request.body.targetUserId ?? request.body.recipientId
-    ) as string;
+    return (request.body.targetUserId ?? request.body.recipientId) as string;
   }
 
   // 3. Nếu không tìm thấy -> Báo lỗi Code (Developer Error) hoặc Bad Request

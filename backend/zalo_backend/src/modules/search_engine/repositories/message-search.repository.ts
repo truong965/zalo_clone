@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { MessageType } from '@prisma/client';
-import { MessageSearchResultDto, ConversationGroupedMessageDto } from '../dto/search.dto';
+import {
+  MessageSearchResultDto,
+  ConversationGroupedMessageDto,
+} from '../dto/search.dto';
 import { PaginationUtil } from '../utils/pagination.util';
 import { RankingUtil, RelationshipType } from '../utils/ranking.util';
 import type {
@@ -19,7 +22,7 @@ import type {
 
 @Injectable()
 export class MessageSearchRepository {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   /**
    * Search messages in a specific conversation
@@ -644,7 +647,8 @@ export class MessageSearchRepository {
 
       return {
         conversationId: row.conversation_id,
-        conversationName: row.conversation_name || row.sender_name || 'Người dùng',
+        conversationName:
+          row.conversation_name || row.sender_name || 'Người dùng',
         conversationType: row.conversation_type,
         conversationAvatar: row.conversation_avatar ?? undefined,
         matchCount: Number(row.match_count),
@@ -719,14 +723,14 @@ export class MessageSearchRepository {
 
       const fullRankScore = keyword
         ? RankingUtil.calculateFullScore(
-          searchMsg.rank_score || 0,
-          msg.created_at,
-          relationship,
-          msg.content,
-          keyword,
-          hasReplies,
-          hasSeenReceipts,
-        )
+            searchMsg.rank_score || 0,
+            msg.created_at,
+            relationship,
+            msg.content,
+            keyword,
+            hasReplies,
+            hasSeenReceipts,
+          )
         : 0;
 
       return {

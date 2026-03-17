@@ -38,7 +38,7 @@ export class ConversationRealtimeService {
     private readonly broadcaster: SystemMessageBroadcasterService,
     private readonly redisRegistry: RedisRegistryService,
     private readonly redis: RedisService,
-  ) { }
+  ) {}
 
   async createGroup(
     dto: CreateGroupDto,
@@ -320,7 +320,12 @@ export class ConversationRealtimeService {
    */
   private async enqueueForOfflineMembers(
     memberIds: string[],
-    message: { id: bigint; conversationId: string; createdAt: Date;[key: string]: any },
+    message: {
+      id: bigint;
+      conversationId: string;
+      createdAt: Date;
+      [key: string]: any;
+    },
   ): Promise<void> {
     try {
       const client = this.redis.getClient();

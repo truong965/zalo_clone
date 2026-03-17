@@ -29,7 +29,7 @@ export interface ISocketEmitEvent {
    * Gửi trực tiếp tới 1 socketId cụ thể (VD: QR Login session).
    */
   socketId?: string;
-  
+
   /**
    * (Tùy chọn) Gửi vào một room xác định.
    */

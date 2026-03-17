@@ -18,7 +18,7 @@ export type DirectReceipts = Record<string, DirectReceiptEntry>;
 export class ReceiptService {
   private readonly logger = new Logger(ReceiptService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   // ─── DIRECT (1v1) ──────────────────────────────────────────────────
 
@@ -26,10 +26,7 @@ export class ReceiptService {
    * Mark a single message as DELIVERED for a 1v1 conversation.
    * Uses jsonb_set to atomically update directReceipts.
    */
-  async markDirectDelivered(
-    messageId: bigint,
-    userId: string,
-  ): Promise<void> {
+  async markDirectDelivered(messageId: bigint, userId: string): Promise<void> {
     try {
       const now = new Date().toISOString();
       // Only update if delivered is currently null (idempotent)
@@ -102,7 +99,8 @@ export class ReceiptService {
     messageIds: bigint[],
     userId: string,
   ): Promise<{ updatedIds: bigint[]; senderMap: Map<bigint, string> }> {
-    if (messageIds.length === 0) return { updatedIds: [], senderMap: new Map() };
+    if (messageIds.length === 0)
+      return { updatedIds: [], senderMap: new Map() };
 
     try {
       const now = new Date().toISOString();
@@ -234,9 +232,7 @@ export class ReceiptService {
   /**
    * Determine conversation type for a given conversationId.
    */
-  async getConversationType(
-    conversationId: string,
-  ): Promise<ConversationType> {
+  async getConversationType(conversationId: string): Promise<ConversationType> {
     const convo = await this.prisma.conversation.findUniqueOrThrow({
       where: { id: conversationId },
       select: { type: true },

@@ -22,101 +22,110 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
 import { PushNotificationService } from '../services/push-notification.service';
-import type { FriendRequestSentEvent, FriendRequestAcceptedEvent } from '@modules/friendship/events/friendship.events';
+import type {
+  FriendRequestSentEvent,
+  FriendRequestAcceptedEvent,
+} from '@modules/friendship/events/friendship.events';
 
 @Injectable()
 export class FriendshipPushNotificationListener {
-      private readonly logger = new Logger(FriendshipPushNotificationListener.name);
+  private readonly logger = new Logger(FriendshipPushNotificationListener.name);
 
-      constructor(
-            private readonly pushService: PushNotificationService,
-            private readonly prisma: PrismaService,
-      ) { }
+  constructor(
+    private readonly pushService: PushNotificationService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-      // ─────────────────────────────────────────────────────────────────────
-      // Friend request sent → push to target user
-      // ─────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────
+  // Friend request sent → push to target user
+  // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('friendship.request.sent', { async: true })
-      async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
-            if (!this.pushService.isAvailable) return;
+  @OnEvent('friendship.request.sent', { async: true })
+  async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
+    if (!this.pushService.isAvailable) return;
 
-            try {
-                  await this.processFriendRequest(event);
-            } catch (error) {
-                  this.logger.error(
-                        `[FRIEND_NOTIF] Failed to process friendship.request.sent: ${(error as Error).message}`,
-                  );
-            }
-      }
+    try {
+      await this.processFriendRequest(event);
+    } catch (error) {
+      this.logger.error(
+        `[FRIEND_NOTIF] Failed to process friendship.request.sent: ${(error as Error).message}`,
+      );
+    }
+  }
 
-      private async processFriendRequest(event: FriendRequestSentEvent): Promise<void> {
-            const { toUserId, fromUserId, requestId } = event;
+  private async processFriendRequest(
+    event: FriendRequestSentEvent,
+  ): Promise<void> {
+    const { toUserId, fromUserId, requestId } = event;
 
-            // Resolve sender profile for push content
-            const senderProfile = await this.resolveUserProfile(fromUserId);
+    // Resolve sender profile for push content
+    const senderProfile = await this.resolveUserProfile(fromUserId);
 
-            await this.pushService.sendFriendRequestPush({
-                  recipientId: toUserId,
-                  fromUserId,
-                  fromUserName: senderProfile.displayName,
-                  fromUserAvatar: senderProfile.avatar,
-                  requestId,
-            });
-      }
+    await this.pushService.sendFriendRequestPush({
+      recipientId: toUserId,
+      fromUserId,
+      fromUserName: senderProfile.displayName,
+      fromUserAvatar: senderProfile.avatar,
+      requestId,
+    });
+  }
 
-      // ─────────────────────────────────────────────────────────────────────
-      // Friend request accepted → push to original requester
-      // ─────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────
+  // Friend request accepted → push to original requester
+  // ─────────────────────────────────────────────────────────────────────
 
-      @OnEvent('friendship.accepted', { async: true })
-      async handleFriendRequestAccepted(event: FriendRequestAcceptedEvent): Promise<void> {
-            if (!this.pushService.isAvailable) return;
+  @OnEvent('friendship.accepted', { async: true })
+  async handleFriendRequestAccepted(
+    event: FriendRequestAcceptedEvent,
+  ): Promise<void> {
+    if (!this.pushService.isAvailable) return;
 
-            try {
-                  await this.processFriendAccepted(event);
-            } catch (error) {
-                  this.logger.error(
-                        `[FRIEND_NOTIF] Failed to process friendship.accepted: ${(error as Error).message}`,
-                  );
-            }
-      }
+    try {
+      await this.processFriendAccepted(event);
+    } catch (error) {
+      this.logger.error(
+        `[FRIEND_NOTIF] Failed to process friendship.accepted: ${(error as Error).message}`,
+      );
+    }
+  }
 
-      private async processFriendAccepted(event: FriendRequestAcceptedEvent): Promise<void> {
-            const { requesterId, acceptedBy, friendshipId } = event;
+  private async processFriendAccepted(
+    event: FriendRequestAcceptedEvent,
+  ): Promise<void> {
+    const { requesterId, acceptedBy, friendshipId } = event;
 
-            // Resolve accepter profile for push content
-            const accepterProfile = await this.resolveUserProfile(acceptedBy);
+    // Resolve accepter profile for push content
+    const accepterProfile = await this.resolveUserProfile(acceptedBy);
 
-            await this.pushService.sendFriendAcceptedPush({
-                  recipientId: requesterId,
-                  acceptedByUserId: acceptedBy,
-                  acceptedByName: accepterProfile.displayName,
-                  acceptedByAvatar: accepterProfile.avatar,
-                  friendshipId,
-            });
-      }
+    await this.pushService.sendFriendAcceptedPush({
+      recipientId: requesterId,
+      acceptedByUserId: acceptedBy,
+      acceptedByName: accepterProfile.displayName,
+      acceptedByAvatar: accepterProfile.avatar,
+      friendshipId,
+    });
+  }
 
-      // ─── Helpers ──────────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────
 
-      /**
-       * Resolve user display name and avatar. Lightweight select (2 columns).
-       * Fallback to 'Người dùng' if user not found.
-       */
-      private async resolveUserProfile(
-            userId: string,
-      ): Promise<{ displayName: string; avatar: string | null }> {
-            try {
-                  const user = await this.prisma.user.findUnique({
-                        where: { id: userId },
-                        select: { displayName: true, avatarUrl: true },
-                  });
-                  return {
-                        displayName: user?.displayName ?? 'Người dùng',
-                        avatar: user?.avatarUrl ?? null,
-                  };
-            } catch {
-                  return { displayName: 'Người dùng', avatar: null };
-            }
-      }
+  /**
+   * Resolve user display name and avatar. Lightweight select (2 columns).
+   * Fallback to 'Người dùng' if user not found.
+   */
+  private async resolveUserProfile(
+    userId: string,
+  ): Promise<{ displayName: string; avatar: string | null }> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true, avatarUrl: true },
+      });
+      return {
+        displayName: user?.displayName ?? 'Người dùng',
+        avatar: user?.avatarUrl ?? null,
+      };
+    } catch {
+      return { displayName: 'Người dùng', avatar: null };
+    }
+  }
 }

@@ -27,7 +27,10 @@ export class MessagingBlockListener {
 
       this.logger.debug(`[Messaging] User ${blockerId} blocked ${blockedId}`);
 
-      const conversation = await this.findDirectConversation(blockerId, blockedId);
+      const conversation = await this.findDirectConversation(
+        blockerId,
+        blockedId,
+      );
 
       if (conversation) {
         await this.prisma.conversation.update({
@@ -69,7 +72,10 @@ export class MessagingBlockListener {
 
       this.logger.debug(`[Messaging] User ${blockerId} unblocked ${blockedId}`);
 
-      const conversation = await this.findDirectConversation(blockerId, blockedId);
+      const conversation = await this.findDirectConversation(
+        blockerId,
+        blockedId,
+      );
 
       if (conversation) {
         await this.prisma.conversation.update({

@@ -22,138 +22,136 @@ import { PrismaService } from 'src/database/prisma.service';
  */
 @Injectable()
 export class DisplayNameResolver {
-      constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-      /**
-       * Resolve display names for a batch of users, from the viewer's perspective.
-       *
-       * @param viewerId - The user viewing the names (determines contact-based overrides)
-       * @param targetUserIds - User IDs to resolve names for
-       * @returns Map<userId, resolvedDisplayName>
-       */
-      async batchResolve(
-            viewerId: string,
-            targetUserIds: string[],
-      ): Promise<Map<string, string>> {
-            const result = new Map<string, string>();
+  /**
+   * Resolve display names for a batch of users, from the viewer's perspective.
+   *
+   * @param viewerId - The user viewing the names (determines contact-based overrides)
+   * @param targetUserIds - User IDs to resolve names for
+   * @returns Map<userId, resolvedDisplayName>
+   */
+  async batchResolve(
+    viewerId: string,
+    targetUserIds: string[],
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
 
-            if (targetUserIds.length === 0) return result;
+    if (targetUserIds.length === 0) return result;
 
-            // Deduplicate and exclude viewer (viewer sees their own real name)
-            const uniqueIds = [
-                  ...new Set(targetUserIds.filter((id) => id !== viewerId)),
-            ];
-            if (uniqueIds.length === 0) return result;
+    // Deduplicate and exclude viewer (viewer sees their own real name)
+    const uniqueIds = [
+      ...new Set(targetUserIds.filter((id) => id !== viewerId)),
+    ];
+    if (uniqueIds.length === 0) return result;
 
-            // 1. Query contacts for the viewer — get alias/phonebook overrides
-            const contacts = await this.prisma.userContact.findMany({
-                  where: {
-                        ownerId: viewerId,
-                        contactUserId: { in: uniqueIds },
-                  },
-                  select: {
-                        contactUserId: true,
-                        aliasName: true,
-                        phoneBookName: true,
-                  },
-            });
+    // 1. Query contacts for the viewer — get alias/phonebook overrides
+    const contacts = await this.prisma.userContact.findMany({
+      where: {
+        ownerId: viewerId,
+        contactUserId: { in: uniqueIds },
+      },
+      select: {
+        contactUserId: true,
+        aliasName: true,
+        phoneBookName: true,
+      },
+    });
 
-            const users = await this.prisma.user.findMany({
-                  where: { id: { in: uniqueIds } },
-                  select: { id: true, displayName: true },
-            });
-            const userMap = new Map(users.map((user) => [user.id, user.displayName]));
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, displayName: true },
+    });
+    const userMap = new Map(users.map((user) => [user.id, user.displayName]));
 
-            // 2. Apply 3-level fallback: aliasName > phoneBookName > displayName
-            const resolvedFromContacts = new Set<string>();
-            for (const contact of contacts) {
-                  const name =
-                        contact.aliasName ??
-                        contact.phoneBookName ??
-                        userMap.get(contact.contactUserId) ??
-                        'Unknown User';
-                  result.set(contact.contactUserId, name);
-                  resolvedFromContacts.add(contact.contactUserId);
-            }
+    // 2. Apply 3-level fallback: aliasName > phoneBookName > displayName
+    const resolvedFromContacts = new Set<string>();
+    for (const contact of contacts) {
+      const name =
+        contact.aliasName ??
+        contact.phoneBookName ??
+        userMap.get(contact.contactUserId) ??
+        'Unknown User';
+      result.set(contact.contactUserId, name);
+      resolvedFromContacts.add(contact.contactUserId);
+    }
 
-            // 3. For users not in contacts, use their profile displayName
-            const unresolvedIds = uniqueIds.filter(
-                  (id) => !resolvedFromContacts.has(id),
-            );
-            if (unresolvedIds.length > 0) {
-                  const users = await this.prisma.user.findMany({
-                        where: { id: { in: unresolvedIds } },
-                        select: { id: true, displayName: true },
-                  });
-                  for (const user of users) {
-                        result.set(user.id, user.displayName);
-                  }
-            }
-
-            return result;
+    // 3. For users not in contacts, use their profile displayName
+    const unresolvedIds = uniqueIds.filter(
+      (id) => !resolvedFromContacts.has(id),
+    );
+    if (unresolvedIds.length > 0) {
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: unresolvedIds } },
+        select: { id: true, displayName: true },
+      });
+      for (const user of users) {
+        result.set(user.id, user.displayName);
       }
+    }
 
-      /**
-       * Resolve a single target user's display name from multiple viewers' perspectives.
-       * Inverse of batchResolve — one target, many viewers.
-       *
-       * Use case: socket broadcast where one sender's name must be resolved for each recipient.
-       * Uses 2 queries total (1 user + 1 userContact batch) regardless of viewer count.
-       *
-       * @param viewerIds - Users who are viewing the target's name
-       * @param targetUserId - The user whose name is being resolved
-       * @returns Map<viewerId, resolvedDisplayName>
-       */
-      async batchResolveForViewers(
-            viewerIds: string[],
-            targetUserId: string,
-      ): Promise<Map<string, string>> {
-            const result = new Map<string, string>();
-            if (viewerIds.length === 0) return result;
+    return result;
+  }
 
-            // Exclude the target viewing themselves (they see their own real name)
-            const uniqueViewerIds = [
-                  ...new Set(viewerIds.filter((id) => id !== targetUserId)),
-            ];
-            if (uniqueViewerIds.length === 0) return result;
+  /**
+   * Resolve a single target user's display name from multiple viewers' perspectives.
+   * Inverse of batchResolve — one target, many viewers.
+   *
+   * Use case: socket broadcast where one sender's name must be resolved for each recipient.
+   * Uses 2 queries total (1 user + 1 userContact batch) regardless of viewer count.
+   *
+   * @param viewerIds - Users who are viewing the target's name
+   * @param targetUserId - The user whose name is being resolved
+   * @returns Map<viewerId, resolvedDisplayName>
+   */
+  async batchResolveForViewers(
+    viewerIds: string[],
+    targetUserId: string,
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (viewerIds.length === 0) return result;
 
-            // 2 parallel queries: target's base name + all viewers' contact records
-            const [targetUser, contacts] = await Promise.all([
-                  this.prisma.user.findUnique({
-                        where: { id: targetUserId },
-                        select: { displayName: true },
-                  }),
-                  this.prisma.userContact.findMany({
-                        where: {
-                              ownerId: { in: uniqueViewerIds },
-                              contactUserId: targetUserId,
-                        },
-                        select: { ownerId: true, aliasName: true, phoneBookName: true },
-                  }),
-            ]);
+    // Exclude the target viewing themselves (they see their own real name)
+    const uniqueViewerIds = [
+      ...new Set(viewerIds.filter((id) => id !== targetUserId)),
+    ];
+    if (uniqueViewerIds.length === 0) return result;
 
-            const baseName = targetUser?.displayName ?? 'Unknown User';
-            const contactMap = new Map(
-                  contacts.map((c) => [c.ownerId, c]),
-            );
+    // 2 parallel queries: target's base name + all viewers' contact records
+    const [targetUser, contacts] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: { displayName: true },
+      }),
+      this.prisma.userContact.findMany({
+        where: {
+          ownerId: { in: uniqueViewerIds },
+          contactUserId: targetUserId,
+        },
+        select: { ownerId: true, aliasName: true, phoneBookName: true },
+      }),
+    ]);
 
-            for (const viewerId of uniqueViewerIds) {
-                  const contact = contactMap.get(viewerId);
-                  result.set(
-                        viewerId,
-                        contact?.aliasName ?? contact?.phoneBookName ?? baseName,
-                  );
-            }
+    const baseName = targetUser?.displayName ?? 'Unknown User';
+    const contactMap = new Map(contacts.map((c) => [c.ownerId, c]));
 
-            return result;
-      }
+    for (const viewerId of uniqueViewerIds) {
+      const contact = contactMap.get(viewerId);
+      result.set(
+        viewerId,
+        contact?.aliasName ?? contact?.phoneBookName ?? baseName,
+      );
+    }
 
-      /**
-       * Resolve a single user's display name from the viewer's perspective.
-       * Convenience wrapper around batchResolve for single lookups.
-       */
-      async resolve(viewerId: string, targetUserId: string): Promise<string> {
-            const map = await this.batchResolve(viewerId, [targetUserId]);
-            return map.get(targetUserId) ?? 'Unknown User';
-      }
+    return result;
+  }
+
+  /**
+   * Resolve a single user's display name from the viewer's perspective.
+   * Convenience wrapper around batchResolve for single lookups.
+   */
+  async resolve(viewerId: string, targetUserId: string): Promise<string> {
+    const map = await this.batchResolve(viewerId, [targetUserId]);
+    return map.get(targetUserId) ?? 'Unknown User';
+  }
 }

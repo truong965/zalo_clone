@@ -65,7 +65,7 @@ export class BlockService {
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) { }
+  ) {}
 
   /**
    * Block a user (Idempotent)
@@ -426,16 +426,20 @@ export class BlockService {
     });
 
     const blockedIds = blocks.map((b) => b.blockedId);
-    const blockedUsers = blockedIds.length > 0
-      ? await this.prisma.user.findMany({
-        where: { id: { in: blockedIds } },
-        select: { id: true, displayName: true, avatarUrl: true },
-      })
-      : [];
+    const blockedUsers =
+      blockedIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: blockedIds } },
+            select: { id: true, displayName: true, avatarUrl: true },
+          })
+        : [];
     const blockedUserMap = new Map(blockedUsers.map((u) => [u.id, u]));
 
     // Batch resolve display names per viewer
-    const nameMap = await this.displayNameResolver.batchResolve(userId, blockedIds);
+    const nameMap = await this.displayNameResolver.batchResolve(
+      userId,
+      blockedIds,
+    );
 
     return CursorPaginationHelper.buildResult({
       items: blocks,

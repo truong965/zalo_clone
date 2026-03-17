@@ -28,46 +28,52 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('call', () => ({
-      // ── STUN ─────────────────────────────────────────────────────────────────
-      stunServerUrl: process.env.STUN_SERVER_URL || 'stun:stun.l.google.com:19302',
+  // ── STUN ─────────────────────────────────────────────────────────────────
+  stunServerUrl: process.env.STUN_SERVER_URL || 'stun:stun.l.google.com:19302',
 
-      // ── TURN ─────────────────────────────────────────────────────────────────
-      turnServerUrl: process.env.TURN_SERVER_URL || 'turn:localhost:3478',
+  // ── TURN ─────────────────────────────────────────────────────────────────
+  turnServerUrl: process.env.TURN_SERVER_URL || 'turn:localhost:3478',
 
-      // PRODUCTION: uncomment when TLS is configured on coturn or managed TURN
-      // turnServerUrlTls: process.env.TURN_SERVER_URL_TLS || '',
+  // PRODUCTION: uncomment when TLS is configured on coturn or managed TURN
+  // turnServerUrlTls: process.env.TURN_SERVER_URL_TLS || '',
 
-      /** Shared secret used to generate HMAC-SHA1 short-lived TURN credentials (RFC 5766) */
-      turnSecret: process.env.TURN_SECRET || 'coturn-dev-secret',
+  /** Shared secret used to generate HMAC-SHA1 short-lived TURN credentials (RFC 5766) */
+  turnSecret: process.env.TURN_SECRET || 'coturn-dev-secret',
 
-      /** Credential TTL in seconds (default 12h). Longer = fewer re-auths, shorter = tighter security */
-      turnCredentialTtl: parseInt(process.env.TURN_CREDENTIAL_TTL || '43200', 10),
+  /** Credential TTL in seconds (default 12h). Longer = fewer re-auths, shorter = tighter security */
+  turnCredentialTtl: parseInt(process.env.TURN_CREDENTIAL_TTL || '43200', 10),
 
-      // ── TURN Provider (future: managed TURN) ─────────────────────────────────
-      // PRODUCTION: set to 'metered' | 'twilio' | 'cloudflare' and provide API key
-      // turnProvider: process.env.TURN_PROVIDER || 'self-hosted',
-      // turnApiKey: process.env.TURN_API_KEY || '',
+  // ── TURN Provider (future: managed TURN) ─────────────────────────────────
+  // PRODUCTION: set to 'metered' | 'twilio' | 'cloudflare' and provide API key
+  // turnProvider: process.env.TURN_PROVIDER || 'self-hosted',
+  // turnApiKey: process.env.TURN_API_KEY || '',
 
-      // ── ICE ──────────────────────────────────────────────────────────────────
-      /**
-       * Default ICE transport policy.
-       * - 'relay': force TURN relay (no IP leak, recommended default)
-       * - 'all': allow direct P2P + TURN fallback (lower latency, user opt-in)
-       *
-       * PRODUCTION: keep 'relay' as default for privacy.
-       * Frontend can override per-user if `allowDirectConnection` setting exists.
-       */
-      defaultIceTransportPolicy:
-            (process.env.DEFAULT_ICE_TRANSPORT_POLICY as 'relay' | 'all') || 'relay',
+  // ── ICE ──────────────────────────────────────────────────────────────────
+  /**
+   * Default ICE transport policy.
+   * - 'relay': force TURN relay (no IP leak, recommended default)
+   * - 'all': allow direct P2P + TURN fallback (lower latency, user opt-in)
+   *
+   * PRODUCTION: keep 'relay' as default for privacy.
+   * Frontend can override per-user if `allowDirectConnection` setting exists.
+   */
+  defaultIceTransportPolicy:
+    (process.env.DEFAULT_ICE_TRANSPORT_POLICY as 'relay' | 'all') || 'relay',
 
-      // ── Daily.co (Phase 4) ──────────────────────────────────────────────────
-      dailyApiKey: process.env.DAILY_API_KEY || '',
-      dailyDomain: process.env.DAILY_DOMAIN || '',
+  // ── Daily.co (Phase 4) ──────────────────────────────────────────────────
+  dailyApiKey: process.env.DAILY_API_KEY || '',
+  dailyDomain: process.env.DAILY_DOMAIN || '',
 
-      // ── Call Timeouts ───────────────────────────────────────────────────────
-      /** Ringing timeout in ms before auto NO_ANSWER */
-      ringingTimeoutMs: parseInt(process.env.CALL_RINGING_TIMEOUT_MS || '30000', 10),
+  // ── Call Timeouts ───────────────────────────────────────────────────────
+  /** Ringing timeout in ms before auto NO_ANSWER */
+  ringingTimeoutMs: parseInt(
+    process.env.CALL_RINGING_TIMEOUT_MS || '30000',
+    10,
+  ),
 
-      /** Disconnect grace period in ms before ending call */
-      disconnectGraceMs: parseInt(process.env.CALL_DISCONNECT_GRACE_MS || '3000', 10),
+  /** Disconnect grace period in ms before ending call */
+  disconnectGraceMs: parseInt(
+    process.env.CALL_DISCONNECT_GRACE_MS || '3000',
+    10,
+  ),
 }));

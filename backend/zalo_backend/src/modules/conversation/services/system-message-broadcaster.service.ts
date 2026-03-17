@@ -16,27 +16,29 @@ import { ModuleRef } from '@nestjs/core';
 import type { ConversationGateway } from '../conversation.gateway';
 
 export interface SystemMessagePayload {
-      conversationId: string;
-      message: Record<string, unknown>;
-      excludeUserIds?: string[];
+  conversationId: string;
+  message: Record<string, unknown>;
+  excludeUserIds?: string[];
 }
 
 @Injectable()
 export class SystemMessageBroadcasterService implements OnApplicationBootstrap {
-      private conversationGateway: ConversationGateway;
+  private conversationGateway: ConversationGateway;
 
-      constructor(private readonly moduleRef: ModuleRef) { }
+  constructor(private readonly moduleRef: ModuleRef) {}
 
-      onApplicationBootstrap() {
-            // Lazy-load the class reference to break the circular file dependency:
-            // conversation.gateway → conversation-realtime.service → this file → conversation.gateway
-            const { ConversationGateway } = require('../conversation.gateway') as {
-                  ConversationGateway: new (...args: unknown[]) => ConversationGateway;
-            };
-            this.conversationGateway = this.moduleRef.get(ConversationGateway, { strict: false });
-      }
+  onApplicationBootstrap() {
+    // Lazy-load the class reference to break the circular file dependency:
+    // conversation.gateway → conversation-realtime.service → this file → conversation.gateway
+    const { ConversationGateway } = require('../conversation.gateway') as {
+      ConversationGateway: new (...args: unknown[]) => ConversationGateway;
+    };
+    this.conversationGateway = this.moduleRef.get(ConversationGateway, {
+      strict: false,
+    });
+  }
 
-      async broadcast(payload: SystemMessagePayload): Promise<void> {
-            await this.conversationGateway.handleSystemMessageBroadcast(payload);
-      }
+  async broadcast(payload: SystemMessagePayload): Promise<void> {
+    await this.conversationGateway.handleSystemMessageBroadcast(payload);
+  }
 }

@@ -19,5 +19,4 @@ import { ContactNotificationListener } from './listeners/contact-notification.li
   ],
   exports: [ContactService], // Export cho call-history, conversation, search modules
 })
-export class ContactModule { }
-
+export class ContactModule {}

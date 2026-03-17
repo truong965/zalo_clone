@@ -53,9 +53,10 @@ export class MetricsService {
   };
 
   constructor(
-    @Inject(MEDIA_QUEUE_PROVIDER) private readonly queueService: IMediaQueueService,
+    @Inject(MEDIA_QUEUE_PROVIDER)
+    private readonly queueService: IMediaQueueService,
     private readonly prisma: PrismaService,
-  ) { }
+  ) {}
 
   /**
    * Collect metrics every 5 minutes
@@ -212,8 +213,6 @@ export class MetricsService {
       // TODO: Send CRITICAL alert
     }
   }
-
-
 
   /**
    * Get current metrics (for admin dashboard)

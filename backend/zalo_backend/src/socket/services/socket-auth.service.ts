@@ -18,7 +18,7 @@ export class SocketAuthService {
     private readonly prisma: PrismaService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) { }
+  ) {}
 
   /**
    * Authenticate socket connection

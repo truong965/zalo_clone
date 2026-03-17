@@ -35,53 +35,53 @@ import callConfig from 'src/config/call.config';
 
 /** ICE server configuration sent to WebRTC client */
 export interface IceServerConfig {
-      urls: string | string[];
-      username?: string;
-      credential?: string;
+  urls: string | string[];
+  username?: string;
+  credential?: string;
 }
 
 @Injectable()
 export class TurnCredentialService {
-      private readonly logger = new Logger(TurnCredentialService.name);
+  private readonly logger = new Logger(TurnCredentialService.name);
 
-      constructor(
-            @Inject(callConfig.KEY)
-            private readonly config: NestConfig.ConfigType<typeof callConfig>,
-      ) { }
+  constructor(
+    @Inject(callConfig.KEY)
+    private readonly config: NestConfig.ConfigType<typeof callConfig>,
+  ) {}
 
-      /**
-       * Generate time-limited TURN credentials for a given user.
-       *
-       * @param userId - The user requesting credentials (embedded in username for auditing)
-       * @returns TURN ICE server config with short-lived credentials
-       */
-      generateCredentials(userId: string): IceServerConfig {
-            const ttl = this.config.turnCredentialTtl;
-            const secret = this.config.turnSecret;
-            const turnUrl = this.config.turnServerUrl;
+  /**
+   * Generate time-limited TURN credentials for a given user.
+   *
+   * @param userId - The user requesting credentials (embedded in username for auditing)
+   * @returns TURN ICE server config with short-lived credentials
+   */
+  generateCredentials(userId: string): IceServerConfig {
+    const ttl = this.config.turnCredentialTtl;
+    const secret = this.config.turnSecret;
+    const turnUrl = this.config.turnServerUrl;
 
-            // username = unixExpiryTimestamp:userId (coturn parses expiry from the left side)
-            const expiryTimestamp = Math.floor(Date.now() / 1000) + ttl;
-            const username = `${expiryTimestamp}:${userId}`;
+    // username = unixExpiryTimestamp:userId (coturn parses expiry from the left side)
+    const expiryTimestamp = Math.floor(Date.now() / 1000) + ttl;
+    const username = `${expiryTimestamp}:${userId}`;
 
-            // credential = Base64(HMAC-SHA1(secret, username))
-            const credential = createHmac('sha1', secret)
-                  .update(username)
-                  .digest('base64');
+    // credential = Base64(HMAC-SHA1(secret, username))
+    const credential = createHmac('sha1', secret)
+      .update(username)
+      .digest('base64');
 
-            this.logger.debug(
-                  `Generated TURN credentials for user ${userId}, expires in ${ttl}s`,
-            );
+    this.logger.debug(
+      `Generated TURN credentials for user ${userId}, expires in ${ttl}s`,
+    );
 
-            return {
-                  urls: [
-                        turnUrl,                            // turn:host:3478 (UDP)
-                        turnUrl.replace('turn:', 'turn:') + '?transport=tcp', // TCP fallback
-                        // PRODUCTION: add TURNS URL when TLS is configured:
-                        // this.config.turnServerUrlTls,     // turns:host:5349
-                  ],
-                  username,
-                  credential,
-            };
-      }
+    return {
+      urls: [
+        turnUrl, // turn:host:3478 (UDP)
+        turnUrl.replace('turn:', 'turn:') + '?transport=tcp', // TCP fallback
+        // PRODUCTION: add TURNS URL when TLS is configured:
+        // this.config.turnServerUrlTls,     // turns:host:5349
+      ],
+      username,
+      credential,
+    };
+  }
 }

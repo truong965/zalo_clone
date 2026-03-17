@@ -33,7 +33,7 @@ import { RedisService } from '@modules/redis/redis.service';
 export class CacheInvalidationListener {
   private readonly logger = new Logger(CacheInvalidationListener.name);
 
-  constructor(private readonly redis: RedisService) { }
+  constructor(private readonly redis: RedisService) {}
 
   /**
    * Handle cache invalidation event

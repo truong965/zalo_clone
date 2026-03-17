@@ -24,7 +24,11 @@ import {
   ContactRemovedEvent,
   ContactsSyncedEvent,
 } from './events/contact.events';
-import { SyncContactsDto, ContactItemDto, GetContactsQueryDto } from './dto/contact.dto';
+import {
+  SyncContactsDto,
+  ContactItemDto,
+  GetContactsQueryDto,
+} from './dto/contact.dto';
 import { SelfActionException, RateLimitException } from 'src/shared/errors';
 import { FriendshipService } from '../friendship/service/friendship.service';
 import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
@@ -53,7 +57,7 @@ export class ContactService {
     private readonly privacyService: PrivacyService,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) { }
+  ) {}
 
   /**
    * Sync contacts from phone
@@ -85,7 +89,9 @@ export class ContactService {
     }
 
     // 3. Hash & Normalize (Prepare Data)
-    const { phoneHashes, phoneBookNameMap } = this.processInputContacts(dto.contacts); // Extract phone numbers and hash them
+    const { phoneHashes, phoneBookNameMap } = this.processInputContacts(
+      dto.contacts,
+    ); // Extract phone numbers and hash them
 
     // Find matching users (active only)
     const matchedUsers = await this.findUsersByPhoneHash(phoneHashes, ownerId);
@@ -94,7 +100,11 @@ export class ContactService {
     const visibleUsers = await this.filterByPrivacy(ownerId, matchedUsers);
 
     // [ACTION 5.1] Thay thế Transaction lớn bằng Bulk Insert + Batch Update
-    const contactInfoMap = await this.bulkSaveContacts(ownerId, visibleUsers, phoneBookNameMap);
+    const contactInfoMap = await this.bulkSaveContacts(
+      ownerId,
+      visibleUsers,
+      phoneBookNameMap,
+    );
     // Build response with friendship status
     const response = await this.buildContactResponse(
       ownerId,
@@ -152,7 +162,9 @@ export class ContactService {
 
     // contactUserId → current phoneBookName
     const existingMap = new Map<string, string | null>();
-    existingContacts.forEach((c) => existingMap.set(c.contactUserId, c.phoneBookName));
+    existingContacts.forEach((c) =>
+      existingMap.set(c.contactUserId, c.phoneBookName),
+    );
 
     // STEP 2: Phân loại Data
     const toCreate: Prisma.UserContactCreateManyInput[] = [];
@@ -199,13 +211,20 @@ export class ContactService {
         await this.prisma.$transaction(
           batch.map((item) =>
             this.prisma.userContact.update({
-              where: { ownerId_contactUserId: { ownerId, contactUserId: item.contactUserId } },
+              where: {
+                ownerId_contactUserId: {
+                  ownerId,
+                  contactUserId: item.contactUserId,
+                },
+              },
               data: { phoneBookName: item.newPhoneBookName },
             }),
           ),
         );
       }
-      this.logger.debug(`[Sync] Updated phoneBookName for ${toUpdate.length} contacts`);
+      this.logger.debug(
+        `[Sync] Updated phoneBookName for ${toUpdate.length} contacts`,
+      );
 
       // Invalidate display-name cache for updated contacts
       await Promise.all(
@@ -218,7 +237,12 @@ export class ContactService {
       where: { ownerId, contactUserId: { in: visibleUserIds } },
       select: { id: true, contactUserId: true, source: true },
     });
-    return new Map(savedContacts.map((c) => [c.contactUserId, { id: c.id, source: c.source }]));
+    return new Map(
+      savedContacts.map((c) => [
+        c.contactUserId,
+        { id: c.id, source: c.source },
+      ]),
+    );
   }
 
   private processInputContacts(contacts: ContactItemDto[]) {
@@ -270,10 +294,10 @@ export class ContactService {
     if (search) {
       const users = await this.prisma.user.findMany({
         where: { displayName: { contains: search, mode: 'insensitive' } },
-        select: { id: true }
+        select: { id: true },
       });
-      const userIds = users.map(u => u.id);
-      
+      const userIds = users.map((u) => u.id);
+
       where.OR = [
         { aliasName: { contains: search, mode: 'insensitive' } },
         { phoneBookName: { contains: search, mode: 'insensitive' } },
@@ -299,12 +323,17 @@ export class ContactService {
     // Fetch user profiles manually
     const displayNodes = contacts.slice(0, limit);
     const contactUserIds = displayNodes.map((c) => c.contactUserId);
-    
+
     const users = await this.prisma.user.findMany({
       where: { id: { in: contactUserIds } },
-      select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true }
+      select: {
+        id: true,
+        displayName: true,
+        avatarUrl: true,
+        lastSeenAt: true,
+      },
     });
-    const userMap = new Map<string, any>(users.map(u => [u.id, u]));
+    const userMap = new Map<string, any>(users.map((u) => [u.id, u]));
 
     // 2. Batch friendship check — 1 query instead of N (no N+1)
     const friendSet = await this.friendshipService.getFriendIdsFromList(
@@ -326,7 +355,8 @@ export class ContactService {
           displayName:
             contact.aliasName ??
             contact.phoneBookName ??
-            u?.displayName ?? 'Unknown',
+            u?.displayName ??
+            'Unknown',
           aliasName: contact.aliasName ?? undefined,
           phoneBookName: contact.phoneBookName ?? undefined,
           source: contact.source,
@@ -373,15 +403,16 @@ export class ContactService {
 
     let defaultName = 'Unknown User';
     if (!contact?.aliasName && !contact?.phoneBookName) {
-      const u = await this.prisma.user.findUnique({ where: { id: targetUserId }, select: { displayName: true } });
+      const u = await this.prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: { displayName: true },
+      });
       if (u) defaultName = u.displayName;
     }
 
     // L6 fix: 3-level fallback — aliasName > phoneBookName > displayName
     const displayName =
-      contact?.aliasName ??
-      contact?.phoneBookName ??
-      defaultName;
+      contact?.aliasName ?? contact?.phoneBookName ?? defaultName;
 
     // Cache result
     await this.redis.setex(
@@ -436,9 +467,9 @@ export class ContactService {
       // Also fetch users for those without explicit alias/phoneBookName
       const users = await this.prisma.user.findMany({
         where: { id: { in: missingUserIds } },
-        select: { id: true, displayName: true }
+        select: { id: true, displayName: true },
       });
-      const userMap = new Map(users.map(u => [u.id, u.displayName]));
+      const userMap = new Map(users.map((u) => [u.id, u.displayName]));
 
       // Build map from query results
       const contactMap = new Map<string, string>();
@@ -730,16 +761,29 @@ export class ContactService {
 
     const contact = await this.prisma.userContact.upsert({
       where: { ownerId_contactUserId: { ownerId, contactUserId } },
-      create: { ownerId, contactUserId, aliasName: resolvedAlias, source: ContactSource.MANUAL },
+      create: {
+        ownerId,
+        contactUserId,
+        aliasName: resolvedAlias,
+        source: ContactSource.MANUAL,
+      },
       update: { aliasName: resolvedAlias },
     });
 
     await this.invalidateNameCache(ownerId, contactUserId);
 
     // P3.2: Emit typed event — drives Socket.IO notification + idempotent cache invalidation
-    const resolvedDisplayName = await this.resolveDisplayName(ownerId, contactUserId);
+    const resolvedDisplayName = await this.resolveDisplayName(
+      ownerId,
+      contactUserId,
+    );
     await this.eventPublisher.publish(
-      new ContactAliasUpdatedEvent(ownerId, contactUserId, resolvedAlias, resolvedDisplayName),
+      new ContactAliasUpdatedEvent(
+        ownerId,
+        contactUserId,
+        resolvedAlias,
+        resolvedDisplayName,
+      ),
     );
 
     this.logger.debug(
@@ -755,9 +799,16 @@ export class ContactService {
   async checkIsContact(
     ownerId: string,
     targetUserId: string,
-  ): Promise<{ isContact: boolean; aliasName?: string; phoneBookName?: string; source?: ContactSource }> {
+  ): Promise<{
+    isContact: boolean;
+    aliasName?: string;
+    phoneBookName?: string;
+    source?: ContactSource;
+  }> {
     const contact = await this.prisma.userContact.findUnique({
-      where: { ownerId_contactUserId: { ownerId, contactUserId: targetUserId } },
+      where: {
+        ownerId_contactUserId: { ownerId, contactUserId: targetUserId },
+      },
       select: { id: true, aliasName: true, phoneBookName: true, source: true },
     });
     if (!contact) return { isContact: false };

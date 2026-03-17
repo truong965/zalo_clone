@@ -6,32 +6,32 @@ import { MediaType } from '@prisma/client';
  * Shared by both Bull and SQS providers.
  */
 export interface FileProcessingJob {
-      mediaId: string;
-      s3Key: string;
-      // Optional context — workers resolve from DB if not provided
-      uploadId?: string;
-      originalFilename?: string;
-      mimeType?: string;
-      size?: number;
+  mediaId: string;
+  s3Key: string;
+  // Optional context — workers resolve from DB if not provided
+  uploadId?: string;
+  originalFilename?: string;
+  mimeType?: string;
+  size?: number;
 }
 
 // These extend the processor-specific job shapes so the queue layer is aligned
 export interface ImageProcessingJob extends FileProcessingJob {
-      originalWidth?: number;
-      originalHeight?: number;
-      width?: number;
-      height?: number;
+  originalWidth?: number;
+  originalHeight?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface VideoProcessingJob extends FileProcessingJob {
-      duration?: number;
-      width?: number;
-      height?: number;
+  duration?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface MediaJobData {
-      type: MediaType;
-      payload: ImageProcessingJob | VideoProcessingJob | FileProcessingJob;
+  type: MediaType;
+  payload: ImageProcessingJob | VideoProcessingJob | FileProcessingJob;
 }
 
 /**
@@ -41,12 +41,12 @@ export interface MediaJobData {
 export const MEDIA_QUEUE_PROVIDER = Symbol('MEDIA_QUEUE_PROVIDER');
 
 export interface IMediaQueueService {
-      enqueueImageProcessing(payload: ImageProcessingJob): Promise<string>;
-      enqueueVideoProcessing(payload: VideoProcessingJob): Promise<string>;
-      enqueueFileProcessing(
-            payload: FileProcessingJob,
-            mediaType: MediaType,
-      ): Promise<string>;
+  enqueueImageProcessing(payload: ImageProcessingJob): Promise<string>;
+  enqueueVideoProcessing(payload: VideoProcessingJob): Promise<string>;
+  enqueueFileProcessing(
+    payload: FileProcessingJob,
+    mediaType: MediaType,
+  ): Promise<string>;
   /**
    * Returns queue stats. SQS returns approximate counts.
    */

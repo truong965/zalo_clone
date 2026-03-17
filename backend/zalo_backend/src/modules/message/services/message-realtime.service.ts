@@ -71,7 +71,10 @@ export class MessageRealtimeService {
           : new Map<string, string>();
 
       const enrichedMessages = sanitizedMessages.map((msg: any) =>
-        this.enrichMessageSender(msg, senderNameMap.get(msg?.senderId ?? msg?.sender?.id)),
+        this.enrichMessageSender(
+          msg,
+          senderNameMap.get(msg?.senderId ?? msg?.sender?.id),
+        ),
       );
 
       client.emit(SocketEvents.MESSAGES_SYNC, {
@@ -214,8 +217,9 @@ export class MessageRealtimeService {
       throw new Error('Not a member of this conversation');
     }
 
-    const conversationType =
-      await this.receiptService.getConversationType(dto.conversationId);
+    const conversationType = await this.receiptService.getConversationType(
+      dto.conversationId,
+    );
 
     // MSG-R5: Track invalid IDs for debugging
     const originalCount = dto.messageIds.length;
@@ -237,9 +241,18 @@ export class MessageRealtimeService {
     }
 
     if (conversationType === ConversationType.DIRECT) {
-      await this.handleDirectMessageSeen(dto.conversationId, messageIds, userId);
+      await this.handleDirectMessageSeen(
+        dto.conversationId,
+        messageIds,
+        userId,
+      );
     } else {
-      await this.handleGroupMessageSeen(dto.conversationId, messageIds, userId, emitToUser);
+      await this.handleGroupMessageSeen(
+        dto.conversationId,
+        messageIds,
+        userId,
+        emitToUser,
+      );
     }
   }
 
@@ -251,7 +264,10 @@ export class MessageRealtimeService {
     messageIds: bigint[],
     userId: string,
   ): Promise<void> {
-    const { updatedIds, senderMap } = await this.receiptService.markDirectSeen(messageIds, userId);
+    const { updatedIds, senderMap } = await this.receiptService.markDirectSeen(
+      messageIds,
+      userId,
+    );
     await this.resetUnreadCount(conversationId, userId);
 
     if (updatedIds.length === 0) return;
@@ -450,16 +466,17 @@ export class MessageRealtimeService {
     isUserOnline: (userId: string) => Promise<boolean>,
   ): Promise<void> {
     // Determine conversation type to use correct receipt method
-    const convoType =
-      await this.receiptService.getConversationType(message.conversationId);
+    const convoType = await this.receiptService.getConversationType(
+      message.conversationId,
+    );
     const isDirect = convoType === ConversationType.DIRECT;
 
     // GAP-2 fix: Resolve sender display name per recipient (each may have different alias)
     const senderNameMap = senderId
       ? await this.displayNameResolver.batchResolveForViewers(
-        recipientIds,
-        senderId,
-      )
+          recipientIds,
+          senderId,
+        )
       : new Map<string, string>();
 
     for (const recipientId of recipientIds) {
@@ -539,7 +556,7 @@ export class MessageRealtimeService {
    * GAP-2 helper: Enrich a message's sender object with resolvedDisplayName.
    * Returns a new object (does not mutate the original).
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   private enrichMessageSender(message: any, resolvedDisplayName?: string): any {
     if (!resolvedDisplayName || !message?.sender) return message;
     return {

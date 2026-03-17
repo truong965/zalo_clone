@@ -55,7 +55,7 @@ export class AvatarUploadDto {
 
 export interface AvatarUploadResponse {
   presignedUrl: string; // PUT directly from browser to S3
-  fileUrl: string;      // CloudFront URL (prod) or MinIO URL (dev) — save as avatarUrl
+  fileUrl: string; // CloudFront URL (prod) or MinIO URL (dev) — save as avatarUrl
   expiresIn: number;
   s3Key: string;
 }

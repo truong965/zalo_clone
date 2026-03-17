@@ -13,12 +13,16 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ContactService } from './contact.service';
 import { CurrentUser } from 'src/common/decorator/customize';
 import type { User } from '@prisma/client';
-import { SyncContactsDto, UpdateContactAliasDto, GetContactsQueryDto } from './dto/contact.dto';
+import {
+  SyncContactsDto,
+  UpdateContactAliasDto,
+  GetContactsQueryDto,
+} from './dto/contact.dto';
 
 @ApiTags('Social - Contacts')
 @Controller('contacts')
 export class ContactController {
-  constructor(private readonly contactService: ContactService) { }
+  constructor(private readonly contactService: ContactService) {}
 
   @Post('sync')
   @ApiOperation({ summary: 'Sync phone contacts from mobile device' })
@@ -53,7 +57,11 @@ export class ContactController {
     @Param('contactUserId', ParseUUIDPipe) contactUserId: string,
     @Body() dto: UpdateContactAliasDto,
   ) {
-    return this.contactService.updateAlias(user.id, contactUserId, dto.aliasName);
+    return this.contactService.updateAlias(
+      user.id,
+      contactUserId,
+      dto.aliasName,
+    );
   }
 
   @Delete(':contactUserId')

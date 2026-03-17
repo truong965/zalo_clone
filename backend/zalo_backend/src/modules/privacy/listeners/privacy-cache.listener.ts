@@ -18,7 +18,7 @@ export class PrivacyCacheListener {
   constructor(
     private readonly redisService: RedisService,
     private readonly idempotency: IdempotencyService,
-  ) { }
+  ) {}
 
   @OnEvent('privacy.updated', { async: true })
   async handlePrivacyUpdated(payload: {
@@ -54,8 +54,10 @@ export class PrivacyCacheListener {
     try {
       const actions = ['message', 'call', 'profile'] as const;
       for (const action of actions) {
-        const [p1, p2] =
-          RedisKeyBuilder.socialPermissionPatternsForUser(action, userId);
+        const [p1, p2] = RedisKeyBuilder.socialPermissionPatternsForUser(
+          action,
+          userId,
+        );
         await this.redisService.deletePattern(p1);
         await this.redisService.deletePattern(p2);
       }

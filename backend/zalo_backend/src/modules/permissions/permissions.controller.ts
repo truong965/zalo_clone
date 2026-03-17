@@ -22,7 +22,7 @@ import { Roles } from '@common/decorator/roles.decorator';
 @Roles('ADMIN')
 @Controller('permissions')
 export class PermissionsController {
-  constructor(private readonly permissionsService: PermissionsService) { }
+  constructor(private readonly permissionsService: PermissionsService) {}
 
   @Post()
   @ResponseMessage('Create a new permission')

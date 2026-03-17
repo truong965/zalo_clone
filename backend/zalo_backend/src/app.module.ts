@@ -79,7 +79,6 @@ import { HealthModule } from './modules/health/health.module';
     // Global rate-limiting (10req/min default; per-endpoint @Throttle overrides apply)
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
 
-
     // Cron Jobs
     ScheduleModule.forRoot(),
 
@@ -125,7 +124,8 @@ import { HealthModule } from './modules/health/health.module';
     NotificationsModule, // PHASE 5: Push Notifications (FCM + Web Push)
     ReminderModule, // PHASE 4: Reminders (PostgreSQL polling scheduler)
     FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
-    PrivacyModule, SearchEngineModule, // Privacy settings & permissions (Independent)
+    PrivacyModule,
+    SearchEngineModule, // Privacy settings & permissions (Independent)
 
     // Admin Panel (Phase 0: skeleton → Phase 1-2: full implementation)
     AdminModule,
@@ -147,4 +147,4 @@ import { HealthModule } from './modules/health/health.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

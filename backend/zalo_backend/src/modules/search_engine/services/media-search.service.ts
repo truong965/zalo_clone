@@ -22,8 +22,8 @@ export class MediaSearchService {
   constructor(
     private readonly mediaSearchRepository: MediaSearchRepository,
     private readonly validationService: SearchValidationService,
-    private readonly cacheService: SearchCacheService
-  ) { }
+    private readonly cacheService: SearchCacheService,
+  ) {}
 
   /**
    * Search media attachments by filename
@@ -46,7 +46,9 @@ export class MediaSearchService {
       const cursorStr = cursor || 'initial';
       const cacheKey = `search:media:${userId}:${keyword}:${limit}:${mediaType || 'all'}:${cursorStr}`;
       const cached =
-        await this.cacheService.get<CursorPaginatedResult<MediaSearchResultDto>>(cacheKey);
+        await this.cacheService.get<
+          CursorPaginatedResult<MediaSearchResultDto>
+        >(cacheKey);
       if (cached) {
         return cached;
       }
@@ -164,24 +166,26 @@ export class MediaSearchService {
           limit,
         );
 
-      const results: MediaGroupedByConversationDto[] = rawResults.map((raw) => ({
-        conversationId: raw.conversation_id,
-        conversationName: raw.conversation_name || '',
-        conversationType: raw.conversation_type as 'DIRECT' | 'GROUP',
-        conversationAvatar: raw.conversation_avatar || undefined,
-        matchCount: Number(raw.match_count),
-        latestMatch: {
-          id: raw.latest_media_id,
-          originalName: raw.original_name,
-          mediaType: raw.media_type as MediaType,
-          mimeType: raw.mime_type,
-          size: Number(raw.size),
-          thumbnailUrl: raw.thumbnail_url || undefined,
-          cdnUrl: raw.cdn_url || undefined,
-          uploadedByName: raw.uploaded_by_name,
-          createdAt: raw.latest_created_at,
-        },
-      }));
+      const results: MediaGroupedByConversationDto[] = rawResults.map(
+        (raw) => ({
+          conversationId: raw.conversation_id,
+          conversationName: raw.conversation_name || '',
+          conversationType: raw.conversation_type,
+          conversationAvatar: raw.conversation_avatar || undefined,
+          matchCount: Number(raw.match_count),
+          latestMatch: {
+            id: raw.latest_media_id,
+            originalName: raw.original_name,
+            mediaType: raw.media_type as MediaType,
+            mimeType: raw.mime_type,
+            size: Number(raw.size),
+            thumbnailUrl: raw.thumbnail_url || undefined,
+            cdnUrl: raw.cdn_url || undefined,
+            uploadedByName: raw.uploaded_by_name,
+            createdAt: raw.latest_created_at,
+          },
+        }),
+      );
 
       await this.cacheService.set(
         cacheKey,

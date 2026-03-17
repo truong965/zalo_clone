@@ -36,7 +36,7 @@ export class SearchValidationService {
     private readonly interactionAuth: InteractionAuthorizationService,
     @Inject(BLOCK_CHECKER) private readonly blockChecker: IBlockChecker,
     private readonly privacyService: PrivacyService,
-  ) { }
+  ) {}
 
   /**
    * Validate user has ACTIVE membership in conversation

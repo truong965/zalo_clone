@@ -5,12 +5,12 @@ import { IsUUID, IsArray, ArrayMinSize, ArrayMaxSize } from 'class-validator';
  * Creates GroupJoinRequest entries instead of directly adding members.
  */
 export class InviteMembersDto {
-      @IsUUID()
-      conversationId: string;
+  @IsUUID()
+  conversationId: string;
 
-      @IsArray()
-      @IsUUID('all', { each: true })
-      @ArrayMinSize(1)
-      @ArrayMaxSize(50)
-      userIds: string[];
+  @IsArray()
+  @IsUUID('all', { each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  userIds: string[];
 }

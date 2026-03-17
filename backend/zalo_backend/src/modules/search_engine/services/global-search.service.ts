@@ -42,7 +42,7 @@ export class GlobalSearchService {
     private cacheService: SearchCacheService,
     private analyticsService: SearchAnalyticsService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   /**
    * Perform global search across all data types
@@ -71,14 +71,19 @@ export class GlobalSearchService {
       const startTime = Date.now();
 
       // Execute sub-queries in parallel with Promise.allSettled for fault tolerance
-      const [messagesResult, contactsResult, groupsResult, mediaResult, mediaGroupedResult] =
-        await Promise.allSettled([
-          this.searchMessagesGlobalGrouped(userId, request),
-          this.searchContactsGlobal(userId, request),
-          this.searchGroupsGlobal(userId, request),
-          this.searchMediaGlobal(userId, request),
-          this.searchMediaGroupedGlobal(userId, request),
-        ]);
+      const [
+        messagesResult,
+        contactsResult,
+        groupsResult,
+        mediaResult,
+        mediaGroupedResult,
+      ] = await Promise.allSettled([
+        this.searchMessagesGlobalGrouped(userId, request),
+        this.searchContactsGlobal(userId, request),
+        this.searchGroupsGlobal(userId, request),
+        this.searchMediaGlobal(userId, request),
+        this.searchMediaGroupedGlobal(userId, request),
+      ]);
 
       // Process results (skip if failed due to timeout)
       const conversationMessages =
@@ -89,7 +94,9 @@ export class GlobalSearchService {
         groupsResult.status === 'fulfilled' ? groupsResult.value : [];
       const media = mediaResult.status === 'fulfilled' ? mediaResult.value : [];
       const mediaGrouped =
-        mediaGroupedResult.status === 'fulfilled' ? mediaGroupedResult.value : [];
+        mediaGroupedResult.status === 'fulfilled'
+          ? mediaGroupedResult.value
+          : [];
 
       const executionTimeMs = Date.now() - startTime;
 
@@ -184,11 +191,9 @@ export class GlobalSearchService {
     );
 
     return Promise.race([
-      this.groupSearchService.searchGroups(
-        userId,
-        request.keyword,
-        request.limitPerType || 5,
-      ).then((r) => r.data),
+      this.groupSearchService
+        .searchGroups(userId, request.keyword, request.limitPerType || 5)
+        .then((r) => r.data),
       this.createTimeout(timeout, 'Group search timeout'),
     ]);
   }
@@ -207,11 +212,9 @@ export class GlobalSearchService {
     );
 
     return Promise.race([
-      this.mediaSearchService.searchMedia(
-        userId,
-        request.keyword,
-        request.limitPerType || 5,
-      ).then((r) => r.data),
+      this.mediaSearchService
+        .searchMedia(userId, request.keyword, request.limitPerType || 5)
+        .then((r) => r.data),
       this.createTimeout(timeout, 'Media search timeout'),
     ]);
   }

@@ -25,7 +25,7 @@ export interface SearchSubscribePayload {
     mediaType?: MediaType;
     fromUserId?: string;
     startDate?: string; // ISO date string
-    endDate?: string;   // ISO date string
+    endDate?: string; // ISO date string
   };
 }
 

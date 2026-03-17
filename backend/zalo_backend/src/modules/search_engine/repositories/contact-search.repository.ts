@@ -15,7 +15,7 @@ import type {
 
 @Injectable()
 export class ContactSearchRepository {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   /**
    * Search contacts with alias priority
@@ -82,7 +82,11 @@ export class ContactSearchRepository {
             )
           )
         `;
-        cursorParams.push(payload.relevanceScore, payload.sortName, payload.lastId as unknown as string);
+        cursorParams.push(
+          payload.relevanceScore,
+          payload.sortName,
+          payload.lastId as unknown as string,
+        );
       }
     }
 
@@ -269,13 +273,13 @@ export class ContactSearchRepository {
     if (!contact) return null;
 
     const userContact = await this.prisma.userContact.findFirst({
-        where: { ownerId: userId, contactUserId: targetId },
-        select: { aliasName: true, phoneBookName: true, source: true }
+      where: { ownerId: userId, contactUserId: targetId },
+      select: { aliasName: true, phoneBookName: true, source: true },
     });
 
     return {
-        ...contact,
-        myContacts: userContact ? [userContact] : []
+      ...contact,
+      myContacts: userContact ? [userContact] : [],
     };
   }
 
@@ -345,19 +349,29 @@ export class ContactSearchRepository {
       skip: offset,
     });
 
-    const userIds = contacts.map(c => c.contactUserId);
-    const users = userIds.length > 0 ? await this.prisma.user.findMany({
-       where: { id: { in: userIds } },
-       select: { id: true, displayName: true, avatarUrl: true, phoneNumber: true, status: true }
-    }) : [];
-    const userMap = new Map(users.map(u => [u.id, u]));
+    const userIds = contacts.map((c) => c.contactUserId);
+    const users =
+      userIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+              phoneNumber: true,
+              status: true,
+            },
+          })
+        : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
 
     return contacts.map((contact) => {
       const u = userMap.get(contact.contactUserId);
       return {
         id: contact.contactUserId,
         phoneNumber: u?.phoneNumber,
-        displayName: contact.aliasName || contact.phoneBookName || u?.displayName,
+        displayName:
+          contact.aliasName || contact.phoneBookName || u?.displayName,
         avatarUrl: u?.avatarUrl,
         status: u?.status,
         hasAlias: !!(contact.aliasName || contact.phoneBookName),
@@ -386,20 +400,21 @@ export class ContactSearchRepository {
         'NONE') as 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED';
 
       const showProfile =
-        ((contact.showProfile as string | undefined) ??
-          ((contact.privacySettings as { showProfile?: string } | undefined)
-            ?.showProfile)) ?? 'CONTACTS';
+        (contact.showProfile as string | undefined) ??
+        (contact.privacySettings as { showProfile?: string } | undefined)
+          ?.showProfile ??
+        'CONTACTS';
 
       const isFriend = relationshipStatus === 'FRIEND';
       const effectiveCanMessage =
         (contact.canMessage as boolean | undefined) ?? canMessage ?? false;
-      const isPrivacyLimited =
-        showProfile === 'CONTACTS' && !isFriend;
+      const isPrivacyLimited = showProfile === 'CONTACTS' && !isFriend;
 
-      const requesterId =
-        (contact.requester_id ?? contact.requesterId) as string | undefined;
-      const pendingRequestId =
-        (contact.friendship_id ?? contact.friendshipId) as string | undefined;
+      const requesterId = (contact.requester_id ?? contact.requesterId) as
+        | string
+        | undefined;
+      const pendingRequestId = (contact.friendship_id ??
+        contact.friendshipId) as string | undefined;
 
       const requestDirection =
         relationshipStatus === 'REQUEST' && requesterId
@@ -410,8 +425,9 @@ export class ContactSearchRepository {
 
       return {
         id: contact.id as string,
-        phoneNumber:
-          (contact.phone_number ?? contact.phoneNumber) as string | undefined,
+        phoneNumber: (contact.phone_number ?? contact.phoneNumber) as
+          | string
+          | undefined,
         displayName: (contact.display_name ?? contact.displayName) as string,
         displayNameFinal:
           ((contact.display_name_final ??
@@ -422,11 +438,10 @@ export class ContactSearchRepository {
           ((contact.avatar_url ?? contact.avatarUrl) as string | null) ??
           undefined,
         phoneBookName:
-          ((contact.phone_book_name ?? contact.phoneBookName) as string | null) ??
-          undefined,
-        source:
-          ((contact.source) as 'PHONE_SYNC' | 'MANUAL' | null) ??
-          undefined,
+          ((contact.phone_book_name ?? contact.phoneBookName) as
+            | string
+            | null) ?? undefined,
+        source: (contact.source as 'PHONE_SYNC' | 'MANUAL' | null) ?? undefined,
         relationshipStatus,
         hasAlias: (contact.has_alias ?? contact.hasAlias ?? false) as boolean,
         aliasPriority: (contact.relevance_score as number) || 5,

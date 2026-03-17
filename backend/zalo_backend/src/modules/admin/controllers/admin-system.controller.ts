@@ -18,11 +18,13 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @UseGuards(RolesGuard)
 @Roles('ADMIN')
 export class AdminSystemController {
-      constructor(private readonly systemService: AdminSystemService) { }
+  constructor(private readonly systemService: AdminSystemService) {}
 
-      @ApiOperation({ summary: 'Get infrastructure health check (DB, Redis, S3, queue)' })
-      @Get('status')
-      getSystemStatus() {
-            return this.systemService.getSystemStatus();
-      }
+  @ApiOperation({
+    summary: 'Get infrastructure health check (DB, Redis, S3, queue)',
+  })
+  @Get('status')
+  getSystemStatus() {
+    return this.systemService.getSystemStatus();
+  }
 }

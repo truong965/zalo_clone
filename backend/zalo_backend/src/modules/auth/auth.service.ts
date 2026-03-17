@@ -21,7 +21,7 @@ export class AuthService {
     private readonly redisRegistry: RedisRegistryService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) { }
+  ) {}
 
   /**
    * Login user and generate tokens
@@ -91,7 +91,7 @@ export class AuthService {
       accessToken,
       refreshToken,
       expiresIn: this.tokenService.parseExpiresIn(
-        this.jwtConfiguration.accessToken.expiresIn as string,
+        this.jwtConfiguration.accessToken.expiresIn,
       ),
       tokenType: 'Bearer',
       user: new UserEntity(user),
@@ -109,7 +109,7 @@ export class AuthService {
       accessToken,
       refreshToken,
       expiresIn: this.tokenService.parseExpiresIn(
-        this.jwtConfiguration.accessToken.expiresIn as string,
+        this.jwtConfiguration.accessToken.expiresIn,
       ),
       tokenType: 'Bearer',
     };

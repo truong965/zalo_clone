@@ -47,7 +47,7 @@ export class QrLoginController {
     private readonly deviceFingerprintService: DeviceFingerprintService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) { }
+  ) {}
 
   /**
    * Pha 1: Web yêu cầu tạo QR session mới
@@ -83,7 +83,8 @@ export class QrLoginController {
     @Req() req: Request,
   ): Promise<QrScanResponseDto> {
     const mobileDeviceId =
-      (user as any).currentDeviceId || this.deviceFingerprintService.extractDeviceInfo(req).deviceId;
+      (user as any).currentDeviceId ||
+      this.deviceFingerprintService.extractDeviceInfo(req).deviceId;
 
     return this.qrLoginService.scan(dto.qrSessionId, user.id, mobileDeviceId);
   }
@@ -139,7 +140,9 @@ export class QrLoginController {
     // Set refresh token cookie (same logic as normal login)
     const cookieOptions = {
       ...this.jwtConfiguration.refreshToken.cookieOptions,
-      maxAge: ms(this.jwtConfiguration.refreshToken.cookieOptions.maxAge as StringValue),
+      maxAge: ms(
+        this.jwtConfiguration.refreshToken.cookieOptions.maxAge as StringValue,
+      ),
     };
 
     res.cookie(

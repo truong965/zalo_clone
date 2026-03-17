@@ -12,13 +12,13 @@
  */
 
 import {
-      Controller,
-      Post,
-      Delete,
-      Param,
-      Body,
-      HttpCode,
-      HttpStatus,
+  Controller,
+  Post,
+  Delete,
+  Param,
+  Body,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from 'src/common/decorator/customize';
@@ -29,32 +29,32 @@ import { RegisterDeviceTokenDto } from '../dto/register-device-token.dto';
 @ApiBearerAuth()
 @Controller('devices')
 export class DeviceTokenController {
-      constructor(private readonly deviceTokenService: DeviceTokenService) { }
+  constructor(private readonly deviceTokenService: DeviceTokenService) {}
 
-      @Post()
-      @HttpCode(HttpStatus.OK)
-      @ApiOperation({ summary: 'Register or update FCM push token' })
-      async registerToken(
-            @CurrentUser('id') userId: string,
-            @Body() dto: RegisterDeviceTokenDto,
-      ) {
-            await this.deviceTokenService.registerToken({
-                  userId,
-                  deviceId: dto.deviceId,
-                  fcmToken: dto.fcmToken,
-                  platform: dto.platform,
-            });
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Register or update FCM push token' })
+  async registerToken(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RegisterDeviceTokenDto,
+  ) {
+    await this.deviceTokenService.registerToken({
+      userId,
+      deviceId: dto.deviceId,
+      fcmToken: dto.fcmToken,
+      platform: dto.platform,
+    });
 
-            return { message: 'Device token registered' };
-      }
+    return { message: 'Device token registered' };
+  }
 
-      @Delete(':deviceId')
-      @HttpCode(HttpStatus.NO_CONTENT)
-      @ApiOperation({ summary: 'Remove device (e.g. on logout)' })
-      async removeToken(
-            @CurrentUser('id') userId: string,
-            @Param('deviceId') deviceId: string,
-      ) {
-            await this.deviceTokenService.removeToken(userId, deviceId);
-      }
+  @Delete(':deviceId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove device (e.g. on logout)' })
+  async removeToken(
+    @CurrentUser('id') userId: string,
+    @Param('deviceId') deviceId: string,
+  ) {
+    await this.deviceTokenService.removeToken(userId, deviceId);
+  }
 }

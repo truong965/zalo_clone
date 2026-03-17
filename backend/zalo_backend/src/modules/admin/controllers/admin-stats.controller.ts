@@ -20,17 +20,17 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 @UseGuards(RolesGuard)
 @Roles('ADMIN')
 export class AdminStatsController {
-      constructor(private readonly statsService: AdminStatsService) { }
+  constructor(private readonly statsService: AdminStatsService) {}
 
-      @ApiOperation({ summary: 'Get real-time KPI counters (from Redis)' })
-      @Get('overview')
-      getOverview() {
-            return this.statsService.getOverview();
-      }
+  @ApiOperation({ summary: 'Get real-time KPI counters (from Redis)' })
+  @Get('overview')
+  getOverview() {
+    return this.statsService.getOverview();
+  }
 
-      @ApiOperation({ summary: 'Get historical daily statistics time-series' })
-      @Get('daily')
-      getDailyStats(@Query() dto: DailyStatsQueryDto) {
-            return this.statsService.getDailyStats(dto);
-      }
+  @ApiOperation({ summary: 'Get historical daily statistics time-series' })
+  @Get('daily')
+  getDailyStats(@Query() dto: DailyStatsQueryDto) {
+    return this.statsService.getDailyStats(dto);
+  }
 }

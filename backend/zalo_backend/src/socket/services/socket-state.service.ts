@@ -20,7 +20,7 @@ export class SocketStateService {
     private readonly deviceFingerprint: DeviceFingerprintService,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
-  ) { }
+  ) {}
 
   /**
    * Handle new socket connection

@@ -29,7 +29,10 @@ import { MediaResponseDto } from '../dto/media-response.dto';
 import { MEDIA_QUEUE_PROVIDER } from '../queues/media-queue.interface';
 import type { IMediaQueueService } from '../queues/media-queue.interface';
 import { MEDIA_EVENTS } from 'src/common/constants/media.constant';
-import type { MediaUploadedEvent, MediaDeletedEvent } from '../events/media.events';
+import type {
+  MediaUploadedEvent,
+  MediaDeletedEvent,
+} from '../events/media.events';
 import { AwsError } from './s3.service';
 
 @Injectable()
@@ -39,13 +42,17 @@ export class MediaUploadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3Service: S3Service,
-    @Inject(MEDIA_QUEUE_PROVIDER) private readonly mediaQueue: IMediaQueueService,
+    @Inject(MEDIA_QUEUE_PROVIDER)
+    private readonly mediaQueue: IMediaQueueService,
     private readonly eventEmitter: EventEmitter2,
     @Inject(uploadConfig.KEY)
     private readonly config: ConfigType<typeof uploadConfig>,
-  ) { }
+  ) {}
 
-  async getMediaById(userId: string, mediaId: string): Promise<MediaResponseDto> {
+  async getMediaById(
+    userId: string,
+    mediaId: string,
+  ): Promise<MediaResponseDto> {
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { id: mediaId },
     });
@@ -230,7 +237,12 @@ export class MediaUploadService {
 
     this.logger.debug('Avatar upload initiated', { userId, s3Key });
 
-    return { presignedUrl, fileUrl, expiresIn: this.config.presignedUrlExpiry, s3Key };
+    return {
+      presignedUrl,
+      fileUrl,
+      expiresIn: this.config.presignedUrlExpiry,
+      s3Key,
+    };
   }
 
   async confirmUpload(
@@ -295,7 +307,10 @@ export class MediaUploadService {
       });
 
       // ── Enqueue background work only for IMAGE/VIDEO (thumbnails, optimization) ──
-      if (media.mediaType === MediaType.IMAGE || media.mediaType === MediaType.VIDEO) {
+      if (
+        media.mediaType === MediaType.IMAGE ||
+        media.mediaType === MediaType.VIDEO
+      ) {
         await this.enqueueProcessing(updated);
       }
 
@@ -339,8 +354,6 @@ export class MediaUploadService {
         return this.config.limits.maxDocumentSizeMB;
     }
   }
-
-
 
   private async enqueueProcessing(media: MediaAttachment): Promise<void> {
     const jobPayload = {
@@ -422,14 +435,26 @@ export class MediaUploadService {
       size: media.size.toString(),
       s3Key: media.s3Key,
       cdnUrl: media.cdnUrl,
-      thumbnailUrl: (media as MediaAttachment & { thumbnailUrl?: string | null }).thumbnailUrl ?? null,
-      optimizedUrl: (media as MediaAttachment & { optimizedUrl?: string | null }).optimizedUrl ?? null,
-      hlsPlaylistUrl: (media as MediaAttachment & { hlsPlaylistUrl?: string | null }).hlsPlaylistUrl ?? null,
-      duration: (media as MediaAttachment & { duration?: number | null }).duration ?? null,
-      width: (media as MediaAttachment & { width?: number | null }).width ?? null,
-      height: (media as MediaAttachment & { height?: number | null }).height ?? null,
+      thumbnailUrl:
+        (media as MediaAttachment & { thumbnailUrl?: string | null })
+          .thumbnailUrl ?? null,
+      optimizedUrl:
+        (media as MediaAttachment & { optimizedUrl?: string | null })
+          .optimizedUrl ?? null,
+      hlsPlaylistUrl:
+        (media as MediaAttachment & { hlsPlaylistUrl?: string | null })
+          .hlsPlaylistUrl ?? null,
+      duration:
+        (media as MediaAttachment & { duration?: number | null }).duration ??
+        null,
+      width:
+        (media as MediaAttachment & { width?: number | null }).width ?? null,
+      height:
+        (media as MediaAttachment & { height?: number | null }).height ?? null,
       processingStatus: media.processingStatus,
-      processingError: (media as MediaAttachment & { processingError?: string | null }).processingError ?? null,
+      processingError:
+        (media as MediaAttachment & { processingError?: string | null })
+          .processingError ?? null,
       createdAt: media.createdAt,
       updatedAt: media.updatedAt ?? null,
     });
@@ -442,7 +467,10 @@ export class MediaUploadService {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const { createHash } = require('crypto');
-    const fileHash = createHash('md5').update(uploadId).digest('hex').substring(0, 12);
+    const fileHash = createHash('md5')
+      .update(uploadId)
+      .digest('hex')
+      .substring(0, 12);
     return `permanent/${year}/${month}/unlinked/${fileHash}.${extension}`;
   }
 
@@ -454,18 +482,27 @@ export class MediaUploadService {
     }
     // Fallback: derive from MIME type
     const mimeExtMap: Record<string, string> = {
-      'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif',
-      'image/webp': 'webp', 'image/svg+xml': 'svg',
-      'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
-      'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg',
-      'audio/webm': 'weba', 'audio/mp4': 'm4a',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+      'video/mp4': 'mp4',
+      'video/webm': 'webm',
+      'video/quicktime': 'mov',
+      'audio/mpeg': 'mp3',
+      'audio/wav': 'wav',
+      'audio/ogg': 'ogg',
+      'audio/webm': 'weba',
+      'audio/mp4': 'm4a',
       'application/pdf': 'pdf',
       'application/msword': 'doc',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        'docx',
       'application/vnd.ms-excel': 'xls',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+        'xlsx',
     };
     return mimeExtMap[mimeType] || 'bin';
   }
 }
-

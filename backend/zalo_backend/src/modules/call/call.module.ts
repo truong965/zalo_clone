@@ -78,11 +78,11 @@ import { CallEndedSocketListener } from './listeners/call-ended.listener';
     CallSignalingGateway, // CALL PHASE 1: Call signaling gateway
 
     // PHASE 2: WebRTC P2P services
-    TurnCredentialService,  // HMAC-SHA1 TURN credential generation
-    IceConfigService,       // STUN/TURN server list + iceTransportPolicy
+    TurnCredentialService, // HMAC-SHA1 TURN credential generation
+    IceConfigService, // STUN/TURN server list + iceTransportPolicy
 
     // PHASE 4: Daily.co SFU integration
-    DailyCoService,         // Daily.co REST API (rooms + meeting tokens)
+    DailyCoService, // Daily.co REST API (rooms + meeting tokens)
 
     // PHASE 3.5: Block event listener
     CallBlockListener, // Listen to BlockModule events
@@ -90,4 +90,4 @@ import { CallEndedSocketListener } from './listeners/call-ended.listener';
   ],
   exports: [CallHistoryService],
 })
-export class CallModule { }
+export class CallModule {}

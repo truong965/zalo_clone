@@ -26,7 +26,11 @@ import { NotBlockedGuard } from '@shared/guards/not-blocked.guard';
  */
 @Module({
   imports: [ConfigModule, BlockModule, PrivacyModule, FriendshipModule],
-  providers: [InteractionAuthorizationService, InteractionGuard, NotBlockedGuard],
+  providers: [
+    InteractionAuthorizationService,
+    InteractionGuard,
+    NotBlockedGuard,
+  ],
   exports: [InteractionAuthorizationService, InteractionGuard, NotBlockedGuard],
 })
-export class AuthorizationModule { }
+export class AuthorizationModule {}

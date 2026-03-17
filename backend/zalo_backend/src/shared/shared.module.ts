@@ -18,4 +18,4 @@ import { DisplayNameResolver } from './services/display-name-resolver.service';
   providers: [DisplayNameResolver],
   exports: [DisplayNameResolver],
 })
-export class SharedModule { }
+export class SharedModule {}

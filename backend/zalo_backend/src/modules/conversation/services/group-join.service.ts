@@ -29,7 +29,7 @@ export class GroupJoinService {
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) { }
+  ) {}
 
   async requestJoin(dto: CreateJoinRequestDto, userId: string) {
     const group = await this.prisma.conversation.findUnique({
@@ -261,14 +261,19 @@ export class GroupJoinService {
     const userMap = new Map(users.map((u) => [u.id, u]));
 
     // Batch resolve display names per admin viewer
-    const nameMap = await this.displayNameResolver.batchResolve(adminId, userIds);
+    const nameMap = await this.displayNameResolver.batchResolve(
+      adminId,
+      userIds,
+    );
 
     return requests.map((r) => ({
       ...r,
       user: {
         id: r.userId,
         displayName:
-          nameMap.get(r.userId) ?? userMap.get(r.userId)?.displayName ?? 'Unknown User',
+          nameMap.get(r.userId) ??
+          userMap.get(r.userId)?.displayName ??
+          'Unknown User',
         avatarUrl: userMap.get(r.userId)?.avatarUrl ?? null,
       },
     }));

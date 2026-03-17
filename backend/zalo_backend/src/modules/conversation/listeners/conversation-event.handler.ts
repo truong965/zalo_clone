@@ -36,7 +36,7 @@ export class ConversationEventHandler {
     private readonly prisma: PrismaService,
     private readonly idempotency: IdempotencyService,
     private readonly broadcaster: SystemMessageBroadcasterService,
-  ) { }
+  ) {}
 
   /**
    * Emit system-message.broadcast so the gateway can broadcast
@@ -72,7 +72,9 @@ export class ConversationEventHandler {
         handlerId,
       );
       if (alreadyProcessed) {
-        this.logger.debug(`[MESSAGE_SENT] Skipping duplicate event: ${eventId}`);
+        this.logger.debug(
+          `[MESSAGE_SENT] Skipping duplicate event: ${eventId}`,
+        );
         return;
       }
     } catch (idempotencyError) {
@@ -89,7 +91,9 @@ export class ConversationEventHandler {
       });
 
       if (!msg) {
-        this.logger.warn(`[MESSAGE_SENT] Message not found: ${payload.messageId}`);
+        this.logger.warn(
+          `[MESSAGE_SENT] Message not found: ${payload.messageId}`,
+        );
         return;
       }
 
@@ -280,14 +284,14 @@ export class ConversationEventHandler {
           content,
           metadata: isSelfJoin
             ? {
-              action: 'MEMBER_JOINED',
-              userId: addedBy,
-            }
+                action: 'MEMBER_JOINED',
+                userId: addedBy,
+              }
             : {
-              action: 'MEMBERS_ADDED',
-              actorId: addedBy,
-              addedUserIds: memberIds,
-            },
+                action: 'MEMBERS_ADDED',
+                actorId: addedBy,
+                addedUserIds: memberIds,
+              },
         },
       });
 
@@ -299,9 +303,7 @@ export class ConversationEventHandler {
       // Broadcast system message to all members
       this.emitSystemMessageBroadcast(conversationId, sysMsg);
 
-      this.logger.log(
-        `[MEMBER_ADDED] Complete: Members added to conversation`,
-      );
+      this.logger.log(`[MEMBER_ADDED] Complete: Members added to conversation`);
 
       try {
         await this.idempotency.recordProcessed(
@@ -381,7 +383,9 @@ export class ConversationEventHandler {
       const nameMap = new Map(users.map((u) => [u.id, u.displayName]));
 
       const memberName = nameMap.get(memberId) ?? 'Một thành viên';
-      const kickerName = kickedBy ? (nameMap.get(kickedBy) ?? 'Một thành viên') : undefined;
+      const kickerName = kickedBy
+        ? (nameMap.get(kickedBy) ?? 'Một thành viên')
+        : undefined;
 
       const sysMsg = await this.prisma.message.create({
         data: {
@@ -392,14 +396,14 @@ export class ConversationEventHandler {
             : `${memberName} đã rời nhóm`,
           metadata: isRemoved
             ? {
-              action: 'MEMBER_KICKED',
-              actorId: kickedBy,
-              targetUserId: memberId,
-            }
+                action: 'MEMBER_KICKED',
+                actorId: kickedBy,
+                targetUserId: memberId,
+              }
             : {
-              action: 'MEMBER_LEFT',
-              actorId: memberId,
-            },
+                action: 'MEMBER_LEFT',
+                actorId: memberId,
+              },
         },
       });
 
@@ -411,9 +415,7 @@ export class ConversationEventHandler {
       // Broadcast system message to remaining members (exclude the one who left)
       this.emitSystemMessageBroadcast(conversationId, sysMsg, [memberId]);
 
-      this.logger.log(
-        `[MEMBER_LEFT] Complete: ${memberId} left conversation`,
-      );
+      this.logger.log(`[MEMBER_LEFT] Complete: ${memberId} left conversation`);
 
       try {
         await this.idempotency.recordProcessed(

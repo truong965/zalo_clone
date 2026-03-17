@@ -52,7 +52,7 @@ export class SearchEngineController {
   constructor(
     private analyticsService: SearchAnalyticsService,
     private contactSearchService: ContactSearchService,
-  ) { }
+  ) {}
 
   // ============================================================================
   // CONTACT SEARCH (REST — for create group modal)

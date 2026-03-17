@@ -45,7 +45,7 @@ export class PrivacyBlockListener {
   constructor(
     private readonly redisService: RedisService,
     private readonly idempotency: IdempotencyService,
-  ) { }
+  ) {}
 
   /**
    * Handle user.blocked event

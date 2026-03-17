@@ -25,7 +25,7 @@ export class ContactSearchService {
     private validationService: SearchValidationService,
     private cacheService: SearchCacheService,
     private analyticsService: SearchAnalyticsService,
-  ) { }
+  ) {}
 
   /**
    * Search contacts with privacy checks
@@ -169,11 +169,12 @@ export class ContactSearchService {
       }
 
       // Execute search
-      const rawContacts = await this.contactSearchRepository.searchByContactName(
-        userId,
-        keyword,
-        limit,
-      );
+      const rawContacts =
+        await this.contactSearchRepository.searchByContactName(
+          userId,
+          keyword,
+          limit,
+        );
 
       const results = this.contactSearchRepository.mapToDto(
         rawContacts,
@@ -281,15 +282,17 @@ export class ContactSearchService {
         return null;
       }
 
-      // check can message 
+      // check can message
       const canMessage = await this.validationService.canUserMessage(
         viewerId,
         targetId,
       );
 
       // Determine friendship status to compute privacy-limited fields correctly
-      const friendshipStatus =
-        await this.validationService.getFriendshipStatus(viewerId, targetId);
+      const friendshipStatus = await this.validationService.getFriendshipStatus(
+        viewerId,
+        targetId,
+      );
 
       const relationshipStatus: 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED' =
         friendshipStatus === RelationshipType.FRIEND

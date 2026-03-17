@@ -37,7 +37,7 @@ export class BlockController {
   constructor(
     private readonly blockService: BlockService,
     private readonly authHelper: BlockAuthorizationHelper,
-  ) { }
+  ) {}
 
   // ==============================
   // 1. BLOCKING OPERATIONS

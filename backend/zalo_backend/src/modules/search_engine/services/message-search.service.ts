@@ -27,7 +27,7 @@ export class MessageSearchService {
     private validationService: SearchValidationService,
     private cacheService: SearchCacheService,
     private analyticsService: SearchAnalyticsService,
-  ) { }
+  ) {}
 
   /**
    * Search messages in a specific conversation
@@ -77,28 +77,28 @@ export class MessageSearchService {
       // Branch: keyword present → full-text search; empty → filter-only browse
       const rawMessages = trimmedKeyword
         ? await this.messageSearchRepository.searchInConversation(
-          userId,
-          conversationId,
-          request.keyword,
-          request.limit,
-          request.cursor,
-          request.messageType,
-          request.fromUserId,
-          request.startDate ? new Date(request.startDate) : undefined,
-          request.endDate ? new Date(request.endDate) : undefined,
-          request.hasMedia,
-        )
+            userId,
+            conversationId,
+            request.keyword,
+            request.limit,
+            request.cursor,
+            request.messageType,
+            request.fromUserId,
+            request.startDate ? new Date(request.startDate) : undefined,
+            request.endDate ? new Date(request.endDate) : undefined,
+            request.hasMedia,
+          )
         : await this.messageSearchRepository.browseInConversation(
-          userId,
-          conversationId,
-          request.limit,
-          request.cursor,
-          request.messageType,
-          request.fromUserId,
-          request.startDate ? new Date(request.startDate) : undefined,
-          request.endDate ? new Date(request.endDate) : undefined,
-          request.hasMedia,
-        );
+            userId,
+            conversationId,
+            request.limit,
+            request.cursor,
+            request.messageType,
+            request.fromUserId,
+            request.startDate ? new Date(request.startDate) : undefined,
+            request.endDate ? new Date(request.endDate) : undefined,
+            request.hasMedia,
+          );
 
       const limit = PaginationUtil.normalizeLimit(request.limit, 100);
       const { items, nextCursor } = PaginationUtil.trimAndGetNextCursor(
@@ -177,12 +177,12 @@ export class MessageSearchService {
 
       const targetMessage = context.targetMessage
         ? (
-          await this.messageSearchRepository.mapToDto(
-            [context.targetMessage],
-            userId,
-            '',
-          )
-        )[0]
+            await this.messageSearchRepository.mapToDto(
+              [context.targetMessage],
+              userId,
+              '',
+            )
+          )[0]
         : undefined;
 
       return {
@@ -327,7 +327,10 @@ export class MessageSearchService {
       // Sort by matchCount desc, then by latest message time desc
       results.sort((a, b) => {
         if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
-        return new Date(b.latestMatch.createdAt).getTime() - new Date(a.latestMatch.createdAt).getTime();
+        return (
+          new Date(b.latestMatch.createdAt).getTime() -
+          new Date(a.latestMatch.createdAt).getTime()
+        );
       });
 
       // Cache result (1 minute)

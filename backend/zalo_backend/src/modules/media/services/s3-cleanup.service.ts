@@ -29,7 +29,7 @@ export class S3CleanupService {
     private readonly prisma: PrismaService,
     @Inject(uploadConfig.KEY)
     private readonly config: ConfigType<typeof uploadConfig>,
-  ) { }
+  ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async scheduledCleanup(): Promise<void> {
@@ -139,7 +139,8 @@ export class S3CleanupService {
   private async cleanFailedUploads(): Promise<number> {
     try {
       const threshold = new Date(
-        Date.now() - this.config.cleanup.failedUploadMaxAgeDays * 24 * 60 * 60 * 1000,
+        Date.now() -
+          this.config.cleanup.failedUploadMaxAgeDays * 24 * 60 * 60 * 1000,
       );
 
       const failedUploads = await this.prisma.mediaAttachment.findMany({
@@ -192,7 +193,8 @@ export class S3CleanupService {
   private async cleanupSoftDeletedMedia(): Promise<number> {
     try {
       const threshold = new Date(
-        Date.now() - this.config.cleanup.softDeletedMaxAgeDays * 24 * 60 * 60 * 1000,
+        Date.now() -
+          this.config.cleanup.softDeletedMaxAgeDays * 24 * 60 * 60 * 1000,
       );
 
       const softDeletedMedia = await this.prisma.mediaAttachment.findMany({
@@ -264,10 +266,14 @@ export class S3CleanupService {
 
     // Thêm check lỗi MD-R1 (Orphaned Files Bug)
     const results = await Promise.allSettled(promises);
-    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    
+    const failures = results.filter(
+      (r): r is PromiseRejectedResult => r.status === 'rejected',
+    );
+
     if (failures.length > 0) {
-      const errorMsgs = failures.map(f => (f.reason as Error)?.message || String(f.reason)).join('; ');
+      const errorMsgs = failures
+        .map((f) => (f.reason as Error)?.message || String(f.reason))
+        .join('; ');
       throw new Error(`S3 Asset Deletion Failed: ${errorMsgs}`);
     }
   }

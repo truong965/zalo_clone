@@ -25,7 +25,7 @@ import { ParseBigIntPipe } from 'src/common/pipes/parse-bigint.pipe';
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
 export class MessageController {
-  constructor(private readonly messageService: MessageService) { }
+  constructor(private readonly messageService: MessageService) {}
 
   @Post()
   @ApiOperation({ summary: 'Send message via HTTP (fallback)' })
@@ -61,7 +61,8 @@ export class MessageController {
 
   @Get('conversations/:conversationId/media/recent')
   @ApiOperation({
-    summary: 'Get recent media items in a conversation (with cursor pagination)',
+    summary:
+      'Get recent media items in a conversation (with cursor pagination)',
   })
   async getRecentMedia(
     @CurrentUser() user,

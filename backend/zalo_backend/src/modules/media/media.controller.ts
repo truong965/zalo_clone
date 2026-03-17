@@ -19,14 +19,20 @@ import { CurrentUser, Public } from 'src/common/decorator/customize';
 import { MediaUploadService } from './services/media-upload.service';
 import { InitiateUploadDto, AvatarUploadDto } from './dto/initiate-upload.dto';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 
 @ApiTags('Media')
 @ApiBearerAuth()
 @Controller('media')
 @UseGuards(JwtAuthGuard)
 export class MediaController {
-  constructor(private readonly mediaUploadService: MediaUploadService) { }
+  constructor(private readonly mediaUploadService: MediaUploadService) {}
 
   /**
    * Initiate upload - Get presigned URL
@@ -48,7 +54,9 @@ export class MediaController {
    * Avatars bypass the media worker pipeline (no MediaAttachment record).
    * Flow: POST here → PUT file to presignedUrl → store fileUrl as avatarUrl.
    */
-  @ApiOperation({ summary: 'Get presigned URL for avatar upload (bypasses media pipeline)' })
+  @ApiOperation({
+    summary: 'Get presigned URL for avatar upload (bypasses media pipeline)',
+  })
   @Post('upload/avatar')
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5/min
   @HttpCode(HttpStatus.OK)
@@ -62,7 +70,9 @@ export class MediaController {
   /**
    * Confirm upload after client uploads to S3
    */
-  @ApiOperation({ summary: 'Confirm upload after client has PUT the file to S3' })
+  @ApiOperation({
+    summary: 'Confirm upload after client has PUT the file to S3',
+  })
   @Post('upload/confirm')
   @HttpCode(HttpStatus.OK)
   async confirmUpload(
@@ -77,9 +87,16 @@ export class MediaController {
    * Public endpoint — used as <img src> / <video src> / <a href> in the browser.
    * @param variant  "original" | "thumbnail" | "optimized" (default: original)
    */
-  @ApiOperation({ summary: 'Redirect to presigned CDN URL for media playback (public, no auth required)' })
+  @ApiOperation({
+    summary:
+      'Redirect to presigned CDN URL for media playback (public, no auth required)',
+  })
   @ApiParam({ name: 'id', description: 'Media attachment ID' })
-  @ApiQuery({ name: 'v', required: false, description: 'Variant: original | thumbnail | optimized' })
+  @ApiQuery({
+    name: 'v',
+    required: false,
+    description: 'Variant: original | thumbnail | optimized',
+  })
   @Public()
   @Get('serve/:id')
   async serveMedia(
@@ -112,7 +129,9 @@ export class MediaController {
   /**
    * Delete a media item (removes DB record and S3 objects)
    */
-  @ApiOperation({ summary: 'Delete media item — removes DB record and S3 objects' })
+  @ApiOperation({
+    summary: 'Delete media item — removes DB record and S3 objects',
+  })
   @ApiParam({ name: 'id', description: 'Media attachment ID' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

@@ -65,7 +65,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       const user = JSON.parse(cached);
       // Validate password version even from cache
       if (user.passwordVersion !== payload.pwdVer) {
-        throw new UnauthorizedException('Password changed. Please login again.');
+        throw new UnauthorizedException(
+          'Password changed. Please login again.',
+        );
       }
       return user;
     }
@@ -104,12 +106,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     // Attach user to request (remove sensitive data)
     const entity = new UserEntity(user);
-    
+
     // Attach the current device context specifically for this token's runtime
     entity.currentDeviceId = payload.deviceId;
 
     // Cache the pristine serialized entity (without the dynamic token context)
-    await this.redis.setex(cacheKey, PROFILE_CACHE_TTL, JSON.stringify(new UserEntity(user)));
+    await this.redis.setex(
+      cacheKey,
+      PROFILE_CACHE_TTL,
+      JSON.stringify(new UserEntity(user)),
+    );
 
     return entity;
   }

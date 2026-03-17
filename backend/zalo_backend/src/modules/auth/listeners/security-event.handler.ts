@@ -26,23 +26,25 @@ export interface AuthSecurityRevokedEvent {
   eventId?: string;
   userId: string;
   reason:
-  | 'PASSWORD_CHANGE'
-  | 'MANUAL_LOGOUT_ALL'
-  | 'SECURITY_RISK'
-  | 'TOKEN_ROTATION';
+    | 'PASSWORD_CHANGE'
+    | 'MANUAL_LOGOUT_ALL'
+    | 'SECURITY_RISK'
+    | 'TOKEN_ROTATION';
   excludeDeviceId?: string;
 }
 
 @Injectable()
 export class SecurityEventHandler implements OnApplicationBootstrap {
   private readonly logger = new Logger(SecurityEventHandler.name);
-  private socketGateway: { forceDisconnectUser(userId: string, reason: string): Promise<void> };
+  private socketGateway: {
+    forceDisconnectUser(userId: string, reason: string): Promise<void>;
+  };
 
   constructor(
     private readonly idempotency: IdempotencyService,
     private readonly tokenService: TokenService,
     private readonly moduleRef: ModuleRef,
-  ) { }
+  ) {}
 
   onApplicationBootstrap() {
     try {
@@ -96,7 +98,9 @@ export class SecurityEventHandler implements OnApplicationBootstrap {
         userId,
         TokenRevocationReason.SUSPICIOUS_ACTIVITY,
       );
-      this.logger.debug(`[SECURITY] Invalidated all refresh tokens for ${userId}`);
+      this.logger.debug(
+        `[SECURITY] Invalidated all refresh tokens for ${userId}`,
+      );
 
       // 2. Force disconnect all active WebSocket connections
       if (this.socketGateway) {

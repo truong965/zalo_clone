@@ -22,7 +22,9 @@ export class ContactItemDto {
   })
   phoneNumber: string;
 
-  @ApiPropertyOptional({ description: 'Tên hiển thị từ danh bạ điện thoại (phone book name)' })
+  @ApiPropertyOptional({
+    description: 'Tên hiển thị từ danh bạ điện thoại (phone book name)',
+  })
   @IsString()
   @IsOptional()
   @MaxLength(100)
@@ -50,13 +52,20 @@ export class ContactResponseDto {
   @ApiPropertyOptional()
   avatarUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Tên gợi nhớ do người dùng đặt thủ công' })
+  @ApiPropertyOptional({
+    description: 'Tên gợi nhớ do người dùng đặt thủ công',
+  })
   aliasName?: string;
 
-  @ApiPropertyOptional({ description: 'Tên từ danh bạ điện thoại (phone sync)' })
+  @ApiPropertyOptional({
+    description: 'Tên từ danh bạ điện thoại (phone sync)',
+  })
   phoneBookName?: string;
 
-  @ApiProperty({ enum: ContactSource, description: 'Nguồn tạo contact: MANUAL hoặc PHONE_SYNC' })
+  @ApiProperty({
+    enum: ContactSource,
+    description: 'Nguồn tạo contact: MANUAL hoặc PHONE_SYNC',
+  })
   source: ContactSource;
 
   @ApiProperty()
@@ -67,7 +76,10 @@ export class ContactResponseDto {
 }
 
 export class UpdateContactAliasDto {
-  @ApiPropertyOptional({ description: 'Tên gợi nhớ trong danh bạ. Truyền null hoặc bỏ qua để xoá alias (reset về tên thật)' })
+  @ApiPropertyOptional({
+    description:
+      'Tên gợi nhớ trong danh bạ. Truyền null hoặc bỏ qua để xoá alias (reset về tên thật)',
+  })
   @IsString()
   @IsOptional()
   @MaxLength(100)
@@ -77,13 +89,16 @@ export class UpdateContactAliasDto {
 // --- QUERY DTO for GET /contacts ---
 
 export class GetContactsQueryDto extends CursorPaginationDto {
-  @ApiPropertyOptional({ description: 'Tìm kiếm theo tên gợi nhớ, tên danh bạ, hoặc tên hiển thị' })
+  @ApiPropertyOptional({
+    description: 'Tìm kiếm theo tên gợi nhớ, tên danh bạ, hoặc tên hiển thị',
+  })
   @IsOptional()
   @IsString()
   search?: string;
 
   @ApiPropertyOptional({
-    description: 'Khi true: chỉ trả về contacts chưa phải bạn bè (loại bỏ overlap)',
+    description:
+      'Khi true: chỉ trả về contacts chưa phải bạn bè (loại bỏ overlap)',
     default: false,
   })
   @IsOptional()
