@@ -48,9 +48,6 @@ export class MediaUploadService {
   async getMediaById(userId: string, mediaId: string): Promise<MediaResponseDto> {
     const media = await this.prisma.mediaAttachment.findUnique({
       where: { id: mediaId },
-      include: {
-        message: { select: { conversationId: true } },
-      },
     });
     if (!media) throw new NotFoundException(`Media not found: ${mediaId}`);
 
@@ -58,7 +55,13 @@ export class MediaUploadService {
     // (2) the media is linked to a message in a conversation the requester is a member of.
     // This lets conversation partners poll processing status without a 403.
     if (media.uploadedBy !== userId) {
-      const conversationId = media.message?.conversationId;
+      if (!media.messageId) throw new ForbiddenException('Access denied');
+
+      const message = await this.prisma.message.findUnique({
+        where: { id: media.messageId },
+        select: { conversationId: true },
+      });
+      const conversationId = message?.conversationId;
       if (!conversationId) throw new ForbiddenException('Access denied');
 
       const membership = await this.prisma.conversationMember.findFirst({

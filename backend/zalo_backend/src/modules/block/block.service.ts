@@ -379,48 +379,82 @@ export class BlockService {
 
     // Search filter: alias > phoneBook > displayName (follows display name resolution rule)
     if (search) {
-      where.blocked = {
-        OR: [
-          { displayName: { contains: search, mode: 'insensitive' } },
-          // Also search aliasName & phoneBookName from viewer's contacts
-          { inContactsOf: { some: { ownerId: userId, aliasName: { contains: search, mode: 'insensitive' } } } },
-          { inContactsOf: { some: { ownerId: userId, phoneBookName: { contains: search, mode: 'insensitive' } } } },
-        ],
-      };
+      const [matchedUsers, matchedContacts] = await Promise.all([
+        this.prisma.user.findMany({
+          where: { displayName: { contains: search, mode: 'insensitive' } },
+          select: { id: true },
+        }),
+        this.prisma.userContact.findMany({
+          where: {
+            ownerId: userId,
+            OR: [
+              { aliasName: { contains: search, mode: 'insensitive' } },
+              { phoneBookName: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+          select: { contactUserId: true },
+        }),
+      ]);
+
+      const matchedIds = [
+        ...new Set([
+          ...matchedUsers.map((u) => u.id),
+          ...matchedContacts.map((c) => c.contactUserId),
+        ]),
+      ];
+
+      if (matchedIds.length === 0) {
+        return {
+          data: [],
+          meta: { limit, hasNextPage: false, nextCursor: undefined },
+        };
+      }
+
+      where.blockedId = { in: matchedIds };
     }
 
     const blocks = await this.prisma.block.findMany({
       where,
       ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
       orderBy: { createdAt: 'desc' },
-      include: {
-        blocked: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
+      select: {
+        id: true,
+        blockedId: true,
+        createdAt: true,
+        reason: true,
       },
     });
 
+    const blockedIds = blocks.map((b) => b.blockedId);
+    const blockedUsers = blockedIds.length > 0
+      ? await this.prisma.user.findMany({
+        where: { id: { in: blockedIds } },
+        select: { id: true, displayName: true, avatarUrl: true },
+      })
+      : [];
+    const blockedUserMap = new Map(blockedUsers.map((u) => [u.id, u]));
+
     // Batch resolve display names per viewer
-    const blockedIds = blocks.map((b) => b.blocked.id);
     const nameMap = await this.displayNameResolver.batchResolve(userId, blockedIds);
 
     return CursorPaginationHelper.buildResult({
       items: blocks,
       limit,
       getCursor: (block) => block.id,
-      mapToDto: (block) =>
-        ({
+      mapToDto: (block) => {
+        const blockedUser = blockedUserMap.get(block.blockedId);
+        return {
           blockId: block.id,
-          userId: block.blocked.id,
-          displayName: nameMap.get(block.blocked.id) ?? block.blocked.displayName,
-          avatarUrl: block.blocked.avatarUrl ?? undefined,
+          userId: block.blockedId,
+          displayName:
+            nameMap.get(block.blockedId) ??
+            blockedUser?.displayName ??
+            'Unknown User',
+          avatarUrl: blockedUser?.avatarUrl ?? undefined,
           blockedAt: block.createdAt,
           reason: block.reason ?? undefined,
-        }) as BlockedUserDto,
+        } as BlockedUserDto;
+      },
     });
   }
 

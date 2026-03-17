@@ -16,18 +16,18 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
-import { SocketGateway } from '../socket.gateway';
 import { SocketEvents } from '@common/constants/socket-events.constant';
 import type { ContactAliasUpdatedEvent } from '@modules/contact/events/contact.events';
+import { OUTBOUND_SOCKET_EVENT, ISocketEmitEvent } from '@common/events/outbound-socket.event';
 
 @Injectable()
 export class ContactNotificationListener extends IdempotentListener {
       constructor(
             prisma: PrismaService,
-            private readonly socketGateway: SocketGateway,
+            private readonly eventEmitter: EventEmitter2,
       ) {
             super(prisma);
       }
@@ -48,15 +48,16 @@ export class ContactNotificationListener extends IdempotentListener {
                   await this.withIdempotency(
                         event.eventId,
                         async () => {
-                              await this.socketGateway.emitToUser(
-                                    event.ownerId,
-                                    SocketEvents.CONTACT_ALIAS_UPDATED,
-                                    {
+                              const socketEvent: ISocketEmitEvent = {
+                                    event: SocketEvents.CONTACT_ALIAS_UPDATED as any,
+                                    userId: event.ownerId,
+                                    data: {
                                           contactUserId: event.contactUserId,
                                           aliasName: event.newAliasName,
                                           resolvedDisplayName: event.resolvedDisplayName,
-                                    },
-                              );
+                                    }
+                              };
+                              this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
                         },
                         'ContactNotificationListener.handleContactAliasUpdated',
                         event.version,

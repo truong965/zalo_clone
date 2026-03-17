@@ -234,27 +234,42 @@ export class GroupJoinService {
         conversationId,
         status: JoinRequestStatus.PENDING,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
+      select: {
+        id: true,
+        conversationId: true,
+        userId: true,
+        status: true,
+        inviterId: true,
+        reviewedBy: true,
+        requestedAt: true,
+        reviewedAt: true,
+        expiresAt: true,
+        message: true,
       },
       orderBy: { requestedAt: 'asc' },
     });
 
+    const userIds = [...new Set(requests.map((r) => r.userId))];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        displayName: true,
+        avatarUrl: true,
+      },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     // Batch resolve display names per admin viewer
-    const userIds = requests.map((r) => r.user.id);
     const nameMap = await this.displayNameResolver.batchResolve(adminId, userIds);
 
     return requests.map((r) => ({
       ...r,
       user: {
-        ...r.user,
-        displayName: nameMap.get(r.user.id) ?? r.user.displayName,
+        id: r.userId,
+        displayName:
+          nameMap.get(r.userId) ?? userMap.get(r.userId)?.displayName ?? 'Unknown User',
+        avatarUrl: userMap.get(r.userId)?.avatarUrl ?? null,
       },
     }));
   }

@@ -22,6 +22,9 @@ import { DailyCoService } from './services/daily-co.service';
 // PHASE 3.5: Block event listener
 import { CallBlockListener } from './listeners/call-block.listener';
 
+// Real-time socket events
+import { CallEndedSocketListener } from './listeners/call-ended.listener';
+
 /**
  * CallModule (PHASE 2 - REFACTORED, PHASE 3.5 - EXTENDED)
  *
@@ -83,6 +86,7 @@ import { CallBlockListener } from './listeners/call-block.listener';
 
     // PHASE 3.5: Block event listener
     CallBlockListener, // Listen to BlockModule events
+    CallEndedSocketListener,
   ],
   exports: [CallHistoryService],
 })

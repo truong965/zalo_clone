@@ -84,10 +84,19 @@ export class MessageGateway implements OnGatewayInit {
   @OnEvent(SocketEvents.USER_SOCKET_CONNECTED)
   async handleUserConnected(payload: {
     userId: string;
-    socketId: string;
-    socket: AuthenticatedSocket;
+    socketId?: string | null;
+    socket?: AuthenticatedSocket;
   }) {
     const { userId, socket } = payload;
+
+    // Ignore cross-server presence rebroadcasts that do not carry a local socket.
+    if (!socket) {
+      this.logger.debug(
+        `Skipping message subscription setup for ${userId} because no local socket was provided`,
+      );
+      return;
+    }
+
     this.logger.log(`📱 User ${userId} authenticated - setting up message subscriptions`);
 
     try {

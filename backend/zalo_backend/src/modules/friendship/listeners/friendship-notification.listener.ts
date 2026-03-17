@@ -13,10 +13,9 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { PrismaService } from '@database/prisma.service';
-import { SocketGateway } from '../socket.gateway';
 import { SocketEvents } from '@common/constants/socket-events.constant';
 import type {
       FriendRequestSentEvent,
@@ -25,12 +24,13 @@ import type {
       FriendRequestCancelledEvent,
       UnfriendedEvent,
 } from '@modules/friendship/events/friendship.events';
+import { OUTBOUND_SOCKET_EVENT, ISocketEmitEvent } from '@common/events/outbound-socket.event';
 
 @Injectable()
 export class FriendshipNotificationListener extends IdempotentListener {
       constructor(
             prisma: PrismaService,
-            private readonly socketGateway: SocketGateway,
+            private readonly eventEmitter: EventEmitter2,
       ) {
             super(prisma);
       }
@@ -46,15 +46,16 @@ export class FriendshipNotificationListener extends IdempotentListener {
                         `[FriendshipNotif] Friend request sent: ${event.fromUserId} → ${event.toUserId}`,
                   );
 
-                  await this.socketGateway.emitToUser(
-                        event.toUserId,
-                        SocketEvents.FRIEND_REQUEST_RECEIVED as string,
-                        {
+                  const socketEvent: ISocketEmitEvent = {
+                        event: SocketEvents.FRIEND_REQUEST_RECEIVED as any,
+                        userId: event.toUserId,
+                        data: {
                               friendshipId: event.requestId,
                               fromUserId: event.fromUserId,
                               toUserId: event.toUserId,
-                        },
-                  );
+                        }
+                  };
+                  this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
             } catch (error) {
                   this.logger.error(
                         `[FriendshipNotif] Failed to emit friendship.request.sent socket event`,
@@ -76,15 +77,16 @@ export class FriendshipNotificationListener extends IdempotentListener {
                         `[FriendshipNotif] Friend request accepted: ${event.acceptedBy} accepted ${event.requesterId}'s request`,
                   );
 
-                  await this.socketGateway.emitToUser(
-                        event.requesterId,
-                        SocketEvents.FRIEND_REQUEST_ACCEPTED as string,
-                        {
+                  const socketEvent: ISocketEmitEvent = {
+                        event: SocketEvents.FRIEND_REQUEST_ACCEPTED as any,
+                        userId: event.requesterId,
+                        data: {
                               friendshipId: event.friendshipId,
                               acceptedBy: event.acceptedBy,
                               requesterId: event.requesterId,
-                        },
-                  );
+                        }
+                  };
+                  this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
             } catch (error) {
                   this.logger.error(
                         `[FriendshipNotif] Failed to emit friendship.accepted socket event`,
@@ -106,16 +108,17 @@ export class FriendshipNotificationListener extends IdempotentListener {
                         `[FriendshipNotif] Friend request cancelled: ${event.cancelledBy} cancelled request to ${event.targetUserId}`,
                   );
 
-                  await this.socketGateway.emitToUser(
-                        event.targetUserId,
-                        SocketEvents.FRIEND_REQUEST_CANCELLED as string,
-                        {
+                  const socketEvent: ISocketEmitEvent = {
+                        event: SocketEvents.FRIEND_REQUEST_CANCELLED as any,
+                        userId: event.targetUserId,
+                        data: {
                               friendshipId: event.friendshipId,
                               cancelledBy: event.cancelledBy,
                               targetUserId: event.targetUserId,
                               eventType: event.eventType,
-                        },
-                  );
+                        }
+                  };
+                  this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
             } catch (error) {
                   this.logger.error(
                         `[FriendshipNotif] Failed to emit friendship.request.cancelled socket event`,
@@ -137,15 +140,16 @@ export class FriendshipNotificationListener extends IdempotentListener {
                         `[FriendshipNotif] Friend request declined: ${event.toUserId} declined ${event.fromUserId}'s request`,
                   );
 
-                  await this.socketGateway.emitToUser(
-                        event.fromUserId,
-                        SocketEvents.FRIEND_REQUEST_DECLINED as string,
-                        {
+                  const socketEvent: ISocketEmitEvent = {
+                        event: SocketEvents.FRIEND_REQUEST_DECLINED as any,
+                        userId: event.fromUserId,
+                        data: {
                               friendshipId: event.requestId,
                               declinedBy: event.toUserId,
                               requesterId: event.fromUserId,
-                        },
-                  );
+                        }
+                  };
+                  this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
             } catch (error) {
                   this.logger.error(
                         `[FriendshipNotif] Failed to emit friendship.request.declined socket event`,
@@ -169,16 +173,18 @@ export class FriendshipNotificationListener extends IdempotentListener {
                         `[FriendshipNotif] Unfriended: ${event.initiatedBy} unfriended ${otherUserId}`,
                   );
 
-                  await this.socketGateway.emitToUser(
-                        otherUserId,
-                        SocketEvents.FRIEND_UNFRIENDED as string,
-                        {
+                  const socketEvent: ISocketEmitEvent = {
+                        event: SocketEvents.FRIEND_UNFRIENDED as any,
+                        userId: otherUserId,
+                        data: {
                               friendshipId: event.friendshipId,
                               initiatedBy: event.initiatedBy,
                               userId: otherUserId,
                               eventType: event.eventType,
-                        },
-                  );
+                        }
+                  };
+                  this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
+
             } catch (error) {
                   this.logger.error(
                         `[FriendshipNotif] Failed to emit friendship.unfriended socket event`,

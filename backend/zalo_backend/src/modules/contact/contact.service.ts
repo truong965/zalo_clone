@@ -268,10 +268,16 @@ export class ContactService {
     const where: Prisma.UserContactWhereInput = { ownerId };
 
     if (search) {
+      const users = await this.prisma.user.findMany({
+        where: { displayName: { contains: search, mode: 'insensitive' } },
+        select: { id: true }
+      });
+      const userIds = users.map(u => u.id);
+      
       where.OR = [
         { aliasName: { contains: search, mode: 'insensitive' } },
         { phoneBookName: { contains: search, mode: 'insensitive' } },
-        { contactUser: { displayName: { contains: search, mode: 'insensitive' } } },
+        { contactUserId: { in: userIds } },
       ];
     }
 
@@ -288,21 +294,19 @@ export class ContactService {
       where,
       ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
       orderBy: { createdAt: 'desc' },
-      include: {
-        contactUser: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            lastSeenAt: true,
-          },
-        },
-      },
     });
 
-    // 2. Batch friendship check — 1 query instead of N (no N+1)
+    // Fetch user profiles manually
     const displayNodes = contacts.slice(0, limit);
-    const contactUserIds = displayNodes.map((c) => c.contactUser.id);
+    const contactUserIds = displayNodes.map((c) => c.contactUserId);
+    
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: contactUserIds } },
+      select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true }
+    });
+    const userMap = new Map<string, any>(users.map(u => [u.id, u]));
+
+    // 2. Batch friendship check — 1 query instead of N (no N+1)
     const friendSet = await this.friendshipService.getFriendIdsFromList(
       ownerId,
       contactUserIds,
@@ -313,21 +317,24 @@ export class ContactService {
       items: contacts,
       limit,
       getCursor: (c) => c.id,
-      mapToDto: (contact): ContactResponseDto => ({
-        id: contact.id,
-        contactUserId: contact.contactUser.id,
-        // 3-level fallback: aliasName > phoneBookName > displayName
-        displayName:
-          contact.aliasName ??
-          contact.phoneBookName ??
-          contact.contactUser.displayName,
-        aliasName: contact.aliasName ?? undefined,
-        phoneBookName: contact.phoneBookName ?? undefined,
-        source: contact.source,
-        avatarUrl: contact.contactUser.avatarUrl ?? undefined,
-        lastSeenAt: contact.contactUser.lastSeenAt ?? undefined,
-        isFriend: friendSet.has(contact.contactUser.id),
-      }),
+      mapToDto: (contact): ContactResponseDto => {
+        const u = userMap.get(contact.contactUserId);
+        return {
+          id: contact.id,
+          contactUserId: contact.contactUserId,
+          // 3-level fallback: aliasName > phoneBookName > displayName
+          displayName:
+            contact.aliasName ??
+            contact.phoneBookName ??
+            u?.displayName ?? 'Unknown',
+          aliasName: contact.aliasName ?? undefined,
+          phoneBookName: contact.phoneBookName ?? undefined,
+          source: contact.source,
+          avatarUrl: u?.avatarUrl ?? undefined,
+          lastSeenAt: u?.lastSeenAt ?? undefined,
+          isFriend: friendSet.has(contact.contactUserId),
+        };
+      },
     });
   }
 
@@ -361,20 +368,20 @@ export class ContactService {
       select: {
         aliasName: true,
         phoneBookName: true,
-        contactUser: {
-          select: {
-            displayName: true,
-          },
-        },
       },
     });
+
+    let defaultName = 'Unknown User';
+    if (!contact?.aliasName && !contact?.phoneBookName) {
+      const u = await this.prisma.user.findUnique({ where: { id: targetUserId }, select: { displayName: true } });
+      if (u) defaultName = u.displayName;
+    }
 
     // L6 fix: 3-level fallback — aliasName > phoneBookName > displayName
     const displayName =
       contact?.aliasName ??
       contact?.phoneBookName ??
-      contact?.contactUser.displayName ??
-      'Unknown User';
+      defaultName;
 
     // Cache result
     await this.redis.setex(
@@ -423,13 +430,15 @@ export class ContactService {
           contactUserId: true,
           aliasName: true,
           phoneBookName: true,
-          contactUser: {
-            select: {
-              displayName: true,
-            },
-          },
         },
       });
+
+      // Also fetch users for those without explicit alias/phoneBookName
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: missingUserIds } },
+        select: { id: true, displayName: true }
+      });
+      const userMap = new Map(users.map(u => [u.id, u.displayName]));
 
       // Build map from query results
       const contactMap = new Map<string, string>();
@@ -438,7 +447,7 @@ export class ContactService {
         const name =
           contact.aliasName ??
           contact.phoneBookName ??
-          contact.contactUser.displayName ??
+          userMap.get(contact.contactUserId) ??
           'Unknown';
         contactMap.set(contact.contactUserId, name);
       });
@@ -448,13 +457,8 @@ export class ContactService {
         (id) => !contactMap.has(id),
       );
       if (usersNotInContacts.length > 0) {
-        const users = await this.prisma.user.findMany({
-          where: { id: { in: usersNotInContacts } },
-          select: { id: true, displayName: true },
-        });
-
-        users.forEach((user) => {
-          contactMap.set(user.id, user.displayName);
+        usersNotInContacts.forEach((id) => {
+          contactMap.set(id, userMap.get(id) || 'Unknown User');
         });
       }
 

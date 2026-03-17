@@ -48,11 +48,9 @@ export class AdminCallsService {
                               status: true,
                               duration: true,
                               participantCount: true,
+                              initiatorId: true,
                               startedAt: true,
                               endedAt: true,
-                              initiator: {
-                                    select: { id: true, displayName: true },
-                              },
                               _count: { select: { participants: true } },
                         },
                         orderBy: { startedAt: 'desc' },
@@ -62,7 +60,19 @@ export class AdminCallsService {
                   this.prisma.callHistory.count({ where }),
             ]);
 
-            return { data, total, page, limit };
+            const initiatorIds = [...new Set(data.map((call) => call.initiatorId))];
+            const initiators = await this.prisma.user.findMany({
+                  where: { id: { in: initiatorIds } },
+                  select: { id: true, displayName: true },
+            });
+            const initiatorMap = new Map(initiators.map((user) => [user.id, user]));
+
+            const composedData = data.map((call) => ({
+                  ...call,
+                  initiator: initiatorMap.get(call.initiatorId) ?? null,
+            }));
+
+            return { data: composedData, total, page, limit };
       }
 
       // ─── GET /admin/conversations ─────────────────────────────────────────

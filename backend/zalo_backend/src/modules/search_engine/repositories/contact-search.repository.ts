@@ -263,15 +263,20 @@ export class ContactSearchRepository {
             showLastSeen: true,
           },
         },
-        myContacts: {
-          where: { ownerId: userId },
-          select: { aliasName: true, phoneBookName: true, source: true },
-          take: 1,
-        },
       },
     });
 
-    return contact;
+    if (!contact) return null;
+
+    const userContact = await this.prisma.userContact.findFirst({
+        where: { ownerId: userId, contactUserId: targetId },
+        select: { aliasName: true, phoneBookName: true, source: true }
+    });
+
+    return {
+        ...contact,
+        myContacts: userContact ? [userContact] : []
+    };
   }
 
   /**
@@ -335,32 +340,31 @@ export class ContactSearchRepository {
   async getUserContacts(userId: string, limit = 50, offset = 0) {
     const contacts = await this.prisma.userContact.findMany({
       where: { ownerId: userId },
-      include: {
-        contactUser: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            phoneNumber: true,
-            status: true,
-          },
-        },
-      },
       orderBy: [{ aliasName: 'asc' }, { createdAt: 'desc' }],
       take: limit,
       skip: offset,
     });
 
-    return contacts.map((contact) => ({
-      id: contact.contactUser.id,
-      phoneNumber: contact.contactUser.phoneNumber,
-      displayName: contact.aliasName || contact.phoneBookName || contact.contactUser.displayName,
-      avatarUrl: contact.contactUser.avatarUrl,
-      status: contact.contactUser.status,
-      hasAlias: !!(contact.aliasName || contact.phoneBookName),
-      phoneBookName: contact.phoneBookName,
-      source: contact.source,
-    }));
+    const userIds = contacts.map(c => c.contactUserId);
+    const users = userIds.length > 0 ? await this.prisma.user.findMany({
+       where: { id: { in: userIds } },
+       select: { id: true, displayName: true, avatarUrl: true, phoneNumber: true, status: true }
+    }) : [];
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    return contacts.map((contact) => {
+      const u = userMap.get(contact.contactUserId);
+      return {
+        id: contact.contactUserId,
+        phoneNumber: u?.phoneNumber,
+        displayName: contact.aliasName || contact.phoneBookName || u?.displayName,
+        avatarUrl: u?.avatarUrl,
+        status: u?.status,
+        hasAlias: !!(contact.aliasName || contact.phoneBookName),
+        phoneBookName: contact.phoneBookName,
+        source: contact.source,
+      };
+    });
   }
 
   /**

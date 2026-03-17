@@ -42,20 +42,13 @@ const PARENT_MESSAGE_PREVIEW_SELECT = {
   senderId: true,
   type: true,
   deletedAt: true,
-  sender: {
-    select: { id: true, displayName: true, avatarUrl: true },
-  },
-  mediaAttachments: {
-    select: {
-      id: true,
-      mediaType: true,
-      originalName: true,
-      thumbnailUrl: true,
-    },
-    where: { deletedAt: null },
-    take: 1,
-  },
 } as const;
+
+type SenderProfile = {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
 
 /** Reusable media attachment select fields */
 const MEDIA_ATTACHMENT_SELECT = {
@@ -71,7 +64,14 @@ const MEDIA_ATTACHMENT_SELECT = {
   height: true,
   duration: true,
   processingStatus: true,
+  messageId: true,
 } as const;
+
+type RecentMediaMessageRow = {
+  id: bigint;
+  type: MessageType;
+  createdAt: Date;
+};
 
 @Injectable()
 export class MessageService {
@@ -86,6 +86,178 @@ export class MessageService {
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
   ) { }
+
+
+  private async enrichMessagesWithMedia<T extends { id: bigint; parentMessage?: { id: bigint } | null }>(
+    messages: T[],
+  ): Promise<(T & { mediaAttachments: any[]; parentMessage?: any })[]> {
+    if (!messages.length) return messages as any;
+
+    const messageIds = new Set<bigint>();
+    messages.forEach((m) => {
+      messageIds.add(m.id);
+      if (m.parentMessage?.id) messageIds.add(m.parentMessage.id);
+    });
+
+    const mediaList = await this.prisma.mediaAttachment.findMany({
+      where: {
+        messageId: { in: Array.from(messageIds) },
+        deletedAt: null,
+      },
+      select: MEDIA_ATTACHMENT_SELECT,
+    });
+
+    const mediaMap = new Map<string, typeof mediaList>();
+    for (const media of mediaList) {
+      if (!media.messageId) continue;
+      const msgIdStr = media.messageId.toString();
+      if (!mediaMap.has(msgIdStr)) mediaMap.set(msgIdStr, []);
+      mediaMap.get(msgIdStr)!.push(media);
+    }
+
+    return messages.map((m) => {
+      const enriched: any = { ...m };
+      enriched.mediaAttachments = mediaMap.get(m.id.toString()) || [];
+      if (enriched.parentMessage) {
+        enriched.parentMessage = {
+          ...enriched.parentMessage,
+          mediaAttachments: mediaMap.get(enriched.parentMessage.id.toString())?.slice(0, 1) || [],
+        };
+      }
+      return enriched;
+    });
+  }
+
+  private async enrichSingleMessageWithMedia<T extends { id: bigint; parentMessage?: { id: bigint } | null }>(
+    message: T,
+  ): Promise<T & { mediaAttachments: any[]; parentMessage?: any }> {
+    const [enriched] = await this.enrichMessagesWithMedia([message]);
+    return enriched;
+  }
+
+  private async findRecentMediaMessages(
+    conversationId: string,
+    types: MessageType[],
+    limit: number,
+    cursorCreatedAt?: Date,
+    cursorId?: bigint,
+    keyword?: string,
+  ): Promise<RecentMediaMessageRow[]> {
+    const normalizedKeyword = keyword?.trim();
+
+    const cursorFilter =
+      cursorCreatedAt && cursorId !== undefined
+        ? Prisma.sql`
+            AND (
+              m.created_at < ${cursorCreatedAt}
+              OR (m.created_at = ${cursorCreatedAt} AND m.id < ${cursorId})
+            )
+          `
+        : Prisma.empty;
+
+    const mediaExistsFilter = normalizedKeyword
+      ? Prisma.sql`
+          AND EXISTS (
+            SELECT 1
+            FROM media_attachments ma
+            WHERE ma.message_id = m.id
+              AND ma.deleted_at IS NULL
+              AND ma.original_name ILIKE ${`%${normalizedKeyword}%`}
+          )
+        `
+      : Prisma.sql`
+          AND EXISTS (
+            SELECT 1
+            FROM media_attachments ma
+            WHERE ma.message_id = m.id
+              AND ma.deleted_at IS NULL
+          )
+        `;
+
+    return this.prisma.$queryRaw<RecentMediaMessageRow[]>(Prisma.sql`
+      SELECT m.id, m.type, m.created_at AS "createdAt"
+      FROM messages m
+      WHERE m.conversation_id = ${conversationId}::uuid
+        AND m.deleted_at IS NULL
+        AND m.type IN (${Prisma.join(types)})
+        ${cursorFilter}
+        ${mediaExistsFilter}
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT ${limit + 1}
+    `);
+  }
+
+  private async getSenderProfilesMap(userIds: string[]): Promise<Map<string, SenderProfile>> {
+    if (userIds.length === 0) {
+      return new Map();
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        displayName: true,
+        avatarUrl: true,
+      },
+    });
+
+    return new Map(users.map((u) => [u.id, u]));
+  }
+
+  private async hydrateMessagesWithSenders(messages: any[], viewerId: string): Promise<any[]> {
+    if (messages.length === 0) {
+      return messages;
+    }
+
+    const senderIds = [
+      ...new Set(
+        messages
+          .flatMap((m) => [m.senderId, m.parentMessage?.senderId])
+          .filter((id): id is string => !!id),
+      ),
+    ];
+
+    const [profileMap, nameMap] = await Promise.all([
+      this.getSenderProfilesMap(senderIds),
+      senderIds.length > 0
+        ? this.displayNameResolver.batchResolve(viewerId, senderIds)
+        : Promise.resolve(new Map<string, string>()),
+    ]);
+
+    const composeSender = (senderId?: string | null) => {
+      if (!senderId) {
+        return null;
+      }
+
+      const profile = profileMap.get(senderId);
+      const resolvedDisplayName =
+        nameMap.get(senderId) ?? profile?.displayName ?? 'Unknown User';
+
+      return {
+        id: senderId,
+        displayName: resolvedDisplayName,
+        avatarUrl: profile?.avatarUrl ?? null,
+        resolvedDisplayName,
+      };
+    };
+
+    return messages.map((message) => ({
+      ...message,
+      sender: composeSender(message.senderId),
+      parentMessage: message.parentMessage
+        ? {
+          ...message.parentMessage,
+          sender: composeSender(message.parentMessage.senderId),
+        }
+        : message.parentMessage,
+    }));
+  }
+
+  private async hydrateSingleMessageWithSender(message: any, viewerId: string): Promise<any> {
+    const [hydrated] = await this.hydrateMessagesWithSenders([message], viewerId);
+    return hydrated;
+  }
+
 
   private async getDirectTargetUserId(
     conversationId: string,
@@ -150,7 +322,7 @@ export class MessageService {
     );
 
     // Idempotency: return cached result if duplicate
-    const existing = await this.checkIdempotency(idempotencyKey);
+    const existing = await this.checkIdempotency(idempotencyKey, senderId);
     if (existing) return existing;
 
     // Validate permissions
@@ -180,19 +352,17 @@ export class MessageService {
     // Persist message
     const message = await this.persistMessage(dto, senderId, replyToId, totalRecipients, directReceipts);
 
-    const fullMessage = await this.prisma.message.findUniqueOrThrow({
+    const _fullMessage = await this.prisma.message.findUniqueOrThrow({
       where: { id: message.id },
       include: {
-        sender: {
-          select: { id: true, displayName: true, avatarUrl: true },
-        },
         parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-        mediaAttachments: {
-          select: MEDIA_ATTACHMENT_SELECT,
-          where: { deletedAt: null },
-        },
       },
     });
+    const fullMessageWithMedia = await this.enrichSingleMessageWithMedia(_fullMessage);
+    const fullMessage = await this.hydrateSingleMessageWithSender(
+      fullMessageWithMedia,
+      senderId,
+    );
 
     await this.redis.getClient().setex(
       idempotencyKey,
@@ -222,20 +392,23 @@ export class MessageService {
   /**
    * Check idempotency cache and return existing message if found.
    */
-  private async checkIdempotency(idempotencyKey: string): Promise<Message | null> {
+  private async checkIdempotency(idempotencyKey: string, viewerId: string): Promise<Message | null> {
     const cachedMessage = await this.redis.getClient().get(idempotencyKey);
     if (!cachedMessage) return null;
 
     this.logger.debug(`Duplicate send detected`);
     const cached = JSON.parse(cachedMessage) as Message;
-    const existingMessage = await this.prisma.message.findUniqueOrThrow({
+    const _existingMessage = await this.prisma.message.findUniqueOrThrow({
       where: { id: cached.id },
       include: {
-        sender: { select: { id: true, displayName: true, avatarUrl: true } },
         parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-        mediaAttachments: { select: MEDIA_ATTACHMENT_SELECT, where: { deletedAt: null } },
       },
     });
+    const existingMessageWithMedia = await this.enrichSingleMessageWithMedia(_existingMessage);
+    const existingMessage = await this.hydrateSingleMessageWithSender(
+      existingMessageWithMedia,
+      viewerId,
+    );
     return safeJSON(existingMessage);
   }
 
@@ -338,28 +511,35 @@ export class MessageService {
         return msg;
       });
     } catch (error) {
-      return this.handlePersistError(error, dto);
+      return this.handlePersistError(error, dto, senderId);
     }
   }
 
   /**
    * Handle Prisma-specific errors from message persistence.
    */
-  private async handlePersistError(error: unknown, dto: SendMessageDto): Promise<Message> {
+  private async handlePersistError(
+    error: unknown,
+    dto: SendMessageDto,
+    viewerId: string,
+  ): Promise<Message> {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
         const target = error.meta?.target as string[] | undefined;
         if (target?.includes('clientMessageId')) {
           this.logger.warn(`Duplicate clientMessageId detected: ${dto.clientMessageId}`);
         }
-        const existing = await this.prisma.message.findUniqueOrThrow({
+        const _existing = await this.prisma.message.findUniqueOrThrow({
           where: { clientMessageId: dto.clientMessageId },
           include: {
-            sender: { select: { id: true, displayName: true, avatarUrl: true } },
             parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-            mediaAttachments: { select: MEDIA_ATTACHMENT_SELECT, where: { deletedAt: null } },
           },
         });
+        const existingWithMedia = await this.enrichSingleMessageWithMedia(_existing);
+        const existing = await this.hydrateSingleMessageWithSender(
+          existingWithMedia,
+          viewerId,
+        );
         return safeJSON(existing);
       }
 
@@ -478,7 +658,7 @@ export class MessageService {
 
     const isNewer = direction === 'newer';
 
-    const messages = await this.prisma.message.findMany({
+    const _messages = await this.prisma.message.findMany({
       where: {
         conversationId: dto.conversationId,
         deletedAt: null,
@@ -489,60 +669,18 @@ export class MessageService {
         createdAt: isNewer ? 'asc' : 'desc',
       },
       include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
         parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-        mediaAttachments: {
-          select: MEDIA_ATTACHMENT_SELECT,
-          where: {
-            processingStatus: { in: [MediaProcessingStatus.READY, MediaProcessingStatus.PROCESSING] },
-            deletedAt: null,
-          },
-        },
       },
     });
-
-    // Batch resolve display names for senders (including parentMessage senders)
-    const senderIds = [
-      ...new Set(
-        messages
-          .flatMap((m) => [
-            m.sender?.id,
-            (m as any).parentMessage?.sender?.id,
-          ])
-          .filter((id): id is string => !!id),
-      ),
-    ];
-    const nameMap = await this.displayNameResolver.batchResolve(
-      userId,
-      senderIds,
-    );
+    const messagesWithMedia = await this.enrichMessagesWithMedia(_messages);
+    const messages = await this.hydrateMessagesWithSenders(messagesWithMedia, userId);
 
     const result = CursorPaginationHelper.buildResult({
       items: messages,
       limit,
       getCursor: (m) => m.id.toString(),
       mapToDto: (m) => {
-        const dto = safeJSON(m);
-        // Enrich sender with resolvedDisplayName
-        if (dto && typeof dto === 'object' && 'sender' in dto) {
-          const obj = dto as {
-            sender?: { id: string; resolvedDisplayName?: string };
-            parentMessage?: { sender?: { id: string; resolvedDisplayName?: string } };
-          };
-          if (obj.sender?.id) {
-            obj.sender.resolvedDisplayName = nameMap.get(obj.sender.id);
-          }
-          if (obj.parentMessage?.sender?.id) {
-            obj.parentMessage.sender.resolvedDisplayName = nameMap.get(obj.parentMessage.sender.id);
-          }
-        }
-        return dto;
+        return safeJSON(m);
       },
     });
 
@@ -593,19 +731,7 @@ export class MessageService {
     }
 
     const includeFields = {
-      sender: {
-        select: { id: true, displayName: true, avatarUrl: true },
-      },
       parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-      mediaAttachments: {
-        select: MEDIA_ATTACHMENT_SELECT,
-        where: {
-          processingStatus: {
-            in: [MediaProcessingStatus.READY, MediaProcessingStatus.PROCESSING] as MediaProcessingStatus[],
-          },
-          deletedAt: null,
-        },
-      },
     } as const;
 
     // Fetch: before messages, target message, after messages in parallel
@@ -643,48 +769,20 @@ export class MessageService {
     ]);
 
     // Combine: before (reversed to ASC) + target + after — all in DESC order for consistency
-    const allMessages = [
+    const allMessagesRaw = [
       ...afterMsgs.reverse(),  // newest first
       ...(targetMsg ? [targetMsg] : []),
       ...beforeMsgs,           // already DESC order from query
     ];
-
-    // Batch resolve display names for senders (including parentMessage senders)
-    const senderIds = [
-      ...new Set(
-        allMessages
-          .flatMap((m) => [
-            m.sender?.id,
-            (m as any).parentMessage?.sender?.id,
-          ])
-          .filter((id): id is string => !!id),
-      ),
-    ];
-    const nameMap = await this.displayNameResolver.batchResolve(
-      userId,
-      senderIds,
-    );
+    const allMessagesWithMedia = await this.enrichMessagesWithMedia(allMessagesRaw);
+    const allMessages = await this.hydrateMessagesWithSenders(allMessagesWithMedia, userId);
 
     const hasOlderMessages = beforeMsgs.length >= before;
     const hasNewerMessages = afterMsgs.length >= after;
 
     return {
       data: allMessages.map((m) => {
-        const dto = safeJSON(m);
-        // Enrich sender with resolvedDisplayName
-        if (dto && typeof dto === 'object' && 'sender' in dto) {
-          const obj = dto as {
-            sender?: { id: string; resolvedDisplayName?: string };
-            parentMessage?: { sender?: { id: string; resolvedDisplayName?: string } };
-          };
-          if (obj.sender?.id) {
-            obj.sender.resolvedDisplayName = nameMap.get(obj.sender.id);
-          }
-          if (obj.parentMessage?.sender?.id) {
-            obj.parentMessage.sender.resolvedDisplayName = nameMap.get(obj.parentMessage.sender.id);
-          }
-        }
-        return dto;
+        return safeJSON(m);
       }),
       targetMessageId: targetMessageId,
       hasOlderMessages,
@@ -809,60 +907,18 @@ export class MessageService {
       }
     }
 
-    // 4. Build where clause
-    const whereClause: any = {
+    // 4. Query recent message shells using relation-free SQL EXISTS filter
+    const _messages = await this.findRecentMediaMessages(
       conversationId,
-      deletedAt: null,
-      type: { in: types },
-      mediaAttachments: {
-        some: {
-          deletedAt: null,
-          ...(keyword?.trim()
-            ? { originalName: { contains: keyword.trim(), mode: 'insensitive' } }
-            : {}),
-        },
-      },
-    };
+      types,
+      limit,
+      cursorCreatedAt,
+      cursorId,
+      keyword,
+    );
 
-    // Cursor condition: items older than cursor
-    if (cursorCreatedAt && cursorId !== undefined) {
-      whereClause.OR = [
-        { createdAt: { lt: cursorCreatedAt } },
-        { createdAt: cursorCreatedAt, id: { lt: cursorId } },
-      ];
-    }
-
-    // 5. Query messages with their first attachment, ordered by newest first
-    // Fetch limit+1 to detect hasNextPage
-    const messages = await this.prisma.message.findMany({
-      where: whereClause,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      select: {
-        id: true,
-        type: true,
-        createdAt: true,
-        mediaAttachments: {
-          where: {
-            deletedAt: null,
-            ...(keyword?.trim()
-              ? { originalName: { contains: keyword.trim(), mode: 'insensitive' } }
-              : {}),
-          },
-          take: 1,
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            originalName: true,
-            mimeType: true,
-            mediaType: true,
-            size: true,
-            thumbnailUrl: true,
-            cdnUrl: true,
-          },
-        },
-      },
-    });
+    // 5. Attach media payloads in application layer
+    const messages = await this.enrichMessagesWithMedia(_messages);
 
     // 6. Detect pagination
     const hasNextPage = messages.length > limit;

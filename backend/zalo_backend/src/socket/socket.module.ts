@@ -16,13 +16,7 @@ import { EventsModule } from '@shared/events';
 
 // PHASE 2: Event listener (instead of MessagingModule import)
 import { SocketNotificationListener } from './listeners/socket-notification.listener';
-import { FriendshipNotificationListener } from './listeners/friendship-notification.listener';
-import { ContactNotificationListener } from './listeners/contact-notification.listener';
-import { CallEndedSocketListener } from './listeners/call-ended.listener';
-import { QrLoginSocketListener } from './listeners/qr-login-socket.listener';
 import { AuthModule } from 'src/modules/auth/auth.module';
-import { FriendshipModule } from 'src/modules/friendship/friendship.module';
-import { PrivacyModule } from 'src/modules/privacy/privacy.module';
 
 /**
  * SocketModule (PHASE 2 - REFACTORED)
@@ -54,8 +48,6 @@ import { PrivacyModule } from 'src/modules/privacy/privacy.module';
     EventEmitterModule, // PHASE 2: For event listeners
     EventsModule,
     AuthModule, // For DeviceFingerprintService
-    FriendshipModule,
-    PrivacyModule,
   ],
   providers: [
     SocketGateway,
@@ -67,14 +59,6 @@ import { PrivacyModule } from 'src/modules/privacy/privacy.module';
 
     // PHASE 2: Event listener (replaces forwardRef() to MessagingModule)
     SocketNotificationListener,
-    FriendshipNotificationListener,
-    // PHASE 3: Contact domain event → Socket.IO notification
-    ContactNotificationListener,
-    // CALL PHASE 1: Bridge call.ended domain event → Socket.IO notification
-    // CALL PHASE 1: Bridge call.ended domain event → Socket.IO notification
-    CallEndedSocketListener,
-    // PHASE 5: QR Login internal events → Socket.IO emission
-    QrLoginSocketListener,
   ],
   exports: [
     SocketGateway,

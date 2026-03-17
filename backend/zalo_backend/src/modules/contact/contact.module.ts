@@ -4,6 +4,7 @@ import { ContactController } from './contact.controller';
 import { FriendshipModule } from '../friendship/friendship.module';
 import { PrivacyModule } from '../privacy/privacy.module';
 import { ContactCacheListener } from './listeners/contact-cache.listener';
+import { ContactNotificationListener } from './listeners/contact-notification.listener';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ContactCacheListener } from './listeners/contact-cache.listener';
   providers: [
     ContactService,
     ContactCacheListener, // P3.4: cache invalidation on alias change / contact removal
+    ContactNotificationListener,
   ],
   exports: [ContactService], // Export cho call-history, conversation, search modules
 })

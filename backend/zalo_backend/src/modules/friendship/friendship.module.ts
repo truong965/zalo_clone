@@ -25,6 +25,10 @@ import { UnfriendedListener } from './listeners/unfriended.listener';
 import { DistributedLockService } from '@common/distributed-lock/distributed-lock.service';
 import { FriendshipBlockListener } from './listeners/friendship-block.listener';
 
+// Real-time socket events
+import { FriendshipNotificationListener } from './listeners/friendship-notification.listener';
+import { UserPresenceListener } from './listeners/user-presence.listener';
+
 /**
  * FriendshipModule - Extracted from SocialModule (PHASE 6)
  *
@@ -83,6 +87,8 @@ import { FriendshipBlockListener } from './listeners/friendship-block.listener';
     FriendRequestRemovedListener,
     UnfriendedListener,
     FriendshipBlockListener,
+    FriendshipNotificationListener,
+    UserPresenceListener,
   ],
   exports: [FriendshipService],
 })

@@ -55,11 +55,14 @@ export class DisplayNameResolver {
                         contactUserId: true,
                         aliasName: true,
                         phoneBookName: true,
-                        contactUser: {
-                              select: { displayName: true },
-                        },
                   },
             });
+
+            const users = await this.prisma.user.findMany({
+                  where: { id: { in: uniqueIds } },
+                  select: { id: true, displayName: true },
+            });
+            const userMap = new Map(users.map((user) => [user.id, user.displayName]));
 
             // 2. Apply 3-level fallback: aliasName > phoneBookName > displayName
             const resolvedFromContacts = new Set<string>();
@@ -67,7 +70,7 @@ export class DisplayNameResolver {
                   const name =
                         contact.aliasName ??
                         contact.phoneBookName ??
-                        contact.contactUser.displayName ??
+                        userMap.get(contact.contactUserId) ??
                         'Unknown User';
                   result.set(contact.contactUserId, name);
                   resolvedFromContacts.add(contact.contactUserId);

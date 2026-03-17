@@ -325,34 +325,39 @@ model User {
   tokens          UserToken[]
 
   // Social Graph
-  sentFriendRequests     Friendship[] @relation("User1")
-  receivedFriendRequests Friendship[] @relation("User2")
-  friendshipInitiator    Friendship[] @relation("Requester")
-  friendshipActions      Friendship[] @relation("LastActionBy")
+  // [DECOUPLED - Phase 2.2]: Remove physical relations for Social Graph
+  // sentFriendRequests     Friendship[] @relation("User1")
+  // receivedFriendRequests Friendship[] @relation("User2")
+  // friendshipInitiator    Friendship[] @relation("Requester")
+  // friendshipActions      Friendship[] @relation("LastActionBy")
 
-  blocksBlocked    Block[] @relation("Blocker")
-  blocksWasBlocked Block[] @relation("Blocked")
+  // blocksBlocked    Block[] @relation("Blocker")
+  // blocksWasBlocked Block[] @relation("Blocked")
 
   // Messaging & Groups
-  conversations        ConversationMember[]
-  joinRequests         GroupJoinRequest[]   @relation("MemberRequesting") // tự xin vào group
-  groupInvitesSent     GroupJoinRequest[]   @relation("RequestInviter") // Lời mời vào nhóm tôi gửi
-  reviewedJoinRequests GroupJoinRequest[]   @relation("ReviewedRequests")
+  // [DECOUPLED - Phase 2.4]: Remove physical relations for Messaging Domain
+  // conversations        ConversationMember[]
+  // joinRequests         GroupJoinRequest[]   @relation("MemberRequesting") // tự xin vào group
+  // groupInvitesSent     GroupJoinRequest[]   @relation("RequestInviter") // Lời mời vào nhóm tôi gửi
+  // reviewedJoinRequests GroupJoinRequest[]   @relation("ReviewedRequests")
 
-  messagesSent    Message[]
-  messagesDeleted Message[] @relation("DeletedBy")
+  // messagesSent    Message[]
+  // messagesDeleted Message[] @relation("DeletedBy")
 
   // Contacts (Shadow Graph)
-  myContacts   UserContact[] @relation("MyContacts") // Danh bạ tôi lưu
-  inContactsOf UserContact[] @relation("InContacts") // Tôi nằm trong danh bạ ai
+  // [DECOUPLED - Phase 2.2]: Remove physical relations for Shadow Graph
+  // myContacts   UserContact[] @relation("MyContacts") // Danh bạ tôi lưu
+  // inContactsOf UserContact[] @relation("InContacts") // Tôi nằm trong danh bạ ai
 
   // Media
-  uploadedMedia MediaAttachment[] @relation("UploadedMedia")
+  // [DECOUPLED - Phase 2.1]: Remove physical relation to MediaAttachment
+  // uploadedMedia MediaAttachment[] @relation("UploadedMedia")
 
   // Calls [NEW]
-  callsMade          CallHistory[]    @relation("CallsMade")
-  callParticipations CallParticipant[] @relation("CallParticipations")
-  kickedCalls        CallParticipant[] @relation("KickedParticipants")
+  // [DECOUPLED - Phase 2.2]: Remove physical relations for Call Domain
+  // callsMade          CallHistory[]     @relation("CallsMade")
+  // callParticipations CallParticipant[] @relation("CallParticipations")
+  // kickedCalls        CallParticipant[] @relation("KickedParticipants")
 
   // Search Analytics
   searchQueries SearchQuery[]
@@ -552,10 +557,11 @@ model Friendship {
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  user1      User  @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2      User  @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
-  requester  User  @relation("Requester", fields: [requesterId], references: [id])
-  actionUser User? @relation("LastActionBy", fields: [lastActionBy], references: [id])
+  // [DECOUPLED - Phase 2.2]: Remove physical relation to User
+  // user1      User  @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
+  // user2      User  @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
+  // requester  User  @relation("Requester", fields: [requesterId], references: [id])
+  // actionUser User? @relation("LastActionBy", fields: [lastActionBy], references: [id])
 
   // 1. Core Integrity (GIỮ NGUYÊN)
   @@unique([user1Id, user2Id])
@@ -584,8 +590,9 @@ model Block {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  // [DECOUPLED - Phase 2.2]: Remove physical relation to User
+  // blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  // blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
   @@index([blockedId]) // [NEW] Reverse lookup
@@ -611,8 +618,9 @@ model UserContact {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  owner       User @relation("MyContacts", fields: [ownerId], references: [id], onDelete: Cascade)
-  contactUser User @relation("InContacts", fields: [contactUserId], references: [id], onDelete: Cascade)
+  // [DECOUPLED - Phase 2.2]: Remove physical relation to User
+  // owner       User @relation("MyContacts", fields: [ownerId], references: [id], onDelete: Cascade)
+  // contactUser User @relation("InContacts", fields: [contactUserId], references: [id], onDelete: Cascade)
 
   @@unique([ownerId, contactUserId]) // Một người chỉ lưu người kia 1 lần
   @@index([ownerId, aliasName]) // Search nhanh theo tên gợi nhớ
@@ -652,7 +660,8 @@ model Conversation {
   members      ConversationMember[]
   messages     Message[]
   joinRequests GroupJoinRequest[]
-  calls        CallHistory[]      @relation("CallsInConversation")
+  // [DECOUPLED - Phase 2.2]: Remove physical relation to CallHistory
+  // calls        CallHistory[]      @relation("CallsInConversation")
   reminders    Reminder[]
 
   @@index([lastMessageAt(sort: Desc)])
@@ -695,7 +704,8 @@ model ConversationMember {
   kickedAt DateTime? @map("kicked_at") @db.Timestamptz
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // [DECOUPLED - Phase 2.4]: Remove physical relation to User
+  // user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, userId])
   @@index([userId, status])
@@ -729,9 +739,10 @@ model GroupJoinRequest {
   reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation("MemberRequesting", fields: [userId], references: [id], onDelete: Cascade)
-  reviewer     User?        @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
-  inviter      User?        @relation("RequestInviter", fields: [inviterId], references: [id])
+  // [DECOUPLED - Phase 2.4]: Remove physical relations to User
+  // user         User         @relation("MemberRequesting", fields: [userId], references: [id], onDelete: Cascade)
+  // reviewer     User?        @relation("ReviewedRequests", fields: [reviewedBy], references: [id])
+  // inviter      User?        @relation("RequestInviter", fields: [inviterId], references: [id])
 
   @@unique([conversationId, userId])
   @@index([conversationId, status])
@@ -779,13 +790,15 @@ model Message {
 
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User?        @relation(fields: [senderId], references: [id])
-  deletedBy    User?        @relation("DeletedBy", fields: [deletedById], references: [id])
+  // [DECOUPLED - Phase 2.4]: Remove physical relations to User
+  // sender       User?        @relation(fields: [senderId], references: [id])
+  // deletedBy    User?        @relation("DeletedBy", fields: [deletedById], references: [id])
 
   parentMessage Message?  @relation("Reply", fields: [replyToId], references: [id])
   replies       Message[] @relation("Reply")
 
-  mediaAttachments MediaAttachment[]
+  // [DECOUPLED - Phase 2.1]: Remove physical relation to MediaAttachment
+  // mediaAttachments MediaAttachment[]
   reminders        Reminder[]
 
   @@index([conversationId, createdAt(sort: Desc)])
@@ -853,8 +866,9 @@ model MediaAttachment {
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
   deletedById String?   @map("deleted_by") @db.Uuid
 
-  message  Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  uploader User     @relation("UploadedMedia", fields: [uploadedBy], references: [id])
+  // [DECOUPLED - Phase 2.1]: Remove physical relation to Message and User
+  // message  Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  // uploader User     @relation("UploadedMedia", fields: [uploadedBy], references: [id])
 
   @@index([uploadedBy, createdAt(sort: Desc)])
   @@index([processingStatus])
@@ -891,8 +905,7 @@ model CallHistory {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  initiator    User              @relation("CallsMade", fields: [initiatorId], references: [id])
-  conversation Conversation?     @relation("CallsInConversation", fields: [conversationId], references: [id])
+  // [DECOUPLED - Phase 2.2]: Remove physical relations to User and Conversation
   participants CallParticipant[]
 
   // Feed by initiator (calls I made)
@@ -925,8 +938,9 @@ model CallParticipant {
   duration Int? // seconds this participant was in call
 
   callHistory CallHistory @relation(fields: [callId], references: [id], onDelete: Cascade)
-  user        User        @relation("CallParticipations", fields: [userId], references: [id])
-  kicker      User?       @relation("KickedParticipants", fields: [kickedBy], references: [id])
+  // [DECOUPLED - Phase 2.2]: Remove physical relations to User
+  // user        User        @relation("CallParticipations", fields: [userId], references: [id])
+  // kicker      User?       @relation("KickedParticipants", fields: [kickedBy], references: [id])
 
   @@unique([callId, userId])
   @@index([userId, status], name: "idx_call_participant_user_status") // missed-calls badge

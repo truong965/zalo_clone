@@ -1,0 +1,198 @@
+src/modules/contact/contact.service.ts(347,3): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(348,12): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(349,17): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(350,4): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(352,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(352,65): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(353,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(353,50): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(360,5): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(360,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(371,7): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(373,9): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(373,37): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(374,9): error TS1003: Identifier expected.
+src/modules/contact/contact.service.ts(374,17): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(374,29): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(374,55): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(461,8): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(462,42): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(462,50): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(463,10): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(472,12): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/modules/contact/contact.service.ts(472,18): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(472,25): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(472,28): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(479,18): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(479,26): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(479,29): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(487,5): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(490,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(500,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(500,11): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(500,50): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(500,59): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(500,73): error TS1109: Expression expected.
+src/modules/contact/contact.service.ts(501,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(501,61): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(502,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(502,42): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(505,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(505,48): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(508,22): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(508,27): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(521,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(525,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(525,43): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(525,52): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(525,54): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(542,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(542,38): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(542,47): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(542,49): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(549,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(549,11): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(550,16): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(550,25): error TS1011: An element access expression should take an argument.
+src/modules/contact/contact.service.ts(551,12): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(552,4): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(552,18): error TS1011: An element access expression should take an argument.
+src/modules/contact/contact.service.ts(553,12): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(566,7): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(576,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(576,11): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(577,16): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(578,10): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(578,24): error TS1011: An element access expression should take an argument.
+src/modules/contact/contact.service.ts(579,4): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(579,26): error TS1011: An element access expression should take an argument.
+src/modules/contact/contact.service.ts(580,14): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(580,27): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(580,36): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(580,38): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(582,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(582,43): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(586,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(594,7): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(597,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(597,45): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(598,11): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(602,7): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(606,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(606,74): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(611,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(611,35): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(611,43): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(611,44): error TS1109: Expression expected.
+src/modules/contact/contact.service.ts(611,46): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(611,50): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(614,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(618,7): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(620,10): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/modules/contact/contact.service.ts(620,16): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(620,21): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(620,24): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(634,5): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(634,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(634,40): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(635,33): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(635,44): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(635,46): error TS1136: Property assignment expected.
+src/modules/contact/contact.service.ts(671,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(677,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(677,11): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(678,12): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(679,10): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(679,24): error TS1011: An element access expression should take an argument.
+src/modules/contact/contact.service.ts(680,21): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(681,19): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(682,4): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(682,33): error TS1011: An element access expression should take an argument.
+src/modules/contact/contact.service.ts(683,14): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(683,27): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(683,36): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(683,38): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(686,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(686,43): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(687,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(690,6): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(692,12): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(706,7): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(712,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(712,11): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(713,12): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(714,17): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(715,4): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(715,18): error TS1109: Expression expected.
+src/modules/contact/contact.service.ts(716,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(716,60): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(717,11): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(717,15): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(717,30): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(723,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(723,34): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(723,56): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(723,65): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(723,67): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(727,3): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(728,12): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(729,18): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(730,14): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(731,4): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(732,17): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(732,34): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(754,3): error TS1128: Declaration or statement expected.
+src/modules/contact/contact.service.ts(760,3): error TS1434: Unexpected keyword or identifier.
+src/modules/contact/contact.service.ts(761,12): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(762,17): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(763,4): error TS1005: ';' expected.
+src/modules/contact/contact.service.ts(763,34): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(763,54): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(763,78): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(764,11): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(767,7): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(768,9): error TS1003: Identifier expected.
+src/modules/contact/contact.service.ts(768,19): error TS1005: '{' expected.
+src/modules/contact/contact.service.ts(768,26): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(768,46): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(769,12): error TS1005: ':' expected.
+src/modules/contact/contact.service.ts(774,6): error TS1005: ',' expected.
+src/modules/contact/contact.service.ts(776,1): error TS1128: Declaration or statement expected.
+src/modules/friendship/service/friendship.service.ts(889,3): error TS1434: Unexpected keyword or identifier.
+src/modules/friendship/service/friendship.service.ts(889,31): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(889,40): error TS1005: ';' expected.
+src/modules/friendship/service/friendship.service.ts(889,75): error TS1011: An element access expression should take an argument.
+src/modules/friendship/service/friendship.service.ts(890,11): error TS1005: ':' expected.
+src/modules/friendship/service/friendship.service.ts(902,7): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(905,11): error TS1005: ':' expected.
+src/modules/friendship/service/friendship.service.ts(905,43): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(906,10): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/modules/friendship/service/friendship.service.ts(906,16): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(906,18): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(906,21): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(910,5): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(910,11): error TS1005: ':' expected.
+src/modules/friendship/service/friendship.service.ts(913,12): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(914,11): error TS1005: ':' expected.
+src/modules/friendship/service/friendship.service.ts(914,55): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(916,11): error TS1005: ':' expected.
+src/modules/friendship/service/friendship.service.ts(916,91): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(918,12): error TS1005: ':' expected.
+src/modules/friendship/service/friendship.service.ts(941,7): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1007,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1025,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1039,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1062,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1069,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1082,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1108,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1123,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1158,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1176,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1183,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1208,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1222,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1228,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1235,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1244,3): error TS1005: ',' expected.
+src/modules/friendship/service/friendship.service.ts(1258,1): error TS1005: '}' expected.

@@ -40,13 +40,16 @@ import {
   MissedCallsCountDto,
 } from './dto/call-history.dto';
 
-// 1. Định nghĩa Type cho kết quả query từ Prisma (bao gồm cả Relations)
-const callHistoryWithRelations =
+type CallUserProfile = {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+// 1. Prisma payload for Call domain only (no cross-domain User relation includes)
+const callHistoryWithParticipants =
   Prisma.validator<Prisma.CallHistoryDefaultArgs>()({
     include: {
-      initiator: {
-        select: { id: true, displayName: true, avatarUrl: true },
-      },
       participants: {
         select: {
           id: true,
@@ -56,17 +59,14 @@ const callHistoryWithRelations =
           joinedAt: true,
           leftAt: true,
           duration: true,
-          user: {
-            select: { id: true, displayName: true, avatarUrl: true },
-          },
         },
       },
     },
   });
 
 // Đây là Type an toàn được Prisma tự động sinh ra
-type CallHistoryWithRelations = Prisma.CallHistoryGetPayload<
-  typeof callHistoryWithRelations
+type CallHistoryWithParticipants = Prisma.CallHistoryGetPayload<
+  typeof callHistoryWithParticipants
 >;
 @Injectable()
 export class CallHistoryService {
@@ -390,7 +390,7 @@ export class CallHistoryService {
 
       return tx.callHistory.findUniqueOrThrow({
         where: { id: created.id },
-        ...callHistoryWithRelations,
+        ...callHistoryWithParticipants,
       });
     });
 
@@ -427,7 +427,11 @@ export class CallHistoryService {
       `Call logged: ${callHistory.id} (${status}, ${finalDuration}s)`,
     );
 
-    return this.mapToResponseDto(callHistory, '', new Map());
+    const userProfileMap = await this.getUserProfilesMap([
+      callHistory.initiatorId,
+      ...callHistory.participants.map((participant) => participant.userId),
+    ]);
+    return this.mapToResponseDto(callHistory, '', new Map(), userProfileMap);
   }
 
   /**
@@ -489,7 +493,7 @@ export class CallHistoryService {
 
       return tx.callHistory.findUniqueOrThrow({
         where: { id: created.id },
-        ...callHistoryWithRelations,
+        ...callHistoryWithParticipants,
       });
     });
 
@@ -502,7 +506,11 @@ export class CallHistoryService {
 
     this.logger.warn(`Call logged without active session: ${callHistory.id}`);
 
-    return this.mapToResponseDto(callHistory, '', new Map());
+    const userProfileMap = await this.getUserProfilesMap([
+      callHistory.initiatorId,
+      ...callHistory.participants.map((participant) => participant.userId),
+    ]);
+    return this.mapToResponseDto(callHistory, '', new Map(), userProfileMap);
   }
 
   /**
@@ -551,7 +559,7 @@ export class CallHistoryService {
       cursor: cursor ? { id: cursor } : undefined,
       // skip: cursor ? 1 : 0, // Bỏ qua item làm cursor
       orderBy: { startedAt: 'desc' }, // Mới nhất lên đầu
-      ...callHistoryWithRelations,
+      ...callHistoryWithParticipants,
     });
 
     // 2. [OPTIMIZATION] Batch Resolve Display Names
@@ -567,6 +575,10 @@ export class CallHistoryService {
       userId,
       otherUserIds,
     );
+    const userProfileMap = await this.getUserProfilesMap([
+      ...calls.map((call) => call.initiatorId),
+      ...calls.flatMap((call) => call.participants.map((participant) => participant.userId)),
+    ]);
 
     // 4. Pagination Calculation
     const hasNextPage = calls.length > limit;
@@ -580,7 +592,7 @@ export class CallHistoryService {
       total = await this.prisma.callHistory.count({ where });
     }
     const mappedData = data.map((call) =>
-      this.mapToResponseDto(call, userId, nameMap, viewedAt),
+      this.mapToResponseDto(call, userId, nameMap, userProfileMap, viewedAt),
     );
 
     // 5. Return Result
@@ -715,7 +727,7 @@ export class CallHistoryService {
     const calls = await this.prisma.callHistory.findMany({
       where: { id: { in: callIds } },
       orderBy: { startedAt: 'desc' },
-      ...callHistoryWithRelations,
+      ...callHistoryWithParticipants,
     });
     // Resolve display names for initiators
     const otherUserIds = [
@@ -725,9 +737,13 @@ export class CallHistoryService {
       userId,
       otherUserIds,
     );
+    const userProfileMap = await this.getUserProfilesMap([
+      ...calls.map((call) => call.initiatorId),
+      ...calls.flatMap((call) => call.participants.map((participant) => participant.userId)),
+    ]);
 
     return calls.map((call) =>
-      this.mapToResponseDto(call, userId, nameMap, viewedAt),
+      this.mapToResponseDto(call, userId, nameMap, userProfileMap, viewedAt),
     );
   }
 
@@ -991,15 +1007,38 @@ export class CallHistoryService {
   }
 
   /**
+   * Fetch user profiles by IDs for logical data composition.
+   */
+  private async getUserProfilesMap(userIds: string[]): Promise<Map<string, CallUserProfile>> {
+    const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+    if (uniqueUserIds.length === 0) {
+      return new Map();
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: uniqueUserIds } },
+      select: {
+        id: true,
+        displayName: true,
+        avatarUrl: true,
+      },
+    });
+
+    return new Map(users.map((user) => [user.id, user]));
+  }
+
+  /**
    * Map CallHistory entity to response DTO
    */
   private mapToResponseDto(
-    call: CallHistoryWithRelations,
+    call: CallHistoryWithParticipants,
     currentUserId: string,
     nameMap: Map<string, string>,
+    userProfileMap: Map<string, CallUserProfile>,
     viewedAt?: Date,
   ): CallHistoryResponseDto {
-    const resolveName = (user: { id: string; displayName: string } | null) => {
+    const resolveName = (targetUserId: string) => {
+      const user = userProfileMap.get(targetUserId);
       if (!user) return 'Unknown';
       if (user.id === currentUserId) return user.displayName;
       return nameMap.get(user.id) || user.displayName;
@@ -1013,11 +1052,11 @@ export class CallHistoryService {
       joinedAt: p.joinedAt ?? undefined,
       leftAt: p.leftAt ?? undefined,
       duration: p.duration ?? undefined,
-      user: p.user
+      user: userProfileMap.get(p.userId)
         ? {
-          id: p.user.id,
-          displayName: resolveName(p.user),
-          avatarUrl: p.user.avatarUrl ?? null,
+          id: p.userId,
+          displayName: resolveName(p.userId),
+          avatarUrl: userProfileMap.get(p.userId)?.avatarUrl ?? null,
         }
         : undefined,
     }));
@@ -1036,11 +1075,11 @@ export class CallHistoryService {
       conversationId: call.conversationId ?? undefined,
       isViewed: viewedAt ? call.startedAt <= viewedAt : false,
       participants,
-      initiator: call.initiator
+      initiator: userProfileMap.get(call.initiatorId)
         ? {
-          id: call.initiator.id,
-          displayName: resolveName(call.initiator),
-          avatarUrl: call.initiator.avatarUrl ?? null,
+          id: call.initiatorId,
+          displayName: resolveName(call.initiatorId),
+          avatarUrl: userProfileMap.get(call.initiatorId)?.avatarUrl ?? null,
         }
         : undefined,
     };

@@ -1,0 +1,59 @@
+src/modules/block/block.service.ts(382,13): error TS2551: Property 'blocked' does not exist on type 'BlockWhereInput'. Did you mean 'blockerId'?
+src/modules/block/block.service.ts(396,7): error TS2322: Type '{ blocked: { select: { id: true; displayName: true; avatarUrl: true; }; }; }' is not assignable to type 'never'.
+src/modules/block/block.service.ts(408,52): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/block/block.service.ts(418,33): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/block/block.service.ts(419,50): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/block/block.service.ts(419,71): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/block/block.service.ts(420,36): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/contact/contact.service.ts(274,11): error TS2561: Object literal may only specify known properties, but 'contactUser' does not exist in type 'UserContactWhereInput'. Did you mean to write 'contactUserId'?
+src/modules/contact/contact.service.ts(291,7): error TS2322: Type '{ contactUser: { select: { id: true; displayName: true; avatarUrl: true; lastSeenAt: true; }; }; }' is not assignable to type 'never'.
+src/modules/contact/contact.service.ts(305,66): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/contact/contact.service.ts(318,44): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/contact/contact.service.ts(323,31): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/contact/contact.service.ts(327,40): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/contact/contact.service.ts(328,41): error TS2339: Property 'lastSeenAt' does not exist on type 'never'.
+src/modules/contact/contact.service.ts(329,53): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/contact/contact.service.ts(364,9): error TS2561: Object literal may only specify known properties, but 'contactUser' does not exist in type 'UserContactSelect<DefaultArgs>'. Did you mean to write 'contactUserId'?
+src/modules/contact/contact.service.ts(376,16): error TS2551: Property 'contactUser' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; ownerId: string; contactUserId: string; aliasName: string | null; source: ContactSource; phoneBookName: string | null; }'. Did you mean 'contactUserId'?
+src/modules/contact/contact.service.ts(426,11): error TS2561: Object literal may only specify known properties, but 'contactUser' does not exist in type 'UserContactSelect<DefaultArgs>'. Did you mean to write 'contactUserId'?
+src/modules/contact/contact.service.ts(441,19): error TS2551: Property 'contactUser' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; ownerId: string; contactUserId: string; aliasName: string | null; source: ContactSource; phoneBookName: string | null; }'. Did you mean 'contactUserId'?
+src/modules/friendship/service/friendship.service.ts(718,13): error TS2561: Object literal may only specify known properties, but 'user2' does not exist in type 'FriendshipWhereInput'. Did you mean to write 'user2Id'?
+src/modules/friendship/service/friendship.service.ts(731,13): error TS2561: Object literal may only specify known properties, but 'user1' does not exist in type 'FriendshipWhereInput'. Did you mean to write 'user1Id'?
+src/modules/friendship/service/friendship.service.ts(767,7): error TS2322: Type '{ user1: { select: { id: true; displayName: true; avatarUrl: true; phoneNumber: true; }; }; user2: { select: { id: true; displayName: true; avatarUrl: true; phoneNumber: true; }; }; }' is not assignable to type 'never'.
+src/modules/friendship/service/friendship.service.ts(812,51): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(816,26): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(817,31): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(819,76): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(822,44): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(823,29): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(856,7): error TS2322: Type '{ user1: { select: { id: true; displayName: true; avatarUrl: true; }; }; user2: { select: { id: true; displayName: true; avatarUrl: true; }; }; }' is not assignable to type 'never'.
+src/modules/friendship/service/friendship.service.ts(866,30): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(867,30): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(887,29): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(888,46): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(888,63): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(889,32): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(892,26): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(893,43): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(893,57): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(894,29): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(915,7): error TS2322: Type '{ user1: { select: { id: true; displayName: true; avatarUrl: true; }; }; user2: { select: { id: true; displayName: true; avatarUrl: true; }; }; }' is not assignable to type 'never'.
+src/modules/friendship/service/friendship.service.ts(925,32): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(926,32): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(946,29): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(947,46): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(947,63): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(948,32): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(951,26): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(952,43): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(952,57): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/friendship/service/friendship.service.ts(953,29): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/search_engine/repositories/contact-search.repository.ts(266,9): error TS2353: Object literal may only specify known properties, and 'myContacts' does not exist in type 'UserSelect<DefaultArgs>'.
+src/modules/search_engine/repositories/contact-search.repository.ts(338,7): error TS2322: Type '{ contactUser: { select: { id: true; displayName: true; avatarUrl: true; phoneNumber: true; status: true; }; }; }' is not assignable to type 'never'.
+src/modules/search_engine/repositories/contact-search.repository.ts(355,31): error TS2339: Property 'id' does not exist on type 'never'.
+src/modules/search_engine/repositories/contact-search.repository.ts(356,40): error TS2339: Property 'phoneNumber' does not exist on type 'never'.
+src/modules/search_engine/repositories/contact-search.repository.ts(357,86): error TS2339: Property 'displayName' does not exist on type 'never'.
+src/modules/search_engine/repositories/contact-search.repository.ts(358,38): error TS2339: Property 'avatarUrl' does not exist on type 'never'.
+src/modules/search_engine/repositories/contact-search.repository.ts(359,35): error TS2339: Property 'status' does not exist on type 'never'.
+src/shared/services/display-name-resolver.service.ts(58,25): error TS2561: Object literal may only specify known properties, but 'contactUser' does not exist in type 'UserContactSelect<DefaultArgs>'. Did you mean to write 'contactUserId'?
+src/shared/services/display-name-resolver.service.ts(70,33): error TS2551: Property 'contactUser' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; ownerId: string; contactUserId: string; aliasName: string | null; source: ContactSource; phoneBookName: string | null; }'. Did you mean 'contactUserId'?

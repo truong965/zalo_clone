@@ -19,6 +19,13 @@ import { MAX_PINNED_CONVERSATIONS } from '../constants/conversation.constants';
 import type { GroupSettings } from './group.service';
 import { ConversationArchivedEvent, ConversationMutedEvent } from '../events';
 
+type UserProfile = {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  lastSeenAt: Date | null;
+};
+
 const conversationWithRelations =
   Prisma.validator<Prisma.ConversationDefaultArgs>()({
     include: {
@@ -36,15 +43,16 @@ const conversationWithRelations =
         },
       },
       members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              displayName: true,
-              avatarUrl: true,
-              lastSeenAt: true,
-            },
-          },
+        select: {
+          userId: true,
+          role: true,
+          status: true,
+          unreadCount: true,
+          lastReadMessageId: true,
+          isMuted: true,
+          isPinned: true,
+          pinnedAt: true,
+          isArchived: true,
         },
       },
     },
@@ -65,6 +73,24 @@ export class ConversationService {
     private readonly displayNameResolver: DisplayNameResolver,
     private readonly eventEmitter: EventEmitter2,
   ) { }
+
+  private async getUserProfilesMap(userIds: string[]): Promise<Map<string, UserProfile>> {
+    if (userIds.length === 0) {
+      return new Map();
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        displayName: true,
+        avatarUrl: true,
+        lastSeenAt: true,
+      },
+    });
+
+    return new Map(users.map((u) => [u.id, u]));
+  }
 
   /**
    * Check if user is member of conversation
@@ -89,7 +115,7 @@ export class ConversationService {
    * Used for message fanout
    */
   async getActiveMembers(conversationId: string) {
-    return this.prisma.conversationMember.findMany({
+    const members = await this.prisma.conversationMember.findMany({
       where: {
         conversationId,
         status: MemberStatus.ACTIVE,
@@ -97,15 +123,19 @@ export class ConversationService {
       select: {
         userId: true,
         role: true,
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
       },
     });
+
+    const profileMap = await this.getUserProfilesMap(members.map((m) => m.userId));
+
+    return members.map((m) => ({
+      ...m,
+      user: {
+        id: m.userId,
+        displayName: profileMap.get(m.userId)?.displayName ?? 'Unknown User',
+        avatarUrl: profileMap.get(m.userId)?.avatarUrl ?? null,
+      },
+    }));
   }
 
   /**
@@ -358,11 +388,13 @@ export class ConversationService {
         conversations
           .filter((c) => c.type === ConversationType.DIRECT)
           .map(
-            (c) => c.members.find((m) => m.userId !== userId)?.user?.id ?? null,
+            (c) => c.members.find((m) => m.userId !== userId)?.userId ?? null,
           )
           .filter((id): id is string => !!id),
       ),
     );
+
+    const userProfileMap = await this.getUserProfilesMap(directOtherUserIds);
 
     const [privacyMap, nameMap] = await Promise.all([
       this.privacyService.getManySettings(directOtherUserIds),
@@ -393,6 +425,7 @@ export class ConversationService {
             blockMap,
             onlineMap,
             nameMap,
+            userProfileMap,
           ),
           isPinned: memberState?.isPinned ?? false,
           pinnedAt: memberState?.pinnedAt?.toISOString() ?? null,
@@ -424,6 +457,7 @@ export class ConversationService {
     blockMap: Map<string, boolean>,
     onlineMap: Map<string, boolean>,
     nameMap?: Map<string, string>,
+    userProfileMap?: Map<string, UserProfile>,
   ) {
     const currentUserMember = conversation.members.find(
       (m) => m.userId === currentUserId,
@@ -439,11 +473,15 @@ export class ConversationService {
         (m) => m.userId !== currentUserId,
       );
 
-      if (otherMember?.user) {
+      if (otherMember) {
+        const otherProfile = userProfileMap?.get(otherMember.userId);
         // Display name priority: aliasName > phoneBookName > displayName
-        name = nameMap?.get(otherMember.user.id) ?? otherMember.user.displayName;
-        avatar = otherMember.user.avatarUrl;
-        otherUserId = otherMember.user.id;
+        name =
+          nameMap?.get(otherMember.userId) ??
+          otherProfile?.displayName ??
+          name;
+        avatar = otherProfile?.avatarUrl ?? avatar;
+        otherUserId = otherMember.userId;
 
         isOnline = onlineMap.get(otherUserId) || false;
         isBlocked = blockMap.get(otherUserId) || false;
@@ -463,8 +501,7 @@ export class ConversationService {
       lastMessageAt: conversation.lastMessageAt,
 
       lastSeenAt: otherUserId
-        ? conversation.members.find((m) => m.userId === otherUserId)?.user
-          .lastSeenAt
+        ? userProfileMap?.get(otherUserId)?.lastSeenAt ?? null
         : null,
       lastMessage: lastMsg
         ? {
@@ -586,8 +623,8 @@ export class ConversationService {
 
     if (conversation.type === ConversationType.DIRECT) {
       const otherMember = conversation.members.find((m) => m.userId !== userId);
-      if (otherMember?.user) {
-        const otherId = otherMember.user.id;
+      if (otherMember) {
+        const otherId = otherMember.userId;
         const [privacyMap, resolvedNames] = await Promise.all([
           this.privacyService.getManySettings([otherId]),
           this.displayNameResolver.batchResolve(userId, [otherId]),
@@ -603,12 +640,21 @@ export class ConversationService {
       }
     }
 
+    const profileMap = await this.getUserProfilesMap(
+      conversation.type === ConversationType.DIRECT
+        ? conversation.members
+          .filter((m) => m.userId !== userId)
+          .map((m) => m.userId)
+        : [],
+    );
+
     return this.mapConversationResponse(
       conversation as ConversationWithRelations,
       userId,
       blockMap,
       onlineMap,
       nameMap,
+      profileMap,
     );
   }
 
@@ -711,14 +757,9 @@ export class ConversationService {
       include: {
         members: {
           where: { status: MemberStatus.ACTIVE },
-          include: {
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-              },
-            },
+          select: {
+            userId: true,
+            role: true,
           },
           orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
         },
@@ -730,13 +771,14 @@ export class ConversationService {
     }
 
     // Batch resolve display names per viewer
-    const memberIds = conversation.members.map((m) => m.user.id);
+    const memberIds = conversation.members.map((m) => m.userId);
+    const profileMap = await this.getUserProfilesMap(memberIds);
     const nameMap = await this.displayNameResolver.batchResolve(userId, memberIds);
 
     return conversation.members.map((m) => ({
-      id: m.user.id,
-      displayName: nameMap.get(m.user.id) ?? m.user.displayName,
-      avatarUrl: m.user.avatarUrl,
+      id: m.userId,
+      displayName: nameMap.get(m.userId) ?? profileMap.get(m.userId)?.displayName ?? 'Unknown User',
+      avatarUrl: profileMap.get(m.userId)?.avatarUrl ?? null,
       role: m.role,
     }));
   }
@@ -783,12 +825,6 @@ export class ConversationService {
             role: true,
             isMuted: true,
             unreadCount: true,
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-              },
-            },
           },
         },
       },
@@ -799,10 +835,11 @@ export class ConversationService {
     for (const g of groups) {
       for (const m of g.members) {
         if (m.userId !== userId) {
-          allOtherMemberIds.add(m.user.id);
+          allOtherMemberIds.add(m.userId);
         }
       }
     }
+    const profileMap = await this.getUserProfilesMap([...allOtherMemberIds]);
     const nameMap = await this.displayNameResolver.batchResolve(
       userId,
       [...allOtherMemberIds],
@@ -827,8 +864,8 @@ export class ConversationService {
           avatarUrl: g.avatarUrl,
           memberCount: g.members.length,
           membersPreview: otherMembers.map(
-            (m: { user: { id: string; displayName: string } }) =>
-              nameMap.get(m.user.id) ?? m.user.displayName,
+            (m: { userId: string }) =>
+              nameMap.get(m.userId) ?? profileMap.get(m.userId)?.displayName ?? 'Unknown User',
           ),
           lastMessageAt: g.lastMessageAt?.toISOString() ?? null,
           lastMessage: lastMsg
@@ -898,35 +935,43 @@ export class ConversationService {
         createdAt: true,
         deletedAt: true,
         deletedById: true,
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
-        mediaAttachments: {
-          where: { deletedAt: null },
-          take: 1,
-          select: {
-            id: true,
-            mediaType: true,
-            originalName: true,
-            thumbnailUrl: true,
-          },
-        },
       },
       orderBy: { createdAt: 'desc' },
     });
+
 
     // Resolve display names for the viewer
     const senderIds = [
       ...new Set(messages.map((m) => m.senderId).filter(Boolean) as string[]),
     ];
+
+    // [Phase 2.1 DECOUPLED]: Fetch media attachments manually
+    const mediaAttachments = await this.prisma.mediaAttachment.findMany({
+      where: {
+        messageId: { in: messages.map(m => m.id) },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        messageId: true,
+        mediaType: true,
+        originalName: true,
+        thumbnailUrl: true,
+      },
+    });
+    const mediaMap = new Map<string, any[]>();
+    for (const media of mediaAttachments) {
+      if (!media.messageId) continue;
+      const msgIdStr = media.messageId.toString();
+      if (!mediaMap.has(msgIdStr)) mediaMap.set(msgIdStr, []);
+      mediaMap.get(msgIdStr)!.push(media);
+    }
+
     const nameMap =
       senderIds.length > 0
         ? await this.displayNameResolver.batchResolve(userId, senderIds)
         : new Map<string, string>();
+    const senderProfileMap = await this.getUserProfilesMap(senderIds);
 
     return messages.map((m) => ({
       id: m.id.toString(),
@@ -935,15 +980,15 @@ export class ConversationService {
       senderId: m.senderId,
       createdAt: m.createdAt.toISOString(),
       deletedAt: m.deletedAt?.toISOString() ?? null,
-      sender: m.sender
+      sender: m.senderId
         ? {
-          id: m.sender.id,
+          id: m.senderId,
           displayName:
-            nameMap.get(m.sender.id) ?? m.sender.displayName,
-          avatarUrl: m.sender.avatarUrl,
+            nameMap.get(m.senderId) ?? senderProfileMap.get(m.senderId)?.displayName ?? 'Unknown User',
+          avatarUrl: senderProfileMap.get(m.senderId)?.avatarUrl ?? null,
         }
         : null,
-      mediaAttachments: m.mediaAttachments,
+      mediaAttachments: mediaMap.get(m.id.toString())?.slice(0, 1) || [],
     }));
   }
 }

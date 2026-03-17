@@ -145,10 +145,10 @@ export class CallSignalingGateway implements OnGatewayInit {
        */
       private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
 
-       /**
-       * ICE candidate batch buffers: `${callId}:${userId}` → { candidates[], timer }
-       * Server-side batching reduces relay frequency during ICE gathering.
-       */
+      /**
+      * ICE candidate batch buffers: `${callId}:${userId}` → { candidates[], timer }
+      * Server-side batching reduces relay frequency during ICE gathering.
+      */
       private readonly iceBatchBuffers = new Map<
             string,
             { candidates: any[]; timer: NodeJS.Timeout }
@@ -232,10 +232,17 @@ export class CallSignalingGateway implements OnGatewayInit {
       @OnEvent(SocketEvents.USER_SOCKET_CONNECTED)
       async handleUserConnected(payload: {
             userId: string;
-            socketId: string;
-            socket: AuthenticatedSocket;
+            socketId?: string | null;
+            socket?: AuthenticatedSocket;
       }) {
             const { userId, socket } = payload;
+
+            if (!socket) {
+                  this.logger.debug(
+                        `Skipping call reconnection handling for ${userId} because no local socket was provided`,
+                  );
+                  return;
+            }
 
             const session = await this.callHistoryService.getActiveCall(userId);
             if (!session) return;

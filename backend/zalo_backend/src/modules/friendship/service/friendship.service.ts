@@ -705,39 +705,56 @@ export class FriendshipService {
       search,
     } = query;
 
-    // 1. Xây dựng điều kiện Search (Nếu có)
-    // Tìm trong User1 hoặc User2 (đối phương) dựa trên DisplayName hoặc Phone
-    let searchCondition: Prisma.FriendshipWhereInput | undefined;
+    // 1. Build search filter by target IDs (logical relation composition)
+    let ownerFilter: Prisma.FriendshipWhereInput = {
+      OR: [{ user1Id: userId }, { user2Id: userId }],
+    };
 
     if (search) {
-      searchCondition = {
+      const [matchedUsers, matchedContacts] = await Promise.all([
+        this.prisma.user.findMany({
+          where: {
+            OR: [
+              { displayName: { contains: search, mode: 'insensitive' } },
+              { phoneNumber: { contains: search } },
+            ],
+          },
+          select: { id: true },
+        }),
+        this.prisma.userContact.findMany({
+          where: {
+            ownerId: userId,
+            OR: [
+              { aliasName: { contains: search, mode: 'insensitive' } },
+              { phoneBookName: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+          select: { contactUserId: true },
+        }),
+      ]);
+
+      const matchedTargetIds = [
+        ...new Set([
+          ...matchedUsers.map((u) => u.id),
+          ...matchedContacts.map((c) => c.contactUserId),
+        ]),
+      ];
+
+      if (matchedTargetIds.length === 0) {
+        return {
+          data: [],
+          meta: {
+            limit,
+            hasNextPage: false,
+            nextCursor: undefined,
+          },
+        };
+      }
+
+      ownerFilter = {
         OR: [
-          // Case A: Mình là User1 -> Tìm User2 (Đối phương) khớp tên/sđt/alias/phoneBook
-          {
-            user1Id: userId,
-            user2: {
-              OR: [
-                { displayName: { contains: search, mode: 'insensitive' } },
-                { phoneNumber: { contains: search } },
-                // Alias name resolution: search aliasName & phoneBookName from viewer's contacts
-                { inContactsOf: { some: { ownerId: userId, aliasName: { contains: search, mode: 'insensitive' } } } },
-                { inContactsOf: { some: { ownerId: userId, phoneBookName: { contains: search, mode: 'insensitive' } } } },
-              ],
-            },
-          },
-          // Case B: Mình là User2 -> Tìm User1 (Đối phương) khớp tên/sđt/alias/phoneBook
-          {
-            user2Id: userId,
-            user1: {
-              OR: [
-                { displayName: { contains: search, mode: 'insensitive' } },
-                { phoneNumber: { contains: search } },
-                // Alias name resolution: search aliasName & phoneBookName from viewer's contacts
-                { inContactsOf: { some: { ownerId: userId, aliasName: { contains: search, mode: 'insensitive' } } } },
-                { inContactsOf: { some: { ownerId: userId, phoneBookName: { contains: search, mode: 'insensitive' } } } },
-              ],
-            },
-          },
+          { user1Id: userId, user2Id: { in: matchedTargetIds } },
+          { user2Id: userId, user1Id: { in: matchedTargetIds } },
         ],
       };
     }
@@ -748,12 +765,7 @@ export class FriendshipService {
       status,
       deletedAt: null,
       AND: [
-        // Điều kiện 1: Phải là bản ghi của tôi (Tôi là user1 hoặc user2)
-        // Nếu không có search, ta dùng OR đơn giản.
-        // Nếu có search, logic searchCondition ở trên đã bao hàm việc check user1Id/user2Id rồi.
-        searchCondition
-          ? searchCondition
-          : { OR: [{ user1Id: userId }, { user2Id: userId }] },
+        ownerFilter,
       ],
     };
 
@@ -764,24 +776,13 @@ export class FriendshipService {
       cursor: cursor ? { id: cursor } : undefined,
       skip: cursor ? 1 : 0, // Skip cursor record to avoid duplicates
       orderBy: { createdAt: 'desc' }, // Bạn mới kết bạn lên đầu
-      include: {
-        // Chỉ select các field cần thiết để tối ưu performance
-        user1: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            phoneNumber: true,
-          },
-        },
-        user2: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            phoneNumber: true,
-          },
-        },
+      select: {
+        id: true,
+        user1Id: true,
+        user2Id: true,
+        status: true,
+        createdAt: true,
+        acceptedAt: true,
       },
     });
 
@@ -790,6 +791,19 @@ export class FriendshipService {
     const friendUserIds = displayFriendships.map((f) =>
       f.user1Id === userId ? f.user2Id : f.user1Id,
     );
+
+    const friendUsers = friendUserIds.length > 0
+      ? await this.prisma.user.findMany({
+        where: { id: { in: friendUserIds } },
+        select: {
+          id: true,
+          displayName: true,
+          avatarUrl: true,
+          phoneNumber: true,
+        },
+      })
+      : [];
+    const friendUserMap = new Map(friendUsers.map((u) => [u.id, u]));
 
     const contactEntries = friendUserIds.length > 0
       ? await this.prisma.userContact.findMany({
@@ -807,20 +821,24 @@ export class FriendshipService {
       limit,
       getCursor: (f) => f.id,
       mapToDto: (friendship) => {
-        const friend =
-          friendship.user1Id === userId ? friendship.user2 : friendship.user1;
-        const contactInfo = contactMap.get(friend.id);
+        const friendId =
+          friendship.user1Id === userId ? friendship.user2Id : friendship.user1Id;
+        const friend = friendUserMap.get(friendId);
+        const contactInfo = contactMap.get(friendId);
 
         return {
           friendshipId: friendship.id,
-          userId: friend.id,
-          displayName: friend.displayName,
+          userId: friendId,
+          displayName: friend?.displayName ?? 'Unknown User',
           resolvedDisplayName:
-            contactInfo?.aliasName ?? contactInfo?.phoneBookName ?? friend.displayName,
+            contactInfo?.aliasName ??
+            contactInfo?.phoneBookName ??
+            friend?.displayName ??
+            'Unknown User',
           aliasName: contactInfo?.aliasName ?? undefined,
           phoneBookName: contactInfo?.phoneBookName ?? undefined,
-          isContact: contactMap.has(friend.id),
-          avatarUrl: friend.avatarUrl ?? undefined,
+          isContact: contactMap.has(friendId),
+          avatarUrl: friend?.avatarUrl ?? undefined,
           status: friendship.status,
           createdAt: friendship.createdAt,
           acceptedAt: friendship.acceptedAt ?? undefined,
@@ -853,30 +871,38 @@ export class FriendshipService {
           },
         ],
       },
-      include: {
-        user1: { select: { id: true, displayName: true, avatarUrl: true } },
-        user2: { select: { id: true, displayName: true, avatarUrl: true } },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        expiresAt: true,
+        requesterId: true,
+        user1Id: true,
+        user2Id: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Batch resolve display names for all users in received requests
-    const allUserIds = new Set<string>();
-    for (const f of friendships) {
-      allUserIds.add(f.user1.id);
-      allUserIds.add(f.user2.id);
-    }
-    const nameMap = await this.displayNameResolver.batchResolve(userId, [...allUserIds]);
+    const allUserIds = [
+      ...new Set(friendships.flatMap((f) => [f.user1Id, f.user2Id])),
+    ];
+    const [nameMap, users] = await Promise.all([
+      this.displayNameResolver.batchResolve(userId, allUserIds),
+      this.prisma.user.findMany({
+        where: { id: { in: allUserIds } },
+        select: { id: true, displayName: true, avatarUrl: true },
+      }),
+    ]);
+    const userMap = new Map(users.map((u) => [u.id, u]));
 
     return friendships.map((friendship) => {
-      const requester =
+      const requesterId = friendship.requesterId;
+      const targetId =
         friendship.requesterId === friendship.user1Id
-          ? friendship.user1
-          : friendship.user2;
-      const target =
-        friendship.requesterId === friendship.user1Id
-          ? friendship.user2
-          : friendship.user1;
+          ? friendship.user2Id
+          : friendship.user1Id;
+      const requester = userMap.get(requesterId);
+      const target = userMap.get(targetId);
 
       return {
         id: friendship.id,
@@ -884,14 +910,14 @@ export class FriendshipService {
         createdAt: friendship.createdAt,
         expiresAt: friendship.expiresAt ?? undefined,
         requester: {
-          userId: requester.id,
-          displayName: nameMap.get(requester.id) ?? requester.displayName,
-          avatarUrl: requester.avatarUrl ?? undefined,
+          userId: requesterId,
+          displayName: nameMap.get(requesterId) ?? requester?.displayName ?? 'Unknown User',
+          avatarUrl: requester?.avatarUrl ?? undefined,
         },
         target: {
-          userId: target.id,
-          displayName: nameMap.get(target.id) ?? target.displayName,
-          avatarUrl: target.avatarUrl ?? undefined,
+          userId: targetId,
+          displayName: nameMap.get(targetId) ?? target?.displayName ?? 'Unknown User',
+          avatarUrl: target?.avatarUrl ?? undefined,
         },
       };
     });
@@ -912,30 +938,38 @@ export class FriendshipService {
           { expiresAt: { gt: new Date() } },
         ],
       },
-      include: {
-        user1: { select: { id: true, displayName: true, avatarUrl: true } },
-        user2: { select: { id: true, displayName: true, avatarUrl: true } },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        expiresAt: true,
+        requesterId: true,
+        user1Id: true,
+        user2Id: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Batch resolve display names for all users in sent requests
-    const allTargetIds = new Set<string>();
-    for (const f of friendships) {
-      allTargetIds.add(f.user1.id);
-      allTargetIds.add(f.user2.id);
-    }
-    const nameMap = await this.displayNameResolver.batchResolve(userId, [...allTargetIds]);
+    const allTargetIds = [
+      ...new Set(friendships.flatMap((f) => [f.user1Id, f.user2Id])),
+    ];
+    const [nameMap, users] = await Promise.all([
+      this.displayNameResolver.batchResolve(userId, allTargetIds),
+      this.prisma.user.findMany({
+        where: { id: { in: allTargetIds } },
+        select: { id: true, displayName: true, avatarUrl: true },
+      }),
+    ]);
+    const userMap = new Map(users.map((u) => [u.id, u]));
 
     return friendships.map((friendship) => {
-      const requester =
+      const requesterId = friendship.requesterId;
+      const targetId =
         friendship.requesterId === friendship.user1Id
-          ? friendship.user1
-          : friendship.user2;
-      const target =
-        friendship.requesterId === friendship.user1Id
-          ? friendship.user2
-          : friendship.user1;
+          ? friendship.user2Id
+          : friendship.user1Id;
+      const requester = userMap.get(requesterId);
+      const target = userMap.get(targetId);
 
       return {
         id: friendship.id,
@@ -943,14 +977,14 @@ export class FriendshipService {
         createdAt: friendship.createdAt,
         expiresAt: friendship.expiresAt ?? undefined,
         requester: {
-          userId: requester.id,
-          displayName: nameMap.get(requester.id) ?? requester.displayName,
-          avatarUrl: requester.avatarUrl ?? undefined,
+          userId: requesterId,
+          displayName: nameMap.get(requesterId) ?? requester?.displayName ?? 'Unknown User',
+          avatarUrl: requester?.avatarUrl ?? undefined,
         },
         target: {
-          userId: target.id,
-          displayName: nameMap.get(target.id) ?? target.displayName,
-          avatarUrl: target.avatarUrl ?? undefined,
+          userId: targetId,
+          displayName: nameMap.get(targetId) ?? target?.displayName ?? 'Unknown User',
+          avatarUrl: target?.avatarUrl ?? undefined,
         },
       };
     });

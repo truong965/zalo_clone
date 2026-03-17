@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
-import { SocketGateway } from '../socket.gateway';
+import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
 import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
+import { OUTBOUND_SOCKET_EVENT, ISocketEmitEvent } from '@common/events/outbound-socket.event';
+import { SocketEvents } from '@common/constants/socket-events.constant';
 
 @Injectable()
 export class QrLoginSocketListener {
   private readonly logger = new Logger(QrLoginSocketListener.name);
 
-  constructor(private readonly socketGateway: SocketGateway) {}
+  constructor(private readonly eventEmitter: EventEmitter2) {}
 
   /**
    * Listen for internal events from QrLoginService to emit to a specific socket.
@@ -19,13 +20,15 @@ export class QrLoginSocketListener {
     data: unknown;
   }) {
     this.logger.debug(
-      `Received internal event to emit ${payload.event} to socket ${payload.targetSocketId}`,
+      `Received internal event to emit ${payload.event} to socket ${payload.targetSocketId} via new interface`,
     );
-    this.socketGateway.emitToSocket(
-      payload.targetSocketId,
-      payload.event,
-      payload.data,
-    );
+
+    const socketEvent: ISocketEmitEvent = {
+        event: payload.event as any,
+        socketId: payload.targetSocketId,
+        data: payload.data
+    };
+    this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
   }
 
   /**
@@ -40,10 +43,9 @@ export class QrLoginSocketListener {
     this.logger.debug(
       `Received internal event to force logout ${payload.deviceIds.length} devices for user ${payload.userId}`,
     );
-    await this.socketGateway.forceDisconnectDevices(
-      payload.userId,
-      payload.deviceIds,
-      payload.reason,
-    );
+
+    // This is a special case: Since Socket isn't a domain, but Force Disconnect is a Core Socket command
+    // We emit a special internal socket outbound to trigger the force disconnect internally in gateway
+    this.eventEmitter.emit('socket.internal.command.force_disconnect_devices', payload);
   }
 }

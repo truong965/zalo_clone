@@ -28,10 +28,10 @@ import { WsThrottleGuard } from './guards/ws-throttle.guard';
 import { WsValidationPipe } from './pipes/ws-validation.pipe';
 import { EventPublisher } from 'src/shared/events/event-publisher.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { OnEvent } from '@nestjs/event-emitter';
 import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
-import { FriendshipService } from 'src/modules/friendship/service/friendship.service';
-import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
-import { PrismaService } from 'src/database/prisma.service';
+import type { ISocketEmitEvent } from '@common/events/outbound-socket.event';
+import { OUTBOUND_SOCKET_EVENT } from '@common/events/outbound-socket.event';
 
 @WebSocketGateway({
   cors: {
@@ -85,43 +85,9 @@ export class SocketGateway
     private readonly redisPubSub: RedisPubSubService,
     private readonly eventPublisher: EventPublisher,
     private readonly eventEmitter: EventEmitter2,
-    private readonly friendshipService: FriendshipService,
-    private readonly privacyService: PrivacyService,
-    private readonly prisma: PrismaService,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
   ) { }
-
-  private async notifyFriendsPresence(
-    userId: string,
-    isOnline: boolean,
-    timestamp?: Date,
-  ) {
-    try {
-      const settings = await this.privacyService.getSettings(userId);
-      if (!settings.showOnlineStatus) return;
-
-      const friendIds =
-        await this.friendshipService.getFriendIdsForPresence(userId);
-
-      const payload = {
-        userId,
-        timestamp: (timestamp ?? new Date()).toISOString(),
-      };
-
-      await Promise.all(
-        friendIds.map((fid) =>
-          this.emitToUser(
-            fid,
-            isOnline ? SocketEvents.FRIEND_ONLINE : SocketEvents.FRIEND_OFFLINE,
-            payload,
-          ).catch(() => undefined),
-        ),
-      );
-    } catch {
-      // ignore presence notify errors
-    }
-  }
 
   /**
    * Gateway initialization
@@ -145,9 +111,46 @@ export class SocketGateway
     this.logger.log(`📡 Server instance: ${this.config.serverInstance}`);
   }
 
-  // ==================================================================
-  // SAFE RESOURCE MANAGEMENT HELPERS (TASK 2)
-  // ==================================================================
+  // =========================================================================
+  // B. INTERNAL EVENT LISTENERS (NEW STANDARD INTERFACE)
+  // =========================================================================
+
+  /**
+   * Universal listener for standard domain outward socket events
+   */
+  @OnEvent(OUTBOUND_SOCKET_EVENT)
+  async handleStandardOutboundEvent(payload: ISocketEmitEvent) {
+    this.logger.debug(`[SocketGateway] Emitting standard event: ${payload.event}`);
+
+    if (payload.socketId) {
+      this.emitToSocket(payload.socketId, payload.event, payload.data);
+    } else if (payload.userId) {
+      await this.emitToUser(payload.userId, payload.event, payload.data);
+    } else if (payload.userIds && payload.userIds.length > 0) {
+      await Promise.all(
+        payload.userIds.map((uid) =>
+          this.emitToUser(uid, payload.event, payload.data).catch(() => undefined),
+        ),
+      );
+    } else if (payload.room) {
+      this.server.to(payload.room).emit(payload.event, payload.data);
+    } else {
+      this.logger.warn(`[SocketGateway] Received outbound event without target: ${payload.event}`);
+    }
+  }
+
+  /**
+   * Internal command to force disconnect devices
+   */
+  @OnEvent('socket.internal.command.force_disconnect_devices')
+  async handleForceDisconnectCommand(payload: { userId: string, deviceIds: string[], reason: string }) {
+    this.logger.debug(`[SocketGateway] Internal command: Force disconnecting ${payload.deviceIds?.length} devices for ${payload.userId}`);
+    await this.forceDisconnectDevices(payload.userId, payload.deviceIds, payload.reason);
+  }
+
+  // =========================================================================
+  // C. CLIENT LISTENER METHODS
+  // ===========================================================================
 
   /**
    * Đăng ký Interval an toàn - Tự động dọn dẹp khi socket disconnect
@@ -292,14 +295,13 @@ export class SocketGateway
         timestamp: new Date().toISOString(),
       });
 
-      await this.notifyFriendsPresence(user.id, true);
-
       // PHASE 2: Emit event for module gateways to setup their subscriptions
       // MessageGateway will listen to this and subscribe user to receipt updates
       this.eventEmitter.emit(SocketEvents.USER_SOCKET_CONNECTED, {
         userId: user.id,
         socketId: client.id,
         socket: client,
+        connectedAt: new Date(),
       });
 
       // --- VÍ DỤ SỬ DỤNG SAFE INTERVAL (TASK 2 APPLIED) ---
@@ -362,17 +364,11 @@ export class SocketGateway
       if (isOffline) {
         const now = new Date();
 
-        await this.prisma.user
-          .update({
-            where: { id: client.userId },
-            data: { lastSeenAt: now },
-          })
-          .catch((err) => {
-            this.logger.error(
-              `Failed to update lastSeenAt for ${client.userId}`,
-              err,
-            );
-          });
+        // DECOUPLED: Let User module handle DB updates via event
+        this.eventEmitter.emit('user.last_seen.updated', {
+          userId: client.userId,
+          lastSeenAt: now,
+        });
 
         void this.redisPubSub.publish(
           RedisKeyBuilder.channels.presenceOffline,
@@ -382,13 +378,15 @@ export class SocketGateway
           },
         );
 
-        await this.notifyFriendsPresence(client.userId, false, now);
+        // Note: The UserPresenceListener (FriendshipModule) will catch the USER_SOCKET_DISCONNECTED event below
+        // and notify friends, so we don't need to do it here.
       }
 
       // Emit internal event for other gateways/listeners to cleanup resources
       this.eventEmitter.emit(SocketEvents.USER_SOCKET_DISCONNECTED, {
         userId: client.userId,
         socketId: client.id,
+        reason,
       });
 
       this.logger.debug(
@@ -403,9 +401,6 @@ export class SocketGateway
     }
   }
 
-  /**
-   * Handle presence online event from other servers
-   */
   private async handlePresenceOnline(
     channel: string,
     message: string,
@@ -414,17 +409,20 @@ export class SocketGateway
       const data = JSON.parse(message) as { userId?: string };
       this.logger.debug(`Presence online (cross-server): ${data.userId}`);
 
+      // The domain module (Friendship) should ideally listen to cross-server presence,
+      // but if we just emit the internal event, it will catch it!
       if (data.userId) {
-        await this.notifyFriendsPresence(data.userId, true);
+        this.eventEmitter.emit(SocketEvents.USER_SOCKET_CONNECTED, {
+          userId: data.userId,
+          socketId: null, // Cross-server doesn't matter
+          connectedAt: new Date()
+        });
       }
     } catch (error) {
       this.logger.error('Error handling presence online:', error);
     }
   }
 
-  /**
-   * Handle presence offline event from other servers
-   */
   private async handlePresenceOffline(
     channel: string,
     message: string,
@@ -434,7 +432,11 @@ export class SocketGateway
       this.logger.debug(`Presence offline (cross-server): ${data.userId}`);
 
       if (data.userId) {
-        await this.notifyFriendsPresence(data.userId, false);
+        this.eventEmitter.emit(SocketEvents.USER_SOCKET_DISCONNECTED, {
+          userId: data.userId,
+          socketId: null,
+          reason: 'cross-server offline'
+        });
       }
     } catch (error) {
       this.logger.error('Error handling presence offline:', error);

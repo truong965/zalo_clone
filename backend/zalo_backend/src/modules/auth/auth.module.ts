@@ -18,6 +18,7 @@ import { SecurityEventHandler } from './listeners/security-event.handler';
 import { QrLoginController } from './qr-login.controller';
 import { QrLoginService } from './services/qr-login.service';
 import { QrSessionRedisService } from './services/qr-session-redis.service';
+import { QrLoginSocketListener } from './listeners/qr-login-socket.listener';
 import { RedisModule } from 'src/modules/redis/redis.module';
 
 @Module({
@@ -42,6 +43,7 @@ import { RedisModule } from 'src/modules/redis/redis.module';
     // PHASE 3 Action 3.2: Event listener for security-related events
     // PHASE 3.3: Enhanced with idempotency tracking
     SecurityEventHandler,
+    QrLoginSocketListener,
   ],
   exports: [AuthService, TokenService, DeviceFingerprintService],
 })

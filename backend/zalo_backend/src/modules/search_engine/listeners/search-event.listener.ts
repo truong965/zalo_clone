@@ -175,25 +175,12 @@ export class SearchEventListener extends IdempotentListener {
           const message = await this.prisma.message.findUnique({
             where: { id: BigInt(event.messageId) },
             include: {
-              sender: {
-                select: {
-                  id: true,
-                  displayName: true,
-                  avatarUrl: true,
-                  phoneNumber: true,
-                },
-              },
               conversation: {
                 select: {
                   id: true,
                   type: true,
                   name: true,
                 },
-              },
-              // B5: Include media attachments for filename matching in matchesSearchSync
-              mediaAttachments: {
-                select: { originalName: true },
-                where: { deletedAt: null },
               },
             },
           });
@@ -205,9 +192,33 @@ export class SearchEventListener extends IdempotentListener {
             return;
           }
 
+          const sender = message.senderId
+            ? await this.prisma.user.findUnique({
+              where: { id: message.senderId },
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+                phoneNumber: true,
+              },
+            })
+            : null;
+
+          // [Phase 2.1 DECOUPLED]: Fetch media attachments manually
+          const mediaAttachments = await this.prisma.mediaAttachment.findMany({
+            where: {
+              messageId: message.id,
+              deletedAt: null,
+            },
+            select: { originalName: true },
+          });
+
+          // Inject for matching
+          const messageWithMedia = { ...message, sender, mediaAttachments };
+
           // A4: Single-pass matching (replaces notifyActiveSearches + getMatchingSubscriptions)
           const { matches, notifiedCount } =
-            this.realTimeSearchService.findMatchingSubscriptions(message);
+            this.realTimeSearchService.findMatchingSubscriptions(messageWithMedia);
 
 
           this.logger.debug(
@@ -217,7 +228,7 @@ export class SearchEventListener extends IdempotentListener {
           // Emit internal event for SearchGateway to handle socket emission
           // C5: Use batch notification to buffer matches within 100ms window
           if (matches.length > 0) {
-            this.realTimeSearchService.queueBatchNotification(message, matches);
+            this.realTimeSearchService.queueBatchNotification(messageWithMedia, matches);
           }
         } catch (error) {
           this.logger.error(
@@ -720,18 +731,21 @@ export class SearchEventListener extends IdempotentListener {
           // Fetch the mediaAttachment to find which conversation it belongs to
           const media = await this.prisma.mediaAttachment.findUnique({
             where: { id: event.mediaId },
-            select: {
-              message: {
-                select: { conversationId: true },
-              },
-            },
+            select: { messageId: true },
           });
 
-          if (media?.message?.conversationId) {
-            // Invalidate conversation-level search cache
-            await this.searchCacheService.invalidateConversationCache(
-              media.message.conversationId,
-            );
+          if (media?.messageId) {
+            const message = await this.prisma.message.findUnique({
+              where: { id: media.messageId },
+              select: { conversationId: true },
+            });
+
+            if (message?.conversationId) {
+              // Invalidate conversation-level search cache
+              await this.searchCacheService.invalidateConversationCache(
+                message.conversationId,
+              );
+            }
           }
 
           // Invalidate global search cache for the deleting user

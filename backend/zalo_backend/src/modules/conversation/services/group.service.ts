@@ -572,27 +572,51 @@ export class GroupService {
         conversationId,
         status: MemberStatus.ACTIVE,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
+      select: {
+        conversationId: true,
+        userId: true,
+        role: true,
+        status: true,
+        promotedBy: true,
+        promotedAt: true,
+        demotedBy: true,
+        demotedAt: true,
+        lastReadMessageId: true,
+        lastReadAt: true,
+        unreadCount: true,
+        isArchived: true,
+        isMuted: true,
+        isPinned: true,
+        pinnedAt: true,
+        joinedAt: true,
+        leftAt: true,
+        kickedBy: true,
+        kickedAt: true,
       },
       orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
     });
 
+    const userIds = members.map((m) => m.userId);
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        displayName: true,
+        avatarUrl: true,
+      },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     // Batch resolve display names per viewer
-    const memberIds = members.map((m) => m.user.id);
-    const nameMap = await this.displayNameResolver.batchResolve(userId, memberIds);
+    const nameMap = await this.displayNameResolver.batchResolve(userId, userIds);
 
     return members.map((m) => ({
       ...m,
       user: {
-        ...m.user,
-        displayName: nameMap.get(m.user.id) ?? m.user.displayName,
+        id: m.userId,
+        displayName:
+          nameMap.get(m.userId) ?? userMap.get(m.userId)?.displayName ?? 'Unknown User',
+        avatarUrl: userMap.get(m.userId)?.avatarUrl ?? null,
       },
     }));
   }
