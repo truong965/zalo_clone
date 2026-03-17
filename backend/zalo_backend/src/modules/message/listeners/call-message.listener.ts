@@ -8,13 +8,14 @@
  * Choreography Pattern: Listens to `call.ended` directly — no middleman.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
 import { CallStatus, EventType } from '@prisma/client';
 import { safeJSON } from '@common/utils/json.util';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
-import { SystemMessageBroadcasterService } from '@modules/conversation/services/system-message-broadcaster.service';
+import { CONVERSATION_SYSTEM_MESSAGE_PORT } from '@common/contracts/internal-api';
+import type { IConversationSystemMessagePort } from '@common/contracts/internal-api';
 import type { CallEndedPayload } from '@modules/call/events';
 
 @Injectable()
@@ -23,9 +24,10 @@ export class CallMessageListener {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly broadcaster: SystemMessageBroadcasterService,
+    @Inject(CONVERSATION_SYSTEM_MESSAGE_PORT)
+    private readonly systemMessagePort: IConversationSystemMessagePort,
     private readonly idempotency: IdempotencyService,
-  ) {}
+  ) { }
 
   /**
    * Create a SYSTEM message to log the call in the conversation.
@@ -95,7 +97,7 @@ export class CallMessageListener {
         `[CALL_LOG] System message ${message.id} created for call ${callId}`,
       );
 
-      await this.broadcaster.broadcast({
+      await this.systemMessagePort.broadcast({
         conversationId,
         message: safeJSON(message),
         excludeUserIds: [],

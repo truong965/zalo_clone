@@ -14,28 +14,32 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
-import { PrivacyService } from '@modules/privacy/services/privacy.service';
-import { FriendshipService } from '@modules/friendship/service/friendship.service';
 import {
   PermissionAction,
   PermissionActionType,
 } from '@common/constants/permission-actions.constant';
 import { PrivacyLevel } from '@prisma/client';
 import type { PrivacySettingsResponseDto } from '@modules/privacy/dto/privacy.dto';
-
-export interface CanInteractResult {
-  allowed: boolean;
-  reason?: string;
-}
+import {
+  CanInteractResult,
+  FRIENDSHIP_READ_PORT,
+  PRIVACY_READ_PORT,
+} from '@common/contracts/internal-api';
+import type {
+  IFriendshipReadPort,
+  IPrivacyReadPort,
+} from '@common/contracts/internal-api';
 
 @Injectable()
 export class InteractionAuthorizationService {
   constructor(
     @Inject(BLOCK_CHECKER)
     private readonly blockChecker: IBlockChecker,
-    private readonly privacyService: PrivacyService,
-    private readonly friendshipService: FriendshipService,
-  ) {}
+    @Inject(PRIVACY_READ_PORT)
+    private readonly privacyRead: IPrivacyReadPort,
+    @Inject(FRIENDSHIP_READ_PORT)
+    private readonly friendshipRead: IFriendshipReadPort,
+  ) { }
 
   /**
    * Check if requester can perform action on target.
@@ -45,6 +49,11 @@ export class InteractionAuthorizationService {
     targetId: string,
     action: PermissionActionType,
   ): Promise<CanInteractResult> {
+    const resolvedAction = this.resolvePermissionAction(action);
+    if (!resolvedAction) {
+      return { allowed: false, reason: 'Unknown action' };
+    }
+
     if (requesterId === targetId) {
       return { allowed: true };
     }
@@ -54,49 +63,46 @@ export class InteractionAuthorizationService {
       return { allowed: false, reason: 'User is blocked' };
     }
 
-    if (action === PermissionAction.FRIEND_REQUEST) {
+    if (resolvedAction === PermissionAction.FRIEND_REQUEST) {
       return { allowed: true };
     }
 
-    if (action === PermissionAction.FRIENDS_ONLY) {
-      const areFriends = await this.friendshipService.areFriends(
+    if (resolvedAction === PermissionAction.FRIENDS_ONLY) {
+      const areFriends = await this.friendshipRead.areFriends(
         requesterId,
         targetId,
       );
       return areFriends
         ? { allowed: true }
         : {
-            allowed: false,
-            reason: 'This action requires friendship',
-          };
+          allowed: false,
+          reason: 'This action requires friendship',
+        };
     }
 
     if (
-      action === PermissionAction.MESSAGE ||
-      action === PermissionAction.CALL ||
-      action === PermissionAction.PROFILE
+      resolvedAction === PermissionAction.MESSAGE ||
+      resolvedAction === PermissionAction.CALL ||
+      resolvedAction === PermissionAction.PROFILE
     ) {
-      const settings = await this.privacyService.getSettings(targetId);
-      const privacyLevel = this.getPrivacyLevelForAction(
-        action as PermissionAction,
-        settings,
-      );
+      const settings = await this.privacyRead.getSettings(targetId);
+      const privacyLevel = this.getPrivacyLevelForAction(resolvedAction, settings);
 
       if (privacyLevel === PrivacyLevel.EVERYONE) {
         return { allowed: true };
       }
 
       if (privacyLevel === PrivacyLevel.CONTACTS) {
-        const areFriends = await this.friendshipService.areFriends(
+        const areFriends = await this.friendshipRead.areFriends(
           requesterId,
           targetId,
         );
         return areFriends
           ? { allowed: true }
           : {
-              allowed: false,
-              reason: 'User privacy settings require friendship',
-            };
+            allowed: false,
+            reason: 'User privacy settings require friendship',
+          };
       }
 
       return {
@@ -106,6 +112,25 @@ export class InteractionAuthorizationService {
     }
 
     return { allowed: false, reason: 'Unknown action' };
+  }
+
+  private resolvePermissionAction(
+    action: PermissionActionType,
+  ): PermissionAction | undefined {
+    switch (action) {
+      case 'message':
+        return PermissionAction.MESSAGE;
+      case 'call':
+        return PermissionAction.CALL;
+      case 'profile':
+        return PermissionAction.PROFILE;
+      case 'friend_request':
+        return PermissionAction.FRIEND_REQUEST;
+      case 'friends_only':
+        return PermissionAction.FRIENDS_ONLY;
+      default:
+        return undefined;
+    }
   }
 
   private getPrivacyLevelForAction(

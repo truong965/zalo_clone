@@ -16,6 +16,8 @@ import { PrivacyBlockListener } from './listeners/privacy-block.listener';
 import { PrivacyUserRegisteredListener } from './listeners/privacy-user-registered.listener';
 import { DatabaseModule } from '@database/prisma.module';
 import { BlockModule } from '@modules/block/block.module';
+import { PRIVACY_READ_PORT } from '@common/contracts/internal-api';
+import { PrivacyReadAdapter } from './internal-api/privacy-read.adapter';
 
 /**
  * PrivacyModule (PHASE 7 - REFACTORED EVENT-DRIVEN)
@@ -55,6 +57,11 @@ import { BlockModule } from '@modules/block/block.module';
   controllers: [PrivacyController],
   providers: [
     PrivacyService,
+    PrivacyReadAdapter,
+    {
+      provide: PRIVACY_READ_PORT,
+      useExisting: PrivacyReadAdapter,
+    },
 
     // Event Listeners (Idempotent, separated by concern)
     PrivacyCacheListener, // PHASE 4: Handle privacy.updated
@@ -62,6 +69,9 @@ import { BlockModule } from '@modules/block/block.module';
     PrivacyBlockListener, // Handle block events → cache invalidation
     PrivacyUserRegisteredListener, // Create default PrivacySettings on registration
   ],
-  exports: [PrivacyService], // Export for other modules to use
+  exports: [
+    PrivacyService,
+    PRIVACY_READ_PORT,
+  ], // Keep legacy export + new contract token
 })
-export class PrivacyModule {}
+export class PrivacyModule { }

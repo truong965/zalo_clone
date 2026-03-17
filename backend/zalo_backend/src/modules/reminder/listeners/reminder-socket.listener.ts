@@ -11,10 +11,14 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MemberStatus } from '@prisma/client';
 import { PrismaService } from 'src/database/prisma.service';
-import { SocketGateway } from 'src/socket/socket.gateway';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
+import {
+  OUTBOUND_SOCKET_EVENT,
+  ISocketEmitEvent,
+} from '@common/events/outbound-socket.event';
 import { ReminderTriggeredEvent } from '../events/reminder.events';
 
 @Injectable()
@@ -22,9 +26,9 @@ export class ReminderSocketListener {
   private readonly logger = new Logger(ReminderSocketListener.name);
 
   constructor(
-    private readonly socketGateway: SocketGateway,
+    private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   @OnEvent(ReminderTriggeredEvent.eventName)
   async onReminderTriggered(event: ReminderTriggeredEvent) {
@@ -52,21 +56,23 @@ export class ReminderSocketListener {
         `Pushing reminder ${event.reminderId} to ${memberIds.length} conversation members`,
       );
 
-      await this.socketGateway.emitToUsers(
-        memberIds,
-        SocketEvents.REMINDER_TRIGGERED,
-        payload,
-      );
+      const socketEvent: ISocketEmitEvent = {
+        event: SocketEvents.REMINDER_TRIGGERED,
+        data: payload,
+        userIds: memberIds,
+      };
+      await this.eventEmitter.emitAsync(OUTBOUND_SOCKET_EVENT, socketEvent);
     } else {
       // Personal reminder (no conversation) → only notify creator
       this.logger.log(
         `Pushing personal reminder ${event.reminderId} to user ${event.userId}`,
       );
-      await this.socketGateway.emitToUser(
-        event.userId,
-        SocketEvents.REMINDER_TRIGGERED,
-        payload,
-      );
+      const socketEvent: ISocketEmitEvent = {
+        event: SocketEvents.REMINDER_TRIGGERED,
+        data: payload,
+        userId: event.userId,
+      };
+      await this.eventEmitter.emitAsync(OUTBOUND_SOCKET_EVENT, socketEvent);
     }
   }
 }

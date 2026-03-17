@@ -1,10 +1,13 @@
 // src/modules/conversation/services/conversation.service.ts
 
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Inject, Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
-import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
+import {
+  PRIVACY_READ_PORT,
+} from '@common/contracts/internal-api';
+import type { IPrivacyReadPort } from '@common/contracts/internal-api';
 import { DisplayNameResolver } from '@shared/services';
 import {
   ConversationType,
@@ -69,10 +72,11 @@ export class ConversationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisPresence: RedisPresenceService,
-    private readonly privacyService: PrivacyService,
+    @Inject(PRIVACY_READ_PORT)
+    private readonly privacyRead: IPrivacyReadPort,
     private readonly displayNameResolver: DisplayNameResolver,
     private readonly eventEmitter: EventEmitter2,
-  ) {}
+  ) { }
 
   private async getUserProfilesMap(
     userIds: string[],
@@ -399,7 +403,7 @@ export class ConversationService {
     const userProfileMap = await this.getUserProfilesMap(directOtherUserIds);
 
     const [privacyMap, nameMap] = await Promise.all([
-      this.privacyService.getManySettings(directOtherUserIds),
+      this.privacyRead.getManySettings(directOtherUserIds),
       this.displayNameResolver.batchResolve(userId, directOtherUserIds),
     ]);
     await Promise.all(
@@ -505,14 +509,14 @@ export class ConversationService {
         : null,
       lastMessage: lastMsg
         ? {
-            id: lastMsg.id.toString(),
-            content: lastMsg.deletedById
-              ? 'Tin nhắn đã bị thu hồi'
-              : lastMsg.content,
-            type: lastMsg.type,
-            senderId: lastMsg.senderId,
-            createdAt: lastMsg.createdAt,
-          }
+          id: lastMsg.id.toString(),
+          content: lastMsg.deletedById
+            ? 'Tin nhắn đã bị thu hồi'
+            : lastMsg.content,
+          type: lastMsg.type,
+          senderId: lastMsg.senderId,
+          createdAt: lastMsg.createdAt,
+        }
         : null,
       unreadCount: currentUserMember?.unreadCount ?? 0,
       lastReadMessageId: currentUserMember?.lastReadMessageId
@@ -626,7 +630,7 @@ export class ConversationService {
       if (otherMember) {
         const otherId = otherMember.userId;
         const [privacyMap, resolvedNames] = await Promise.all([
-          this.privacyService.getManySettings([otherId]),
+          this.privacyRead.getManySettings([otherId]),
           this.displayNameResolver.batchResolve(userId, [otherId]),
         ]);
         nameMap = resolvedNames;
@@ -643,8 +647,8 @@ export class ConversationService {
     const profileMap = await this.getUserProfilesMap(
       conversation.type === ConversationType.DIRECT
         ? conversation.members
-            .filter((m) => m.userId !== userId)
-            .map((m) => m.userId)
+          .filter((m) => m.userId !== userId)
+          .map((m) => m.userId)
         : [],
     );
 
@@ -881,14 +885,14 @@ export class ConversationService {
           lastMessageAt: g.lastMessageAt?.toISOString() ?? null,
           lastMessage: lastMsg
             ? {
-                id: lastMsg.id.toString(),
-                content: lastMsg.deletedById
-                  ? 'Tin nhắn đã bị thu hồi'
-                  : lastMsg.content,
-                type: lastMsg.type,
-                senderId: lastMsg.senderId,
-                createdAt: lastMsg.createdAt.toISOString(),
-              }
+              id: lastMsg.id.toString(),
+              content: lastMsg.deletedById
+                ? 'Tin nhắn đã bị thu hồi'
+                : lastMsg.content,
+              type: lastMsg.type,
+              senderId: lastMsg.senderId,
+              createdAt: lastMsg.createdAt.toISOString(),
+            }
             : null,
           unreadCount: currentMember?.unreadCount ?? 0,
           myRole: (currentMember?.role as string) ?? 'MEMBER',
@@ -992,13 +996,13 @@ export class ConversationService {
       deletedAt: m.deletedAt?.toISOString() ?? null,
       sender: m.senderId
         ? {
-            id: m.senderId,
-            displayName:
-              nameMap.get(m.senderId) ??
-              senderProfileMap.get(m.senderId)?.displayName ??
-              'Unknown User',
-            avatarUrl: senderProfileMap.get(m.senderId)?.avatarUrl ?? null,
-          }
+          id: m.senderId,
+          displayName:
+            nameMap.get(m.senderId) ??
+            senderProfileMap.get(m.senderId)?.displayName ??
+            'Unknown User',
+          avatarUrl: senderProfileMap.get(m.senderId)?.avatarUrl ?? null,
+        }
         : null,
       mediaAttachments: mediaMap.get(m.id.toString())?.slice(0, 1) || [],
     }));

@@ -14,10 +14,9 @@
  * No direct imports from other feature modules.
  */
 
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from 'src/database/prisma.module';
-import { SocketModule } from 'src/socket/socket.module';
 import { ConversationModule } from '@modules/conversation/conversation.module';
 
 // Service
@@ -35,7 +34,6 @@ import { ReminderController } from './reminder.controller';
   imports: [
     DatabaseModule,
     EventEmitterModule,
-    forwardRef(() => SocketModule),
     ConversationModule,
   ],
   controllers: [ReminderController],
@@ -47,4 +45,4 @@ import { ReminderController } from './reminder.controller';
   ],
   exports: [ReminderService],
 })
-export class ReminderModule {}
+export class ReminderModule { }

@@ -28,6 +28,8 @@ import { FriendshipBlockListener } from './listeners/friendship-block.listener';
 // Real-time socket events
 import { FriendshipNotificationListener } from './listeners/friendship-notification.listener';
 import { UserPresenceListener } from './listeners/user-presence.listener';
+import { FRIENDSHIP_READ_PORT } from '@common/contracts/internal-api';
+import { FriendshipReadAdapter } from './internal-api/friendship-read.adapter';
 
 /**
  * FriendshipModule - Extracted from SocialModule (PHASE 6)
@@ -76,6 +78,11 @@ import { UserPresenceListener } from './listeners/user-presence.listener';
   controllers: [FriendshipsController, FriendRequestController],
   providers: [
     FriendshipService,
+    FriendshipReadAdapter,
+    {
+      provide: FRIENDSHIP_READ_PORT,
+      useExisting: FriendshipReadAdapter,
+    },
 
     // R10: Distributed Lock Service for atomic state mutations
     DistributedLockService,
@@ -90,6 +97,6 @@ import { UserPresenceListener } from './listeners/user-presence.listener';
     FriendshipNotificationListener,
     UserPresenceListener,
   ],
-  exports: [FriendshipService],
+  exports: [FriendshipService, FRIENDSHIP_READ_PORT],
 })
-export class FriendshipModule {}
+export class FriendshipModule { }

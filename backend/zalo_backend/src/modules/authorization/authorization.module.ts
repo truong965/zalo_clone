@@ -6,6 +6,8 @@ import { FriendshipModule } from '@modules/friendship/friendship.module';
 import { InteractionAuthorizationService } from './services/interaction-authorization.service';
 import { InteractionGuard } from './guards/interaction.guard';
 import { NotBlockedGuard } from '@shared/guards/not-blocked.guard';
+import { INTERACTION_READ_PORT } from '@common/contracts/internal-api';
+import { InteractionReadAdapter } from './internal-api/interaction-read.adapter';
 
 /**
  * AuthorizationModule - PHASE 2
@@ -28,9 +30,19 @@ import { NotBlockedGuard } from '@shared/guards/not-blocked.guard';
   imports: [ConfigModule, BlockModule, PrivacyModule, FriendshipModule],
   providers: [
     InteractionAuthorizationService,
+    InteractionReadAdapter,
+    {
+      provide: INTERACTION_READ_PORT,
+      useExisting: InteractionReadAdapter,
+    },
     InteractionGuard,
     NotBlockedGuard,
   ],
-  exports: [InteractionAuthorizationService, InteractionGuard, NotBlockedGuard],
+  exports: [
+    InteractionAuthorizationService,
+    INTERACTION_READ_PORT,
+    InteractionGuard,
+    NotBlockedGuard,
+  ],
 })
-export class AuthorizationModule {}
+export class AuthorizationModule { }

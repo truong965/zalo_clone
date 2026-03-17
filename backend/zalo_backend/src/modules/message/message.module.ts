@@ -1,6 +1,6 @@
 // src/modules/message/message.module.ts
 
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { DatabaseModule } from 'src/database/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -51,7 +51,7 @@ import { MessageGateway } from './message.gateway';
     EventsModule,
     SharedModule,
     AuthorizationModule, // Provides InteractionAuthorizationService for sendMessage() DIRECT permission check
-    forwardRef(() => SocketModule),
+    SocketModule,
     ConversationModule,
     IdempotencyModule,
   ],
@@ -79,4 +79,4 @@ import { MessageGateway } from './message.gateway';
     MessageBroadcasterService,
   ],
 })
-export class MessageModule {}
+export class MessageModule { }

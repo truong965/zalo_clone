@@ -10,11 +10,12 @@
  * Zero coupling: Does not import ReminderService directly.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { safeJSON } from 'src/common/utils/json.util';
-import { SystemMessageBroadcasterService } from '@modules/conversation/services/system-message-broadcaster.service';
+import { CONVERSATION_SYSTEM_MESSAGE_PORT } from '@common/contracts/internal-api';
+import type { IConversationSystemMessagePort } from '@common/contracts/internal-api';
 import { ReminderCreatedEvent } from '../events/reminder.events';
 
 @Injectable()
@@ -23,8 +24,9 @@ export class ReminderSystemMessageListener {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly broadcaster: SystemMessageBroadcasterService,
-  ) {}
+    @Inject(CONVERSATION_SYSTEM_MESSAGE_PORT)
+    private readonly systemMessagePort: IConversationSystemMessagePort,
+  ) { }
 
   @OnEvent(ReminderCreatedEvent.eventName)
   async onReminderCreated(event: ReminderCreatedEvent) {
@@ -70,7 +72,7 @@ export class ReminderSystemMessageListener {
       });
 
       // Broadcast to all conversation members via the shared pattern
-      await this.broadcaster.broadcast({
+      await this.systemMessagePort.broadcast({
         conversationId: event.conversationId,
         message: safeJSON(sysMsg),
         excludeUserIds: [],

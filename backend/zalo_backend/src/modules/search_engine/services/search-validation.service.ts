@@ -9,10 +9,16 @@ import { PrismaService } from 'src/database/prisma.service';
 import { RelationshipType } from '../utils/ranking.util';
 
 // Phase A: Import cached services — eliminates duplicate block/privacy/friendship logic
-import { InteractionAuthorizationService } from '@modules/authorization/services/interaction-authorization.service';
 import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
-import { PrivacyService } from '@modules/privacy/services/privacy.service';
+import {
+  INTERACTION_READ_PORT,
+  PRIVACY_READ_PORT,
+} from '@common/contracts/internal-api';
+import type {
+  IInteractionReadPort,
+  IPrivacyReadPort,
+} from '@common/contracts/internal-api';
 /**
  * SearchValidationService (Phase A: Refactored)
  *
@@ -33,10 +39,12 @@ export class SearchValidationService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly interactionAuth: InteractionAuthorizationService,
+    @Inject(INTERACTION_READ_PORT)
+    private readonly interactionRead: IInteractionReadPort,
     @Inject(BLOCK_CHECKER) private readonly blockChecker: IBlockChecker,
-    private readonly privacyService: PrivacyService,
-  ) {}
+    @Inject(PRIVACY_READ_PORT)
+    private readonly privacyRead: IPrivacyReadPort,
+  ) { }
 
   /**
    * Validate user has ACTIVE membership in conversation
@@ -96,7 +104,7 @@ export class SearchValidationService {
     searcherId: string,
     targetUserId: string,
   ): Promise<boolean> {
-    return this.interactionAuth.canViewProfile(searcherId, targetUserId);
+    return this.interactionRead.canViewProfile(searcherId, targetUserId);
   }
 
   /**
@@ -243,7 +251,7 @@ export class SearchValidationService {
     senderId: string,
     recipientId: string,
   ): Promise<boolean> {
-    return this.interactionAuth.canMessage(senderId, recipientId);
+    return this.interactionRead.canMessage(senderId, recipientId);
   }
 
   /**
@@ -263,7 +271,7 @@ export class SearchValidationService {
     if (isBlocked) return false;
 
     // Get target's privacy settings (Redis cached)
-    const settings = await this.privacyService.getSettings(targetUserId);
+    const settings = await this.privacyRead.getSettings(targetUserId);
 
     // showOnlineStatus: true = everyone can see, false = contacts only
     if (settings.showOnlineStatus) return true;
@@ -315,8 +323,8 @@ export class SearchValidationService {
     // 2. Parallel cached checks via InteractionAuthorizationService
     const [canViewProfile, canMessage, canSeeOnline, friendshipStatus] =
       await Promise.all([
-        this.interactionAuth.canViewProfile(searcherId, targetUserId),
-        this.interactionAuth.canMessage(searcherId, targetUserId),
+        this.interactionRead.canViewProfile(searcherId, targetUserId),
+        this.interactionRead.canMessage(searcherId, targetUserId),
         this.canSeeOnlineStatus(searcherId, targetUserId),
         this.getFriendshipStatus(searcherId, targetUserId),
       ]);
@@ -395,7 +403,7 @@ export class SearchValidationService {
     if (nonBlockedIds.length === 0) return result;
 
     // 2. Batch privacy settings via PrivacyService.getManySettings() (Redis MGET)
-    const privacyMap = await this.privacyService.getManySettings(nonBlockedIds);
+    const privacyMap = await this.privacyRead.getManySettings(nonBlockedIds);
 
     // 3. Batch friendship lookups (single Prisma query)
     const friendshipMap = await this.batchGetFriendships(

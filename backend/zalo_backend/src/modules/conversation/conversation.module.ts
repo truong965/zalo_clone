@@ -1,6 +1,6 @@
 // src/modules/conversation/conversation.module.ts
 
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { DatabaseModule } from 'src/database/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -17,6 +17,8 @@ import { GroupService } from './services/group.service';
 import { GroupJoinService } from './services/group-join.service';
 import { ConversationRealtimeService } from './services/conversation-realtime.service';
 import { SystemMessageBroadcasterService } from './services/system-message-broadcaster.service';
+import { ConversationSystemMessageAdapter } from './internal-api/conversation-system-message.adapter';
+import { CONVERSATION_SYSTEM_MESSAGE_PORT } from '@common/contracts/internal-api';
 
 // Listeners
 import { ConversationEventHandler } from './listeners/conversation-event.handler';
@@ -52,7 +54,7 @@ import { ConversationGateway } from './conversation.gateway';
     SharedModule,
     AuthorizationModule, // Provides InteractionGuard used in ConversationController
     PrivacyModule,
-    forwardRef(() => SocketModule),
+    SocketModule,
     IdempotencyModule,
   ],
   controllers: [ConversationController],
@@ -63,6 +65,11 @@ import { ConversationGateway } from './conversation.gateway';
     GroupJoinService,
     ConversationRealtimeService,
     SystemMessageBroadcasterService,
+    ConversationSystemMessageAdapter,
+    {
+      provide: CONVERSATION_SYSTEM_MESSAGE_PORT,
+      useExisting: ConversationSystemMessageAdapter,
+    },
 
     // Listeners
     ConversationEventHandler,
@@ -77,6 +84,7 @@ import { ConversationGateway } from './conversation.gateway';
     GroupService,
     GroupJoinService,
     SystemMessageBroadcasterService,
+    CONVERSATION_SYSTEM_MESSAGE_PORT,
   ],
 })
-export class ConversationModule {}
+export class ConversationModule { }

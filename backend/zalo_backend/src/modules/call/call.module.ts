@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CallHistoryController } from './call-history.controller';
 import { CallHistoryService } from './call-history.service';
@@ -69,7 +69,7 @@ import { CallEndedSocketListener } from './listeners/call-ended.listener';
     SharedModule,
     AuthorizationModule,
     PrivacyModule, // For privacy/block checks in CallSignalingGateway
-    forwardRef(() => SocketModule), // For SocketStateService in CallSignalingGateway
+    SocketModule, // For SocketStateService in CallSignalingGateway
     DatabaseModule, // PrismaService for group conversation type check
   ],
   controllers: [CallHistoryController],
@@ -90,4 +90,4 @@ import { CallEndedSocketListener } from './listeners/call-ended.listener';
   ],
   exports: [CallHistoryService],
 })
-export class CallModule {}
+export class CallModule { }

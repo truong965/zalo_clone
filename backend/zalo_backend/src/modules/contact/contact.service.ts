@@ -31,7 +31,10 @@ import {
 } from './dto/contact.dto';
 import { SelfActionException, RateLimitException } from 'src/shared/errors';
 import { FriendshipService } from '../friendship/service/friendship.service';
-import { PrivacyService } from 'src/modules/privacy/services/privacy.service';
+import {
+  PRIVACY_READ_PORT,
+} from '@common/contracts/internal-api';
+import type { IPrivacyReadPort } from '@common/contracts/internal-api';
 import * as crypto from 'crypto';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socialConfig from 'src/config/social.config';
@@ -54,10 +57,11 @@ export class ContactService {
     private readonly redis: RedisService,
     private readonly eventPublisher: EventPublisher,
     private readonly friendshipService: FriendshipService,
-    private readonly privacyService: PrivacyService,
+    @Inject(PRIVACY_READ_PORT)
+    private readonly privacyRead: IPrivacyReadPort,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) {}
+  ) { }
 
   /**
    * Sync contacts from phone
@@ -629,7 +633,7 @@ export class ContactService {
 
     // 2. Batch Get Privacy Settings
     // Gọi PrivacyService để lấy settings của danh sách user này
-    const privacyMap = await this.privacyService.getManySettings(userIds);
+    const privacyMap = await this.privacyRead.getManySettings(userIds);
 
     // 3. Phân loại: Ai yêu cầu phải là bạn bè mới tìm thấy?
     // Mặc định Zalo: Tìm bằng SĐT thì ai cũng tìm được (EVERYONE),

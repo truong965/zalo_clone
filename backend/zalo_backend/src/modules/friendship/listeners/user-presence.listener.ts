@@ -1,8 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
-import { FriendshipService } from '../service/friendship.service';
-import { PrivacyService } from '@modules/privacy/services/privacy.service';
 import { SocketEvents } from '@common/constants/socket-events.constant';
+import {
+  FRIENDSHIP_READ_PORT,
+  PRIVACY_READ_PORT,
+} from '@common/contracts/internal-api';
+import type {
+  IFriendshipReadPort,
+  IPrivacyReadPort,
+} from '@common/contracts/internal-api';
 import {
   OUTBOUND_SOCKET_EVENT,
   ISocketEmitEvent,
@@ -20,10 +26,12 @@ export class UserPresenceListener {
   private readonly logger = new Logger(UserPresenceListener.name);
 
   constructor(
-    private readonly friendshipService: FriendshipService,
-    private readonly privacyService: PrivacyService,
+    @Inject(FRIENDSHIP_READ_PORT)
+    private readonly friendshipRead: IFriendshipReadPort,
+    @Inject(PRIVACY_READ_PORT)
+    private readonly privacyRead: IPrivacyReadPort,
     private readonly eventEmitter: EventEmitter2,
-  ) {}
+  ) { }
 
   @OnEvent(SocketEvents.USER_SOCKET_CONNECTED, { async: true })
   async handleUserConnected(payload: {
@@ -49,11 +57,10 @@ export class UserPresenceListener {
     timestamp?: Date,
   ) {
     try {
-      const settings = await this.privacyService.getSettings(userId);
+      const settings = await this.privacyRead.getSettings(userId);
       if (!settings.showOnlineStatus) return;
 
-      const friendIds =
-        await this.friendshipService.getFriendIdsForPresence(userId);
+      const friendIds = await this.friendshipRead.getFriendIdsForPresence(userId);
 
       if (!friendIds || friendIds.length === 0) return;
 
