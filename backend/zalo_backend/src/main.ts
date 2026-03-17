@@ -12,6 +12,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { RedisIoAdapter } from './socket/adapters/redis-io.adapter';
 import { ConfigService } from '@nestjs/config';
+import { setupInternalRouting } from './common/middleware/internal-routing.middleware';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const port = process.env.PORT || 3000;
@@ -37,6 +38,25 @@ async function bootstrap() {
       },
     }),
   );
+
+  // ========================================================================
+  // PHASE 5: Internal API Routing Setup
+  // Register internal routes BEFORE applying global prefix
+  // This allows /internal/* routes to exist without /api/v1 prefix
+  // ========================================================================
+  setupInternalRouting(app);
+
+  // ========================================================================
+  // ROUTING CONFIGURATION: Public API vs Internal Routes
+  // ========================================================================
+  // Public API uses global prefix: /api/v1/*
+  // Internal API uses separate prefix: /internal/*
+  //
+  // This separation allows:
+  // - Internal routes to be protected differently (InternalAuthGuard instead of JWT)
+  // - Clear distinction between public and internal APIs
+  // - Future API Gateway can route these differently
+  // ========================================================================
 
   app.setGlobalPrefix('api');
   app.enableVersioning({

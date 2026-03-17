@@ -4,7 +4,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 // Controllers
 import { AdminStatsController } from './controllers/admin-stats.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
-import { AdminCallsController } from './controllers/admin-calls.controller';
+import { AdminManagementController } from './controllers/admin-management.controller';
 import { AdminActivityController } from './controllers/admin-activity.controller';
 import { AdminSystemController } from './controllers/admin-system.controller';
 
@@ -42,7 +42,7 @@ import { DailyStatsCron } from './cron/daily-stats.cron';
   controllers: [
     AdminStatsController,
     AdminUsersController,
-    AdminCallsController,
+    AdminManagementController,
     AdminActivityController,
     AdminSystemController,
   ],
@@ -59,4 +59,4 @@ import { DailyStatsCron } from './cron/daily-stats.cron';
     DailyStatsCron,
   ],
 })
-export class AdminModule {}
+export class AdminModule { }
