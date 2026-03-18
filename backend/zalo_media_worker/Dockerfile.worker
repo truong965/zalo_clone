@@ -1,0 +1,59 @@
+# backend/zalo_media_worker/Dockerfile.worker
+
+# Base image
+FROM node:25-alpine AS base
+
+# Install necessary OS packages for media processing
+# ffmpeg is required for video processing
+# dumb-init is for graceful shutdowns
+RUN apk add --no-cache ffmpeg dumb-init
+
+# Dependencies stage
+FROM base AS deps
+WORKDIR /app
+
+# Copy package.json files
+COPY backend/zalo_media_worker/package*.json ./backend/zalo_media_worker/
+
+# We only need to install dependencies in the worker directory
+WORKDIR /app/backend/zalo_media_worker
+RUN npm ci
+
+# Builder stage
+FROM base AS builder
+WORKDIR /app
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/backend/zalo_media_worker/node_modules ./backend/zalo_media_worker/node_modules
+
+# Copy Prisma schema from backend API (since worker depends on it via symlink/copy)
+COPY backend/zalo_backend/prisma ./backend/zalo_backend/prisma
+
+# Copy all source files
+COPY backend/zalo_media_worker ./backend/zalo_media_worker
+
+# Generate Prisma client and build NestJS app
+WORKDIR /app/backend/zalo_media_worker
+RUN npm run prisma:generate && \
+    npm run build && \
+    npm prune --production
+
+# Production runner stage
+FROM base AS runner
+
+# Use a non-root user for security
+USER node
+
+WORKDIR /app/backend/zalo_media_worker
+
+ENV NODE_ENV production
+
+# Copy necessary files from builder
+COPY --from=builder --chown=node:node /app/backend/zalo_media_worker/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/backend/zalo_media_worker/dist ./dist
+# We need prisma generated client, if it was generated inside node_modules we're good
+COPY --from=builder --chown=node:node /app/backend/zalo_media_worker/package.json ./package.json
+
+# Use dumb-init to handle PID 1 responsibilities
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/main.js"]
