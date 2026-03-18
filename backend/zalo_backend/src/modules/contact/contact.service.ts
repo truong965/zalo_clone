@@ -16,7 +16,7 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 import { EventPublisher } from '@shared/events';
 import { ContactSource, Prisma, UserContact, UserStatus } from '@prisma/client';
 import {
@@ -29,7 +29,7 @@ import {
   ContactItemDto,
   GetContactsQueryDto,
 } from './dto/contact.dto';
-import { SelfActionException, RateLimitException } from 'src/shared/errors';
+import { SelfActionException, RateLimitException } from 'src/common/errors';
 import { FriendshipService } from '../friendship/service/friendship.service';
 import {
   PRIVACY_READ_PORT,

@@ -9,8 +9,9 @@ import { UserEntity } from '../users/entities/user.entity';
 import { DeviceType, LoginMethod, UserStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
-import { RedisRegistryService } from 'src/modules/redis/services/redis-registry.service';
+import { RedisRegistryService } from 'src/shared/redis/services/redis-registry.service';
 import { DeviceListItemDto } from './dto/device-list.dto';
+import { InternalEventNames } from '@common/contracts/events';
 
 @Injectable()
 export class AuthService {
@@ -123,7 +124,7 @@ export class AuthService {
 
     // PHASE 2: Emit event instead of direct call
     // CallModule listener (CallLogoutHandler) will handle active call cleanup
-    this.eventEmitter.emit('user.logged_out', {
+    this.eventEmitter.emit(InternalEventNames.USER_LOGGED_OUT, {
       userId,
       deviceId,
       timestamp: new Date(),

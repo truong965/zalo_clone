@@ -5,7 +5,7 @@
  * Uses RedisKeyBuilder as single source of truth.
  */
 
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 
 export class FriendshipCacheHelper {

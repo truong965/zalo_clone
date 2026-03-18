@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BlockService } from './block.service';
 import { BlockController } from './block.controller';
-import { RedisModule } from '@modules/redis/redis.module';
+import { RedisModule } from '@shared/redis/redis.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import { EventsModule } from '@shared/events';
 import { SharedModule } from '@shared/shared.module';

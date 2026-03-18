@@ -2,7 +2,7 @@
 
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from 'src/database/prisma.module';
-import { RedisModule } from '../redis/redis.module';
+import { RedisModule } from '@shared/redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { EventsModule } from '@shared/events';
 import { SharedModule } from '@shared/shared.module';

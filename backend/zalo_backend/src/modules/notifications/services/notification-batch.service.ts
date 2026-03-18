@@ -19,7 +19,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 
 /** Batch state stored in Redis hash */

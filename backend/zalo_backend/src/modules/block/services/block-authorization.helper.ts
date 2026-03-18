@@ -22,7 +22,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { User } from '@prisma/client';
-import { RateLimitException } from '@shared/errors';
+import { RateLimitException } from '@common/errors';
 import type { BlockConfig } from '../config/block.config';
 
 @Injectable()

@@ -4,8 +4,8 @@ import {
   AuthenticatedSocket,
   SocketMetadata,
 } from 'src/common/interfaces/socket-client.interface';
-import { RedisRegistryService } from 'src/modules/redis/services/redis-registry.service';
-import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
+import { RedisRegistryService } from 'src/shared/redis/services/redis-registry.service';
+import { RedisPresenceService } from 'src/shared/redis/services/redis-presence.service';
 import { DeviceFingerprintService } from 'src/modules/auth/services/device-fingerprint.service';
 import socketConfig from 'src/config/socket.config';
 import { Request } from 'express';

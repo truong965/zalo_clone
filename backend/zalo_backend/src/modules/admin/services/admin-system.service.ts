@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
-import { RedisRegistryService } from '@modules/redis/services/redis-registry.service';
+import { RedisService } from '@shared/redis/redis.service';
+import { RedisRegistryService } from '@shared/redis/services/redis-registry.service';
 
 /**
  * AdminSystemService

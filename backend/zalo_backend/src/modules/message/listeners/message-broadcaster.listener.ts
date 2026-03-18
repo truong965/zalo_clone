@@ -3,10 +3,11 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import type { MessageSentEvent } from '../events';
 import type { ConversationCreatedEvent } from '@modules/conversation/events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 @Injectable()
 export class MessageBroadcasterListener extends IdempotentListener {
-  @OnEvent('message.sent')
+  @OnEvent(InternalEventNames.MESSAGE_SENT)
   async handleMessageSent(event: MessageSentEvent): Promise<void> {
     return this.withIdempotency(`message-sent-${event.messageId}`, async () => {
       this.logger.debug(
@@ -27,7 +28,7 @@ export class MessageBroadcasterListener extends IdempotentListener {
     });
   }
 
-  @OnEvent('conversation.created')
+  @OnEvent(InternalEventNames.CONVERSATION_CREATED)
   async handleConversationCreated(
     event: ConversationCreatedEvent,
   ): Promise<void> {

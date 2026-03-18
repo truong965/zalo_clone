@@ -3,7 +3,7 @@
 // import { BadRequestException, ForbiddenException } from '@nestjs/common';
 // import { MessageService } from './message.service';
 // import { PrismaService } from '@database/prisma.service';
-// import { RedisService } from '@modules/redis/redis.service';
+// import { RedisService } from '@shared/redis/redis.service';
 // import { EventPublisher } from '@shared/events';
 // import redisConfig from '@config/redis.config';
 // import { InteractionAuthorizationService } from '@modules/authorization/services/interaction-authorization.service';

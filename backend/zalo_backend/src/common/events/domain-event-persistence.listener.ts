@@ -1,12 +1,15 @@
 /**
  * DomainEventPersistenceListener - PHASE 6
  *
- * Listens to critical domain events and persists them to domain_events table.
- * Enables audit trail, event sourcing, and replay capability.
+ * Supplemental persistence listener for non-critical / legacy direct-emitted
+ * domain events that are not persisted by EventPublisher critical-path.
  *
- * Events persisted (per plan):
- * - USER_BLOCKED, USER_UNBLOCKED
- * - FRIEND_REQUEST_SENT, FRIEND_REQUEST_ACCEPTED, FRIEND_REQUEST_REJECTED,
+ * Primary strategy (Phase 6, Option A):
+ * - Critical events are persisted in EventPublisher before listener fan-out.
+ * - This listener only handles non-critical/bridge events to avoid overlap.
+ *
+ * Events persisted (listener scope after overlap cleanup):
+ * - FRIEND_REQUEST_SENT, FRIEND_REQUEST_REJECTED,
  *   FRIEND_REQUEST_CANCELLED, UNFRIENDED
  * - PRIVACY_SETTINGS_UPDATED
  *
@@ -17,10 +20,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
 import { EventType, Prisma } from '@prisma/client';
-import type {
-  UserBlockedEventPayload,
-  UserUnblockedEventPayload,
-} from '@shared/events/contracts';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 interface PersistInput {
   eventId: string;
@@ -40,37 +40,7 @@ export class DomainEventPersistenceListener {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  @OnEvent('user.blocked', { async: true })
-  async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
-    await this.persist({
-      eventId: event.eventId,
-      eventType: EventType.USER_BLOCKED,
-      aggregateId: event.aggregateId,
-      aggregateType: 'Block',
-      version: event.version,
-      source: event.source,
-      correlationId: event.correlationId,
-      payload: event as unknown as Record<string, unknown>,
-      occurredAt: event.timestamp,
-    });
-  }
-
-  @OnEvent('user.unblocked', { async: true })
-  async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
-    await this.persist({
-      eventId: event.eventId,
-      eventType: EventType.USER_UNBLOCKED,
-      aggregateId: event.aggregateId,
-      aggregateType: 'Block',
-      version: event.version,
-      source: event.source,
-      correlationId: event.correlationId,
-      payload: event as unknown as Record<string, unknown>,
-      occurredAt: event.timestamp,
-    });
-  }
-
-  @OnEvent('friendship.request.sent', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_SENT, { async: true })
   async handleFriendRequestSent(payload: {
     eventId?: string;
     eventType?: string;
@@ -98,36 +68,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.accepted', { async: true })
-  async handleFriendshipAccepted(payload: {
-    eventId?: string;
-    friendshipId?: string;
-    acceptedBy?: string;
-    requesterId?: string;
-    user1Id?: string;
-    user2Id?: string;
-    timestamp?: Date;
-    correlationId?: string;
-  }): Promise<void> {
-    const eventId = payload?.eventId;
-    if (!eventId) {
-      this.logger.warn('[PERSIST] friendship.accepted missing eventId');
-      return;
-    }
-    await this.persist({
-      eventId,
-      eventType: EventType.FRIEND_REQUEST_ACCEPTED,
-      aggregateId: payload.friendshipId ?? payload.user1Id ?? 'unknown',
-      aggregateType: 'Friendship',
-      version: 1,
-      source: 'FriendshipModule',
-      correlationId: payload.correlationId,
-      payload: payload as Record<string, unknown>,
-      occurredAt: payload.timestamp ?? new Date(),
-    });
-  }
-
-  @OnEvent('friendship.request.declined', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_DECLINED, { async: true })
   async handleFriendRequestDeclined(payload: {
     eventId?: string;
     requestId?: string;
@@ -154,7 +95,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.request.cancelled', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_CANCELLED, { async: true })
   async handleFriendRequestCancelled(payload: {
     eventId?: string;
     friendshipId?: string;
@@ -183,7 +124,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('friendship.unfriended', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_UNFRIENDED, { async: true })
   async handleUnfriended(payload: {
     eventId?: string;
     friendshipId?: string;
@@ -211,7 +152,7 @@ export class DomainEventPersistenceListener {
     });
   }
 
-  @OnEvent('privacy.updated', { async: true })
+  @OnEvent(InternalEventNames.PRIVACY_UPDATED, { async: true })
   async handlePrivacyUpdated(payload: {
     eventId?: string;
     userId?: string;

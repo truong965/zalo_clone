@@ -2,7 +2,7 @@
 // import { Test, TestingModule } from '@nestjs/testing';
 // import { FriendshipService } from './friendship.service';
 // import { PrismaService } from '@database/prisma.service';
-// import { RedisService } from '@modules/redis/redis.service';
+// import { RedisService } from '@shared/redis/redis.service';
 // import { DistributedLockService } from '@common/distributed-lock/distributed-lock.service';
 // import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
 // import { FriendshipStatus } from '@prisma/client';

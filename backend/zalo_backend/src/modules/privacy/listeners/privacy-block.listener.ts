@@ -1,14 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventType } from '@prisma/client';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { ALL_PERMISSION_ACTIONS } from '@common/constants/permission-actions.constant';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import type {
   UserBlockedEventPayload,
   UserUnblockedEventPayload,
-} from '@shared/events/contracts';
+} from '@common/contracts/events';
 
 /**
  * PrivacyBlockListener (PHASE 7 - EVENT-DRIVEN REFACTORING)
@@ -54,7 +55,7 @@ export class PrivacyBlockListener {
    *   1. Block status cache: social:block:blockerId:blockedId
    *   2. Permission caches: social:permission:{message|call|profile}:*
    */
-  @OnEvent('user.blocked', { async: true })
+  @OnEvent(InternalEventNames.USER_BLOCKED, { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
@@ -110,7 +111,7 @@ export class PrivacyBlockListener {
    * Same cache invalidation as block event
    * (Permissions need to be recalculated)
    */
-  @OnEvent('user.unblocked', { async: true })
+  @OnEvent(InternalEventNames.USER_UNBLOCKED, { async: true })
   async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;

@@ -3,12 +3,13 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { EventType } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import type {
   UserBlockedEventPayload,
   UserUnblockedEventPayload,
-} from '@shared/events/contracts';
+} from '@common/contracts/events';
 
 /**
  * FriendshipBlockListener (NEW - Moved from BlockEventHandler)
@@ -73,7 +74,7 @@ export class FriendshipBlockListener {
    * }
    * ```
    */
-  @OnEvent('user.blocked')
+  @OnEvent(InternalEventNames.USER_BLOCKED)
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId, eventId } = event;
     const handlerId = this.constructor.name;
@@ -199,7 +200,7 @@ export class FriendshipBlockListener {
    * - Update deletedAt=null for Friendship between blocker-blocked
    * - Only restore if record was soft-deleted by block (deletedAt not null)
    */
-  @OnEvent('user.unblocked')
+  @OnEvent(InternalEventNames.USER_UNBLOCKED)
   async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId, eventId } = event;
     const handlerId = this.constructor.name;

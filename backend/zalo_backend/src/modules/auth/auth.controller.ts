@@ -180,7 +180,9 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
     const deviceInfo = this.deviceFingerprintService.extractDeviceInfo(req);
-    const targetDeviceId = (user as any).currentDeviceId || deviceInfo.deviceId;
+    const targetDeviceId =
+      (user as User & { currentDeviceId?: string }).currentDeviceId ||
+      deviceInfo.deviceId;
 
     // Revoke current device session
     await this.authService.logout(user.id, targetDeviceId);

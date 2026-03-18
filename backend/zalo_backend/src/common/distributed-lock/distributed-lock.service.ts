@@ -32,7 +32,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '@nestjs/common';
 

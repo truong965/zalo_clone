@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /**
  * FriendRequestCancelledListener - PHASE 5
@@ -23,7 +24,7 @@ export class FriendRequestRemovedListener extends IdempotentListener {
     super(prisma);
   }
 
-  @OnEvent('friendship.request.cancelled')
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_CANCELLED)
   async handleFriendshipCancelled(payload: {
     eventId?: string;
     cancelledBy?: string;

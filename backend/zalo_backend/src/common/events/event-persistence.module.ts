@@ -1,10 +1,12 @@
 /**
  * EventPersistenceModule - PHASE 6
  *
- * Provides DomainEventPersistenceListener to persist critical domain events
- * to domain_events table for audit trail and event sourcing.
+ * Provides DomainEventPersistenceListener as supplemental persistence path
+ * for non-critical / legacy direct-emitted events.
  *
- * Listens to: user.blocked, user.unblocked, friendship.*, privacy.updated
+ * Critical persistence is handled by EventPublisher (Option A).
+ *
+ * Listens to: friendship.request.* (except accepted), unfriended, privacy.updated
  */
 
 import { Module } from '@nestjs/common';

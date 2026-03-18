@@ -9,6 +9,7 @@ import { Prisma, TokenRevocationReason, UserStatus } from '@prisma/client';
 import { PrismaService } from 'src/database/prisma.service';
 import { TokenService } from '@modules/auth/services/token.service';
 import { UserListQueryDto } from '../dto/user-list-query.dto';
+import { InternalEventNames } from '@common/contracts/events';
 
 /**
  * AdminUsersService
@@ -184,7 +185,7 @@ export class AdminUsersService {
     );
 
     // Emit event for socket disconnect (event-driven cross-module)
-    this.eventEmitter.emit('auth.security.revoked', {
+    this.eventEmitter.emit(InternalEventNames.AUTH_SECURITY_REVOKED, {
       userId,
       reason: 'SECURITY_RISK',
     });
@@ -234,7 +235,7 @@ export class AdminUsersService {
     );
 
     // Emit event for socket disconnect
-    this.eventEmitter.emit('auth.security.revoked', {
+    this.eventEmitter.emit(InternalEventNames.AUTH_SECURITY_REVOKED, {
       userId,
       reason: 'SECURITY_RISK',
     });

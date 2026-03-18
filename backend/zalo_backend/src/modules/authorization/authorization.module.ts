@@ -5,7 +5,7 @@ import { PrivacyModule } from '@modules/privacy/privacy.module';
 import { FriendshipModule } from '@modules/friendship/friendship.module';
 import { InteractionAuthorizationService } from './services/interaction-authorization.service';
 import { InteractionGuard } from './guards/interaction.guard';
-import { NotBlockedGuard } from '@shared/guards/not-blocked.guard';
+import { NotBlockedGuard } from '@common/guards/not-blocked.guard';
 import { INTERACTION_READ_PORT } from '@common/contracts/internal-api';
 import { InteractionReadAdapter } from './internal-api/interaction-read.adapter';
 

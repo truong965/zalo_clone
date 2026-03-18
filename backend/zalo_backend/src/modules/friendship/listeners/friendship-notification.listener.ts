@@ -17,6 +17,7 @@ import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { PrismaService } from '@database/prisma.service';
 import { SocketEvents } from '@common/constants/socket-events.constant';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import type {
   FriendRequestSentEvent,
   FriendRequestAcceptedEvent,
@@ -42,7 +43,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
    * When User A sends a friend request to User B,
    * notify User B in real-time.
    */
-  @OnEvent('friendship.request.sent', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_SENT, { async: true })
   async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
     try {
       this.logger.debug(
@@ -71,7 +72,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
    * When User B accepts friend request from User A,
    * notify User A (the original requester).
    */
-  @OnEvent('friendship.accepted', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_ACCEPTED, { async: true })
   async handleFriendRequestAccepted(
     event: FriendRequestAcceptedEvent,
   ): Promise<void> {
@@ -102,7 +103,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
    * When User A cancels their sent friend request,
    * notify the target user (User B).
    */
-  @OnEvent('friendship.request.cancelled', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_CANCELLED, { async: true })
   async handleFriendRequestCancelled(
     event: FriendRequestCancelledEvent,
   ): Promise<void> {
@@ -134,7 +135,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
    * When User B declines friend request from User A,
    * notify User A (the requester).
    */
-  @OnEvent('friendship.request.declined', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_DECLINED, { async: true })
   async handleFriendRequestDeclined(
     event: FriendRequestRejectedEvent,
   ): Promise<void> {
@@ -165,7 +166,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
    * When User A unfriends User B,
    * notify User B.
    */
-  @OnEvent('friendship.unfriended', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_UNFRIENDED, { async: true })
   async handleUnfriended(event: UnfriendedEvent): Promise<void> {
     try {
       // The other user is whichever is NOT the initiator

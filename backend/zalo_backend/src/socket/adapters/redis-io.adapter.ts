@@ -2,7 +2,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { ServerOptions } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { INestApplicationContext, Logger } from '@nestjs/common';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 
 export class RedisIoAdapter extends IoAdapter {
   private readonly logger = new Logger(RedisIoAdapter.name);

@@ -13,6 +13,7 @@ import {
   OUTBOUND_SOCKET_EVENT,
   ISocketEmitEvent,
 } from '@common/events/outbound-socket.event';
+import { InternalEventNames } from '@common/contracts/events';
 
 /**
  * Listens to user presence events (`USER_SOCKET_CONNECTED`, `USER_SOCKET_DISCONNECTED`)
@@ -33,7 +34,7 @@ export class UserPresenceListener {
     private readonly eventEmitter: EventEmitter2,
   ) { }
 
-  @OnEvent(SocketEvents.USER_SOCKET_CONNECTED, { async: true })
+  @OnEvent(InternalEventNames.USER_SOCKET_CONNECTED, { async: true })
   async handleUserConnected(payload: {
     userId: string;
     socketId: string;
@@ -42,7 +43,7 @@ export class UserPresenceListener {
     await this.notifyFriendsPresence(payload.userId, true, payload.connectedAt);
   }
 
-  @OnEvent(SocketEvents.USER_SOCKET_DISCONNECTED, { async: true })
+  @OnEvent(InternalEventNames.USER_SOCKET_DISCONNECTED, { async: true })
   async handleUserDisconnected(payload: {
     userId: string;
     socketId: string;

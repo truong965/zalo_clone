@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { RedisRegistryService } from 'src/modules/redis/services/redis-registry.service';
-import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
+import { RedisRegistryService } from 'src/shared/redis/services/redis-registry.service';
+import { RedisPresenceService } from 'src/shared/redis/services/redis-presence.service';
 
 @Injectable()
 export class SocketCleanupJob {

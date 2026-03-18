@@ -3,9 +3,9 @@
 // import { Prisma } from '@prisma/client';
 // import { BlockService } from './block.service';
 // import { PrismaService } from '@database/prisma.service';
-// import { RedisService } from '@modules/redis/redis.service';
+// import { RedisService } from '@shared/redis/redis.service';
 // import { BLOCK_REPOSITORY } from './repositories/block.repository.interface';
-// import { SelfActionException } from '@shared/errors';
+// import { SelfActionException } from '@common/errors';
 // import socialConfig from '@config/social.config';
 // import { ConfigModule } from '@nestjs/config';
 // import { EventPublisher } from '@shared/events';

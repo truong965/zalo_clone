@@ -34,7 +34,7 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { Friendship, FriendshipStatus, Prisma } from '@prisma/client';
 import {
   GetFriendsQueryDto,
@@ -61,7 +61,7 @@ import type {
   FriendshipRejectedPayload,
   FriendshipRequestSentPayload,
   UnfriendedPayload,
-} from '@shared/events/contracts';
+} from '@common/contracts/events';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
 import { v4 as uuidv4 } from 'uuid';
 import socialConfig from '@config/social.config';

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { InternalEventNames } from '@common/contracts/events';
 import { CallHistoryService } from '../call-history.service';
 
 /**
@@ -29,7 +30,7 @@ export class CallBlockListener {
    *         Remove them from Redis and emit call.ended event
    *         Socket module will handle client notifications
    */
-  @OnEvent('user.blocked')
+  @OnEvent(InternalEventNames.USER_BLOCKED)
   async handleUserBlocked(event: {
     blockerId?: string;
     blockedId?: string;
@@ -73,7 +74,7 @@ export class CallBlockListener {
    * No action needed - calls are not restored after unblock
    * (User must manually initiate new calls)
    */
-  @OnEvent('user.unblocked')
+  @OnEvent(InternalEventNames.USER_UNBLOCKED)
   handleUserUnblocked(event: { blockerId?: string; blockedId?: string }): void {
     const blockerId = event?.blockerId;
     const blockedId = event?.blockedId;

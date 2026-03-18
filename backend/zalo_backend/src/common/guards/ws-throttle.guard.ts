@@ -6,7 +6,7 @@ import {
       Logger,
 } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
-import { RedisRateLimitService } from 'src/modules/redis/services/redis-rate-limit.service';
+import { RedisRateLimitService } from 'src/shared/redis/services/redis-rate-limit.service';
 import { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import redisConfig from 'src/config/redis.config';

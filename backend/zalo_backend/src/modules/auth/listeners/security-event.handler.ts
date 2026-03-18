@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { OnEvent } from '@nestjs/event-emitter';
+import { InternalEventNames } from '@common/contracts/events';
 import { EventType, TokenRevocationReason } from '@prisma/client';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { TokenService } from '../services/token.service';
@@ -63,7 +64,7 @@ export class SecurityEventHandler implements OnApplicationBootstrap {
     }
   }
 
-  @OnEvent('auth.security.revoked')
+  @OnEvent(InternalEventNames.AUTH_SECURITY_REVOKED)
   async handleSecurityRevoked(
     payload: AuthSecurityRevokedEvent,
   ): Promise<void> {

@@ -115,10 +115,6 @@ export const SocketEvents = {
   SEARCH_SUGGESTIONS: 'search:suggestions', // Autocomplete suggestions
   SEARCH_ERROR: 'search:error', // Search error notification
 
-  // === SEARCH INTERNAL EVENTS (EventEmitter — gateway ↔ listener) ===
-  SEARCH_INTERNAL_NEW_MATCH: 'search.internal.newMatch',
-  SEARCH_INTERNAL_RESULT_REMOVED: 'search.internal.resultRemoved',
-
   // === SOCKET LIFECYCLE (server-to-server internal presence) ===
   SERVER_HEARTBEAT: 'server_heartbeat',
   AUTH_FORCE_LOGOUT: 'auth.force_logout',
@@ -168,22 +164,6 @@ export const SocketEvents = {
   CALL_QUALITY_CHANGE: 'call:quality-change',
   CALL_PARTICIPANT_JOINED: 'call:participant-joined',
   CALL_PARTICIPANT_LEFT: 'call:participant-left',
-
-  // === CALL INTERNAL EVENTS (EventEmitter — domain events) ===
-  /** Emitted when CallEventHandler wants MessageModule to create a CALL_LOG system message */
-  CALL_LOG_MESSAGE_NEEDED: 'call.log_message_needed',
-  /** Emitted when call ends — listened by ConversationModule to update lastMessageAt */
-  CALL_CONVERSATION_UPDATE_NEEDED: 'call.conversation_update_needed',
-
-  // === PUSH NOTIFICATION EVENTS (EventEmitter — Phase 5) ===
-  /** Gateway requests FCM push for incoming call (callee offline or no ringing ack) */
-  CALL_PUSH_NOTIFICATION_NEEDED: 'call.push_notification_needed',
-  /** CallEventHandler requests FCM push for missed call */
-  CALL_MISSED_NOTIFICATION_NEEDED: 'call.missed_notification_needed',
-
-  // === SOCKET LIFECYCLE (internal EventEmitter events) ===
-  USER_SOCKET_CONNECTED: 'user.socket.connected',
-  USER_SOCKET_DISCONNECTED: 'user.socket.disconnected',
 
   // === REMINDER EVENTS ===
   /** Server → Client: Reminder time has arrived */

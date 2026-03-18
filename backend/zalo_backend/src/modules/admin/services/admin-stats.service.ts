@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
-import { RedisPresenceService } from '@modules/redis/services/redis-presence.service';
+import { RedisService } from '@shared/redis/redis.service';
+import { RedisPresenceService } from '@shared/redis/services/redis-presence.service';
 import { DailyStatsQueryDto } from '../dto/daily-stats-query.dto';
 import { STATS_KEYS, todayICT } from '../listeners/stats-counter.listener';
 import { UserStatus } from '@prisma/client';

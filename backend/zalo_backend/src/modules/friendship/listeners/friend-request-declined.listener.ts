@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
-import type { FriendshipRejectedPayload } from '@shared/events/contracts';
+import type { FriendshipRejectedPayload } from '@common/contracts/events';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /**
  * R6: FriendRequestDeclinedListener (Split Concern)
@@ -51,7 +52,7 @@ export class FriendRequestDeclinedListener extends IdempotentListener {
    *   action: 'REJECTED'
    * })
    */
-  @OnEvent('friendship.request.declined')
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_DECLINED)
   async handleFriendRequestDeclined(
     payload: FriendshipRejectedPayload,
   ): Promise<void> {

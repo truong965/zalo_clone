@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { ConversationType, MemberStatus } from '@prisma/client';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 @Injectable()
 export class MessagingBlockListener {
@@ -9,7 +10,7 @@ export class MessagingBlockListener {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  @OnEvent('user.blocked')
+  @OnEvent(InternalEventNames.USER_BLOCKED)
   async handleUserBlocked(event: {
     blockerId?: string;
     blockedId?: string;
@@ -54,7 +55,7 @@ export class MessagingBlockListener {
     }
   }
 
-  @OnEvent('user.unblocked')
+  @OnEvent(InternalEventNames.USER_UNBLOCKED)
   async handleUserUnblocked(event: {
     blockerId?: string;
     blockedId?: string;

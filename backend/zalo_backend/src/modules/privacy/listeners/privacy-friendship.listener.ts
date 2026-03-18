@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
-import type { FriendshipAcceptedPayload } from '@shared/events/contracts/friendship-events.contract';
-import type { UnfriendedPayload } from '@shared/events/contracts/friendship-events.contract';
+import { InternalEventNames } from '@common/contracts/events/event-names';
+import type {
+  FriendshipAcceptedPayload,
+  UnfriendedPayload,
+} from '@common/contracts/events';
 
 /**
  * PrivacyFriendshipListener - PHASE 4
@@ -21,7 +24,7 @@ export class PrivacyFriendshipListener {
 
   constructor(private readonly redisService: RedisService) {}
 
-  @OnEvent('friendship.accepted', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_ACCEPTED, { async: true })
   async handleFriendshipAccepted(
     event: FriendshipAcceptedPayload | { user1Id?: string; user2Id?: string },
   ): Promise<void> {
@@ -45,7 +48,7 @@ export class PrivacyFriendshipListener {
     }
   }
 
-  @OnEvent('friendship.unfriended', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_UNFRIENDED, { async: true })
   async handleUnfriended(
     event: UnfriendedPayload | { user1Id?: string; user2Id?: string },
   ): Promise<void> {

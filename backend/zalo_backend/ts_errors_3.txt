@@ -1,1 +1,0 @@
-src/modules/message/services/message.service.ts(873,9): error TS2353: Object literal may only specify known properties, and 'mediaAttachments' does not exist in type 'MessageSelect<DefaultArgs>'.

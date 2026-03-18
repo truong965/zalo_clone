@@ -2,8 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventType } from '@prisma/client';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /**
  * PrivacyCacheListener - PHASE 4 (renamed from PrivacyEventHandler)
@@ -20,7 +21,7 @@ export class PrivacyCacheListener {
     private readonly idempotency: IdempotencyService,
   ) {}
 
-  @OnEvent('privacy.updated', { async: true })
+  @OnEvent(InternalEventNames.PRIVACY_UPDATED, { async: true })
   async handlePrivacyUpdated(payload: {
     eventId?: string;
     userId?: string;

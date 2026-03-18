@@ -3,7 +3,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { Message } from '@prisma/client';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 import redisConfig from 'src/config/redis.config';
 import type { ConfigType } from '@nestjs/config';
 import { safeStringify } from 'src/common/utils/json.util';

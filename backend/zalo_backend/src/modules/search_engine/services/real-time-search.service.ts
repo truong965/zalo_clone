@@ -13,11 +13,12 @@ import { GlobalSearchService } from './global-search.service';
 import { GroupSearchService } from './group-search.service';
 import { MediaSearchService } from './media-search.service';
 import { SearchValidationService } from './search-validation.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import type { MessageWithSearchContext } from '../interfaces/search-raw-result.interface';
 import { MessageSearchRequestDto } from '../dto/search.dto';
 import { ConfigService } from '@nestjs/config';
+import { InternalEventNames } from '@common/contracts/events';
 
 /**
  * Real-Time Search Service (Phase 4 — A1/A3/A4 refactored)
@@ -94,7 +95,7 @@ export class RealTimeSearchService implements OnModuleInit {
     private readonly eventEmitter: EventEmitter2,
     private readonly configService: ConfigService,
     @Optional() private readonly redis: RedisService,
-  ) {}
+  ) { }
 
   private getInitialLimits(): {
     messageLimit: number;
@@ -703,7 +704,7 @@ export class RealTimeSearchService implements OnModuleInit {
         keyword,
         { message: latestMessage, userId },
       ] of byKeyword.entries()) {
-        this.eventEmitter.emit(SocketEvents.SEARCH_INTERNAL_NEW_MATCH, {
+        this.eventEmitter.emit(InternalEventNames.SEARCH_INTERNAL_NEW_MATCH, {
           message: latestMessage,
           subscriptions: [{ socketId, keyword, userId }],
         });

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
-import type { FriendshipAcceptedPayload } from '@shared/events/contracts';
+import type { FriendshipAcceptedPayload } from '@common/contracts/events';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /**
  * R6: FriendshipAcceptedListener (Split Concern)
@@ -63,7 +64,7 @@ export class FriendshipAcceptedListener extends IdempotentListener {
    *   acceptedBy: 'user-2'
    * })
    */
-  @OnEvent('friendship.accepted')
+  @OnEvent(InternalEventNames.FRIENDSHIP_ACCEPTED)
   async handleFriendshipAccepted(
     payload: FriendshipAcceptedPayload,
   ): Promise<void> {

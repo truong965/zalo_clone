@@ -10,6 +10,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
+import { InternalEventNames } from '@common/contracts/events';
 import { SocketEvents } from '@common/constants/socket-events.constant';
 import type { CallEndedPayload } from '@modules/call/events';
 import {
@@ -26,7 +27,7 @@ export class CallEndedSocketListener {
   /**
    * When a call ends (from any source), notify all participants via Socket.IO.
    */
-  @OnEvent('call.ended', { async: true })
+  @OnEvent(InternalEventNames.CALL_ENDED, { async: true })
   async handleCallEnded(payload: CallEndedPayload): Promise<void> {
     try {
       const {

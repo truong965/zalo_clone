@@ -23,7 +23,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 import {
   CallStatus,
   CallType,
@@ -35,7 +35,7 @@ import {
 
 import { v4 as uuidv4 } from 'uuid';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
-import { SelfActionException } from 'src/shared/errors';
+import { SelfActionException } from 'src/common/errors';
 import { DisplayNameResolver } from '@shared/services';
 import { EventPublisher } from '@shared/events';
 import {

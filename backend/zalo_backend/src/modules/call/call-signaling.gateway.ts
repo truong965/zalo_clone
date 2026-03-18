@@ -93,6 +93,7 @@ import { DailyCoService } from './services/daily-co.service';
 import { PrismaService } from 'src/database/prisma.service';
 import { InteractionAuthorizationService } from '../authorization/services/interaction-authorization.service';
 import { PermissionAction } from 'src/common/constants/permission-actions.constant';
+import { InternalEventNames } from '@common/contracts/events';
 
 /** 30s timeout for ringing before auto NO_ANSWER */
 const RINGING_TIMEOUT_MS = 30_000;
@@ -186,7 +187,7 @@ export class CallSignalingGateway implements OnGatewayInit {
        * When a user disconnects, check if they have an active call.
        * If so, notify the other party and start a grace period.
        */
-      @OnEvent(SocketEvents.USER_SOCKET_DISCONNECTED)
+      @OnEvent(InternalEventNames.USER_SOCKET_DISCONNECTED)
       async handleUserDisconnected(payload: { userId: string; socketId: string }) {
             const { userId } = payload;
 
@@ -241,7 +242,7 @@ export class CallSignalingGateway implements OnGatewayInit {
       /**
        * When a user reconnects, cancel any pending disconnect timer for their call.
        */
-      @OnEvent(SocketEvents.USER_SOCKET_CONNECTED)
+      @OnEvent(InternalEventNames.USER_SOCKET_CONNECTED)
       async handleUserConnected(payload: {
             userId: string;
             socketId?: string | null;
@@ -573,7 +574,7 @@ export class CallSignalingGateway implements OnGatewayInit {
                               await this.socketState.getUserSockets(receiverId);
 
                         if (receiverSocketIds.length === 0) {
-                              this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
+                              this.eventEmitter.emit(InternalEventNames.CALL_PUSH_NOTIFICATION_NEEDED, {
                                     callId,
                                     callType,
                                     callerId: callerInfo.id,
@@ -633,7 +634,7 @@ export class CallSignalingGateway implements OnGatewayInit {
                         this.logger.log(
                               `Call ${callId}: callee ${calleeId} offline, sending push notification`,
                         );
-                        this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
+                        this.eventEmitter.emit(InternalEventNames.CALL_PUSH_NOTIFICATION_NEEDED, {
                               callId,
                               callType,
                               callerId: callerInfo.id,
@@ -668,7 +669,7 @@ export class CallSignalingGateway implements OnGatewayInit {
                         this.logger.log(
                               `Call ${callId}: no ringing ack after ${RINGING_ACK_TIMEOUT_MS}ms, sending backup push`,
                         );
-                        this.eventEmitter.emit(SocketEvents.CALL_PUSH_NOTIFICATION_NEEDED, {
+                        this.eventEmitter.emit(InternalEventNames.CALL_PUSH_NOTIFICATION_NEEDED, {
                               callId,
                               callType,
                               callerId: callerInfo.id,

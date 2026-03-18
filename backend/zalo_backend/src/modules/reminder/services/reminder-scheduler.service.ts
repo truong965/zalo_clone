@@ -17,6 +17,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { ReminderTriggeredEvent } from '../events/reminder.events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /** Batch size per cron tick — prevents memory spikes */
 const POLL_BATCH_SIZE = 100;
@@ -78,7 +79,7 @@ export class ReminderSchedulerService {
           if (updated.count === 0) continue;
 
           this.eventEmitter.emit(
-            ReminderTriggeredEvent.eventName,
+            InternalEventNames.REMINDER_TRIGGERED,
             new ReminderTriggeredEvent(
               reminder.id,
               reminder.userId,

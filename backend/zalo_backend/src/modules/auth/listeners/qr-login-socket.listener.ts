@@ -5,13 +5,13 @@ import {
   OUTBOUND_SOCKET_EVENT,
   ISocketEmitEvent,
 } from '@common/events/outbound-socket.event';
-import { SocketEvents } from '@common/constants/socket-events.constant';
+import { InternalEventNames } from '@common/contracts/events';
 
 @Injectable()
 export class QrLoginSocketListener {
   private readonly logger = new Logger(QrLoginSocketListener.name);
 
-  constructor(private readonly eventEmitter: EventEmitter2) {}
+  constructor(private readonly eventEmitter: EventEmitter2) { }
 
   /**
    * Listen for internal events from QrLoginService to emit to a specific socket.
@@ -50,7 +50,7 @@ export class QrLoginSocketListener {
     // This is a special case: Since Socket isn't a domain, but Force Disconnect is a Core Socket command
     // We emit a special internal socket outbound to trigger the force disconnect internally in gateway
     this.eventEmitter.emit(
-      'socket.internal.command.force_disconnect_devices',
+      InternalEventNames.SOCKET_INTERNAL_FORCE_DISCONNECT_DEVICES,
       payload,
     );
   }

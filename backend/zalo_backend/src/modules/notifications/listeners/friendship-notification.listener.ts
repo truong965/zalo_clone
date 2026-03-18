@@ -22,6 +22,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
 import { PushNotificationService } from '../services/push-notification.service';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import type {
   FriendRequestSentEvent,
   FriendRequestAcceptedEvent,
@@ -40,7 +41,7 @@ export class FriendshipPushNotificationListener {
   // Friend request sent → push to target user
   // ─────────────────────────────────────────────────────────────────────
 
-  @OnEvent('friendship.request.sent', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_SENT, { async: true })
   async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
     if (!this.pushService.isAvailable) return;
 
@@ -74,7 +75,7 @@ export class FriendshipPushNotificationListener {
   // Friend request accepted → push to original requester
   // ─────────────────────────────────────────────────────────────────────
 
-  @OnEvent('friendship.accepted', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_ACCEPTED, { async: true })
   async handleFriendRequestAccepted(
     event: FriendRequestAcceptedEvent,
   ): Promise<void> {

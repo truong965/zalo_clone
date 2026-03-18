@@ -6,10 +6,11 @@ import { SocketAuthService } from './services/socket-auth.service';
 import { SocketStateService } from './services/socket-state.service';
 import { WsJwtGuard } from 'src/common/guards/ws-jwt.guard';
 import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
-import { RedisModule } from 'src/modules/redis/redis.module';
+import { RedisModule } from 'src/shared/redis/redis.module';
 import socketConfig from 'src/config/socket.config';
 import { DatabaseModule } from 'src/database/prisma.module';
 import { SocketCleanupJob } from './jobs/socket-cleanup.job';
+import { SocketPresenceService } from './services/socket-presence.service';
 import { EventsModule } from '@shared/events';
 
 // PHASE 2: Event listener (instead of MessagingModule import)
@@ -52,6 +53,7 @@ import { AuthModule } from 'src/modules/auth/auth.module';
     WsJwtGuard,
     WsThrottleGuard,
     SocketCleanupJob,
+    SocketPresenceService,
 
     // PHASE 2: Event listener (replaces forwardRef() to MessagingModule)
     SocketNotificationListener,

@@ -11,7 +11,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ConversationService } from '../services/conversation.service';
-import type { FriendshipAcceptedPayload } from '@shared/events/contracts';
+import type { FriendshipAcceptedPayload } from '@common/contracts/events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 @Injectable()
 export class FriendshipConversationListener {
@@ -19,7 +20,7 @@ export class FriendshipConversationListener {
 
   constructor(private readonly conversationService: ConversationService) {}
 
-  @OnEvent('friendship.accepted', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_ACCEPTED, { async: true })
   async handleFriendshipAccepted(
     payload: FriendshipAcceptedPayload,
   ): Promise<void> {

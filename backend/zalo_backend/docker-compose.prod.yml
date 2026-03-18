@@ -187,9 +187,7 @@ networks:
       - STREAM_THRESHOLD_MB=${STREAM_THRESHOLD_MB}
       - MAX_IMAGE_DIMENSION=${MAX_IMAGE_DIMENSION}
       - MAX_VIDEO_DIMENSION=${MAX_VIDEO_DIMENSION}
-      - CLAMAV_ENABLED=${CLAMAV_ENABLED:-false}
-      - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
-      - CLAMAV_PORT=${CLAMAV_PORT:-3310}
+
     deploy:
       resources:
         limits:

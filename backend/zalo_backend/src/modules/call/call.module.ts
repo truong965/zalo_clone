@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { CallHistoryController } from './call-history.controller';
 import { CallHistoryService } from './call-history.service';
 import { CallSignalingGateway } from './call-signaling.gateway';
-import { RedisModule } from '../redis/redis.module';
+import { RedisModule } from '@shared/redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { SharedModule } from '@shared/shared.module';
 import { AuthorizationModule } from '@modules/authorization/authorization.module';

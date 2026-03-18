@@ -19,7 +19,7 @@ import { PermissionEntity } from '../permissions/entity/permission.entity';
 import { EventPublisher } from '@shared/events';
 import { UserRegisteredEvent } from '@modules/auth/events';
 import { UserProfileUpdatedEvent } from './events/user.events';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 
 @Injectable()

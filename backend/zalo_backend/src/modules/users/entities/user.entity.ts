@@ -53,6 +53,9 @@ export class UserEntity implements User {
   // Non-persistent field, only exists in req.user
   currentDeviceId?: string;
 
+  // Non-persistent field, only exists in req.user for session-bound operations
+  currentSessionId?: string;
+
   // ==============================
   // 4. Authorization (RBAC)
   // ==============================

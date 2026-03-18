@@ -1,4 +1,0 @@
-src/modules/message/services/message.service.ts(432,3): error TS1117: An object literal cannot have multiple properties with the same name.
-src/modules/message/services/message.service.ts(542,9): error TS2353: Object literal may only specify known properties, and 'mediaAttachments' does not exist in type 'MessageInclude<DefaultArgs>'.
-src/modules/message/services/message.service.ts(558,15): error TS2551: Property 'sender' does not exist on type '{ conversationId: string; id: bigint; updatedById: string | null; deletedById: string | null; createdAt: Date; updatedAt: Date; deletedAt: Date | null; senderId: string | null; ... 8 more ...; directReceipts: JsonValue; } & { ...; }'. Did you mean 'senderId'?
-src/modules/message/services/message.service.ts(888,9): error TS2353: Object literal may only specify known properties, and 'mediaAttachments' does not exist in type 'MessageSelect<DefaultArgs>'.

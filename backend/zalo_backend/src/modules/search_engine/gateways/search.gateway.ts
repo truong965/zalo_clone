@@ -31,6 +31,7 @@ import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.inte
 import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { safeJSON } from 'src/common/utils/json.util';
 import { DisplayNameResolver } from '@shared/services';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 /**
  * SearchGateway (Phase B: TD-07 — Shared namespace)
  *
@@ -90,7 +91,7 @@ export class SearchGateway {
    * Handle user socket disconnection — cleanup search subscriptions.
    * SocketGateway owns the connection lifecycle; this gateway reacts via event.
    */
-  @OnEvent(SocketEvents.USER_SOCKET_DISCONNECTED)
+  @OnEvent(InternalEventNames.USER_SOCKET_DISCONNECTED)
   handleUserDisconnected(event: { userId: string; socketId: string }): void {
     if (event.userId) {
       this.realTimeSearchService.unsubscribe(event.userId, event.socketId);
@@ -301,9 +302,9 @@ export class SearchGateway {
    * Handle search.internal.newMatch from SearchEventListener
    * Receives pre-processed matching subscriptions and message data, emits to sockets.
    *
-   * Phase A (TD-04): Replaces duplicate @OnEvent('message.sent') — no more double DB query.
+   * Phase A (TD-04): Replaces duplicate @OnEvent(InternalEventNames.MESSAGE_SENT) — no more double DB query.
    */
-  @OnEvent(SocketEvents.SEARCH_INTERNAL_NEW_MATCH)
+  @OnEvent(InternalEventNames.SEARCH_INTERNAL_NEW_MATCH)
   async handleInternalNewMatch(event: {
     message: {
       id: bigint;
@@ -376,7 +377,7 @@ export class SearchGateway {
       }
     } catch (error) {
       this.logger.error(
-        `Failed to handle ${SocketEvents.SEARCH_INTERNAL_NEW_MATCH}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to handle ${InternalEventNames.SEARCH_INTERNAL_NEW_MATCH}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -388,7 +389,7 @@ export class SearchGateway {
    *
    * Phase A (TD-05): Implements the TODO that was left in message.deleted handler.
    */
-  @OnEvent(SocketEvents.SEARCH_INTERNAL_RESULT_REMOVED)
+  @OnEvent(InternalEventNames.SEARCH_INTERNAL_RESULT_REMOVED)
   handleInternalResultRemoved(event: {
     messageId: string;
     conversationId: string;
@@ -421,7 +422,7 @@ export class SearchGateway {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to handle ${SocketEvents.SEARCH_INTERNAL_RESULT_REMOVED}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to handle ${InternalEventNames.SEARCH_INTERNAL_RESULT_REMOVED}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }

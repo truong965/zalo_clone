@@ -19,6 +19,7 @@ import {
   OUTBOUND_SOCKET_EVENT,
   ISocketEmitEvent,
 } from '@common/events/outbound-socket.event';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import { ReminderTriggeredEvent } from '../events/reminder.events';
 
 @Injectable()
@@ -30,7 +31,7 @@ export class ReminderSocketListener {
     private readonly prisma: PrismaService,
   ) { }
 
-  @OnEvent(ReminderTriggeredEvent.eventName)
+  @OnEvent(InternalEventNames.REMINDER_TRIGGERED)
   async onReminderTriggered(event: ReminderTriggeredEvent) {
     const payload = {
       reminderId: event.reminderId,

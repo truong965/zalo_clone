@@ -3,7 +3,7 @@
 import { Inject, Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
-import { RedisPresenceService } from 'src/modules/redis/services/redis-presence.service';
+import { RedisPresenceService } from 'src/shared/redis/services/redis-presence.service';
 import {
   PRIVACY_READ_PORT,
 } from '@common/contracts/internal-api';

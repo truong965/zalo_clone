@@ -31,6 +31,7 @@ import {
   type CachedMemberState,
 } from '../services/conversation-member-cache.service';
 import type { MessageSentEvent } from '@modules/message/events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /** Batch window in seconds per conversation type */
 const BATCH_WINDOW = {
@@ -68,7 +69,7 @@ export class MessageNotificationListener {
    * Handle message.sent event — core notification dispatch.
    * Never throws — all errors are caught and logged.
    */
-  @OnEvent('message.sent', { async: true })
+  @OnEvent(InternalEventNames.MESSAGE_SENT, { async: true })
   async handleMessageSent(event: MessageSentEvent): Promise<void> {
     if (!this.pushService.isAvailable) {
       this.logger.warn(

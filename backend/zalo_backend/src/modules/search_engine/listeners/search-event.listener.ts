@@ -1,7 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { RealTimeSearchService } from '../services/real-time-search.service';
 import { SearchCacheService } from '../services/search-cache.service';
@@ -14,11 +13,12 @@ import type {
   UserBlockedEventPayload,
   UserUnblockedEventPayload,
   PrivacySettingsUpdatedPayload,
-} from '@shared/events/contracts';
+} from '@common/contracts/events';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import type { MediaDeletedEvent } from 'src/modules/media/events/media.events';
 import type { ContactAliasUpdatedEvent } from '@modules/contact/events/contact.events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /**
  * SearchEventListener (Phase A: Refactored)
@@ -153,7 +153,7 @@ export class SearchEventListener extends IdempotentListener {
    * 4. Single-pass matching via findMatchingSubscriptions()
    * 5. Emit internal event for SearchGateway socket delivery
    */
-  @OnEvent('message.sent', { async: true })
+  @OnEvent(InternalEventNames.MESSAGE_SENT, { async: true })
   async handleMessageSent(event: MessageSentEvent): Promise<void> {
     // C1: Use Redis SET NX for hot-path idempotency (replaces 3 DB ops with 1 Redis op)
     return this.withRedisIdempotency(
@@ -200,14 +200,14 @@ export class SearchEventListener extends IdempotentListener {
 
           const sender = message.senderId
             ? await this.prisma.user.findUnique({
-                where: { id: message.senderId },
-                select: {
-                  id: true,
-                  displayName: true,
-                  avatarUrl: true,
-                  phoneNumber: true,
-                },
-              })
+              where: { id: message.senderId },
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+                phoneNumber: true,
+              },
+            })
             : null;
 
           // [Phase 2.1 DECOUPLED]: Fetch media attachments manually
@@ -254,7 +254,7 @@ export class SearchEventListener extends IdempotentListener {
    * Handle MESSAGE_DELETED event
    * Invalidate search cache and emit internal event for socket notification (TD-05)
    */
-  @OnEvent('message.deleted', { async: true })
+  @OnEvent(InternalEventNames.MESSAGE_DELETED, { async: true })
   async handleMessageDeleted(event: {
     messageId: string;
     conversationId: string;
@@ -273,7 +273,7 @@ export class SearchEventListener extends IdempotentListener {
           );
 
           // Phase A (TD-05): Emit internal event for SearchGateway to push resultRemoved to active subscribers
-          this.eventEmitter.emit(SocketEvents.SEARCH_INTERNAL_RESULT_REMOVED, {
+          this.eventEmitter.emit(InternalEventNames.SEARCH_INTERNAL_RESULT_REMOVED, {
             messageId: event.messageId,
             conversationId: event.conversationId,
           });
@@ -294,7 +294,7 @@ export class SearchEventListener extends IdempotentListener {
    * Handle USER_BLOCKED event
    * Invalidate contact search cache for both users
    */
-  @OnEvent('user.blocked', { async: true })
+  @OnEvent(InternalEventNames.USER_BLOCKED, { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     return this.withIdempotency(
       `user-blocked-${event.blockerId}-${event.blockedId}`,
@@ -326,7 +326,7 @@ export class SearchEventListener extends IdempotentListener {
    * Handle USER_UNBLOCKED event
    * Invalidate contact search cache for both users
    */
-  @OnEvent('user.unblocked', { async: true })
+  @OnEvent(InternalEventNames.USER_UNBLOCKED, { async: true })
   async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     return this.withIdempotency(
       `user-unblocked-${event.blockerId}-${event.blockedId}`,
@@ -358,7 +358,7 @@ export class SearchEventListener extends IdempotentListener {
    * Handle FRIENDSHIP status changes
    * Invalidate contact search cache when friendship status changes
    */
-  @OnEvent('friendship.accepted', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_ACCEPTED, { async: true })
   async handleFriendshipAccepted(event: {
     userId1: string;
     userId2: string;
@@ -388,7 +388,7 @@ export class SearchEventListener extends IdempotentListener {
     );
   }
 
-  @OnEvent('friendship.unfriended', { async: true })
+  @OnEvent(InternalEventNames.FRIENDSHIP_UNFRIENDED, { async: true })
   async handleFriendshipUnfriended(event: {
     userId1: string;
     userId2: string;
@@ -431,8 +431,8 @@ export class SearchEventListener extends IdempotentListener {
    * Note: Listens to both 'message.updated' and 'message.edited' event names
    * for forward-compatibility — whichever the message module decides to emit.
    */
-  @OnEvent('message.updated', { async: true }) // TODO(edit-message): Activate when editMessage() is implemented
-  @OnEvent('message.edited', { async: true }) // TODO(edit-message): Activate when editMessage() is implemented
+  @OnEvent(InternalEventNames.MESSAGE_UPDATED, { async: true }) // TODO(edit-message): Activate when editMessage() is implemented
+  @OnEvent(InternalEventNames.MESSAGE_EDITED, { async: true }) // TODO(edit-message): Activate when editMessage() is implemented
   async handleMessageUpdated(event: {
     messageId: string;
     conversationId: string;
@@ -470,7 +470,7 @@ export class SearchEventListener extends IdempotentListener {
    * Handle CONVERSATION_MEMBER_ADDED event
    * Invalidate conversation-scoped search caches so new member can search history
    */
-  @OnEvent('conversation.member.added', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_ADDED, { async: true })
   async handleConversationMemberAdded(
     event: ConversationMemberAddedEvent,
   ): Promise<void> {
@@ -522,7 +522,7 @@ export class SearchEventListener extends IdempotentListener {
    * Handle CONVERSATION_MEMBER_LEFT event
    * Invalidate caches so removed member no longer sees conversation in search scope
    */
-  @OnEvent('conversation.member.left', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_LEFT, { async: true })
   async handleConversationMemberLeft(
     event: ConversationMemberLeftEvent,
   ): Promise<void> {
@@ -565,7 +565,7 @@ export class SearchEventListener extends IdempotentListener {
    * Handle PRIVACY_SETTINGS_UPDATED event
    * Invalidate contact search caches — privacy changes affect who can find this user
    */
-  @OnEvent('privacy.updated', { async: true })
+  @OnEvent(InternalEventNames.PRIVACY_UPDATED, { async: true })
   async handlePrivacyUpdated(
     event: PrivacySettingsUpdatedPayload,
   ): Promise<void> {
@@ -600,7 +600,7 @@ export class SearchEventListener extends IdempotentListener {
    *
    * Event emitter: ConversationService (when group info is updated)
    */
-  @OnEvent('conversation.updated', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_UPDATED, { async: true })
   async handleConversationUpdated(event: {
     conversationId: string;
     updatedBy?: string;
@@ -642,7 +642,7 @@ export class SearchEventListener extends IdempotentListener {
    *
    * Event emitter: MediaUploadService (when media processing completes)
    */
-  @OnEvent('media.uploaded', { async: true })
+  @OnEvent(InternalEventNames.MEDIA_UPLOADED, { async: true })
   async handleMediaUploaded(event: {
     mediaId: string;
     messageId?: string;
@@ -689,7 +689,7 @@ export class SearchEventListener extends IdempotentListener {
    * Event emitter: UserService (when user updates their profile)
    * Note: Event name is 'user.profile.updated' (matching existing convention in conversation-event.handler.ts)
    */
-  @OnEvent('user.profile.updated', { async: true })
+  @OnEvent(InternalEventNames.USER_PROFILE_UPDATED, { async: true })
   async handleUserProfileUpdated(event: {
     userId: string;
     updates?: { displayName?: string; avatarUrl?: string };
@@ -728,7 +728,7 @@ export class SearchEventListener extends IdempotentListener {
    *
    * Event emitter: MediaUploadService.deleteMedia()
    */
-  @OnEvent('media.deleted', { async: true })
+  @OnEvent(InternalEventNames.MEDIA_DELETED, { async: true })
   async handleMediaDeleted(event: MediaDeletedEvent): Promise<void> {
     return this.withIdempotency(`media-deleted-${event.mediaId}`, async () => {
       this.logger.debug(
@@ -766,8 +766,7 @@ export class SearchEventListener extends IdempotentListener {
         );
       } catch (error) {
         this.logger.error(
-          `[SearchEvent] Failed to process media.deleted: ${
-            error instanceof Error ? error.message : 'Unknown error'
+          `[SearchEvent] Failed to process media.deleted: ${error instanceof Error ? error.message : 'Unknown error'
           }`,
         );
       }
@@ -786,7 +785,7 @@ export class SearchEventListener extends IdempotentListener {
    *   - Global search cache for the owner (grouped results contain resolved names)
    *   - Contact search cache for the owner (contact names changed)
    */
-  @OnEvent('contact.alias.updated', { async: true })
+  @OnEvent(InternalEventNames.CONTACT_ALIAS_UPDATED, { async: true })
   async handleContactAliasUpdated(
     event: ContactAliasUpdatedEvent,
   ): Promise<void> {

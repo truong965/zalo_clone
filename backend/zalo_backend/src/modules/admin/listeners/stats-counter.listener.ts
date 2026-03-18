@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { RedisService } from '@modules/redis/redis.service';
+import { InternalEventNames } from '@common/contracts/events';
+import { RedisService } from '@shared/redis/redis.service';
 import { PrismaService } from '@database/prisma.service';
 import { UserStatus } from '@prisma/client';
 import type { UserRegisteredEvent } from '@modules/auth/events';
@@ -112,7 +113,7 @@ export class StatsCounterListener implements OnModuleInit {
    *
    * Emitted via EventPublisher in UsersService.register().
    */
-  @OnEvent('user.registered', { async: true })
+  @OnEvent(InternalEventNames.USER_REGISTERED, { async: true })
   async onUserRegistered(_event: UserRegisteredEvent): Promise<void> {
     try {
       const client = this.redis.getClient();
@@ -127,7 +128,7 @@ export class StatsCounterListener implements OnModuleInit {
    *
    * Emitted via EventPublisher in MessageService.sendMessage().
    */
-  @OnEvent('message.sent', { async: true })
+  @OnEvent(InternalEventNames.MESSAGE_SENT, { async: true })
   async onMessageSent(_event: MessageSentEvent): Promise<void> {
     try {
       const client = this.redis.getClient();
@@ -147,7 +148,7 @@ export class StatsCounterListener implements OnModuleInit {
    *
    * Emitted directly in CallHistoryService (plain object payload).
    */
-  @OnEvent('call.ended', { async: true })
+  @OnEvent(InternalEventNames.CALL_ENDED, { async: true })
   async onCallEnded(_event: CallEndedPayload): Promise<void> {
     try {
       const client = this.redis.getClient();
@@ -166,7 +167,7 @@ export class StatsCounterListener implements OnModuleInit {
    *
    * Emitted directly in MediaUploadService.
    */
-  @OnEvent('media.uploaded', { async: true })
+  @OnEvent(InternalEventNames.MEDIA_UPLOADED, { async: true })
   async onMediaUploaded(_event: MediaUploadedPayload): Promise<void> {
     try {
       const client = this.redis.getClient();

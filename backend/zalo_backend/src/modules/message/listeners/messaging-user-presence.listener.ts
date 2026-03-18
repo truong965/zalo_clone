@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
-import { SocketEvents } from 'src/common/constants/socket-events.constant';
+import { InternalEventNames } from '@common/contracts/events';
 
 @Injectable()
 export class MessagingUserPresenceListener extends IdempotentListener {
-  @OnEvent(SocketEvents.USER_SOCKET_CONNECTED)
+  @OnEvent(InternalEventNames.USER_SOCKET_CONNECTED)
   async handleUserConnected(event: any): Promise<void> {
     await this.withIdempotency(
       `user-connected-${event?.userId || 'unknown'}`,
@@ -30,7 +30,7 @@ export class MessagingUserPresenceListener extends IdempotentListener {
     );
   }
 
-  @OnEvent(SocketEvents.USER_SOCKET_DISCONNECTED)
+  @OnEvent(InternalEventNames.USER_SOCKET_DISCONNECTED)
   async handleUserDisconnected(event: any): Promise<void> {
     await this.withIdempotency(
       `user-disconnected-${event?.userId || 'unknown'}`,

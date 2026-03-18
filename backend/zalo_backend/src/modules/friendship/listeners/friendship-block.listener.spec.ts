@@ -3,7 +3,7 @@
 // import { FriendshipBlockListener } from './friendship-block.listener';
 // import { PrismaService } from '@database/prisma.service';
 // import { IdempotencyService } from '@common/idempotency/idempotency.service';
-// import { RedisService } from '@modules/redis/redis.service';
+// import { RedisService } from '@shared/redis/redis.service';
 // import type {
 //   UserBlockedEventPayload,
 //   UserUnblockedEventPayload,

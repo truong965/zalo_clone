@@ -21,8 +21,7 @@ import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { SocketAuthService } from './services/socket-auth.service';
 import { SocketStateService } from './services/socket-state.service';
-import { RedisPubSubService } from 'src/modules/redis/services/redis-pub-sub.service';
-import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
+import { SocketPresenceService } from './services/socket-presence.service';
 import socketConfig from 'src/config/socket.config';
 import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
 import { WsValidationPipe } from 'src/common/pipes/ws-validation.pipe';
@@ -31,6 +30,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { ISocketEmitEvent } from '@common/events/outbound-socket.event';
 import { OUTBOUND_SOCKET_EVENT } from '@common/events/outbound-socket.event';
+import { InternalEventNames } from '@common/contracts/events';
 
 @WebSocketGateway({
   cors: {
@@ -81,7 +81,7 @@ export class SocketGateway
   constructor(
     private readonly socketAuth: SocketAuthService,
     private readonly socketState: SocketStateService,
-    private readonly redisPubSub: RedisPubSubService,
+    private readonly socketPresence: SocketPresenceService,
     private readonly eventPublisher: EventPublisher,
     private readonly eventEmitter: EventEmitter2,
     @Inject(socketConfig.KEY)
@@ -100,7 +100,7 @@ export class SocketGateway
     // Subscribe to cross-server events
     // Hàm afterInit là đồng bộ, nên ta dùng 'void' để đánh dấu promise được xử lý ngầm
     // và thêm .catch để bắt lỗi nếu việc subscribe thất bại
-    void this.subscribeToCrossServerEvents().catch((err) => {
+    void this.socketPresence.subscribeToEvents().catch((err) => {
       this.logger.error('Failed to subscribe to cross-server events', err);
     });
 
@@ -147,7 +147,7 @@ export class SocketGateway
   /**
    * Internal command to force disconnect devices
    */
-  @OnEvent('socket.internal.command.force_disconnect_devices')
+  @OnEvent(InternalEventNames.SOCKET_INTERNAL_FORCE_DISCONNECT_DEVICES)
   async handleForceDisconnectCommand(payload: {
     userId: string;
     deviceIds: string[];
@@ -234,23 +234,7 @@ export class SocketGateway
     client.deviceId = undefined;
   }
 
-  /**
-   * Subscribe to Redis Pub/Sub channels for cross-server communication
-   */
-  private async subscribeToCrossServerEvents(): Promise<void> {
-    // Subscribe to presence updates
-    await this.redisPubSub.subscribe(
-      RedisKeyBuilder.channels.presenceOnline,
-      (channel, message) => void this.handlePresenceOnline(channel, message),
-    );
 
-    await this.redisPubSub.subscribe(
-      RedisKeyBuilder.channels.presenceOffline,
-      (channel, message) => void this.handlePresenceOffline(channel, message),
-    );
-
-    this.logger.log('✅ Subscribed to cross-server events');
-  }
 
   /**
    * Handle new client connection
@@ -307,14 +291,11 @@ export class SocketGateway
       });
 
       // Publish presence update (cross-server)
-      void this.redisPubSub.publish(RedisKeyBuilder.channels.presenceOnline, {
-        userId: user.id,
-        timestamp: new Date().toISOString(),
-      });
+      void this.socketPresence.publishPresenceOnline(user.id);
 
       // PHASE 2: Emit event for module gateways to setup their subscriptions
       // MessageGateway will listen to this and subscribe user to receipt updates
-      this.eventEmitter.emit(SocketEvents.USER_SOCKET_CONNECTED, {
+      this.eventEmitter.emit(InternalEventNames.USER_SOCKET_CONNECTED, {
         userId: user.id,
         socketId: client.id,
         socket: client,
@@ -388,25 +369,19 @@ export class SocketGateway
         const now = new Date();
 
         // DECOUPLED: Let User module handle DB updates via event
-        this.eventEmitter.emit('user.last_seen.updated', {
+        this.eventEmitter.emit(InternalEventNames.USER_LAST_SEEN_UPDATED, {
           userId: client.userId,
           lastSeenAt: now,
         });
 
-        void this.redisPubSub.publish(
-          RedisKeyBuilder.channels.presenceOffline,
-          {
-            userId: client.userId,
-            timestamp: now.toISOString(),
-          },
-        );
+        void this.socketPresence.publishPresenceOffline(client.userId);
 
         // Note: The UserPresenceListener (FriendshipModule) will catch the USER_SOCKET_DISCONNECTED event below
         // and notify friends, so we don't need to do it here.
       }
 
       // Emit internal event for other gateways/listeners to cleanup resources
-      this.eventEmitter.emit(SocketEvents.USER_SOCKET_DISCONNECTED, {
+      this.eventEmitter.emit(InternalEventNames.USER_SOCKET_DISCONNECTED, {
         userId: client.userId,
         socketId: client.id,
         reason,
@@ -424,47 +399,7 @@ export class SocketGateway
     }
   }
 
-  private handlePresenceOnline(
-    channel: string,
-    message: string,
-  ): void {
-    try {
-      const data = JSON.parse(message) as { userId?: string };
-      this.logger.debug(`Presence online (cross-server): ${data.userId}`);
 
-      // The domain module (Friendship) should ideally listen to cross-server presence,
-      // but if we just emit the internal event, it will catch it!
-      if (data.userId) {
-        this.eventEmitter.emit(SocketEvents.USER_SOCKET_CONNECTED, {
-          userId: data.userId,
-          socketId: null, // Cross-server doesn't matter
-          connectedAt: new Date(),
-        });
-      }
-    } catch (error) {
-      this.logger.error('Error handling presence online:', error);
-    }
-  }
-
-  private handlePresenceOffline(
-    channel: string,
-    message: string,
-  ): void {
-    try {
-      const data = JSON.parse(message) as { userId?: string };
-      this.logger.debug(`Presence offline (cross-server): ${data.userId}`);
-
-      if (data.userId) {
-        this.eventEmitter.emit(SocketEvents.USER_SOCKET_DISCONNECTED, {
-          userId: data.userId,
-          socketId: null,
-          reason: 'cross-server offline',
-        });
-      }
-    } catch (error) {
-      this.logger.error('Error handling presence offline:', error);
-    }
-  }
 
   /**
    * Setup graceful shutdown handler

@@ -2,12 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventType } from '@prisma/client';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
+import { InternalEventNames } from '@common/contracts/events';
 import type {
   UserBlockedEventPayload,
   UserUnblockedEventPayload,
-} from '@shared/events/contracts';
+} from '@common/contracts/events';
 
 /**
  * BlockCacheListener - PHASE 3 (renamed from BlockEventHandler)
@@ -27,7 +28,7 @@ export class BlockCacheListener {
     private readonly idempotency: IdempotencyService,
   ) {}
 
-  @OnEvent('user.blocked', { async: true })
+  @OnEvent(InternalEventNames.USER_BLOCKED, { async: true })
   async handleUserBlocked(event: UserBlockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;
@@ -78,7 +79,7 @@ export class BlockCacheListener {
     }
   }
 
-  @OnEvent('user.unblocked', { async: true })
+  @OnEvent(InternalEventNames.USER_UNBLOCKED, { async: true })
   async handleUserUnblocked(event: UserUnblockedEventPayload): Promise<void> {
     const { blockerId, blockedId } = event;
     const eventId = event.eventId;

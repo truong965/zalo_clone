@@ -11,6 +11,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 interface UserRegisteredPayload {
   userId?: string;
@@ -23,7 +24,7 @@ export class PrivacyUserRegisteredListener {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  @OnEvent('user.registered', { async: true })
+  @OnEvent(InternalEventNames.USER_REGISTERED, { async: true })
   async handleUserRegistered(payload: UserRegisteredPayload): Promise<void> {
     const userId = payload?.userId;
 

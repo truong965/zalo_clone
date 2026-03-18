@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { FriendshipCacheHelper } from '../helpers/friendship-cache.helper';
-import type { UnfriendedPayload } from '@shared/events/contracts';
+import type { UnfriendedPayload } from '@common/contracts/events';
 import { EventIdGenerator } from '@common/utils/event-id-generator';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /**
  * R6: UnfriendedListener (Split Concern)
@@ -66,7 +67,7 @@ export class UnfriendedListener extends IdempotentListener {
    *   user2Id: 'user-2'
    * })
    */
-  @OnEvent('friendship.unfriended')
+  @OnEvent(InternalEventNames.FRIENDSHIP_UNFRIENDED)
   async handleUnfriended(payload: UnfriendedPayload): Promise<void> {
     const eventId = this.extractEventId(payload);
     if (!EventIdGenerator.isValid(eventId)) {

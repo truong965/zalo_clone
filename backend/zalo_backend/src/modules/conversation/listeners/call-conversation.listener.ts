@@ -14,6 +14,7 @@ import { EventType } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import type { CallEndedPayload } from '@modules/call/events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 @Injectable()
 export class CallConversationListener {
@@ -28,7 +29,7 @@ export class CallConversationListener {
    * Update conversation.lastMessageAt when a call ends in that conversation.
    * Precondition: conversationId must exist.
    */
-  @OnEvent('call.ended', { async: true })
+  @OnEvent(InternalEventNames.CALL_ENDED, { async: true })
   async handleCallEnded(payload: CallEndedPayload): Promise<void> {
     const { conversationId, callId } = payload;
 

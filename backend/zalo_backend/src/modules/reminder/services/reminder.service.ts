@@ -27,6 +27,7 @@ import {
   ReminderCreatedEvent,
   ReminderDeletedEvent,
 } from '../events/reminder.events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import type { CreateReminderDto } from '../dto/create-reminder.dto';
 import type { UpdateReminderDto } from '../dto/update-reminder.dto';
 
@@ -104,7 +105,7 @@ export class ReminderService {
 
     // Emit event → listeners create system message, etc.
     this.eventEmitter.emit(
-      ReminderCreatedEvent.eventName,
+      InternalEventNames.REMINDER_CREATED,
       new ReminderCreatedEvent(
         reminder.id,
         userId,
@@ -222,7 +223,7 @@ export class ReminderService {
     await this.prisma.reminder.delete({ where: { id: reminderId } });
 
     this.eventEmitter.emit(
-      ReminderDeletedEvent.eventName,
+      InternalEventNames.REMINDER_DELETED,
       new ReminderDeletedEvent(reminderId, userId),
     );
 

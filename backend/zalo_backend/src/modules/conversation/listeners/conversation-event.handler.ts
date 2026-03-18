@@ -7,6 +7,7 @@ import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { safeJSON } from '@common/utils/json.util';
 import { SystemMessageBroadcasterService } from '../services/system-message-broadcaster.service';
 import type { MessageSentEvent } from '@modules/message/events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import type {
   ConversationCreatedEvent,
   ConversationDissolvedEvent,
@@ -61,7 +62,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('message.sent')
+  @OnEvent(InternalEventNames.MESSAGE_SENT)
   async handleMessageSent(payload: MessageSentEvent): Promise<void> {
     const eventId = payload.eventId;
     const handlerId = this.constructor.name;
@@ -136,7 +137,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('conversation.created')
+  @OnEvent(InternalEventNames.CONVERSATION_CREATED)
   async handleConversationCreated(
     payload: ConversationCreatedEvent,
   ): Promise<void> {
@@ -220,7 +221,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('conversation.member.added')
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_ADDED)
   async handleMemberAdded(
     payload: ConversationMemberAddedEvent,
   ): Promise<void> {
@@ -341,7 +342,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('conversation.member.left')
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_LEFT)
   async handleMemberLeft(payload: ConversationMemberLeftEvent): Promise<void> {
     const { conversationId, memberId, kickedBy } = payload;
     const eventId = payload.eventId;
@@ -453,7 +454,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('user.profile.updated')
+  @OnEvent(InternalEventNames.USER_PROFILE_UPDATED)
   async handleUserProfileUpdated(
     payload: UserProfileUpdatedEvent,
   ): Promise<void> {
@@ -520,7 +521,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('conversation.member.promoted')
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_PROMOTED)
   async handleMemberPromoted(
     payload: ConversationMemberPromotedEvent,
   ): Promise<void> {
@@ -605,7 +606,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('conversation.member.demoted')
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_DEMOTED)
   async handleMemberDemoted(
     payload: ConversationMemberDemotedEvent,
   ): Promise<void> {
@@ -658,7 +659,7 @@ export class ConversationEventHandler {
     }
   }
 
-  @OnEvent('conversation.dissolved')
+  @OnEvent(InternalEventNames.CONVERSATION_DISSOLVED)
   async handleGroupDissolved(
     payload: ConversationDissolvedEvent,
   ): Promise<void> {

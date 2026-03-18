@@ -28,6 +28,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import type { User } from '@prisma/client';
 import { ReminderService } from './services/reminder.service';
 import { CreateReminderDto } from './dto/create-reminder.dto';
 import { UpdateReminderDto } from './dto/update-reminder.dto';
@@ -40,7 +41,7 @@ export class ReminderController {
 
   @ApiOperation({ summary: 'Create a new reminder' })
   @Post()
-  create(@CurrentUser() user, @Body() dto: CreateReminderDto) {
+  create(@CurrentUser() user: User, @Body() dto: CreateReminderDto) {
     return this.reminderService.create(user.id, dto);
   }
 
@@ -52,7 +53,7 @@ export class ReminderController {
   })
   @Get()
   findAll(
-    @CurrentUser() user,
+    @CurrentUser() user: User,
     @Query('includeCompleted') includeCompleted?: string,
   ) {
     return this.reminderService.findAll(user.id, includeCompleted === 'true');
@@ -60,7 +61,7 @@ export class ReminderController {
 
   @ApiOperation({ summary: 'Get reminders that have not yet been delivered' })
   @Get('undelivered')
-  findUndelivered(@CurrentUser() user) {
+  findUndelivered(@CurrentUser() user: User) {
     return this.reminderService.findUndelivered(user.id);
   }
 
@@ -68,7 +69,7 @@ export class ReminderController {
   @ApiParam({ name: 'conversationId', description: 'Conversation UUID' })
   @Get('conversation/:conversationId')
   findByConversation(
-    @CurrentUser() user,
+    @CurrentUser() user: User,
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
   ) {
     return this.reminderService.findByConversation(user.id, conversationId);
@@ -77,7 +78,7 @@ export class ReminderController {
   @ApiOperation({ summary: 'Get a single reminder by ID' })
   @ApiParam({ name: 'id', description: 'Reminder UUID' })
   @Get(':id')
-  findOne(@CurrentUser() user, @Param('id', ParseUUIDPipe) id: string) {
+  findOne(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
     return this.reminderService.findOne(user.id, id);
   }
 
@@ -85,7 +86,7 @@ export class ReminderController {
   @ApiParam({ name: 'id', description: 'Reminder UUID' })
   @Patch(':id')
   update(
-    @CurrentUser() user,
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateReminderDto,
   ) {
@@ -95,7 +96,7 @@ export class ReminderController {
   @ApiOperation({ summary: 'Delete a reminder' })
   @ApiParam({ name: 'id', description: 'Reminder UUID' })
   @Delete(':id')
-  remove(@CurrentUser() user, @Param('id', ParseUUIDPipe) id: string) {
+  remove(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
     return this.reminderService.remove(user.id, id);
   }
 }

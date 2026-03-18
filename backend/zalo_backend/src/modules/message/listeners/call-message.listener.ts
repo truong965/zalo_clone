@@ -17,6 +17,7 @@ import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { CONVERSATION_SYSTEM_MESSAGE_PORT } from '@common/contracts/internal-api';
 import type { IConversationSystemMessagePort } from '@common/contracts/internal-api';
 import type { CallEndedPayload } from '@modules/call/events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 @Injectable()
 export class CallMessageListener {
@@ -33,7 +34,7 @@ export class CallMessageListener {
    * Create a SYSTEM message to log the call in the conversation.
    * Precondition: conversationId must exist.
    */
-  @OnEvent('call.ended', { async: true })
+  @OnEvent(InternalEventNames.CALL_ENDED, { async: true })
   async handleCallEnded(payload: CallEndedPayload): Promise<void> {
     const { conversationId } = payload;
 

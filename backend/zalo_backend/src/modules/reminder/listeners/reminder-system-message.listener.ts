@@ -16,6 +16,7 @@ import { PrismaService } from 'src/database/prisma.service';
 import { safeJSON } from 'src/common/utils/json.util';
 import { CONVERSATION_SYSTEM_MESSAGE_PORT } from '@common/contracts/internal-api';
 import type { IConversationSystemMessagePort } from '@common/contracts/internal-api';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import { ReminderCreatedEvent } from '../events/reminder.events';
 
 @Injectable()
@@ -28,7 +29,7 @@ export class ReminderSystemMessageListener {
     private readonly systemMessagePort: IConversationSystemMessagePort,
   ) { }
 
-  @OnEvent(ReminderCreatedEvent.eventName)
+  @OnEvent(InternalEventNames.REMINDER_CREATED)
   async onReminderCreated(event: ReminderCreatedEvent) {
     // Only create system message when reminder is linked to a conversation
     if (!event.conversationId) return;

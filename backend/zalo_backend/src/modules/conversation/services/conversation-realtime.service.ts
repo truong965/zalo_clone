@@ -3,8 +3,8 @@ import { MemberRole, MemberStatus } from '@prisma/client';
 import { SystemMessageBroadcasterService } from './system-message-broadcaster.service';
 import { PrismaService } from 'src/database/prisma.service';
 import { safeJSON, safeStringify } from '@common/utils/json.util';
-import { RedisRegistryService } from 'src/modules/redis/services/redis-registry.service';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisRegistryService } from 'src/shared/redis/services/redis-registry.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 
 import { ConversationService } from './conversation.service';

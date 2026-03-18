@@ -34,6 +34,7 @@ import type {
   MediaDeletedEvent,
 } from '../events/media.events';
 import { AwsError } from './s3.service';
+import { FileUtils } from '../../../common/utils/file.utils';
 
 @Injectable()
 export class MediaUploadService {
@@ -159,7 +160,7 @@ export class MediaUploadService {
     userId: string,
     dto: InitiateUploadDto,
   ): Promise<InitiateUploadResponse> {
-    const mediaType = this.inferMediaType(dto.mimeType);
+    const mediaType = FileUtils.inferMediaType(dto.fileName, dto.mimeType);
     const limitMB = this.getLimitForType(mediaType);
 
     const sizeValidation = this.validateFileSize(dto.fileSize, limitMB);
@@ -379,27 +380,11 @@ export class MediaUploadService {
         break;
       case MediaType.AUDIO:
       case MediaType.DOCUMENT:
-        // MD-R3 fix: Audio/Document now go through Worker queue
-        // instead of inline processing in the HTTP request
-        await this.mediaQueue.enqueueFileProcessing(
-          {
-            ...jobPayload,
-            size: Number(media.size),
-            mimeType: media.mimeType,
-          },
-          media.mediaType,
-        );
+        // Already READY, no background processing needed for files/audio.
         break;
       default:
         throw new Error(`Unsupported type: ${media.mediaType as any}`);
     }
-  }
-
-  private inferMediaType(mime: string): MediaType {
-    if (mime.startsWith('image/')) return MediaType.IMAGE;
-    if (mime.startsWith('video/')) return MediaType.VIDEO;
-    if (mime.startsWith('audio/')) return MediaType.AUDIO;
-    return MediaType.DOCUMENT;
   }
 
   private async markAsFailed(mediaId: string, reason: string) {

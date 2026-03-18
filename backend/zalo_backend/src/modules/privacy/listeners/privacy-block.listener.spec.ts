@@ -1,7 +1,7 @@
 // import { describe, it, expect, beforeEach, vi } from 'vitest';
 // import { Test, TestingModule } from '@nestjs/testing';
 // import { PrivacyBlockListener } from './privacy-block.listener';
-// import { RedisService } from '@modules/redis/redis.service';
+// import { RedisService } from '@shared/redis/redis.service';
 // import { IdempotencyService } from '@common/idempotency/idempotency.service';
 
 // describe('PrivacyBlockListener', () => {

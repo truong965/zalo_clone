@@ -26,7 +26,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
 import type { IBlockRepository } from './repositories/block.repository.interface';
 import { BLOCK_REPOSITORY } from './repositories/block.repository.interface';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { Block, Prisma } from '@prisma/client';
 import {
   BlockUserDto,
@@ -35,11 +35,11 @@ import {
   BlockRelation,
   GetBlockedListQueryDto,
 } from './dto/block.dto';
-import { SelfActionException } from '@shared/errors';
+import { SelfActionException } from '@common/errors';
 import type {
   UserBlockedEventPayload,
   UserUnblockedEventPayload,
-} from '@shared/events/contracts';
+} from '@common/contracts/events';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socialConfig from '@config/social.config';
 import type { ConfigType } from '@nestjs/config';

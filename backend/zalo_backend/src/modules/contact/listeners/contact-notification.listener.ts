@@ -17,6 +17,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
+import { InternalEventNames } from '@common/contracts/events';
 import { PrismaService } from '@database/prisma.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { SocketEvents } from '@common/constants/socket-events.constant';
@@ -41,7 +42,7 @@ export class ContactNotificationListener extends IdempotentListener {
    *
    * Only the owner is notified — alias is visible to them alone.
    */
-  @OnEvent('contact.alias.updated', { async: true })
+  @OnEvent(InternalEventNames.CONTACT_ALIAS_UPDATED, { async: true })
   async handleContactAliasUpdated(
     event: ContactAliasUpdatedEvent,
   ): Promise<void> {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { RedisService } from '@modules/redis/redis.service';
+import { InternalEventNames } from '@common/contracts/events';
+import { RedisService } from '@shared/redis/redis.service';
 
 /**
  * PART 3.2: Cache Invalidation Listener
@@ -48,7 +49,7 @@ export class CacheInvalidationListener {
    *   reason: string - Why invalidation occurred (for logging)
    * }
    */
-  @OnEvent('cache.invalidate', { async: true })
+  @OnEvent(InternalEventNames.CACHE_INVALIDATE, { async: true })
   async handleCacheInvalidation(event: {
     keys: string[];
     reason: string;

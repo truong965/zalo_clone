@@ -44,6 +44,7 @@ import { TransferAdminDto } from './dto/transfer-admin.dto';
 import { CreateJoinRequestDto } from './dto/join-request.dto';
 import { ReviewJoinRequestDto } from './dto/review-join-request.dto';
 import { InviteMembersDto } from './dto/invite-members.dto';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 @WebSocketGateway({
   cors: { origin: '*', credentials: true },
@@ -514,7 +515,7 @@ export class ConversationGateway implements OnGatewayInit {
    * React to ConversationArchivedEvent → emit socket to user's devices.
    * No DB side-effects, no idempotency needed.
    */
-  @OnEvent('conversation.archived')
+  @OnEvent(InternalEventNames.CONVERSATION_ARCHIVED)
   async handleConversationArchived(
     payload: ConversationArchivedEvent,
   ): Promise<void> {
@@ -542,7 +543,7 @@ export class ConversationGateway implements OnGatewayInit {
    * React to ConversationMutedEvent → emit socket to user's devices.
    * No DB side-effects, no idempotency needed.
    */
-  @OnEvent('conversation.muted')
+  @OnEvent(InternalEventNames.CONVERSATION_MUTED)
   async handleConversationMuted(
     payload: ConversationMutedEvent,
   ): Promise<void> {

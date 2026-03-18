@@ -19,7 +19,7 @@ import { QrLoginController } from './qr-login.controller';
 import { QrLoginService } from './services/qr-login.service';
 import { QrSessionRedisService } from './services/qr-session-redis.service';
 import { QrLoginSocketListener } from './listeners/qr-login-socket.listener';
-import { RedisModule } from 'src/modules/redis/redis.module';
+import { RedisModule } from 'src/shared/redis/redis.module';
 
 @Module({
   imports: [

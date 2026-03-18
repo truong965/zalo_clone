@@ -10,7 +10,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import socialConfig from '@config/social.config';
 import type { ConfigType } from '@nestjs/config';

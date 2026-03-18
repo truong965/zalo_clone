@@ -8,8 +8,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { ClsService } from 'nestjs-cls';
 import { Pool } from 'pg';
+import { RequestContextService } from '@common/context/request-context.service';
 
 interface AuditData {
   createdById?: string;
@@ -28,7 +28,7 @@ interface SoftDeleteCriteria {
 // Để TypeScript có thể suy luận (Infer) được Type trả về
 const createExtendedClient = (
   baseClient: PrismaClient,
-  cls: ClsService,
+  requestContext: RequestContextService,
   sets: {
     create: Set<string>;
     update: Set<string>;
@@ -40,7 +40,7 @@ const createExtendedClient = (
     query: {
       $allModels: {
         create: async ({ model, args, query }) => {
-          const userId = cls.get<string>('userId');
+          const userId = requestContext.getUserId();
           if (sets.create.has(model) && userId) {
             const data = args.data as AuditData;
             data.createdById = userId;
@@ -52,7 +52,7 @@ const createExtendedClient = (
         },
 
         update: async ({ model, args, query }) => {
-          const userId = cls.get<string>('userId');
+          const userId = requestContext.getUserId();
           if (sets.update.has(model) && userId) {
             const data = args.data as AuditData;
             data.updatedById = userId;
@@ -61,7 +61,7 @@ const createExtendedClient = (
         },
 
         updateMany: async ({ model, args, query }) => {
-          const userId = cls.get<string>('userId');
+          const userId = requestContext.getUserId();
           if (sets.update.has(model) && userId) {
             const data = args.data as AuditData;
             data.updatedById = userId;
@@ -71,7 +71,7 @@ const createExtendedClient = (
 
         delete: async ({ model, args, query }) => {
           if (sets.softDelete.has(model)) {
-            const userId = cls.get<string>('userId');
+            const userId = requestContext.getUserId();
             const modelKey = model.charAt(0).toLowerCase() + model.slice(1);
 
             // Note: Ở đây ta dùng 'any' tạm thời để truy cập dynamic key,
@@ -104,7 +104,7 @@ const createExtendedClient = (
 
         deleteMany: async ({ model, args, query }) => {
           if (sets.softDelete.has(model)) {
-            const userId = cls.get<string>('userId');
+            const userId = requestContext.getUserId();
             const modelKey = model.charAt(0).toLowerCase() + model.slice(1);
             const extendedClient = baseClient as any;
 
@@ -168,7 +168,7 @@ export class PrismaService
   private _extendedClient: ExtendedPrismaClient;
 
   constructor(
-    private readonly cls: ClsService,
+    private readonly requestContext: RequestContextService,
     private readonly configService: ConfigService,
   ) {
     const connectionString = configService.get<string>('DATABASE_URL');
@@ -180,7 +180,7 @@ export class PrismaService
     // 4. GỌI HÀM HELPER ĐỂ TẠO CLIENT
     this._extendedClient = createExtendedClient(
       this,
-      this.cls,
+      this.requestContext,
       {
         create: this.modelsWithCreateBy,
         update: this.modelsWithUpdateBy,

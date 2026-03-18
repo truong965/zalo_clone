@@ -18,6 +18,7 @@ import { PrismaService } from '@database/prisma.service';
 import { PushNotificationService } from '../services/push-notification.service';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import type { CallEndedPayload } from '@modules/call/events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /** Payload emitted by CallSignalingGateway when callee needs a push */
 export interface CallPushNotificationPayload {
@@ -55,7 +56,7 @@ export class CallNotificationListener {
    * Handle incoming-call push request.
    * Fired when callee is offline OR when ringing_ack is not received within 2 s.
    */
-  @OnEvent('call.push_notification_needed', { async: true })
+  @OnEvent(InternalEventNames.CALL_PUSH_NOTIFICATION_NEEDED, { async: true })
   async handleIncomingCallPush(
     payload: CallPushNotificationPayload,
   ): Promise<void> {
@@ -103,7 +104,7 @@ export class CallNotificationListener {
    * Listens directly to call.ended — only acts when status is MISSED or NO_ANSWER.
    * Loops per-receiver and queries callerName/callerAvatar from DB.
    */
-  @OnEvent('call.ended', { async: true })
+  @OnEvent(InternalEventNames.CALL_ENDED, { async: true })
   async handleMissedCallPush(payload: CallEndedPayload): Promise<void> {
     // Precondition: only handle missed/unanswered calls
     if (

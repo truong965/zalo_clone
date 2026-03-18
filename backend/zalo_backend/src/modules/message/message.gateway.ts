@@ -33,6 +33,7 @@ import { MessageRealtimeService } from './services/message-realtime.service';
 import { PrismaService } from 'src/database/prisma.service';
 
 import { SendMessageDto } from './dto/send-message.dto';
+import { InternalEventNames } from '@common/contracts/events';
 import { MarkAsReadDto } from './dto/mark-as-read.dto';
 import { TypingIndicatorDto } from './dto/typing-indicator.dto';
 
@@ -81,7 +82,7 @@ export class MessageGateway implements OnGatewayInit {
    * Listen to USER_SOCKET_CONNECTED event from SocketGateway
    * This is emitted AFTER authentication, so userId is guaranteed to be set
    */
-  @OnEvent(SocketEvents.USER_SOCKET_CONNECTED)
+  @OnEvent(InternalEventNames.USER_SOCKET_CONNECTED)
   async handleUserConnected(payload: {
     userId: string;
     socketId?: string | null;
@@ -148,7 +149,7 @@ export class MessageGateway implements OnGatewayInit {
   /**
    * Listen to USER_SOCKET_DISCONNECTED event from SocketGateway
    */
-  @OnEvent(SocketEvents.USER_SOCKET_DISCONNECTED)
+  @OnEvent(InternalEventNames.USER_SOCKET_DISCONNECTED)
   async handleUserDisconnected(payload: { userId: string; socketId: string }) {
     // MSG-R3: Decrement refCount, only unsubscribe when last socket disconnects
     const existing = this.userReceiptSubscriptions.get(payload.userId);

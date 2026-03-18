@@ -9,9 +9,10 @@ import { DatabaseModule } from './database/prisma.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { APP_GUARD } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { RedisModule } from './modules/redis/redis.module';
+import { RedisModule } from '@shared/redis/redis.module';
 import { SocketModule } from './socket/socket.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { MessageModule } from './modules/message/message.module';
@@ -45,6 +46,8 @@ import queueConfig from './config/queue.config';
 import socialConfig from './config/social.config';
 import workerConfig from './config/worker.config';
 import { HealthModule } from './modules/health/health.module';
+import { RequestContextModule } from './common/context/request-context.module';
+import { RequestContextInterceptor } from './common/interceptor/request-context.interceptor';
 
 @Module({
   imports: [
@@ -83,14 +86,25 @@ import { HealthModule } from './modules/health/health.module';
     ScheduleModule.forRoot(),
 
     // Context Local Storage (User Session tracking)
+    // middleware.mount: true automatically mounts CLS middleware to all routes
+    // This ensures CLS context is available for all HTTP requests
     ClsModule.forRoot({
       global: true,
-      middleware: { mount: true },
+      middleware: {
+        mount: true,
+        setup: (cls, req) => {
+          // Ensure CLS context is initialized for this request
+          if (!cls.getId()) {
+            cls.set('requestId', req.headers['x-request-id'] || '');
+          }
+        },
+      },
     }),
 
     // ========================================================================
     // 2. CORE MODULES
     // ========================================================================
+    RequestContextModule,
     DatabaseModule,
     RedisModule,
     SocketModule, // Socket Gateway
@@ -145,6 +159,10 @@ import { HealthModule } from './modules/health/health.module';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestContextInterceptor,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule { }

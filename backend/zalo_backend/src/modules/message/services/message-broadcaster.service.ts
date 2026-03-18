@@ -1,7 +1,7 @@
 // src/modules/message/services/message-broadcaster.service.ts
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { RedisPubSubService } from 'src/modules/redis/services/redis-pub-sub.service';
+import { RedisPubSubService } from 'src/shared/redis/services/redis-pub-sub.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { Message } from '@prisma/client';
 

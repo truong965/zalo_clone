@@ -20,7 +20,7 @@ import {
   QrSessionRedisService,
   QrSessionStatus,
 } from './qr-session-redis.service';
-import { RedisRateLimitService } from 'src/modules/redis/services/redis-rate-limit.service';
+import { RedisRateLimitService } from 'src/shared/redis/services/redis-rate-limit.service';
 import { QrExchangeDto } from '../dto/qr-exchange.dto';
 import { QrScanResponseDto } from '../dto/qr-response.dto';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';

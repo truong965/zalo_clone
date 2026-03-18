@@ -2,7 +2,7 @@
 // import { Test, TestingModule } from '@nestjs/testing';
 // import { PrivacyService } from './privacy.service';
 // import { PrismaService } from '@database/prisma.service';
-// import { RedisService } from '@modules/redis/redis.service';
+// import { RedisService } from '@shared/redis/redis.service';
 // import socialConfig from '@config/social.config';
 // import { EventPublisher } from '@shared/events';
 // import { PrivacyLevel } from '@prisma/client';

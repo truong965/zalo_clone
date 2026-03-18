@@ -23,6 +23,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@database/prisma.service';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import {
   PushNotificationService,
   GroupEventPushParams,
@@ -63,7 +64,7 @@ export class GroupNotificationListener {
   // conversation.created → push to all members (GROUP only)
   // ─────────────────────────────────────────────────────────────────────
 
-  @OnEvent('conversation.created', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_CREATED, { async: true })
   async handleConversationCreated(
     event: ConversationCreatedEvent,
   ): Promise<void> {
@@ -111,7 +112,7 @@ export class GroupNotificationListener {
   // conversation.member.added → push to new + existing members
   // ─────────────────────────────────────────────────────────────────────
 
-  @OnEvent('conversation.member.added', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_ADDED, { async: true })
   async handleMemberAdded(event: ConversationMemberAddedEvent): Promise<void> {
     if (!this.pushService.isAvailable) return;
 
@@ -187,7 +188,7 @@ export class GroupNotificationListener {
   // conversation.member.left → push to remaining members or kicked member
   // ─────────────────────────────────────────────────────────────────────
 
-  @OnEvent('conversation.member.left', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_LEFT, { async: true })
   async handleMemberLeft(event: ConversationMemberLeftEvent): Promise<void> {
     if (!this.pushService.isAvailable) return;
 
@@ -266,7 +267,7 @@ export class GroupNotificationListener {
   // conversation.member.promoted → push to promoted member
   // ─────────────────────────────────────────────────────────────────────
 
-  @OnEvent('conversation.member.promoted', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_PROMOTED, { async: true })
   async handleMemberPromoted(
     event: ConversationMemberPromotedEvent,
   ): Promise<void> {
@@ -302,7 +303,7 @@ export class GroupNotificationListener {
   // conversation.member.demoted → push to demoted member
   // ─────────────────────────────────────────────────────────────────────
 
-  @OnEvent('conversation.member.demoted', { async: true })
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_DEMOTED, { async: true })
   async handleMemberDemoted(
     event: ConversationMemberDemotedEvent,
   ): Promise<void> {

@@ -17,8 +17,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MemberStatus } from '@prisma/client';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 
 /** Cached member state — minimal fields for notification decisions */
 export interface CachedMemberState {
@@ -71,25 +72,25 @@ export class ConversationMemberCacheService {
   // ─── Event-driven cache invalidation ─────────────────────────────
 
   /** Member added → invalidate */
-  @OnEvent('conversation.member.added')
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_ADDED)
   async onMemberAdded(event: { conversationId: string }): Promise<void> {
     await this.invalidate(event.conversationId);
   }
 
   /** Member left/removed → invalidate */
-  @OnEvent('conversation.member.left')
+  @OnEvent(InternalEventNames.CONVERSATION_MEMBER_LEFT)
   async onMemberLeft(event: { conversationId: string }): Promise<void> {
     await this.invalidate(event.conversationId);
   }
 
   /** Mute toggled → invalidate */
-  @OnEvent('conversation.muted')
+  @OnEvent(InternalEventNames.CONVERSATION_MUTED)
   async onMuted(event: { conversationId: string }): Promise<void> {
     await this.invalidate(event.conversationId);
   }
 
   /** Archive toggled → invalidate */
-  @OnEvent('conversation.archived')
+  @OnEvent(InternalEventNames.CONVERSATION_ARCHIVED)
   async onArchived(event: { conversationId: string }): Promise<void> {
     await this.invalidate(event.conversationId);
   }

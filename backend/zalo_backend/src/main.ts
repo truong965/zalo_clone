@@ -58,7 +58,9 @@ async function bootstrap() {
   // - Future API Gateway can route these differently
   // ========================================================================
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: ['internal/(.*)'],
+  });
   app.enableVersioning({
     type: VersioningType.URI, //v
     defaultVersion: ['1'], //v1

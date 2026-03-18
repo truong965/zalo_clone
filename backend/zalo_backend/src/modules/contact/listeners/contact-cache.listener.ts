@@ -15,8 +15,9 @@
 
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { InternalEventNames } from '@common/contracts/events';
 import { PrismaService } from '@database/prisma.service';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { IdempotentListener } from '@shared/events/base/idempotent-listener';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import type { ContactAliasUpdatedEvent } from '../events/contact.events';
@@ -39,7 +40,7 @@ export class ContactCacheListener extends IdempotentListener {
    * this event, so this listener acts as an idempotent safety net for cases
    * where the event is replayed by a message broker.
    */
-  @OnEvent('contact.alias.updated', { async: true })
+  @OnEvent(InternalEventNames.CONTACT_ALIAS_UPDATED, { async: true })
   async handleAliasUpdated(event: ContactAliasUpdatedEvent): Promise<void> {
     try {
       return await this.withIdempotency(
@@ -69,7 +70,7 @@ export class ContactCacheListener extends IdempotentListener {
   /**
    * Invalidate name-resolution cache when a contact is removed.
    */
-  @OnEvent('contact.removed', { async: true })
+  @OnEvent(InternalEventNames.CONTACT_REMOVED, { async: true })
   async handleContactRemoved(event: ContactRemovedEvent): Promise<void> {
     try {
       return await this.withIdempotency(
@@ -98,7 +99,7 @@ export class ContactCacheListener extends IdempotentListener {
   /**
    * Log sync metrics (fire-and-forget analytics).
    */
-  @OnEvent('contacts.synced', { async: true })
+  @OnEvent(InternalEventNames.CONTACTS_SYNCED, { async: true })
   async handleContactsSynced(event: ContactsSyncedEvent): Promise<void> {
     this.logger.log(
       `[ContactCache] Sync completed: owner=${event.ownerId} total=${event.totalContacts} matched=${event.matchedCount} duration=${event.durationMs}ms`,

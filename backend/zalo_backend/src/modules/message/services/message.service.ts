@@ -19,7 +19,7 @@ import {
   MessageType,
   Prisma,
 } from '@prisma/client';
-import { RedisService } from 'src/modules/redis/redis.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 import { MessageValidator } from '../helpers/message-validation.helper';
 import redisConfig from 'src/config/redis.config';
 import type { ConfigType } from '@nestjs/config';
@@ -975,9 +975,8 @@ export class MessageService {
     // 7. Map to flat DTO shape
     const data = trimmed
       .filter((msg) => msg.mediaAttachments.length > 0)
-      .map((msg) => {
-        const ma = msg.mediaAttachments[0];
-        return {
+      .flatMap((msg) => {
+        return msg.mediaAttachments.map((ma) => ({
           messageId: msg.id.toString(),
           mediaId: ma.id,
           originalName: ma.originalName,
@@ -988,7 +987,7 @@ export class MessageService {
           cdnUrl: ma.cdnUrl ?? null,
           messageType: msg.type,
           createdAt: msg.createdAt,
-        };
+        }));
       });
 
     // 8. Build next cursor

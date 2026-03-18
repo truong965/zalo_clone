@@ -7,7 +7,7 @@ import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { PrismaService } from 'src/database/prisma.service';
 import { User, UserStatus } from '@prisma/client';
 import { UserEntity } from 'src/modules/users/entities/user.entity';
-import { RedisService } from '@modules/redis/redis.service';
+import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 
 const PROFILE_CACHE_TTL = 300; // 5 minutes
@@ -62,7 +62,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     // Try cache first
     const cached = await this.redis.get(cacheKey);
     if (cached) {
-      const user = JSON.parse(cached);
+      const user = JSON.parse(cached) as UserEntity;
       // Validate password version even from cache
       if (user.passwordVersion !== payload.pwdVer) {
         throw new UnauthorizedException(
@@ -109,6 +109,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     // Attach the current device context specifically for this token's runtime
     entity.currentDeviceId = payload.deviceId;
+    entity.currentSessionId = payload.sid;
 
     // Cache the pristine serialized entity (without the dynamic token context)
     await this.redis.setex(
