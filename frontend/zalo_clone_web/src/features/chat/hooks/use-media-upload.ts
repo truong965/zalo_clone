@@ -21,11 +21,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createId } from '@paralleldrive/cuid2';
 import {
       mediaService,
-      validateFile,
-      sanitizeFileName,
-      inferMediaTypeFromMime,
-      MAX_FILES_PER_SEND,
 } from '@/features/chat/api/media.service';
+import { FileUtils, MAX_FILES_PER_SEND } from '@/utils/file.utils';
 import type { MediaResponseDto } from '@/features/chat/api/media.service';
 import type { MediaType, MessageType } from '@/types/api';
 
@@ -119,13 +116,14 @@ const MESSAGE_TYPE_LIMITS: Record<string, number> = {
 };
 
 // ============================================================================
+// ============================================================================
 // MIME → MessageType MAPPING
 // ============================================================================
 
-function mimeToMessageType(mime: string): MessageType {
-      if (mime.startsWith('image/')) return 'IMAGE';
-      if (mime.startsWith('video/')) return 'VIDEO';
-      if (mime.startsWith('audio/')) return 'AUDIO';
+function mediaToMessageType(mediaType: MediaType): MessageType {
+      if (mediaType === 'IMAGE') return 'IMAGE';
+      if (mediaType === 'VIDEO') return 'VIDEO';
+      if (mediaType === 'AUDIO') return 'AUDIO';
       return 'FILE';
 }
 
@@ -208,7 +206,7 @@ export function useMediaUpload(): UseMediaUploadReturn {
                   const newFiles: PendingFile[] = [];
 
                   for (const file of toAdd) {
-                        const validationError = validateFile(file);
+                        const validationError = FileUtils.validateFileUpload(file);
                         if (validationError) {
                               errors.push(validationError);
                               continue;
@@ -238,7 +236,7 @@ export function useMediaUpload(): UseMediaUploadReturn {
                               localUrl: URL.createObjectURL(file),
                               state: 'queued',
                               uploadProgress: 0,
-                              mediaType: inferMediaTypeFromMime(file.type),
+                              mediaType: FileUtils.inferMediaType(file.name, file.type),
                         });
                   }
 
@@ -315,7 +313,7 @@ export function useMediaUpload(): UseMediaUploadReturn {
                         updateFile(localId, { state: 'initiating', uploadProgress: 0, error: undefined });
 
                         const initResponse = await mediaService.initiateUpload({
-                              fileName: sanitizeFileName(file.name),
+                              fileName: FileUtils.sanitizeFileName(file.name),
                               mimeType: file.type,
                               fileSize: file.size,
                         });
@@ -411,11 +409,11 @@ export function useMediaUpload(): UseMediaUploadReturn {
                   for (let i = 0; i < results.length; i++) {
                         const result = results[i];
                         if (result.status === 'fulfilled') {
-                              newMediaIds.push(result.value);
+                                newMediaIds.push(result.value);
                         } else {
-                              errors.push(
-                                    `"${queuedFiles[i].file.name}": ${result.reason instanceof Error ? result.reason.message : 'Upload failed'}`,
-                              );
+                                errors.push(
+                                      `"${queuedFiles[i].file.name}": ${result.reason instanceof Error ? result.reason.message : 'Upload failed'}`,
+                                );
                         }
                   }
 
@@ -441,7 +439,7 @@ export function useMediaUpload(): UseMediaUploadReturn {
             const groups = new Map<MessageType, PendingFile[]>();
 
             for (const file of confirmed) {
-                  const msgType = mimeToMessageType(file.file.type);
+                  const msgType = mediaToMessageType(file.mediaType);
                   const existing = groups.get(msgType) ?? [];
                   existing.push(file);
                   groups.set(msgType, existing);

@@ -48,18 +48,18 @@ const MESSAGE_TYPE_LIMITS: Record<MessageType, number> = {
 };
 
 // ============================================================================
-// MIME → MessageType MAPPING
+// MediaType → MessageType MAPPING
 // ============================================================================
 
 /**
- * Map a MIME string to the MessageType the backend expects.
+ * Map a MediaType to the MessageType the backend expects.
  *
  * NOTE: MediaType.DOCUMENT → MessageType.FILE (not "DOCUMENT").
  */
-export function mimeToMessageType(mime: string): MessageType {
-      if (mime.startsWith('image/')) return 'IMAGE';
-      if (mime.startsWith('video/')) return 'VIDEO';
-      if (mime.startsWith('audio/')) return 'AUDIO';
+export function mediaTypeToMessageType(mediaType: MediaType): MessageType {
+      if (mediaType === 'IMAGE') return 'IMAGE';
+      if (mediaType === 'VIDEO') return 'VIDEO';
+      if (mediaType === 'AUDIO') return 'AUDIO';
       return 'FILE';
 }
 
@@ -93,7 +93,7 @@ export function batchFilesByType(files: BatchableFile[]): FileBatch[] {
       const groups = new Map<MessageType, BatchableFile[]>();
 
       for (const file of files) {
-            const msgType = mimeToMessageType(file.mimeType);
+            const msgType = mediaTypeToMessageType(file.mediaType);
             const bucket = groups.get(msgType);
             if (bucket) {
                   bucket.push(file);

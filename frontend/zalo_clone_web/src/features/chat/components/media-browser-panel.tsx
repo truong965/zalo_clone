@@ -12,10 +12,12 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Button, Input, Spin, Typography, Empty } from 'antd';
-import { ArrowLeftOutlined, SearchOutlined, LoadingOutlined, FileOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SearchOutlined, LoadingOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { groupBy } from 'lodash-es';
 import { useMediaBrowser } from '@/features/chat/hooks/use-media-browser';
+import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
+import { RecentFileItem } from '@/features/chat/components/recent-file-item';
 import type { RecentMediaItem, MessageType } from '@/types/api';
 
 const { Text } = Typography;
@@ -36,15 +38,6 @@ interface MediaBrowserPanelProps {
 const PHOTO_TYPES: MessageType[] = ['IMAGE', 'VIDEO'];
 const FILE_TYPES: MessageType[] = ['FILE'];
 
-function formatFileSize(bytes: number): string {
-      if (bytes === 0) return '0 B';
-      const units = ['B', 'KB', 'MB', 'GB'];
-      const k = 1024;
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      const value = bytes / Math.pow(k, i);
-      return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
 function formatDate(isoDate: string): string {
       const d = dayjs(isoDate);
       const today = dayjs().startOf('day');
@@ -58,13 +51,14 @@ function formatDate(isoDate: string): string {
 
 // ── Sub-components ───────────────────────────────────────────────────────
 
-function PhotoGrid({ items }: { items: RecentMediaItem[] }) {
+function PhotoGrid({ items, onItemClick }: { items: RecentMediaItem[]; onItemClick: (item: RecentMediaItem) => void }) {
       return (
             <div className="grid grid-cols-3 gap-1 px-3">
                   {items.map((item) => (
                         <div
                               key={item.mediaId}
                               className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer hover:opacity-80 transition-opacity relative"
+                              onClick={() => onItemClick(item)}
                         >
                               {item.thumbnailUrl ? (
                                     <>
@@ -95,22 +89,14 @@ function FileList({ items }: { items: RecentMediaItem[] }) {
       return (
             <div className="flex flex-col">
                   {items.map((item) => (
-                        <div
+                        <RecentFileItem
                               key={item.mediaId}
-                              className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer transition-colors"
-                        >
-                              <div className="w-10 h-10 bg-blue-50 rounded flex items-center justify-center flex-shrink-0">
-                                    <FileOutlined className="text-blue-500 text-lg" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                    <div className="text-sm text-gray-800 truncate">
-                                          {item.originalName}
-                                    </div>
-                                    <div className="text-[11px] text-gray-400">
-                                          {formatFileSize(item.size)} · {dayjs(item.createdAt).format('DD/MM/YYYY')}
-                                    </div>
-                              </div>
-                        </div>
+                              originalName={item.originalName}
+                              sizeBytes={item.size}
+                              createdAt={item.createdAt}
+                              cdnUrl={item.cdnUrl}
+                              mimeType={item.mimeType}
+                        />
                   ))}
             </div>
       );
@@ -126,6 +112,9 @@ export function MediaBrowserPanel({
       const [activeTab, setActiveTab] = useState<MediaTab>(initialTab);
       const [fileKeyword, setFileKeyword] = useState('');
       const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+      // Media Preview State
+      const [previewIndex, setPreviewIndex] = useState(-1);
 
       // Queries — only run for the active tab
       const photoQuery = useMediaBrowser(
@@ -260,7 +249,14 @@ export function MediaBrowserPanel({
                         {/* Results grouped by date */}
                         {!isLoading && allItems.length > 0 ? (
                               <div className="py-2">
-                                    {groupedMessages(groupedItems, activeTab)}
+                                    {groupedMessages(
+                                          groupedItems,
+                                          activeTab,
+                                          (item) => {
+                                                const idx = allItems.findIndex((x) => x.mediaId === item.mediaId);
+                                                if (idx !== -1) setPreviewIndex(idx);
+                                          }
+                                    )}
                               </div>
                         ) : null}
 
@@ -271,6 +267,13 @@ export function MediaBrowserPanel({
                               </div>
                         ) : null}
                   </div>
+
+                  <MediaPreviewModal
+                        isOpen={previewIndex !== -1}
+                        items={allItems}
+                        initialIndex={previewIndex}
+                        onClose={() => setPreviewIndex(-1)}
+                  />
             </div>
       );
 }
@@ -280,6 +283,7 @@ export function MediaBrowserPanel({
 function groupedMessages(
       groups: [string, RecentMediaItem[]][],
       tab: MediaTab,
+      onPhotoClick: (item: RecentMediaItem) => void,
 ) {
       return groups.map(([dateKey, items]) => (
             <div key={dateKey}>
@@ -289,7 +293,7 @@ function groupedMessages(
                         </Text>
                   </div>
                   {tab === 'photos' ? (
-                        <PhotoGrid items={items} />
+                        <PhotoGrid items={items} onItemClick={onPhotoClick} />
                   ) : (
                         <FileList items={items} />
                   )}

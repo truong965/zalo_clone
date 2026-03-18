@@ -20,9 +20,13 @@ import {
       FilePdfOutlined,
       FileWordOutlined,
       FileExcelOutlined,
+      FilePptOutlined,
+      FileZipOutlined,
       FileTextOutlined,
       PlayCircleOutlined,
       SoundOutlined,
+      CodeOutlined,
+      AudioOutlined,
       ReloadOutlined,
       WarningOutlined,
 } from '@ant-design/icons';
@@ -30,6 +34,8 @@ import { Tooltip } from 'antd';
 import { cn } from '@/lib/utils';
 import { formatBytes } from '@/lib/utils';
 import type { PendingFile } from '../hooks/use-media-upload';
+import { FileUtils } from '@/utils/file.utils';
+import type { MediaType } from '@/types/api';
 
 // ============================================================================
 // PROPS
@@ -46,26 +52,45 @@ interface FilePreviewPanelProps {
 // HELPERS
 // ============================================================================
 
-/** Pick an icon for document/audio MIME types. */
-function getFileIcon(mimeType: string) {
-      if (mimeType === 'application/pdf') return <FilePdfOutlined className="text-red-500" />;
-      if (mimeType.includes('word') || mimeType.includes('wordprocessingml'))
+/** Pick an icon and color for document/audio files based on extension and mimeType. */
+function getFileIcon(fileName: string, mimeType: string) {
+      const ext = FileUtils.getExtension(fileName).toLowerCase();
+
+      if (ext === 'pdf' || mimeType === 'application/pdf')
+            return <FilePdfOutlined className="text-red-500" />;
+
+      if (ext === 'doc' || ext === 'docx')
             return <FileWordOutlined className="text-blue-600" />;
-      if (mimeType.includes('excel') || mimeType.includes('spreadsheetml'))
+
+      if (ext === 'xls' || ext === 'xlsx' || ext === 'csv')
             return <FileExcelOutlined className="text-green-600" />;
-      if (mimeType === 'text/plain') return <FileTextOutlined className="text-gray-500" />;
-      if (mimeType.startsWith('audio/')) return <SoundOutlined className="text-purple-500" />;
+
+      if (ext === 'ppt' || ext === 'pptx')
+            return <FilePptOutlined className="text-orange-600" />;
+
+      if (ext === 'zip' || ext === 'rar' || ext === '7z')
+            return <FileZipOutlined className="text-amber-700" />;
+
+      if (ext === 'mp3' || ext === 'wav' || ext === 'm4a' || mimeType.startsWith('audio/'))
+            return <AudioOutlined className="text-purple-500" />;
+
+      if (['js', 'ts', 'jsx', 'tsx', 'py', 'json', 'html', 'css', 'sql'].includes(ext))
+            return <CodeOutlined className="text-yellow-600" />;
+
+      if (ext === 'txt' || ext === 'md' || ext === 'log' || mimeType.startsWith('text/'))
+            return <FileTextOutlined className="text-gray-500" />;
+
       return <FileOutlined className="text-gray-500" />;
+}
+
+/** Whether this file should show a thumbnail (Image/Video). */
+function isVisualMedia(mediaType: MediaType): boolean {
+      return mediaType === 'IMAGE' || mediaType === 'VIDEO';
 }
 
 /** Whether a file state is "active" (i.e. upload in progress, cannot remove). */
 function isActiveUpload(state: PendingFile['state']): boolean {
       return state === 'initiating' || state === 'uploading' || state === 'confirming';
-}
-
-/** Whether this MIME type is visual (image/video) and should show thumbnail. */
-function isVisualMedia(mimeType: string): boolean {
-      return mimeType.startsWith('image/') || mimeType.startsWith('video/');
 }
 
 // ============================================================================
@@ -260,7 +285,7 @@ function DocumentFileCard({
                   >
                         {/* File icon */}
                         <div className="flex-shrink-0 text-xl">
-                              {getFileIcon(file.file.type)}
+                              {getFileIcon(file.file.name, file.file.type)}
                         </div>
 
                         {/* Name + Size */}
@@ -342,7 +367,7 @@ export function FilePreviewPanel({ files, onRemove, onRetry, disabled = false }:
                                     void onRetry(file.localId);
                               };
 
-                              return isVisualMedia(file.file.type) ? (
+                              return isVisualMedia(file.mediaType) ? (
                                     <VisualFileCard
                                           key={file.localId}
                                           file={file}

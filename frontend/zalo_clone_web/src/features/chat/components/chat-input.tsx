@@ -38,14 +38,7 @@ const IMAGE_VIDEO_ACCEPT = [
       'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
 ].join(',');
 
-const DOC_AUDIO_ACCEPT = [
-      'audio/mpeg', 'audio/wav', 'audio/aac', 'audio/x-m4a', 'audio/ogg',
-      'application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/plain',
-].join(',');
+const DOC_AUDIO_ACCEPT = '*/*';
 
 // ============================================================================
 // TYPES

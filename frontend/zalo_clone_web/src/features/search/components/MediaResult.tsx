@@ -8,14 +8,10 @@
  */
 
 import { Typography } from 'antd';
-import {
-      FileImageOutlined,
-      PlaySquareOutlined,
-      SoundOutlined,
-      FileOutlined,
-} from '@ant-design/icons';
+import { PlaySquareOutlined } from '@ant-design/icons';
 import type { MediaSearchResult } from '../types';
-import { formatFileSize, formatSearchTimestamp, isVisualMedia } from '../utils/search.util';
+import { isVisualMedia } from '../utils/search.util';
+import { RecentFileItem } from '@/features/chat/components/recent-file-item';
 
 const { Text } = Typography;
 
@@ -24,17 +20,8 @@ interface MediaResultProps {
       onClick?: (result: MediaSearchResult) => void;
 }
 
-const MEDIA_ICON_MAP: Record<string, React.ReactNode> = {
-      IMAGE: <FileImageOutlined className="text-2xl text-blue-400" />,
-      VIDEO: <PlaySquareOutlined className="text-2xl text-purple-400" />,
-      AUDIO: <SoundOutlined className="text-2xl text-green-400" />,
-      DOCUMENT: <FileOutlined className="text-2xl text-orange-400" />,
-};
-
 export function MediaResult({ data, onClick }: MediaResultProps) {
       const isVisual = isVisualMedia(data.mediaType);
-      const timestamp = formatSearchTimestamp(data.createdAt);
-      const fileSize = formatFileSize(data.size);
 
       // Visual media — show thumbnail
       if (isVisual && data.thumbnailUrl) {
@@ -65,30 +52,15 @@ export function MediaResult({ data, onClick }: MediaResultProps) {
 
       // Non-visual media — file row
       return (
-            <div
-                  className="flex items-center gap-3 px-3 py-3 cursor-pointer rounded-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => onClick?.(data)}
-            >
-                  {/* File icon */}
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        {MEDIA_ICON_MAP[data.mediaType] ?? MEDIA_ICON_MAP.DOCUMENT}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                        <Text strong className="truncate text-sm text-gray-800 block">
-                              {data.originalName}
-                        </Text>
-                        <Text className="text-xs text-gray-400 block">
-                              {fileSize} · {data.uploadedByName} · {timestamp}
-                        </Text>
-                        {data.conversationName && (
-                              <Text className="text-[11px] text-gray-400 block truncate">
-                                    {data.conversationName}
-                              </Text>
-                        )}
-                  </div>
-            </div>
+            <RecentFileItem
+                  originalName={data.originalName}
+                  sizeBytes={Number(data.size)}
+                  createdAt={data.createdAt}
+                  cdnUrl={data.cdnUrl}
+                  mimeType={data.mimeType}
+                  extraLine1={data.uploadedByName}
+                  extraLine2={data.conversationName}
+            />
       );
 }
 

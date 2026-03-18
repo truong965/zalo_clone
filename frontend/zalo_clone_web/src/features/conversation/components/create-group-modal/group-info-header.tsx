@@ -9,10 +9,10 @@ import { useRef } from 'react';
 import { Input, Avatar, notification } from 'antd';
 import { CameraOutlined, TeamOutlined } from '@ant-design/icons';
 import { useCreateGroupStore } from '../../stores/create-group.store';
+import { FileUtils, FILE_SIZE_LIMITS_MB } from '@/utils/file.utils';
 
 const MAX_NAME_LENGTH = 100;
-const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = FILE_SIZE_LIMITS_MB.IMAGE * 1024 * 1024;
 
 export function GroupInfoHeader() {
       const groupName = useCreateGroupStore((s) => s.groupName);
@@ -30,8 +30,8 @@ export function GroupInfoHeader() {
             const file = e.target.files?.[0];
             if (!file) return;
 
-            if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-                  notification.warning({ message: 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP' });
+            if (!FileUtils.isImageFile(file)) {
+                  notification.warning({ message: 'Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF...)' });
                   return;
             }
 
@@ -64,7 +64,7 @@ export function GroupInfoHeader() {
                         <input
                               ref={fileInputRef}
                               type="file"
-                              accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                              accept="image/*"
                               className="hidden"
                               onChange={handleFileChange}
                         />

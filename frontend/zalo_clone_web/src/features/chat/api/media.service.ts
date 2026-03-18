@@ -13,6 +13,7 @@
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import apiClient from '@/lib/axios';
 import type { ApiResponse, MediaProcessingStatus, MediaType } from '@/types/api';
+import { FileUtils } from '@/utils/file.utils';
 
 // ============================================================================
 // REQUEST / RESPONSE TYPES
@@ -52,116 +53,6 @@ export interface MediaResponseDto {
       updatedAt: string | null;
 }
 
-// ============================================================================
-// FILE SIZE LIMITS (mirrored from backend upload.config — MB)
-// ============================================================================
-
-export const FILE_SIZE_LIMITS_MB = {
-      IMAGE: 10,
-      VIDEO: 100,
-      AUDIO: 20,
-      DOCUMENT: 25,
-} as const;
-
-/**
- * Maximum number of files per upload batch.
- * Mirrors backend MESSAGE_LIMITS aggregate.
- */
-export const MAX_FILES_PER_SEND = 10;
-
-// ============================================================================
-// ACCEPTED MIME TYPES (mirrored from backend MIME_TO_EXTENSION)
-// ============================================================================
-
-export const ACCEPTED_MIME_TYPES = [
-      // Images
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      // Videos
-      'video/mp4',
-      'video/quicktime',
-      'video/x-msvideo',
-      'video/webm',
-      // Audio
-      'audio/mpeg',
-      'audio/wav',
-      'audio/aac',
-      'audio/x-m4a',
-      'audio/ogg',
-      // Documents
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/plain',
-] as const;
-
-/**
- * Accept string for <input type="file"> — derived from ACCEPTED_MIME_TYPES.
- */
-export const FILE_INPUT_ACCEPT = ACCEPTED_MIME_TYPES.join(',');
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-/**
- * Infer the MediaType category from a MIME string.
- * Mirrors backend `MediaUploadService.inferMediaType`.
- */
-export function inferMediaTypeFromMime(mime: string): MediaType {
-      if (mime.startsWith('image/')) return 'IMAGE';
-      if (mime.startsWith('video/')) return 'VIDEO';
-      if (mime.startsWith('audio/')) return 'AUDIO';
-      return 'DOCUMENT';
-}
-
-/**
- * Get the size limit (in bytes) for a given MIME type.
- */
-export function getFileSizeLimitBytes(mime: string): number {
-      const type = inferMediaTypeFromMime(mime);
-      const mb = FILE_SIZE_LIMITS_MB[type];
-      return mb * 1024 * 1024;
-}
-
-/**
- * Sanitize a filename to match backend regex: `^[a-zA-Z0-9._-\s()]+$`
- * Replaces disallowed characters with underscores.
- */
-export function sanitizeFileName(name: string): string {
-      return name.replace(/[^a-zA-Z0-9._\-\s()]/g, '_');
-}
-
-/**
- * Validate a single file before upload.
- * Returns null if valid, or an error message string.
- */
-export function validateFile(file: File): string | null {
-      // Check MIME type
-      if (
-            !ACCEPTED_MIME_TYPES.includes(file.type as (typeof ACCEPTED_MIME_TYPES)[number])
-      ) {
-            return `Định dạng file "${file.name}" không được hỗ trợ (${file.type || 'unknown'})`;
-      }
-
-      // Check size
-      const limitBytes = getFileSizeLimitBytes(file.type);
-      if (file.size > limitBytes) {
-            const limitMB = limitBytes / (1024 * 1024);
-            return `File "${file.name}" vượt quá giới hạn ${limitMB}MB`;
-      }
-
-      // Check empty
-      if (file.size === 0) {
-            return `File "${file.name}" rỗng (0 bytes)`;
-      }
-
-      return null;
-}
 
 // ============================================================================
 // SERVICE
@@ -177,7 +68,7 @@ export const mediaService = {
             const response = await apiClient.post<ApiResponse<InitiateUploadResponse>>(
                   API_ENDPOINTS.MEDIA.INITIATE,
                   {
-                        fileName: sanitizeFileName(dto.fileName),
+                        fileName: FileUtils.sanitizeFileName(dto.fileName),
                         mimeType: dto.mimeType,
                         fileSize: dto.fileSize,
                   },

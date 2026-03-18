@@ -15,14 +15,18 @@ import type { RecentMediaItem } from '@/types/api';
 
 interface MediaThumbnailProps {
       item: RecentMediaItem;
+      onClick?: () => void;
 }
 
-export function MediaThumbnail({ item }: MediaThumbnailProps) {
+export function MediaThumbnail({ item, onClick }: MediaThumbnailProps) {
       const isVisualMedia =
             item.messageType === 'IMAGE' || item.messageType === 'VIDEO';
 
       return (
-            <div className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer hover:opacity-80 transition-opacity relative">
+            <div
+                  className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer hover:opacity-80 transition-opacity relative"
+                  onClick={onClick}
+            >
                   {isVisualMedia && item.thumbnailUrl ? (
                         <>
                               <img

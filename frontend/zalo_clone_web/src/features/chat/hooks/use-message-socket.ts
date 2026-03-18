@@ -41,8 +41,15 @@ export function useMessageSocket(params: {
       // Approach A: Guard refs from useChatMessages to buffer messages during jump
       isJumpingRef?: React.RefObject<boolean>;
       jumpBufferRef?: React.MutableRefObject<MessageListItem[]>;
+      /**
+       * Optional factory to build the query key for ANY conversationId.
+       * Used by the receipt update handler to apply updates to the correct
+       * conversation cache, even if the user has switched to another conversation.
+       * Signature: (conversationId: string) => QueryKey
+       */
+      buildMessagesQueryKey?: (conversationId: string) => QueryKey;
 }) {
-      const { conversationId, messagesQueryKey, onTypingStatus, isJumpingRef, jumpBufferRef } = params;
+      const { conversationId, messagesQueryKey, onTypingStatus, isJumpingRef, jumpBufferRef, buildMessagesQueryKey } = params;
       const queryClient = useQueryClient();
       const { socket, isConnected } = useSocket();
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -61,6 +68,11 @@ export function useMessageSocket(params: {
       useEffect(() => {
             messagesQueryKeyRef.current = messagesQueryKey;
       }, [messagesQueryKey]);
+
+      const buildMessagesQueryKeyRef = useRef(buildMessagesQueryKey);
+      useEffect(() => {
+            buildMessagesQueryKeyRef.current = buildMessagesQueryKey;
+      }, [buildMessagesQueryKey]);
 
       const onTypingStatusRef = useRef(onTypingStatus);
       useEffect(() => {
@@ -81,10 +93,10 @@ export function useMessageSocket(params: {
 
             const onMessageNew = (payload: MessageNewPayload) => {
                   try {
-                        const currentConversationId = conversationIdRef.current;
-                        if (!currentConversationId) return;
-                        if (payload.conversationId !== currentConversationId) return;
-
+                        // Delivered ACK must fire regardless of which conversation the user is
+                        // currently viewing. Moving it BEFORE the conversationId guard ensures
+                        // the sender sees "đã nhận" as soon as the message reaches B's socket,
+                        // even when B has a different conversation open (or none at all).
                         const senderId = payload.message.senderId ?? null;
                         const myId = currentUserIdRef.current;
                         if (socket && senderId && myId && senderId !== myId) {
@@ -92,6 +104,10 @@ export function useMessageSocket(params: {
                                     messageId: payload.message.id,
                               });
                         }
+
+                        const currentConversationId = conversationIdRef.current;
+                        if (!currentConversationId) return;
+                        if (payload.conversationId !== currentConversationId) return;
 
                         // Approach A: Buffer messages during jump to avoid race condition
                         const jumping = isJumpingRefCurrent.current?.current;
@@ -139,8 +155,14 @@ export function useMessageSocket(params: {
 
             const onReceiptUpdate = (payload: ReceiptUpdatePayload) => {
                   try {
-                        // DIRECT receipt updates — update directReceipts JSONB
-                        applyReceiptUpdateToCache(queryClient, messagesQueryKeyRef.current, payload);
+                        // Bug 1 fix: apply the receipt to the conversation that OWNS the message,
+                        // not just the currently selected conversation. If the user has switched
+                        // conversations, messagesQueryKeyRef would point to the wrong cache.
+                        const factory = buildMessagesQueryKeyRef.current;
+                        const targetKey = factory && payload.conversationId
+                              ? factory(payload.conversationId)
+                              : messagesQueryKeyRef.current;
+                        applyReceiptUpdateToCache(queryClient, targetKey, payload);
                   } catch {
                         // ignore handler errors
                   }

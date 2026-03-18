@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
-import { Button, Dropdown, Empty, Spin, Tooltip } from 'antd';
+import { Button, Dropdown, Empty, Spin, Tooltip, Avatar } from 'antd';
 import type { MenuProps } from 'antd';
-import { MoreOutlined } from '@ant-design/icons';
+import { MoreOutlined, UserOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../types';
 import type { DirectReceipts } from '@/types/api';
 import { ImageAttachment, VideoAttachment, AudioAttachment, DocumentAttachment } from './attachments';
@@ -398,8 +398,14 @@ export function MessageList({
                                                             >
                                                                   <div data-message-id={msg.id} className={`flex group ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}>
                                                                         {msg.senderSide !== 'me' && (
-                                                                              <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center mr-2 text-xs flex-shrink-0">
-                                                                                    {(msg.sender?.resolvedDisplayName ?? msg.sender?.displayName)?.[0]?.toUpperCase() ?? 'U'}
+                                                                              <div className="mr-2 flex-shrink-0">
+                                                                                    <Avatar
+                                                                                          src={msg.sender?.avatarUrl}
+                                                                                          icon={<UserOutlined />}
+                                                                                          className="bg-blue-200 border border-gray-100"
+                                                                                          size={32}
+                                                                                          alt={msg.sender?.resolvedDisplayName ?? msg.sender?.displayName ?? 'User'}
+                                                                                    />
                                                                               </div>
                                                                         )}
                                                                         <div className={`px-3 py-2 rounded-lg max-w-[70%] text-[15px] shadow-sm 

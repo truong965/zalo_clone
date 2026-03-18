@@ -41,6 +41,8 @@ import { usePinConversation, useArchiveConversation, useMuteConversation } from 
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
 import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
+import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
+import { RecentFileItem } from '@/features/chat/components/recent-file-item';
 import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
 
 interface GroupInfoContentProps {
@@ -75,6 +77,9 @@ export function GroupInfoContent({
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversationId);
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
+
+      const [previewItems, setPreviewItems] = useState<typeof recentMedia>([]);
+      const [previewIndex, setPreviewIndex] = useState(-1);
 
       // async-parallel: two independent queries run in parallel
       const { data: recentMedia } = useConversationRecentMedia(conversationId, ['IMAGE', 'VIDEO'], 3);
@@ -285,8 +290,15 @@ export function GroupInfoContent({
                               ) : (
                                     <>
                                           <div className="grid grid-cols-3 gap-1">
-                                                {recentMedia.map((item) => (
-                                                      <MediaThumbnail key={item.mediaId} item={item} />
+                                                {recentMedia.map((item, idx) => (
+                                                      <MediaThumbnail
+                                                            key={item.mediaId}
+                                                            item={item}
+                                                            onClick={() => {
+                                                                  setPreviewItems(recentMedia);
+                                                                  setPreviewIndex(idx);
+                                                            }}
+                                                      />
                                                 ))}
                                           </div>
                                           <Button
@@ -313,19 +325,16 @@ export function GroupInfoContent({
                                     </div>
                               ) : (
                                     <>
-                                          <div className="flex flex-col gap-1">
+                                          <div className="flex flex-col">
                                                 {recentFiles.map((item) => (
-                                                      <div
+                                                      <RecentFileItem
                                                             key={item.mediaId}
-                                                            className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
-                                                      >
-                                                            <MediaThumbnail item={item} />
-                                                            <div className="flex-1 min-w-0">
-                                                                  <div className="text-xs text-gray-700 truncate">
-                                                                        {item.originalName}
-                                                                  </div>
-                                                            </div>
-                                                      </div>
+                                                            originalName={item.originalName}
+                                                            sizeBytes={item.size}
+                                                            createdAt={item.createdAt}
+                                                            cdnUrl={item.cdnUrl}
+                                                            mimeType={item.mimeType}
+                                                      />
                                                 ))}
                                           </div>
                                           <Button
@@ -495,6 +504,13 @@ export function GroupInfoContent({
                         onSubmit={createReminder}
                         conversationId={conversationId}
                         isSubmitting={isReminderCreating}
+                  />
+
+                  <MediaPreviewModal
+                        isOpen={previewIndex !== -1}
+                        items={previewItems ?? []}
+                        initialIndex={previewIndex}
+                        onClose={() => setPreviewIndex(-1)}
                   />
             </>
       );

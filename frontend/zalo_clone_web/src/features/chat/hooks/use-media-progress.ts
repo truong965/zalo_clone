@@ -84,8 +84,12 @@ function updateAttachmentInCache(
 
                   const existing = attachments[idx];
 
-                  // Skip if already at same status
-                  if (existing.processingStatus === processingStatus) return msg;
+                  // Bug 2 fix: don't skip if we're setting a thumbnailUrl that wasn't there.
+                  // The backend sets processingStatus=READY immediately; the worker adds
+                  // thumbnailUrl later. We must apply the thumbnail even when status stays READY.
+                  const statusUnchanged = existing.processingStatus === processingStatus;
+                  const thumbnailWillUpdate = payload.thumbnailUrl && !existing.thumbnailUrl;
+                  if (statusUnchanged && !thumbnailWillUpdate) return msg;
 
                   pageChanged = true;
 
@@ -203,7 +207,15 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                               .then((result) => {
                                     if (cancelled) return;
 
-                                    if (result.processingStatus === 'READY' || result.processingStatus === 'FAILED') {
+                                    // Bug 2 fix: for VIDEO/IMAGE, READY is only truly terminal
+                                    // once thumbnailUrl is populated. The worker adds the thumbnail
+                                    // asynchronously after the backend marks the file READY.
+                                    const needsThumb =
+                                          result.processingStatus === 'READY' &&
+                                          !result.thumbnailUrl &&
+                                          (result.mediaType === 'VIDEO' || result.mediaType === 'IMAGE');
+
+                                    if ((result.processingStatus === 'READY' && !needsThumb) || result.processingStatus === 'FAILED') {
                                           queryClientRef.current.setQueryData<MessagesInfiniteData>(
                                                 queryKeyRef.current,
                                                 (prev) => updateAttachmentInCache(prev, mediaId, {
@@ -214,6 +226,9 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                                                       cdnUrl: result.cdnUrl,
                                                 }),
                                           );
+                                          // Remove from checkedIdsRef so if it re-enters pendingMediaIds
+                                          // (shouldn't happen but defensive), polling can restart.
+                                          checkedIdsRef.current.delete(mediaId);
                                           // Terminal state reached — stop polling.
                                     } else if (retries < MAX_RETRIES) {
                                           retries++;

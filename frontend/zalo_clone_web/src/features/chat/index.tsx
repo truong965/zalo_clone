@@ -237,6 +237,14 @@ export function ChatFeature() {
       // ── Hook: typing indicator (no socket dependency → safe before useMessageSocket)
       const { typingText, onTypingStatus } = useTypingIndicator({ currentUserId });
 
+      // ── Bug 1 fix: factory to derive the correct messages query key for any conversationId.
+      // useMessageSocket uses this to apply receipt updates to the right conversation cache,
+      // even when the user has switched away from the conversation that owns the message.
+      const buildMessagesQueryKey = useCallback(
+            (cid: string) => ['messages', { conversationId: cid, limit: 50 }] as const,
+            [],
+      );
+
       // ── Hook: message socket (single call with typing wired in) ──────────
       const {
             isConnected: isMsgSocketConnected,
@@ -250,6 +258,7 @@ export function ChatFeature() {
             isJumpingRef,
             jumpBufferRef,
             onTypingStatus,
+            buildMessagesQueryKey,
       });
 
       // ── Hook: typing change handler (needs socket emitters → after useMessageSocket)
@@ -286,7 +295,17 @@ export function ChatFeature() {
             for (const msg of messages) {
                   if (!msg.mediaAttachments) continue;
                   for (const a of msg.mediaAttachments) {
-                        if (!DONE_STATUSES.has(a.processingStatus)) {
+                        const isPending = !DONE_STATUSES.has(a.processingStatus);
+                        // Bug 2 fix: also keep watching READY videos/images that still lack a thumbnail.
+                        // The backend marks processingStatus=READY immediately after upload, but the
+                        // media worker generates thumbnails asynchronously. Without this, pendingMediaIds
+                        // excludes these attachments and no socket listener is registered, so the
+                        // thumbnail update from the worker is never applied (requires F5).
+                        const isReadyWithoutThumb =
+                              a.processingStatus === 'READY' &&
+                              !a.thumbnailUrl &&
+                              (a.mediaType === 'VIDEO' || a.mediaType === 'IMAGE');
+                        if (isPending || isReadyWithoutThumb) {
                               ids.push(a.id);
                         }
                   }

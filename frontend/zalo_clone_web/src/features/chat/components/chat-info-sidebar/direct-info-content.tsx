@@ -24,6 +24,8 @@ import { useReminders, ReminderList, CreateReminderModal } from '@/features/remi
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
 import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
+import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
+import { RecentFileItem } from '@/features/chat/components/recent-file-item';
 
 const { Title } = Typography;
 
@@ -44,6 +46,9 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversation.id);
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
+
+      const [previewItems, setPreviewItems] = useState<typeof recentMedia>([]);
+      const [previewIndex, setPreviewIndex] = useState(-1);
 
       // async-parallel: two independent queries run in parallel
       const { data: recentMedia } = useConversationRecentMedia(conversation.id, ['IMAGE', 'VIDEO'], 3);
@@ -74,8 +79,15 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                               ) : (
                                     <>
                                           <div className="grid grid-cols-3 gap-1">
-                                                {recentMedia.map((item) => (
-                                                      <MediaThumbnail key={item.mediaId} item={item} />
+                                                {recentMedia.map((item, idx) => (
+                                                      <MediaThumbnail
+                                                            key={item.mediaId}
+                                                            item={item}
+                                                            onClick={() => {
+                                                                  setPreviewItems(recentMedia);
+                                                                  setPreviewIndex(idx);
+                                                            }}
+                                                      />
                                                 ))}
                                           </div>
                                           <Button
@@ -102,19 +114,16 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                     </div>
                               ) : (
                                     <>
-                                          <div className="flex flex-col gap-1">
+                                          <div className="flex flex-col">
                                                 {recentFiles.map((item) => (
-                                                      <div
+                                                      <RecentFileItem
                                                             key={item.mediaId}
-                                                            className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer"
-                                                      >
-                                                            <MediaThumbnail item={item} />
-                                                            <div className="flex-1 min-w-0">
-                                                                  <div className="text-xs text-gray-700 truncate">
-                                                                        {item.originalName}
-                                                                  </div>
-                                                            </div>
-                                                      </div>
+                                                            originalName={item.originalName}
+                                                            sizeBytes={item.size}
+                                                            createdAt={item.createdAt}
+                                                            cdnUrl={item.cdnUrl}
+                                                            mimeType={item.mimeType}
+                                                      />
                                                 ))}
                                           </div>
                                           <Button
@@ -342,6 +351,13 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                         onSubmit={createReminder}
                         conversationId={conversation.id}
                         isSubmitting={isReminderCreating}
+                  />
+
+                  <MediaPreviewModal
+                        isOpen={previewIndex !== -1}
+                        items={previewItems ?? []}
+                        initialIndex={previewIndex}
+                        onClose={() => setPreviewIndex(-1)}
                   />
             </>
       );
