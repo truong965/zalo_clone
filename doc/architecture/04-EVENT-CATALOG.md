@@ -5,7 +5,7 @@
 > worker process (see `docker-compose.workers.yml`) and are not deployed in the
 > current single-instance production setup.
 >
-> **Last updated:** 2026-03-12 — manually updated after P0–P4 event catalog
+> **Last updated:** 2026-03-17 — updated after Phase 4 Stage 7.6/7.7
 > review. See `EVENT-CATALOG-REVIEW-REPORT.md` for full audit details.
 
 ---
@@ -28,9 +28,9 @@ Service / Gateway
 * **Direct emit** — some low-level or internal events (`user.logged_out`,
   Socket lifecycle, media, reminder) bypass the publisher and call
   `eventEmitter.emit()` directly.
-* **Direct service call** — `SystemMessageBroadcasterService` replaces the
-  former `system-message.broadcast` event. Callers invoke the service method
-  directly instead of emitting an event (see R3 in review report).
+* **Internal command port call** — cross-domain callers request conversation
+  system-message broadcast via `CONVERSATION_SYSTEM_MESSAGE_PORT`.
+  The owner-side adapter delegates to `SystemMessageBroadcasterService`.
 
 ---
 
@@ -55,6 +55,26 @@ Service / Gateway
 | | | | Common → `DomainEventPersistenceListener` | Persist to `domain_events` audit table |
 | `user.logged_out` | ⚡ | Auth → `AuthService` | *(no active listener)* | — |
 | `auth.security.revoked` | ⚡ | Admin → `AdminUsersService` | Auth → `SecurityEventHandler` | Disconnect all sockets, invalidate tokens, force logout |
+
+---
+
+## 0 — Internal Typed Contract Events (Phase 4 baseline)
+
+Source of truth for typed internal transport/search events:
+- `backend/zalo_backend/src/common/contracts/events/event-names.ts`
+- `backend/zalo_backend/src/common/contracts/events/event-contracts.ts`
+
+Currently typed in contract map:
+- `socket.outbound`
+- `user.socket.connected`
+- `user.socket.disconnected`
+- `search.internal.newMatch`
+- `search.internal.resultRemoved`
+
+Notes:
+- This is a scoped subset introduced in Phase 4 Stage 7.1.
+- Domain-event catalog entries below remain the runtime reference for broader
+  business events.
 
 ---
 
@@ -136,10 +156,9 @@ Service / Gateway
 | `message.deleted` | 📤 | Message → `MessageService` | Search → `SearchEventListener` | Invalidate search cache, emit `search:resultRemoved` to active subscribers |
 | | | | Common → `DomainEventPersistenceListener` | Persist to `domain_events` audit table |
 
-> **Removed:** `system-message.broadcast` — replaced by direct
-> `SystemMessageBroadcasterService.broadcast()` calls (see R3 in review report).
-> Callers: `ConversationRealtimeService`, `ConversationEventHandler`,
-> `ReminderSystemMessageListener`, `CallMessageListener`.
+> **Removed:** `system-message.broadcast` event name.
+> Cross-domain callers now use `CONVERSATION_SYSTEM_MESSAGE_PORT` command port.
+> Owner-side implementation delegates to `SystemMessageBroadcasterService`.
 
 ---
 
@@ -176,7 +195,7 @@ Service / Gateway
 
 | Event Name | Type | Emitter (Module → Service) | Listener (Module → Class) | Action |
 |---|---|---|---|---|
-| `call.ended` | 📤 | Call → `CallHistoryService` | Message → `CallMessageListener` | Create SYSTEM message in conversation for call log + broadcast via `SystemMessageBroadcasterService` |
+| `call.ended` | 📤 | Call → `CallHistoryService` | Message → `CallMessageListener` | Create SYSTEM message in conversation for call log + broadcast via `CONVERSATION_SYSTEM_MESSAGE_PORT` |
 | | | | Conversation → `CallConversationListener` | Update `conversation.lastMessageAt` after call ends |
 | | | | Notifications → `CallNotificationListener` | Send FCM push for missed/no-answer calls (per-receiver, group-aware) |
 | | | | Socket → `CallEndedSocketListener` | Emit `call:ended` socket event to all participants |
@@ -212,8 +231,8 @@ Service / Gateway
 
 | Event Name | Type | Emitter (Module → Service) | Listener (Module → Class) | Action |
 |---|---|---|---|---|
-| `reminder.created` | ⚡ | Reminder → `ReminderService` | Reminder → `ReminderSystemMessageListener` | Create SYSTEM message in conversation + broadcast via `SystemMessageBroadcasterService` |
-| `reminder.triggered` | ⚡ | Reminder → `ReminderSchedulerService` | Reminder → `ReminderSocketListener` | Send Socket.IO reminder notification to conversation members |
+| `reminder.created` | ⚡ | Reminder → `ReminderService` | Reminder → `ReminderSystemMessageListener` | Create SYSTEM message in conversation + broadcast via `CONVERSATION_SYSTEM_MESSAGE_PORT` |
+| `reminder.triggered` | ⚡ | Reminder → `ReminderSchedulerService` | Reminder → `ReminderSocketListener` | Emit `socket.outbound` reminder notification (target `userId`/`userIds`) |
 | `reminder.deleted` | ⚡ | Reminder → `ReminderService` | *(no active listener)* | — |
 
 ---

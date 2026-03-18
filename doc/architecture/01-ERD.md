@@ -165,6 +165,7 @@ PASSWORD_CHANGED PASSWORD_CHANGED
 SUSPICIOUS_ACTIVITY SUSPICIOUS_ACTIVITY
 TOKEN_ROTATION TOKEN_ROTATION
 ADMIN_ACTION ADMIN_ACTION
+NEW_LOGIN_OVERRIDE NEW_LOGIN_OVERRIDE
         }
     
 
@@ -215,6 +216,13 @@ CONVERSATION_MUTED CONVERSATION_MUTED
 MANUAL MANUAL
         }
     
+
+
+        login_method {
+            PASSWORD PASSWORD
+QR_CODE QR_CODE
+        }
+    
   "users" {
     String id "🗝️"
     String phone_number 
@@ -244,6 +252,7 @@ MANUAL MANUAL
     String id "🗝️"
     String user_id 
     String refresh_token_hash 
+    LoginMethod login_method 
     String device_id 
     String device_name "❓"
     DeviceType device_type "❓"
@@ -573,6 +582,7 @@ MANUAL MANUAL
     "users" |o--|o "Gender" : "enum:gender"
     "users" |o--|| "UserStatus" : "enum:status"
     "users" }o--|o roles : "role"
+    "user_tokens" |o--|| "LoginMethod" : "enum:login_method"
     "user_tokens" |o--|o "DeviceType" : "enum:device_type"
     "user_tokens" |o--|o "Platform" : "enum:platform"
     "user_tokens" |o--|o "TokenRevocationReason" : "enum:revoked_reason"
@@ -586,44 +596,24 @@ MANUAL MANUAL
     "privacy_settings" |o--|| "PrivacyLevel" : "enum:who_can_message_me"
     "privacy_settings" |o--|| "PrivacyLevel" : "enum:who_can_call_me"
     "friendships" |o--|| "FriendshipStatus" : "enum:status"
-    "friendships" }o--|| users : "user1"
-    "friendships" }o--|| users : "user2"
-    "friendships" }o--|| users : "requester"
-    "friendships" }o--|o users : "actionUser"
-    "blocks" }o--|| users : "blocker"
-    "blocks" }o--|| users : "blocked"
     "user_contacts" |o--|| "ContactSource" : "enum:source"
-    "user_contacts" }o--|| users : "owner"
-    "user_contacts" }o--|| users : "contactUser"
     "conversations" |o--|| "ConversationType" : "enum:type"
     "conversation_members" |o--|| "MemberRole" : "enum:role"
     "conversation_members" |o--|| "MemberStatus" : "enum:status"
     "conversation_members" }o--|| conversations : "conversation"
-    "conversation_members" }o--|| users : "user"
     "group_join_requests" |o--|| "JoinRequestStatus" : "enum:status"
     "group_join_requests" }o--|| conversations : "conversation"
-    "group_join_requests" }o--|| users : "user"
-    "group_join_requests" }o--|o users : "reviewer"
-    "group_join_requests" }o--|o users : "inviter"
     "messages" |o--|| "MessageType" : "enum:type"
     "messages" }o--|| conversations : "conversation"
-    "messages" }o--|o users : "sender"
-    "messages" }o--|o users : "deletedBy"
     "messages" |o--|o messages : "parentMessage"
     "media_attachments" |o--|| "MediaType" : "enum:media_type"
     "media_attachments" |o--|| "MediaProcessingStatus" : "enum:processing_status"
-    "media_attachments" }o--|o messages : "message_id"
-    "media_attachments" }o--|| users : "uploader"
     "call_history" |o--|| "CallType" : "enum:call_type"
     "call_history" |o--|| "CallProvider" : "enum:provider"
     "call_history" |o--|| "CallStatus" : "enum:status"
-    "call_history" }o--|| users : "initiator"
-    "call_history" }o--|o conversations : "conversation"
     "call_participants" |o--|| "CallParticipantRole" : "enum:role"
     "call_participants" |o--|| "CallParticipantStatus" : "enum:status"
     "call_participants" }o--|| call_history : "callHistory"
-    "call_participants" }o--|| users : "user"
-    "call_participants" }o--|o users : "kicker"
     "domain_events" |o--|| "EventType" : "enum:event_type"
     "processed_events" |o--|| "EventType" : "enum:event_type"
     "search_queries" }o--|| users : "clicked_result_id"
