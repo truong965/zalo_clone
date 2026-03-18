@@ -6,6 +6,7 @@ import type {
       RegisterPayload,
       UserProfile,
 } from '@/types/auth';
+import type { Conversation, ConversationListResponse } from '@/types/conversation';
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
@@ -260,8 +261,28 @@ export const mobileApi = {
             return apiRequest<UserProfile>('/api/v1/auth/me', { method: 'GET' }, accessToken);
       },
 
-      getConversations(accessToken: string) {
-            return apiRequest<unknown>('/api/v1/conversations', { method: 'GET' }, accessToken);
+      getConversations(accessToken: string, params: { cursor?: string; limit?: number } = {}) {
+            const query = new URLSearchParams();
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            
+            const queryString = query.toString();
+            const path = `/api/v1/conversations${queryString ? `?${queryString}` : ''}`;
+            
+            return apiRequest<ConversationListResponse>(path, { method: 'GET' }, accessToken);
+      },
+      
+      getConversation(id: string, accessToken: string) {
+            return apiRequest<Conversation>(`/api/v1/conversations/${id}`, { method: 'GET' }, accessToken);
+      },
+
+      togglePin(conversationId: string, accessToken: string, isPinned: boolean) {
+            const method = isPinned ? 'POST' : 'DELETE';
+            return apiRequest<void>(`/api/v1/conversations/${conversationId}/pin`, { method }, accessToken);
+      },
+
+      toggleMute(conversationId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/conversations/${conversationId}/mute`, { method: 'PATCH' }, accessToken);
       },
 
       getFriends(accessToken: string) {
@@ -315,6 +336,63 @@ export const mobileApi = {
                         method: 'POST',
                         body: JSON.stringify({ qrSessionId }),
                   },
+                  accessToken,
+            );
+      },
+
+      getMessages(conversationId: string, accessToken: string, cursor?: string, limit: number = 20) {
+            return apiRequest<{ data: any[]; nextCursor?: string; hasMore: boolean }>(
+                  `/api/v1/messages?conversationId=${conversationId}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
+                  { method: 'GET' },
+                  accessToken,
+            );
+      },
+
+      sendMessage(data: { conversationId: string; content?: string; type: string; clientMessageId: string; mediaIds?: string[] }, accessToken: string) {
+            return apiRequest<any>(
+                  '/api/v1/messages',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify(data),
+                  },
+                  accessToken,
+            );
+      },
+
+      updateConversation(id: string, accessToken: string, data: { name?: string; avatarUrl?: string }) {
+            return apiRequest<Conversation>(
+                  `/api/v1/conversations/${id}`,
+                  {
+                        method: 'PATCH',
+                        body: JSON.stringify(data),
+                  },
+                  accessToken,
+            );
+      },
+
+      addMembers(id: string, accessToken: string, memberIds: string[]) {
+            return apiRequest<void>(
+                  `/api/v1/conversations/${id}/members`,
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ memberIds }),
+                  },
+                  accessToken,
+            );
+      },
+
+      leaveGroup(id: string, accessToken: string) {
+            return apiRequest<void>(
+                  `/api/v1/conversations/${id}/leave`,
+                  { method: 'POST' },
+                  accessToken,
+            );
+      },
+
+      dissolveGroup(id: string, accessToken: string) {
+            return apiRequest<void>(
+                  `/api/v1/conversations/${id}`,
+                  { method: 'DELETE' },
                   accessToken,
             );
       },

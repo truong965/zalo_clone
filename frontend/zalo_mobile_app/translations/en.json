@@ -41,8 +41,8 @@
             "profile": "Profile"
       },
       "chats": {
-            "searchPlaceholder": "Search conversations",
-            "empty": "No conversations yet.",
+            "searchPlaceholder": "Search",
+            "empty": "No result",
             "directMessage": "Direct message",
             "conversation": "Conversation",
             "noMessage": "No messages yet"
@@ -101,43 +101,5 @@
       "modal": {
             "title": "This is a modal",
             "backHome": "Go to home screen"
-      },
-      "explore": {
-            "title": "Explore",
-            "intro": "This app includes example code to help you get started.",
-            "learnMore": "Learn more",
-            "sections": {
-                  "fileRouting": {
-                        "title": "File-based routing",
-                        "descriptionPrefix": "This app has two screens:",
-                        "and": "and",
-                        "layoutPrefix": "The layout file in",
-                        "layoutSuffix": "sets up the tab navigator."
-                  },
-                  "crossPlatform": {
-                        "title": "Android, iOS, and web support",
-                        "descriptionPrefix": "You can open this project on Android, iOS, and the web. To open the web version, press",
-                        "descriptionSuffix": "in the terminal running this project."
-                  },
-                  "images": {
-                        "title": "Images",
-                        "descriptionPrefix": "For static images, you can use the",
-                        "and": "and",
-                        "descriptionSuffix": "suffixes to provide files for different screen densities"
-                  },
-                  "theme": {
-                        "title": "Light and dark mode components",
-                        "descriptionPrefix": "This template has light and dark mode support. The",
-                        "descriptionSuffix": "hook lets you inspect what the user's current color scheme is, and so you can adjust UI colors accordingly."
-                  },
-                  "animation": {
-                        "title": "Animations",
-                        "descriptionPrefix": "This template includes an example of an animated component. The",
-                        "descriptionMiddle": "component uses the powerful",
-                        "descriptionSuffix": "library to create a waving hand animation.",
-                        "iosPrefix": "The",
-                        "iosSuffix": "component provides a parallax effect for the header image."
-                  }
-            }
       }
 }

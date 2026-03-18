@@ -1,19 +1,20 @@
-import { Redirect, Tabs } from 'expo-router';
-import React from 'react';
-import type { Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Redirect, Tabs } from 'expo-router';
+import type { Href } from 'expo-router';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Appbar, Searchbar } from 'react-native-paper';
 import { HapticTab } from '@/components/haptic-tab';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/providers/auth-provider';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const { isAuthenticated, isLoading } = useAuth();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const loginHref = '/login' as Href;
+  const [searchQuery, setSearchQuery] = useState('');
 
   if (isLoading) {
     return null;
@@ -23,43 +24,113 @@ export default function TabLayout() {
     return <Redirect href={loginHref} />;
   }
 
+  const renderHeaderActions = (routeName: string) => {
+    switch (routeName) {
+      case 'index':
+        return (
+          <>
+            <Appbar.Action
+              icon={({ size, color }) => <Ionicons name="qr-code-outline" size={size} color={color} />}
+              onPress={() => { }}
+            />
+            <Appbar.Action
+              icon={({ size, color }) => <Ionicons name="add" size={size} color={color} />}
+              onPress={() => { }}
+            />
+          </>
+        );
+      case 'contacts':
+        return (
+          <Appbar.Action
+            icon={({ size, color }) => <Ionicons name="person-add-outline" size={size} color={color} />}
+            onPress={() => { }}
+          />
+        );
+      case 'profile':
+        return (
+          <Appbar.Action
+            icon={({ size, color }) => <Ionicons name="settings-outline" size={size} color={color} />}
+            onPress={() => { }}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabs.chats'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-ellipses" size={size} color={color} />
+    <View className="flex-1 bg-background">
+      <Tabs
+        screenOptions={({ route }) => ({
+          headerShown: true,
+          header: () => (
+            <Appbar.Header
+              style={{
+                paddingTop: insets.top,
+                paddingBottom: 30,
+                paddingHorizontal: 12,
+                backgroundColor: '#1E88E5'
+              }}
+              statusBarHeight={insets.top}
+            >
+              <View className="flex-1 flex-row items-center justify-between">
+                <View className="flex-1 mr-2">
+                  <Searchbar
+                    placeholder={t('chats.searchPlaceholder')}
+                    onChangeText={setSearchQuery}
+                    value={searchQuery}
+                    style={{ backgroundColor: 'rgba(255,255,255,0.2)', height: 40 }}
+                    inputStyle={{ minHeight: 0, fontSize: 14, color: '#fff' }}
+                    placeholderTextColor="rgba(255,255,255,0.6)"
+                    iconColor="rgba(255,255,255,0.7)"
+                  />
+                </View>
+                <View className="flex-row items-center">
+                  {renderHeaderActions(route.name)}
+                </View>
+              </View>
+            </Appbar.Header>
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="contacts"
-        options={{
-          title: t('tabs.contacts'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="calls"
-        options={{
-          title: t('tabs.calls'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="call" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: t('tabs.profile'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
-        }}
-      />
-    </Tabs>
+          tabBarButton: HapticTab,
+          tabBarShowLabel: false,
+          tabBarStyle: {
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            paddingVertical: 0,
+            paddingHorizontal: 0,
+          },
+        })}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: t('tabs.chats'),
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="chatbubble-ellipses" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="contacts"
+          options={{
+            title: t('tabs.contacts'),
+            tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="calls"
+          options={{
+            title: t('tabs.calls'),
+            tabBarIcon: ({ color, size }) => <Ionicons name="call" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: t('tabs.profile'),
+            tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          }}
+        />
+      </Tabs>
+    </View>
   );
 }

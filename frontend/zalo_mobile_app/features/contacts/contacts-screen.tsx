@@ -63,7 +63,6 @@ export function ContactsScreen() {
 
       return (
             <View className="flex-1 bg-background p-4">
-                  <Text className="mb-3 text-2xl font-bold text-foreground">{t('tabs.contacts')}</Text>
                   <FlashList
                         data={items}
                         keyExtractor={(item, index) => item.id || String(index)}

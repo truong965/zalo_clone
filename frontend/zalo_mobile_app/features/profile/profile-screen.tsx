@@ -107,8 +107,6 @@ export function ProfileScreen() {
 
       return (
             <ScrollView contentContainerClassName="flex-grow gap-3 bg-background p-4">
-                  <Text className="text-2xl font-bold text-foreground">{t('profile.title')}</Text>
-
                   {isRefreshing ? (
                         <ActivityIndicator />
                   ) : (

@@ -1,133 +1,119 @@
 import { FlashList } from '@shopify/flash-list';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, RefreshControl, Text, TextInput, View } from 'react-native';
-
-import { normalizeList } from '@/lib/api/normalize-list';
-import { useAuth } from '@/providers/auth-provider';
-import { mobileApi } from '@/services/api';
-
-type ChatItem = {
-      id: string;
-      name?: string;
-      type?: string;
-      unreadCount?: number;
-      lastMessage?: {
-            content?: string;
-            createdAt?: string;
-      };
-      updatedAt?: string;
-      members?: { displayName?: string }[];
-};
-
-function deriveConversationName(item: ChatItem, directMessageText: string, conversationText: string): string {
-      if (item.name && item.name.trim()) {
-            return item.name;
-      }
-
-      if (item.type === 'DIRECT' && item.members?.length) {
-            return item.members[0]?.displayName || directMessageText;
-      }
-
-      return conversationText;
-}
+import { ActivityIndicator, RefreshControl, View, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { ConversationItem } from './components/conversation-item';
+import { ConversationActionSheet } from './components/conversation-action-sheet';
+import { useConversationsList } from './hooks/use-conversations-list';
+import { useConversationActions } from './hooks/use-conversation-actions';
+import { useConversationRealtime } from './hooks/use-conversation-realtime';
+import { Conversation } from '@/types/conversation';
 
 export function ChatsScreen() {
-      const { accessToken } = useAuth();
-      const { t } = useTranslation();
+  const { t } = useTranslation();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [isActionSheetVisible, setIsActionSheetVisible] = useState(false);
 
-      const [items, setItems] = useState<ChatItem[]>([]);
-      const [search, setSearch] = useState('');
-      const [isLoading, setIsLoading] = useState(true);
-      const [isRefreshing, setIsRefreshing] = useState(false);
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage
+  } = useConversationsList();
 
-      const loadData = useCallback(async () => {
-            if (!accessToken) {
-                  return;
-            }
+  const { pinConversation, muteConversation } = useConversationActions();
+  useConversationRealtime();
 
-            const response = await mobileApi.getConversations(accessToken);
-            setItems(normalizeList<ChatItem>(response));
-      }, [accessToken]);
+  const flattenedData = useMemo(() => {
+    return data?.pages.flatMap((page) => page.data) ?? [];
+  }, [data]);
 
-      useFocusEffect(
-            useCallback(() => {
-                  setIsLoading(true);
-                  loadData()
-                        .catch(() => setItems([]))
-                        .finally(() => setIsLoading(false));
-            }, [loadData]),
-      );
+  const handlePress = useCallback((id: string) => {
+    router.push({
+      pathname: `/chat/${id}` as any,
+    });
+  }, [router]);
 
-      const onRefresh = async () => {
-            setIsRefreshing(true);
-            try {
-                  await loadData();
-            } finally {
-                  setIsRefreshing(false);
-            }
-      };
+  const handleLongPress = useCallback((id: string) => {
+    const conv = flattenedData.find(c => c.id === id);
+    if (conv) {
+      setSelectedConversation(conv);
+      setIsActionSheetVisible(true);
+    }
+  }, [flattenedData]);
 
-      const filteredItems = useMemo(() => {
-            const keyword = search.trim().toLowerCase();
+  const handlePin = useCallback((id: string, isPinned: boolean) => {
+    pinConversation({ id, isPinned });
+  }, [pinConversation]);
 
-            if (!keyword) {
-                  return items;
-            }
+  const handleMute = useCallback((id: string) => {
+    muteConversation(id);
+  }, [muteConversation]);
 
-            return items.filter((item) => {
-                  const name = deriveConversationName(item, t('chats.directMessage'), t('chats.conversation')).toLowerCase();
-                  const lastMessage = item.lastMessage?.content?.toLowerCase() ?? '';
-                  return name.includes(keyword) || lastMessage.includes(keyword);
-            });
-      }, [items, search, t]);
+  if (isLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
-      if (isLoading) {
-            return (
-                  <View className="flex-1 items-center justify-center">
-                        <ActivityIndicator />
+  return (
+    <View className="flex-1 bg-background" style={{ paddingBottom: insets.bottom, paddingTop: 8 }}>
+      {flattenedData.length === 0 && !isLoading ? (
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-muted-foreground text-lg">{t('chats.empty')}</Text>
+        </View>
+      ) : (
+        (() => {
+          const AnyFlashList = FlashList as any;
+          return (
+            <AnyFlashList
+              data={flattenedData}
+              keyExtractor={(item: Conversation) => item.id}
+              renderItem={({ item }: { item: Conversation }) => (
+                <ConversationItem
+                  conversation={item}
+                  onPress={handlePress}
+                  onLongPress={handleLongPress}
+                />
+              )}
+              onEndReached={() => {
+                if (hasNextPage && !isFetchingNextPage) {
+                  fetchNextPage();
+                }
+              }}
+              onEndReachedThreshold={0.5}
+              refreshControl={
+                <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+              }
+              ListFooterComponent={
+                isFetchingNextPage ? (
+                  <View className="py-4">
+                    <ActivityIndicator />
                   </View>
-            );
-      }
+                ) : null
+              }
+              estimatedItemSize={88}
+            />
+          );
+        })()
+      )}
 
-      return (
-            <View className="flex-1 bg-background p-4">
-                  <Text className="mb-3 text-2xl font-bold text-foreground">{t('tabs.chats')}</Text>
-
-                  <TextInput
-                        value={search}
-                        onChangeText={setSearch}
-                        placeholder={t('chats.searchPlaceholder')}
-                        className="mb-3 rounded-xl border border-border bg-secondary px-3 py-2.5 text-foreground"
-                  />
-
-                  <FlashList
-                        data={filteredItems}
-                        keyExtractor={(item, index) => item.id || String(index)}
-                        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-                        ListEmptyComponent={<Text className="mt-10 text-center text-muted">{t('chats.empty')}</Text>}
-                        renderItem={({ item }) => {
-                              const name = deriveConversationName(item, t('chats.directMessage'), t('chats.conversation'));
-                              const preview = item.lastMessage?.content ?? t('chats.noMessage');
-
-                              return (
-                                    <View className="mb-2.5 rounded-xl border border-border bg-secondary p-3">
-                                          <View className="flex-row items-center justify-between">
-                                                <Text className="mr-2 flex-1 font-bold text-foreground">{name}</Text>
-                                                {item.unreadCount ? (
-                                                      <View className="h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5">
-                                                            <Text className="text-xs font-bold text-primary-foreground">{item.unreadCount}</Text>
-                                                      </View>
-                                                ) : null}
-                                          </View>
-                                          <Text className="mt-1.5 text-muted" numberOfLines={1}>
-                                                {preview}
-                                          </Text>
-                                    </View>
-                              );
-                        }}
-                  />
-            </View>
-      );
+      <ConversationActionSheet
+        visible={isActionSheetVisible}
+        conversation={selectedConversation}
+        onDismiss={() => setIsActionSheetVisible(false)}
+        onPin={handlePin}
+        onMute={handleMute}
+      />
+    </View>
+  );
 }

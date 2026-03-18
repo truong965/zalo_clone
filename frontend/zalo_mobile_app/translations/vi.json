@@ -41,11 +41,17 @@
             "profile": "Cá nhân"
       },
       "chats": {
-            "searchPlaceholder": "Tìm cuộc trò chuyện",
-            "empty": "Chưa có cuộc trò chuyện.",
+            "searchPlaceholder": "Tìm kiếm",
+            "empty": "không có kết quả",
             "directMessage": "Tin nhắn cá nhân",
             "conversation": "Cuộc trò chuyện",
-            "noMessage": "Chưa có tin nhắn"
+            "noMessage": "Chưa có tin nhắn",
+            "pin": "Ghim hội thoại",
+            "unpin": "Bỏ ghim",
+            "mute": "Tắt thông báo",
+            "unmute": "Bật thông báo",
+            "pinSuccess": "Đã cập nhật trạng thái ghim",
+            "muteSuccess": "Đã cập nhật trạng thái thông báo"
       },
       "contacts": {
             "empty": "Chưa có danh bạ.",
@@ -101,43 +107,5 @@
       "modal": {
             "title": "Đây là màn hình modal",
             "backHome": "Về màn hình chính"
-      },
-      "explore": {
-            "title": "Khám phá",
-            "intro": "Ứng dụng này bao gồm mã ví dụ để giúp bạn bắt đầu.",
-            "learnMore": "Tìm hiểu thêm",
-            "sections": {
-                  "fileRouting": {
-                        "title": "Điều hướng theo tệp",
-                        "descriptionPrefix": "Ứng dụng này có hai màn hình:",
-                        "and": "và",
-                        "layoutPrefix": "Tệp layout trong",
-                        "layoutSuffix": "thiết lập tab navigator."
-                  },
-                  "crossPlatform": {
-                        "title": "Hỗ trợ Android, iOS và web",
-                        "descriptionPrefix": "Bạn có thể mở dự án này trên Android, iOS và web. Để mở bản web, nhấn",
-                        "descriptionSuffix": "trong terminal đang chạy dự án."
-                  },
-                  "images": {
-                        "title": "Hình ảnh",
-                        "descriptionPrefix": "Với ảnh tĩnh, bạn có thể dùng hậu tố",
-                        "and": "và",
-                        "descriptionSuffix": "để cung cấp tệp cho các mật độ màn hình khác nhau"
-                  },
-                  "theme": {
-                        "title": "Thành phần sáng và tối",
-                        "descriptionPrefix": "Template này hỗ trợ giao diện sáng và tối. Hook",
-                        "descriptionSuffix": "giúp bạn biết chế độ màu hiện tại của người dùng để điều chỉnh giao diện phù hợp."
-                  },
-                  "animation": {
-                        "title": "Hiệu ứng động",
-                        "descriptionPrefix": "Template này có ví dụ về thành phần có animation. Thành phần",
-                        "descriptionMiddle": "sử dụng thư viện mạnh mẽ",
-                        "descriptionSuffix": "để tạo animation vẫy tay.",
-                        "iosPrefix": "Thành phần",
-                        "iosSuffix": "cung cấp hiệu ứng parallax cho ảnh header."
-                  }
-            }
       }
 }
