@@ -15,6 +15,7 @@ import { useSendFriendRequest, useCancelRequest, useAcceptRequest } from '../api
 import type { ContactSearchResult } from '@/features/search/types';
 import type { User } from '@/types/api';
 import { FriendRequestModal } from './friend-request-modal';
+import { useTranslation } from 'react-i18next';
 
 interface FriendshipSearchModalProps {
 
@@ -30,6 +31,7 @@ export function FriendshipSearchModal({
       onClose,
       onNavigateToConversation,
 }: FriendshipSearchModalProps) {
+      const { t } = useTranslation();
       const {
             keyword,
             results,
@@ -69,13 +71,13 @@ export function FriendshipSearchModal({
 
       const handleSearch = useCallback(() => {
             if (!normalizedInput) {
-                  setValidationError('Vui lòng nhập số điện thoại.');
+                  setValidationError(t('contacts.search.invalidEmpty'));
                   resetSearch();
                   return;
             }
 
             if (!PHONE_PATTERN.test(normalizedInput)) {
-                  setValidationError('Số điện thoại phải đủ 10 số hoặc +84xxxxxxxxx (không dấu cách).');
+                  setValidationError(t('contacts.search.invalidFormat'));
                   resetSearch();
                   return;
             }
@@ -142,8 +144,8 @@ export function FriendshipSearchModal({
             sendRequest.mutate(contact.id, {
                   onSuccess: () => {
                         notification.success({
-                              message: 'Đã gửi lời mời kết bạn',
-                              description: `Lời mời kết bạn đã được gửi đến ${effectiveDisplayName}`,
+                              message: t('contacts.search.sentSuccess'),
+                              description: t('contacts.search.sentDesc', { name: effectiveDisplayName }),
                         });
                         // Re-search to refresh relationship status
                         triggerSearch(normalizedInput);
@@ -154,14 +156,14 @@ export function FriendshipSearchModal({
                         const apiErr = ApiError.from(error);
                         if (apiErr.status === 409) {
                               notification.warning({
-                                    message: 'Đã gửi lời mời trước đó',
-                                    description: apiErr.message || 'Bạn đã gửi lời mời kết bạn cho người này rồi.',
+                                    message: t('contacts.search.duplicateTitle'),
+                                    description: apiErr.message || t('contacts.search.duplicateDesc'),
                               });
                               // Re-search to update status
                               triggerSearch(normalizedInput);
                               onClose();
                         } else {
-                              const msg = apiErr.message || 'Không thể gửi lời mời kết bạn';
+                              const msg = apiErr.message || t('contacts.search.cannotSend');
                               notification.error({ message: msg });
                         }
                   },
@@ -171,32 +173,32 @@ export function FriendshipSearchModal({
       const handleCancelRequest = useCallback(() => {
             if (!contact) return;
             if (!contact.pendingRequestId) {
-                  notification.warning({ message: 'Thiếu mã lời mời để thu hồi' });
+                  notification.warning({ message: t('contacts.search.missingId') });
                   return;
             }
             cancelReq.mutate(contact.pendingRequestId, {
                   onSuccess: () => {
-                        notification.success({ message: 'Đã thu hồi lời mời kết bạn' });
+                        notification.success({ message: t('contacts.search.recallSuccess') });
                         triggerSearch(normalizedInput);
                         onClose();
                   },
-                  onError: () => notification.error({ message: 'Không thể thu hồi lời mời' }),
+                  onError: () => notification.error({ message: t('contacts.search.recallFail') }),
             });
       }, [contact, cancelReq, triggerSearch, normalizedInput]);
 
       const handleAcceptRequest = useCallback(() => {
             if (!contact) return;
             if (!contact.pendingRequestId) {
-                  notification.warning({ message: 'Thiếu mã lời mời để chấp nhận' });
+                  notification.warning({ message: t('contacts.search.missingAcceptId') });
                   return;
             }
             acceptReq.mutate(contact.pendingRequestId, {
                   onSuccess: () => {
-                        notification.success({ message: 'Đã chấp nhận lời mời kết bạn' });
+                        notification.success({ message: t('contacts.search.acceptSuccess') });
                         triggerSearch(normalizedInput);
                         onClose();
                   },
-                  onError: () => notification.error({ message: 'Không thể chấp nhận lời mời' }),
+                  onError: () => notification.error({ message: t('contacts.search.acceptFail') }),
             });
       }, [acceptReq, contact, triggerSearch, normalizedInput]);
 
@@ -211,7 +213,7 @@ export function FriendshipSearchModal({
                   return (
                         <div className="flex gap-2 p-3">
                               <Button block disabled icon={<StopOutlined />}>
-                                    Không thể liên hệ
+                                    {t('contacts.search.blocked')}
                               </Button>
                         </div>
                   );
@@ -227,7 +229,7 @@ export function FriendshipSearchModal({
                         loading={isActionLoading}
                         onClick={handleMessageClick}
                   >
-                        Nhắn tin
+                        {t('contacts.search.message')}
                   </Button>
             );
 
@@ -239,7 +241,7 @@ export function FriendshipSearchModal({
                   // Hoặc để messageButton full width. Ở đây giữ cấu trúc 2 nút, nút 2 disabled để báo trạng thái.
                   actionButton = (
                         <Button key="status-friend" className="flex-1" disabled type="text">
-                              Đã là bạn bè
+                              {t('contacts.search.alreadyFriend')}
                         </Button>
                   );
             } else if (contact.relationshipStatus === 'REQUEST') {
@@ -252,7 +254,7 @@ export function FriendshipSearchModal({
                                     loading={cancelReq.isPending}
                                     onClick={handleCancelRequest}
                               >
-                                    Thu hồi lời mời
+                                    {t('contacts.search.recallRequest')}
                               </Button>
                         );
                   } else {
@@ -266,7 +268,7 @@ export function FriendshipSearchModal({
                                     disabled={isMutating}
                                     onClick={handleAcceptRequest}
                               >
-                                    Chấp nhận
+                                    {t('contacts.search.accept')}
                               </Button>
                         );
                   }
@@ -282,7 +284,7 @@ export function FriendshipSearchModal({
                               disabled={isMutating}
                               onClick={handleSendFriendRequest}
                         >
-                              Kết bạn
+                              {t('contacts.search.addFriend')}
                         </Button>
                   );
             }
@@ -303,19 +305,19 @@ export function FriendshipSearchModal({
                         footer={null}
                         centered
                         width={420}
-                        title="Tìm bạn bằng số điện thoại"
+                        title={t('contacts.search.modalTitle')}
                   >
                         <div className="flex flex-col gap-4">
                               <div className="flex gap-2">
                                     <Input
                                           value={phoneInput}
                                           onChange={(e) => setPhoneInput(e.target.value)}
-                                          placeholder="Nhập số điện thoại (10 số hoặc +84)"
+                                          placeholder={t('contacts.search.phonePlaceholder')}
                                           prefix={<SearchOutlined className="text-gray-400" />}
                                           onPressEnter={handleSearch}
                                     />
                                     <Button type="primary" onClick={handleSearch}>
-                                          Tìm
+                                          {t('contacts.search.searchBtn')}
                                     </Button>
                               </div>
 
@@ -347,7 +349,7 @@ export function FriendshipSearchModal({
 
                               {status === 'success' && !mappedUser && keyword.trim() ? (
                                     <div className="text-sm text-gray-500 text-center py-4">
-                                          Không tìm thấy người dùng phù hợp.
+                                          {t('contacts.search.notFound')}
                                     </div>
                               ) : null}
                         </div>

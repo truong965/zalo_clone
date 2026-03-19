@@ -19,6 +19,7 @@ import { useCallStore } from '@/features/call/stores/call.store';
 import type { CallType, PeerInfo } from '@/features/call/types';
 import { conversationApi } from '@/features/conversation';
 import { useAuthStore } from '@/features/auth';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
@@ -53,6 +54,7 @@ export function ChatHeader({
       const [callLoading, setCallLoading] = useState(false);
       const [callModalOpen, setCallModalOpen] = useState(false);
       const currentUserId = useAuthStore((s) => s.user?.id);
+      const { t } = useTranslation();
 
       // Only enabled for 1-to-1 conversations
       const { data: contactInfo } = useContactCheck(isDirect ? otherUserId : null);
@@ -62,19 +64,16 @@ export function ChatHeader({
             const diffMs = now.getTime() - date.getTime();
             const diffMins = Math.floor(diffMs / 60000);
 
-            if (diffMins < 1) return { text: 'Truy cập 1 phút trước', isRecent: true };
-            if (diffMins < 5) return { text: `Truy cập ${diffMins} phút trước`, isRecent: true };
-            if (diffMins < 10) return { text: `Truy cập ${diffMins} phút trước`, isRecent: true };
-            if (diffMins < 30) return { text: `Truy cập ${diffMins} phút trước`, isRecent: true };
-            if (diffMins < 60) return { text: `Truy cập ${diffMins} phút trước`, isRecent: true };
-            return { text: 'Ngoại tuyến', isRecent: false };
+            if (diffMins < 1) return { text: t('chat.header.accessJustNow'), isRecent: true };
+            if (diffMins < 60) return { text: t('chat.header.accessMinsAgo', { count: diffMins }), isRecent: true };
+            return { text: t('chat.header.offline'), isRecent: false };
       };
 
       const presenceInfo = (() => {
             if (!isDirect) return null;
-            if (isOnline) return { text: 'Đang hoạt động', isRecent: true };
+            if (isOnline) return { text: t('chat.header.online'), isRecent: true };
             if (lastSeenAt) return getPresenceInfo(lastSeenAt);
-            return { text: 'Ngoại tuyến', isRecent: false };
+            return { text: t('chat.header.offline'), isRecent: false };
       })();
 
       // Build the "More" dropdown menu — memoised to avoid per-render object allocation.
@@ -83,7 +82,7 @@ export function ChatHeader({
             return [
                   {
                         key: 'set-alias',
-                        label: contactInfo?.aliasName ? 'Chỉnh sửa biệt danh' : 'Đặt biệt danh',
+                        label: contactInfo?.aliasName ? t('chat.header.editAlias') : t('chat.header.setAlias'),
                         icon: <EditOutlined />,
                         onClick: () => setAliasModalOpen(true),
                   },
@@ -91,7 +90,7 @@ export function ChatHeader({
                         ? [
                               {
                                     key: 'clear-alias',
-                                    label: 'Xoá biệt danh',
+                                    label: t('chat.header.removeAlias'),
                                     icon: <DeleteOutlined />,
                                     danger: true,
                                     onClick: () => setAliasModalOpen(true),
@@ -191,7 +190,7 @@ export function ChatHeader({
                                           type="text"
                                           loading={callLoading}
                                           className="text-gray-500 hover:bg-gray-100"
-                                          title={isDirect ? 'Cuộc gọi' : 'Gọi nhóm'}
+                                          title={isDirect ? t('chat.header.callTooltip') : t('chat.header.groupCallTooltip')}
                                           onClick={() => setCallModalOpen(true)}
                                     />
                               )}
@@ -200,14 +199,14 @@ export function ChatHeader({
                                     type="text"
                                     className="text-gray-500 hover:bg-gray-100"
                                     onClick={onToggleSearch}
-                                    title="Tìm kiếm tin nhắn"
+                                    title={t('chat.header.searchTooltip')}
                               />
                               <Button
                                     icon={<LayoutOutlined className="rotate-180" />}
                                     type="text"
                                     className="text-gray-500 hover:bg-gray-100"
                                     onClick={onToggleInfo}
-                                    title="Thông tin hội thoại"
+                                    title={t('chat.header.infoTooltip')}
                               />
                               {moreMenuItems.length > 0 && (
                                     <Dropdown menu={{ items: moreMenuItems }} trigger={['click']} placement="bottomRight">
@@ -215,7 +214,7 @@ export function ChatHeader({
                                                 icon={<MoreOutlined />}
                                                 type="text"
                                                 className="text-gray-500 hover:bg-gray-100"
-                                                title="Thêm tuỳ chọn"
+                                                title={t('chat.header.moreTooltip')}
                                           />
                                     </Dropdown>
                               )}
@@ -225,13 +224,13 @@ export function ChatHeader({
                   {/* ── Camera-choice modal (dùng chung cho cả direct và group call) ── */}
                   <Modal
                         open={callModalOpen}
-                        title={isDirect ? 'Gọi video' : 'Gọi nhóm'}
+                        title={isDirect ? t('chat.header.videoCall') : t('chat.header.groupCall')}
                         footer={null}
                         onCancel={() => setCallModalOpen(false)}
                         centered
                         width={360}
                   >
-                        <p className="text-gray-600 mb-4">Chọn cài đặt camera trước khi gọi:</p>
+                        <p className="text-gray-600 mb-4">{t('chat.header.callCameraPref')}</p>
                         <div className="flex gap-3">
                               <Button
                                     type="primary"
@@ -242,7 +241,7 @@ export function ChatHeader({
                                           void initiateCall('VIDEO', false);
                                     }}
                               >
-                                    Bật camera
+                                    {t('chat.header.cameraOn')}
                               </Button>
                               <Button
                                     icon={<PhoneOutlined />}
@@ -252,7 +251,7 @@ export function ChatHeader({
                                           void initiateCall('VIDEO', true);
                                     }}
                               >
-                                    Tắt camera
+                                    {t('chat.header.cameraOff')}
                               </Button>
                         </div>
                   </Modal>

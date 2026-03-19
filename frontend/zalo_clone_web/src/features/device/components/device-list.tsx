@@ -4,10 +4,12 @@ import { MobileOutlined, DesktopOutlined, DeleteOutlined, GlobalOutlined } from 
 import { useDeviceSessions, useRevokeSession } from '../api/device.api';
 import type { DeviceSession } from '@/features/auth/api/auth.service';
 import { ApiError } from '@/lib/api-error';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text, Paragraph } = Typography;
 
 export function DeviceList() {
+  const { t } = useTranslation();
   const { data: devices, isLoading, error } = useDeviceSessions();
   const { mutate: revokeSession, isPending: isRevoking } = useRevokeSession();
   const [api, contextHolder] = notification.useNotification();
@@ -18,16 +20,16 @@ export function DeviceList() {
     revokeSession(device.deviceId, {
       onSuccess: () => {
         api.success({
-          message: 'Thành công',
-          description: 'Đã đăng xuất thiết bị thành công.',
+          message: t('device.revokeSuccess'),
+          description: t('device.revokeSuccessDesc'),
           placement: 'bottomRight',
         });
         setRevokingId(null);
       },
       onError: (err) => {
         api.error({
-          message: 'Lỗi',
-          description: ApiError.from(err).message || 'Lỗi khi đăng xuất thiết bị',
+          message: t('device.revokeError'),
+          description: ApiError.from(err).message || t('device.revokeErrorDesc'),
           placement: 'bottomRight',
         });
         setRevokingId(null);
@@ -38,7 +40,7 @@ export function DeviceList() {
   if (error) {
     return (
       <div className="p-4 text-center text-red-500">
-        Không thể tải danh sách thiết bị. Vui lòng thử lại sau.
+        {t('device.loadError')}
       </div>
     );
   }
@@ -57,7 +59,7 @@ export function DeviceList() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString('vi-VN', {
+    return date.toLocaleString(undefined, {
       hour: '2-digit',
       minute: '2-digit',
       day: '2-digit',
@@ -71,10 +73,10 @@ export function DeviceList() {
       {contextHolder}
       <div>
         <Title level={4} className="!text-gray-900 dark:!text-white !mb-1">
-          Quản lý thiết bị
+          {t('device.title')}
         </Title>
         <Paragraph className="!text-gray-500 dark:!text-gray-400 !text-sm !mb-0">
-          Danh sách các thiết bị di động và máy tính đang đăng nhập vào tài khoản của bạn.
+          {t('device.subtitle')}
         </Paragraph>
       </div>
 
@@ -95,11 +97,11 @@ export function DeviceList() {
                 actions={[
                   <Popconfirm
                     key="revoke"
-                    title="Đăng xuất thiết bị"
-                    description="Bạn có chắc chắn muốn đăng xuất khỏi thiết bị này không?"
+                    title={t('device.revokeTitle')}
+                    description={t('device.revokeDesc')}
                     onConfirm={() => handleRevoke(device)}
-                    okText="Đăng xuất"
-                    cancelText="Hủy"
+                    okText={t('device.revokeOk')}
+                    cancelText={t('device.revokeCancel')}
                     okButtonProps={{ danger: true, loading: isRevoking && revokingId === device.deviceId }}
                   >
                     <Button 
@@ -108,7 +110,7 @@ export function DeviceList() {
                       icon={<DeleteOutlined />} 
                       loading={isRevoking && revokingId === device.deviceId}
                     >
-                      Đăng xuất
+                      {t('device.revokeBtn')}
                     </Button>
                   </Popconfirm>,
                 ]}
@@ -120,7 +122,7 @@ export function DeviceList() {
                       <Text className="text-base font-medium">{device.deviceName}</Text>
                       {device.isOnline && (
                         <Tag color="success" className="rounded-full border-0 font-medium">
-                          Đang hoạt động
+                          {t('device.online')}
                         </Tag>
                       )}
                     </div>
@@ -128,10 +130,10 @@ export function DeviceList() {
                   description={
                     <div className="flex flex-col gap-0.5 mt-1">
                       <Text className="text-xs text-gray-500">
-                        Nền tảng: <span className="font-medium">{device.platform}</span> • Phương thức: {device.loginMethod === 'QR_CODE' ? 'Mã QR' : 'Mật khẩu'}
+                        {t('device.platform')}: <span className="font-medium">{device.platform}</span> • {t('device.loginMethod')}: {device.loginMethod === 'QR_CODE' ? t('device.qrCode') : t('device.password')}
                       </Text>
                       <Text className="text-xs text-gray-400">
-                        IP: {device.ipAddress} • Đăng nhập lúc: {formatDate(device.lastUsedAt)}
+                        {t('device.ip')}: {device.ipAddress} • {t('device.loginAt')}: {formatDate(device.lastUsedAt)}
                       </Text>
                     </div>
                   }

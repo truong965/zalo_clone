@@ -1,4 +1,5 @@
 import { useState, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Typography } from 'antd';
 import {
       DownloadOutlined,
@@ -114,6 +115,7 @@ export const RecentFileItem = memo(function RecentFileItem({
       extraLine1,
       extraLine2,
 }: SharedFileItemProps) {
+      const { t } = useTranslation();
       const [downloading, setDownloading] = useState(false);
       const viewable = isBrowserViewable(mimeType);
       const extension = FileUtils.getExtension(originalName);
@@ -175,10 +177,10 @@ export const RecentFileItem = memo(function RecentFileItem({
                         onClick={handleDownload}
                         disabled={downloading}
                         className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors opacity-0 group-hover:opacity-100 ${downloading
-                              ? 'text-blue-400 bg-blue-50 opacity-100 cursor-not-allowed'
-                              : 'text-gray-500 hover:text-blue-600 hover:bg-black/5'
+                                    ? 'text-blue-400 bg-blue-50 opacity-100 cursor-not-allowed'
+                                    : 'text-gray-500 hover:text-blue-600 hover:bg-black/5'
                               }`}
-                        title="Tải xuống"
+                        title={t('chat.infoSidebar.media')}
                   >
                         <DownloadOutlined className={downloading ? 'text-lg animate-pulse' : 'text-lg'} />
                   </button>

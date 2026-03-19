@@ -15,6 +15,7 @@
  *   - architecture-avoid-boolean-props: uses parentMessage shape
  */
 
+import { useTranslation } from 'react-i18next';
 import { FileOutlined, PictureOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import type { MessageParentMessage } from '@/types/api';
 
@@ -23,21 +24,7 @@ interface ReplyQuoteProps {
       onJumpToMessage?: (messageId: string) => void;
 }
 
-function getContentPreview(parent: MessageParentMessage): string {
-      if (parent.deletedAt) return 'Tin nhắn đã bị xóa';
-      if (parent.content) return parent.content;
-
-      const attachment = parent.mediaAttachments?.[0];
-      if (attachment) {
-            const typeLabel = attachment.mediaType === 'IMAGE' ? 'Hình ảnh'
-                  : attachment.mediaType === 'VIDEO' ? 'Video'
-                        : attachment.mediaType === 'AUDIO' ? 'Audio'
-                              : 'File';
-            return `[${typeLabel}] ${attachment.originalName}`;
-      }
-
-      return '[Tin nhắn]';
-}
+// getContentPreview now handled in component with useTranslation
 
 function MediaIcon({ mediaType }: { mediaType: string }) {
       switch (mediaType) {
@@ -51,11 +38,26 @@ function MediaIcon({ mediaType }: { mediaType: string }) {
 }
 
 export function ReplyQuote({ parentMessage, onJumpToMessage }: ReplyQuoteProps) {
+      const { t } = useTranslation();
       const isDeleted = !!parentMessage.deletedAt;
       const senderName = parentMessage.sender?.resolvedDisplayName
             ?? parentMessage.sender?.displayName
-            ?? 'Người dùng';
+            ?? t('layout.client.defaultUser');
       const attachment = parentMessage.mediaAttachments?.[0];
+
+      const getContentPreview = (parent: MessageParentMessage): string => {
+            if (parent.deletedAt) return t('chat.messageList.deletedMessage');
+            if (parent.content) return parent.content;
+            const attachment = parent.mediaAttachments?.[0];
+            if (attachment) {
+                  const typeLabel = attachment.mediaType === 'IMAGE' ? t('chat.input.sendImageVideo')
+                        : attachment.mediaType === 'VIDEO' ? t('chat.header.videoCall')
+                              : attachment.mediaType === 'AUDIO' ? t('chat.messageList.callVoice')
+                                    : t('chat.input.attachFile');
+                  return `[${typeLabel}] ${attachment.originalName}`;
+            }
+            return `[${t('chat.messageList.messagePreview')}]`;
+      };
 
       return (
             <button

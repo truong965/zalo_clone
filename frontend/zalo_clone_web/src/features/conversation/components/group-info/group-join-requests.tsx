@@ -5,6 +5,7 @@
  * Only renders when the group has requireApproval enabled.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Avatar, Button, Badge, Spin, Empty } from 'antd';
 import {
       CheckOutlined,
@@ -45,6 +46,7 @@ export function GroupJoinRequests({
       reviewJoinRequest,
       refreshTrigger,
 }: GroupJoinRequestsProps) {
+      const { t } = useTranslation();
       const [requests, setRequests] = useState<JoinRequestItem[]>([]);
       const [isLoading, setIsLoading] = useState(false);
       const [reviewingIds, setReviewingIds] = useState<Set<string>>(new Set());
@@ -91,7 +93,7 @@ export function GroupJoinRequests({
                   <div className="flex items-center gap-2 px-4 py-3">
                         <TeamOutlined className="text-gray-500" />
                         <span className="text-sm font-medium text-gray-700">
-                              Yêu cầu tham gia
+                              {t('conversation.groupInfo.joinRequests.title')}
                         </span>
                         {requests.length > 0 && (
                               <Badge

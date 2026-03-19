@@ -9,6 +9,7 @@
  * - Virtualized list via @tanstack/react-virtual (replaces manual windowing)
  */
 
+import { useTranslation } from 'react-i18next';
 import { useRef, useCallback, useState, useEffect, type ChangeEvent } from 'react';
 import { Input, Button, Spin, Empty, Typography } from 'antd';
 import { SearchOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
@@ -24,6 +25,7 @@ const { Text } = Typography;
 const ITEM_HEIGHT = 84;
 
 export function GroupList() {
+      const { t } = useTranslation();
       const navigate = useNavigate();
       const [search, setSearch] = useState('');
       const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -103,7 +105,7 @@ export function GroupList() {
                   {/* Header */}
                   <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                         <Text className="text-sm text-gray-500">
-                              Nhóm{groups.length > 0 ? ` (${groups.length})` : ''}
+                              {t('conversation.groupList.title')}{groups.length > 0 ? ` (${groups.length})` : ''}
                         </Text>
                         <Button
                               type="primary"
@@ -111,7 +113,7 @@ export function GroupList() {
                               icon={<PlusOutlined />}
                               onClick={openCreateGroup}
                         >
-                              Tạo nhóm
+                              {t('conversation.groupList.createGroup')}
                         </Button>
                   </div>
 
@@ -119,7 +121,7 @@ export function GroupList() {
                   <div className="px-4 py-2">
                         <Input
                               prefix={<SearchOutlined className="text-gray-400" />}
-                              placeholder="Tìm nhóm..."
+                              placeholder={t('conversation.groupList.searchPlaceholder')}
                               value={search}
                               onChange={handleSearchChange}
                               allowClear
@@ -130,12 +132,12 @@ export function GroupList() {
                   <div className="flex-1 overflow-y-auto" ref={scrollParentRef}>
                         {isError ? (
                               <div className="px-4 py-12 flex flex-col items-center gap-3">
-                                    <Text type="danger">Không thể tải danh sách nhóm</Text>
+                                    <Text type="danger">{t('conversation.groupList.loadError')}</Text>
                                     <Button
                                           size="small"
                                           onClick={() => void refetch()}
                                     >
-                                          Thử lại
+                                          {t('conversation.groupList.retry')}
                                     </Button>
                               </div>
                         ) : isLoading ? (
@@ -151,8 +153,8 @@ export function GroupList() {
                                           <div className="space-y-1">
                                                 <Text type="secondary">
                                                       {debouncedSearch
-                                                            ? 'Không tìm thấy nhóm phù hợp'
-                                                            : 'Bạn chưa tham gia nhóm nào'}
+                                                            ? t('conversation.groupList.noSearchResults')
+                                                            : t('conversation.groupList.noGroups')}
                                                 </Text>
                                                 {!debouncedSearch && (
                                                       <>
@@ -162,7 +164,7 @@ export function GroupList() {
                                                                   size="small"
                                                                   onClick={openCreateGroup}
                                                             >
-                                                                  Tạo nhóm mới
+                                                                  {t('conversation.groupList.createGroup')}
                                                             </Button>
                                                       </>
                                                 )}

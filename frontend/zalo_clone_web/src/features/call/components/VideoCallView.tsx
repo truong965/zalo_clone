@@ -13,8 +13,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useCallStore } from '../stores/call.store';
 import { QualityIndicator } from './QualityIndicator';
-
+import { useTranslation } from 'react-i18next';
 export function VideoCallView() {
+      const { t } = useTranslation();
       const localStream = useCallStore((s) => s.localStream);
       const remoteStream = useCallStore((s) => s.remoteStream);
       const connectionQuality = useCallStore((s) => s.connectionQuality);
@@ -113,7 +114,9 @@ export function VideoCallView() {
                                     </div>
                               )}
                               <span className="text-white/80 text-sm">
-                                    {!remoteStream ? 'Đang chờ kết nối video…' : `${peerInfo?.displayName ?? 'Người dùng'} đã tắt camera`}
+                                    {!remoteStream
+                                          ? t('call.waitingVideo')
+                                          : `${peerInfo?.displayName ?? t('layout.client.defaultUser')} ${t('chat.header.cameraOff').toLowerCase()}`}
                               </span>
                         </div>
                   )}

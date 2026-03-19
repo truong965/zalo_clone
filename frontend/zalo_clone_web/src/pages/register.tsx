@@ -11,6 +11,7 @@ import { useAuth } from '@/features/auth';
 import { ROUTES } from '@/config/routes';
 import { ApiError } from '@/lib/api-error';
 import type { RegisterRequest } from '@/types';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -18,6 +19,7 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [api, contextHolder] = notification.useNotification();
+  const { t } = useTranslation();
 
   const { register, isLoading, isAuthenticated, clearError } = useAuth();
 
@@ -38,16 +40,16 @@ export function RegisterPage() {
         dateOfBirth: values.dateOfBirth,
       });
       api.success({
-        message: 'Đăng ký thành công!',
-        description: 'Vui lòng đăng nhập với tài khoản mới.',
+        message: t('auth.register.successTitle'),
+        description: t('auth.register.successDesc'),
         placement: 'topRight',
         duration: 5,
       });
       setTimeout(() => navigate(ROUTES.LOGIN), 1500);
     } catch (err: unknown) {
       api.error({
-        message: 'Đăng ký thất bại',
-        description: ApiError.from(err).message || 'Vui lòng kiểm tra lại thông tin.',
+        message: t('auth.register.failTitle'),
+        description: ApiError.from(err).message || t('auth.register.failDesc'),
         placement: 'topRight',
       });
     }
@@ -66,8 +68,8 @@ export function RegisterPage() {
         <Card className="shadow-lg w-full border-none sm:border-solid">
           <Space direction="vertical" className="w-full" size="large">
             <div className="text-center">
-              <Title level={2} className="!mb-2">Đăng Ký</Title>
-              <Text type="secondary">Tạo tài khoản mới cho dự án của bạn</Text>
+              <Title level={2} className="!mb-2">{t('auth.register.title')}</Title>
+              <Text type="secondary">{t('auth.register.subtitle')}</Text>
             </div>
 
             <Form
@@ -78,75 +80,75 @@ export function RegisterPage() {
               size="large"
             >
               <Form.Item
-                label="Tên Hiển Thị"
+                label={t('auth.register.displayNameLabel')}
                 name="displayName"
-                rules={[{ required: true, message: 'Vui lòng nhập tên hiển thị' }]}
+                rules={[{ required: true, message: t('auth.register.displayNameRequired') }]}
               >
-                <Input prefix={<UserOutlined />} placeholder="VD: Nguyễn Văn A" />
+                <Input prefix={<UserOutlined />} placeholder={t('auth.register.displayNamePlaceholder')} />
               </Form.Item>
 
               <Form.Item
-                label="Số Điện Thoại"
+                label={t('auth.register.phoneLabel')}
                 name="phoneNumber"
                 rules={[
-                  { required: true, message: 'Vui lòng nhập số điện thoại' },
-                  { pattern: /(84|0[3|5|7|8|9])+([0-9]{8})\b/g, message: 'SĐT không hợp lệ' },
+                  { required: true, message: t('auth.register.phoneRequired') },
+                  { pattern: /(84|0[3|5|7|8|9])+([0-9]{8})\b/g, message: t('auth.register.phoneInvalid') },
                 ]}
               >
-                <Input prefix={<PhoneOutlined />} placeholder="VD: 0987654321" />
+                <Input prefix={<PhoneOutlined />} placeholder={t('auth.register.phonePlaceholder')} />
               </Form.Item>
 
               <Form.Item
-                label="Mật Khẩu"
+                label={t('auth.register.passwordLabel')}
                 name="password"
-                rules={[{ required: true, message: 'Nhập mật khẩu' }, { min: 6, message: 'Tối thiểu 6 ký tự' }]}
+                rules={[{ required: true, message: t('auth.register.passwordRequired') }, { min: 6, message: t('auth.register.passwordMin') }]}
               >
-                <Input.Password prefix={<LockOutlined />} placeholder="Nhập mật khẩu" />
+                <Input.Password prefix={<LockOutlined />} placeholder={t('auth.register.passwordPlaceholder')} />
               </Form.Item>
 
               <Form.Item
-                label="Xác Nhận Mật Khẩu"
+                label={t('auth.register.confirmPasswordLabel')}
                 name="confirmPassword"
                 dependencies={['password']}
                 rules={[
-                  { required: true, message: 'Xác nhận mật khẩu' },
+                  { required: true, message: t('auth.register.confirmPasswordRequired') },
                   ({ getFieldValue }) => ({
                     validator(_, value) {
                       if (!value || getFieldValue('password') === value) return Promise.resolve();
-                      return Promise.reject(new Error('Mật khẩu không khớp!'));
+                      return Promise.reject(new Error(t('auth.register.confirmPasswordMatch')));
                     },
                   }),
                 ]}
               >
-                <Input.Password prefix={<LockOutlined />} placeholder="Xác nhận lại" />
+                <Input.Password prefix={<LockOutlined />} placeholder={t('auth.register.confirmPasswordPlaceholder')} />
               </Form.Item>
 
               <div className="grid grid-cols-2 gap-4">
-                <Form.Item label="Giới Tính" name="gender" className="mb-0">
-                  <Select placeholder="Chọn">
-                    <Select.Option value="MALE">Nam</Select.Option>
-                    <Select.Option value="FEMALE">Nữ</Select.Option>
+                <Form.Item label={t('auth.register.genderLabel')} name="gender" className="mb-0">
+                  <Select placeholder={t('auth.register.genderPlaceholder')}>
+                    <Select.Option value="MALE">{t('auth.register.male')}</Select.Option>
+                    <Select.Option value="FEMALE">{t('auth.register.female')}</Select.Option>
                   </Select>
                 </Form.Item>
 
-                <Form.Item label="Ngày Sinh" name="dateOfBirth" className="mb-0">
+                <Form.Item label={t('auth.register.dobLabel')} name="dateOfBirth" className="mb-0">
                   <Input type="date" max={new Date().toISOString().split('T')[0]} />
                 </Form.Item>
               </div>
 
               <Form.Item className="mt-8 mb-0">
                 <Button type="primary" htmlType="submit" block size="large" loading={isLoading}>
-                  {isLoading ? 'Đang đăng ký...' : 'Đăng Ký'}
+                  {isLoading ? t('auth.register.loading') : t('auth.register.submit')}
                 </Button>
               </Form.Item>
             </Form>
 
-            <Divider className="my-2">Hoặc</Divider>
+            <Divider className="my-2">{t('auth.register.or')}</Divider>
 
             <div className="text-center pb-2">
-              <Text>Đã có tài khoản? </Text>
+              <Text>{t('auth.register.haveAccount')} </Text>
               <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700">
-                Đăng nhập
+                {t('auth.register.loginNow')}
               </Link>
             </div>
           </Space>

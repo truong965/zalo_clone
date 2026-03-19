@@ -5,6 +5,7 @@
  * → Hiện modal gợi ý gửi lời mời kết bạn.
  */
 
+import { useTranslation } from 'react-i18next';
 import { Modal, Button, Avatar, notification } from 'antd';
 import { UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import { useSendFriendRequest } from '../api/friendship.api';
@@ -21,6 +22,7 @@ interface FriendRequestModalProps {
 }
 
 export function FriendRequestModal({ visible, target, onClose }: FriendRequestModalProps) {
+      const { t } = useTranslation();
       const sendRequest = useSendFriendRequest();
 
       const handleSendRequest = () => {
@@ -28,13 +30,13 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
             sendRequest.mutate(target.userId, {
                   onSuccess: () => {
                         notification.success({
-                              message: 'Đã gửi lời mời kết bạn',
-                              description: `Lời mời kết bạn đã được gửi đến ${target.displayName}`,
+                              message: t('contacts.friendRequest.sendSuccess'),
+                              description: t('contacts.friendRequest.sendSuccessDesc', { name: target.displayName }),
                         });
                         onClose();
                   },
                   onError: (error: unknown) => {
-                        const msg = ApiError.from(error).message || 'Không thể gửi lời mời kết bạn';
+                        const msg = ApiError.from(error).message || t('contacts.friendRequest.sendError');
                         notification.error({ message: msg });
                   },
             });
@@ -63,7 +65,7 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
                               </h3>
 
                               <p className="text-sm text-gray-500 text-center m-0 px-4">
-                                    Người dùng này chỉ cho phép bạn bè nhắn tin. Hãy gửi lời mời kết bạn để bắt đầu trò chuyện.
+                                    {t('contacts.friendRequest.description')}
                               </p>
 
                               <div className="flex gap-2 mt-2 w-full px-4">
@@ -71,7 +73,7 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
                                           block
                                           onClick={onClose}
                                     >
-                                          Đóng
+                                          {t('contacts.friendRequest.close')}
                                     </Button>
                                     <Button
                                           type="primary"
@@ -80,7 +82,7 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
                                           loading={sendRequest.isPending}
                                           onClick={handleSendRequest}
                                     >
-                                          Kết bạn
+                                          {t('contacts.friendRequest.sendRequest')}
                                     </Button>
                               </div>
                         </div>

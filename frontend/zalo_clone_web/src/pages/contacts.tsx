@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { FriendList, FriendRequestList, useFriendshipStore, BlockedList, ContactList } from '@/features/contacts';
 import { GroupList } from '@/features/conversation';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -35,32 +36,33 @@ interface TabConfig {
 export function ContactsPage() {
   const [activeTab, setActiveTab] = useState<ContactTab>('friends');
   const pendingReceivedCount = useFriendshipStore((s) => s.pendingReceivedCount);
+  const { t } = useTranslation();
 
   const tabs: TabConfig[] = [
     {
       key: 'friends',
-      label: 'Bạn bè',
+      label: t('contacts.page.tabFriends'),
       icon: <TeamOutlined />,
     },
     {
       key: 'requests',
-      label: 'Lời mời kết bạn',
+      label: t('contacts.page.tabRequests'),
       icon: <UserAddOutlined />,
       badge: pendingReceivedCount,
     },
     {
       key: 'contacts',
-      label: 'Gợi ý từ danh bạ',
+      label: t('contacts.page.tabContacts'),
       icon: <PhoneOutlined />,
     },
     {
       key: 'groups',
-      label: 'Nhóm',
+      label: t('contacts.page.tabGroups'),
       icon: <UsergroupAddOutlined />,
     },
     {
       key: 'blocked',
-      label: 'Chặn',
+      label: t('contacts.page.tabBlocked'),
       icon: <StopOutlined />,
     },
   ];
@@ -73,7 +75,7 @@ export function ContactsPage() {
         <div className="px-4 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <UserOutlined className="text-lg text-blue-600" />
-            <Text strong className="text-base">Danh bạ</Text>
+            <Text strong className="text-base">{t('contacts.page.header')}</Text>
           </div>
         </div>
 

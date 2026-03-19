@@ -6,6 +6,7 @@ import { authService } from '../api/auth.service';
 import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
 import { ApiError } from '@/lib/api-error';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
@@ -22,6 +23,7 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
   const [qrState, setQrState] = useState<QrState>('LOADING');
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { t } = useTranslation();
 
   // ── Refs to avoid stale closures in socket event handlers ──
   const qrSessionIdRef = useRef<string | null>(null);
@@ -106,7 +108,7 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
           setQrState('PENDING');
           startExpirationTimer();
         } catch (err) {
-          onError(ApiError.from(err).message || 'Không thể tạo mã QR.');
+          onError(ApiError.from(err).message || t('auth.qr.qrError'));
           setQrState('EXPIRED');
         }
       };
@@ -140,7 +142,7 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
           clearTimer();
           onLoginSuccess();
         } catch (err) {
-          onError(ApiError.from(err).message || 'Xác thực QR thất bại.');
+          onError(ApiError.from(err).message || t('auth.qr.authFail'));
           setQrState('EXPIRED');
         }
       });
@@ -166,7 +168,7 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
       return (
         <div className="flex flex-col items-center justify-center py-10 min-h-[250px]">
           <Spin size="large" />
-          <Text className="mt-4 text-gray-500">Đang tải mã QR...</Text>
+          <Text className="mt-4 text-gray-500">{t('auth.qr.loading')}</Text>
         </div>
       );
     }
@@ -175,11 +177,11 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
       return (
         <Result
           status="warning"
-          title="Mã QR đã hết hạn"
-          subTitle="Vui lòng tải lại mã để tiếp tục đăng nhập."
+          title={t('auth.qr.expiredTitle')}
+          subTitle={t('auth.qr.expiredDesc')}
           extra={
             <Button type="primary" icon={<SyncOutlined />} onClick={generateAndConnect}>
-              Tải lại mã
+              {t('auth.qr.reload')}
             </Button>
           }
         />
@@ -190,9 +192,9 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
       return (
         <div className="flex flex-col items-center justify-center py-10 min-h-[250px]">
           <CheckCircleOutlined className="text-6xl text-green-500 mb-4" />
-          <Title level={4}>Quét mã thành công</Title>
+          <Title level={4}>{t('auth.qr.scannedTitle')}</Title>
           <Text className="text-gray-500 text-center">
-            Vui lòng xác nhận đăng nhập trên thiết bị di động của bạn.
+            {t('auth.qr.scannedDesc')}
           </Text>
         </div>
       );
@@ -217,8 +219,8 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
         <div className="flex items-center text-gray-600 bg-gray-50 px-4 py-3 rounded-lg w-full">
           <MobileOutlined className="text-2xl text-blue-500 mr-3" />
           <div className="flex flex-col">
-            <Text strong>Sử dụng ứng dụng Zalo Clone</Text>
-            <Text className="text-sm">Vào mục quét mã QR để quét</Text>
+            <Text strong>{t('auth.qr.useApp')}</Text>
+            <Text className="text-sm">{t('auth.qr.scanInstruction')}</Text>
           </div>
         </div>
       </div>

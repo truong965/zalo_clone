@@ -18,7 +18,7 @@ const RegisterPage = lazy(() => import('@/pages/register').then(m => ({ default:
 const ChatPage = lazy(() => import('@/pages/chat').then(m => ({ default: m.ChatPage })));
 const ContactsPage = lazy(() => import('@/pages/contacts').then(m => ({ default: m.ContactsPage })));
 const CallsPage = lazy(() => import('@/pages/calls').then(m => ({ default: m.CallsPage })));
-const ProfilePage = lazy(() => import('@/pages/profile').then(m => ({ default: m.ProfilePage })));
+// const ProfilePage = lazy(() => import('@/pages/profile').then(m => ({ default: m.ProfilePage })));
 const SettingsPage = lazy(() => import('@/pages/settings').then(m => ({ default: m.SettingsPage })));
 const CallScreen = lazy(() => import('@/features/call/components/CallScreen').then(m => ({ default: m.CallScreen })));
 
@@ -126,16 +126,16 @@ export const router = createBrowserRouter([
                               </ErrorBoundary>
                         ),
                   },
-                  {
-                        path: 'profile',
-                        element: (
-                              <ErrorBoundary>
-                                    <Suspense fallback={<PageSkeleton />}>
-                                          <ProfilePage />
-                                    </Suspense>
-                              </ErrorBoundary>
-                        ),
-                  },
+                  // {
+                  //       path: 'profile',
+                  //       element: (
+                  //             <ErrorBoundary>
+                  //                   <Suspense fallback={<PageSkeleton />}>
+                  //                         <ProfilePage />
+                  //                   </Suspense>
+                  //             </ErrorBoundary>
+                  //       ),
+                  // },
                   {
                         path: 'notifications',
                         element: <div className="p-4">Notifications Page (Coming soon)</div>,

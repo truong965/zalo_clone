@@ -26,6 +26,7 @@ import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversati
 import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
 import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
 import { RecentFileItem } from '@/features/chat/components/recent-file-item';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
@@ -36,6 +37,7 @@ interface DirectInfoContentProps {
 }
 
 export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }: DirectInfoContentProps) {
+      const { t } = useTranslation();
       const blockMutation = useBlockUser();
       const { togglePin } = usePinConversation();
       const { toggleMute } = useMuteConversation();
@@ -56,7 +58,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
 
       // In a DIRECT conversation, the other user is whoever isn't us
       const otherUserId = conversation.otherUserId ?? null;
-      const otherUserName = conversation.name ?? 'người dùng này';
+      const otherUserName = conversation.name ?? t('chat.conversationItem.anonymous');
 
       const handleBlockConfirm = () => {
             if (!otherUserId) return;
@@ -69,12 +71,12 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
       const items = [
             {
                   key: '1',
-                  label: <span className="font-medium">Ảnh/Video</span>,
+                  label: <span className="font-medium">{t('chat.infoSidebar.media')}</span>,
                   children: (
                         <>
                               {!recentMedia?.length ? (
                                     <div className="text-gray-500 text-center py-2 text-xs">
-                                          Chưa có Ảnh/Video được chia sẻ
+                                          {t('chat.infoSidebar.noMedia')}
                                     </div>
                               ) : (
                                     <>
@@ -96,7 +98,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                                 className="w-full mt-1 text-xs"
                                                 onClick={() => onOpenMediaBrowser?.('photos')}
                                           >
-                                                Xem tất cả
+                                                {t('chat.infoSidebar.viewAll')}
                                           </Button>
                                     </>
                               )}
@@ -105,12 +107,12 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
             },
             {
                   key: '2',
-                  label: <span className="font-medium">File</span>,
+                  label: <span className="font-medium">{t('chat.infoSidebar.file')}</span>,
                   children: (
                         <>
                               {!recentFiles?.length ? (
                                     <div className="text-gray-500 text-center py-2 text-xs">
-                                          Chưa có File được chia sẻ
+                                          {t('chat.infoSidebar.noFile')}
                                     </div>
                               ) : (
                                     <>
@@ -132,7 +134,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                                 className="w-full mt-1 text-xs"
                                                 onClick={() => onOpenMediaBrowser?.('files')}
                                           >
-                                                Xem tất cả
+                                                {t('chat.infoSidebar.viewAll')}
                                           </Button>
                                     </>
                               )}
@@ -141,7 +143,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
             },
             {
                   key: '3',
-                  label: <span className="font-medium">Thiết lập bảo mật</span>,
+                  label: <span className="font-medium">{t('chat.infoSidebar.security')}</span>,
                   children: (
                         <div className="flex flex-col gap-3">
                               <button
@@ -153,7 +155,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                     <StopOutlined className="text-red-500" />
                                     <div className="flex-1">
                                           <div className="text-sm text-red-600">
-                                                {blockMutation.isPending ? 'Đang chặn...' : 'Chặn người dùng'}
+                                                {blockMutation.isPending ? t('chat.infoSidebar.blocking') : t('chat.infoSidebar.block')}
                                           </div>
                                     </div>
                               </button>
@@ -206,7 +208,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                           }
                                     </div>
                                     <span className="text-xs text-gray-500 text-center max-w-[60px]">
-                                          {conversation.isMuted ? 'Bật thông báo' : 'Tắt thông báo'}
+                                          {conversation.isMuted ? t('chat.infoSidebar.unmute') : t('chat.infoSidebar.mute')}
                                     </span>
                               </div>
                               <div
@@ -220,7 +222,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                           <PushpinOutlined className={conversation.isPinned ? 'text-blue-600' : 'text-gray-600 group-hover:text-blue-600'} />
                                     </div>
                                     <span className="text-xs text-gray-500 text-center max-w-[60px]">
-                                          {conversation.isPinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
+                                          {conversation.isPinned ? t('chat.infoSidebar.unpin') : t('chat.infoSidebar.pin')}
                                     </span>
                               </div>
                               {/* <div className="flex flex-col items-center gap-2 cursor-pointer group">
@@ -242,7 +244,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                         >
                               <ClockCircleOutlined className="text-gray-500 text-lg" />
                               <span className="text-sm font-medium text-gray-600 flex-1">
-                                    Danh sách nhắc hẹn
+                                    {t('chat.infoSidebar.reminders')}
                               </span>
                               <RightOutlined
                                     rotate={showReminders ? 90 : 0}
@@ -259,7 +261,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                                 icon={<ClockCircleOutlined />}
                                                 onClick={() => setShowCreateReminder(true)}
                                           >
-                                                Tạo nhắc hẹn
+                                                {t('chat.infoSidebar.createReminder')}
                                           </Button>
                                     </div>
                                     <ReminderList
@@ -289,12 +291,14 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                               <Button
                                     type="text"
                                     block
-                                    className="text-left flex items-center gap-2 h-10"
+                                    className="gap-2 h-10"
                                     icon={<InboxOutlined />}
                                     loading={isArchiving}
                                     onClick={() => setIsArchiveModalOpen(true)}
                               >
-                                    {conversation.isArchived ? 'Bỏ lưu trữ' : 'Lưu trữ hội thoại'}
+                                    <span className="flex items-center justify-start gap-2 w-full text-gray-700">
+                                          <span>{conversation.isArchived ? t('chat.infoSidebar.unarchive') : t('chat.infoSidebar.archive')}</span>
+                                    </span>
                               </Button>
                         </div>
                   </div>
@@ -304,29 +308,27 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                         title={
                               <span className="flex items-center gap-2">
                                     <ExclamationCircleFilled className="text-red-500" />
-                                    Chặn {otherUserName}?
+                                    {t('chat.infoSidebar.blockConfirmTitle', { name: otherUserName })}
                               </span>
                         }
                         open={isBlockModalOpen}
                         onOk={handleBlockConfirm}
                         onCancel={() => setIsBlockModalOpen(false)}
-                        okText="Chặn"
-                        cancelText="Hủy"
+                        okText={t('chat.infoSidebar.blockConfirmOk')}
+                        cancelText={t('chat.infoSidebar.blockConfirmCancel')}
                         okButtonProps={{
                               danger: true,
                               loading: blockMutation.isPending,
                         }}
                   >
                         <p className="text-gray-600">
-                              Sau khi chặn, bạn sẽ không thể gửi hoặc nhận tin nhắn từ
-                              {' '}<strong>{otherUserName}</strong>.
-                              Người này sẽ không được thông báo.
+                              {t('chat.infoSidebar.blockWarning', { name: otherUserName })}
                         </p>
                   </Modal>
 
                   {/* Archive confirmation modal */}
                   <Modal
-                        title={conversation.isArchived ? 'Bỏ lưu trữ hội thoại' : 'Lưu trữ hội thoại'}
+                        title={conversation.isArchived ? t('chat.infoSidebar.unarchiveModalTitle') : t('chat.infoSidebar.archiveModalTitle')}
                         open={isArchiveModalOpen}
                         onOk={() => {
                               toggleArchive(conversation.id, !!conversation.isArchived);
@@ -334,13 +336,13 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                               onClose?.();
                         }}
                         onCancel={() => setIsArchiveModalOpen(false)}
-                        okText={conversation.isArchived ? 'Bỏ lưu trữ' : 'Lưu trữ'}
-                        cancelText="Hủy"
+                        okText={conversation.isArchived ? t('chat.infoSidebar.unarchiveModalOk') : t('chat.infoSidebar.archiveModalOk')}
+                        cancelText={t('chat.infoSidebar.blockConfirmCancel')}
                   >
                         <p className="text-gray-600">
                               {conversation.isArchived
-                                    ? 'Hội thoại sẽ được chuyển về danh sách chính.'
-                                    : 'Hội thoại sẽ được chuyển vào mục "Lưu trữ". Bạn vẫn có thể xem lại trong tab Lưu trữ.'
+                                    ? t('chat.infoSidebar.unarchiveWarning')
+                                    : t('chat.infoSidebar.archiveWarning')
                               }
                         </p>
                   </Modal>

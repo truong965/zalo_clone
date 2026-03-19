@@ -11,6 +11,7 @@ import { useConversationById } from '@/features/conversation/hooks/use-conversat
 import { DirectInfoContent } from './chat-info-sidebar/direct-info-content';
 import { GroupInfoContent } from './chat-info-sidebar/group-info-content';
 import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
@@ -31,6 +32,7 @@ export function ChatInfoSidebar({
       onLeaveGroup,
       onOpenMediaBrowser,
 }: ChatInfoSidebarProps) {
+      const { t } = useTranslation();
       const { data: conversation, isLoading } = useConversationById(conversationId);
 
       const isGroup = conversation?.type === 'GROUP';
@@ -40,7 +42,7 @@ export function ChatInfoSidebar({
                   {/* Header */}
                   <div className="flex-none h-14 flex items-center justify-center border-b border-gray-100">
                         <Title level={5} className="m-0">
-                              {isGroup ? 'Thông tin nhóm' : 'Thông tin hội thoại'}
+                              {isGroup ? t('chat.infoSidebar.groupInfo') : t('chat.infoSidebar.directInfo')}
                         </Title>
                   </div>
 

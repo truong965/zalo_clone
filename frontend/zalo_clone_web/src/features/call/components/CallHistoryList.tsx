@@ -13,6 +13,7 @@ import { useCallHistory, useMissedCallCount, useMarkMissedAsViewed } from '../ho
 import { useCallStore } from '../stores/call.store';
 import { CallHistoryItem } from './CallHistoryItem';
 import type { CallHistoryStatus, CallType } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
@@ -20,24 +21,16 @@ const { Title } = Typography;
 // TAB DEFINITIONS
 // ============================================================================
 
-interface TabDef {
-      key: string;
-      label: string;
-      status?: CallHistoryStatus;
-}
 
-const TABS: TabDef[] = [
-      { key: 'all', label: 'Tất cả' },
-      { key: 'missed', label: 'Nhỡ', status: 'MISSED' },
-];
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
 export function CallHistoryList() {
+      const { t } = useTranslation();
       const [activeTab, setActiveTab] = useState('all');
-      const currentTabDef = TABS.find((t) => t.key === activeTab);
+      const currentTabDef = [{ key: 'all', status: undefined }, { key: 'missed', status: 'MISSED' as CallHistoryStatus }].find((t) => t.key === activeTab);
       const statusFilter = currentTabDef?.status;
 
       const {
@@ -112,19 +105,16 @@ export function CallHistoryList() {
       const records = data?.pages.flatMap((page) => page.data) ?? [];
 
       // ── Tab items with badge ────────────────────────────────────────────
-      const tabItems = TABS.map((tab) => ({
-            key: tab.key,
-            label:
-                  tab.key === 'missed' && missedCount && missedCount.count > 0
-                        ? `${tab.label} (${missedCount.count})`
-                        : tab.label,
-      }));
+      const tabItems = [
+            { key: 'all', label: t('call.tabAll') },
+            { key: 'missed', label: missedCount && missedCount.count > 0 ? `${t('call.tabMissed')} (${missedCount.count})` : t('call.tabMissed') },
+      ];
 
       return (
             <div className="flex h-full flex-col px-4">
                   <div className="flex items-center justify-between px-4 pt-4 pb-2">
                         <Title level={4} className="!mb-0">
-                              Cuộc gọi
+                              {t('call.title')}
                         </Title>
                   </div>
 
@@ -145,13 +135,13 @@ export function CallHistoryList() {
 
                         {isError && (
                               <div className="px-4 py-8 text-center text-red-500">
-                                    Không thể tải lịch sử cuộc gọi
+                                    {t('call.loadError')}
                               </div>
                         )}
 
                         {!isLoading && !isError && records.length === 0 && (
                               <Empty
-                                    description={activeTab === 'missed' ? 'Không có cuộc gọi nhỡ' : 'Chưa có cuộc gọi nào'}
+                                    description={activeTab === 'missed' ? t('call.noMissed') : t('call.noHistory')}
                                     className="py-12"
                               />
                         )}

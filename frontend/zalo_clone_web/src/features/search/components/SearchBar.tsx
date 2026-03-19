@@ -43,7 +43,7 @@ export function SearchBar({
       onSuggestionSelect,
       onSearch,
       onBack,
-      placeholder = 'Tìm kiếm',
+      placeholder,
       autoFocus = false,
 }: SearchBarProps) {
       const [showSuggestions, setShowSuggestions] = useState(false);

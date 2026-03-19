@@ -6,6 +6,7 @@
  * Rules: composition-patterns, react-best-practices.
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { MediaProcessingStatus } from '@/types/api';
 import type { MessageMediaAttachmentItem } from '@/types/api';
@@ -19,6 +20,7 @@ interface AudioAttachmentProps {
 }
 
 export function AudioAttachment({ attachment, className }: AudioAttachmentProps) {
+      const { t } = useTranslation();
       const [isDownloading, setIsDownloading] = useState(false);
       const isReady = attachment.processingStatus === MediaProcessingStatus.READY;
       const isFailed = attachment.processingStatus === MediaProcessingStatus.FAILED;
@@ -37,14 +39,14 @@ export function AudioAttachment({ attachment, className }: AudioAttachmentProps)
                   const response = await fetch(attachment.cdnUrl);
                   const blob = await response.blob();
                   const blobUrl = URL.createObjectURL(blob);
-                  
+
                   const a = document.createElement('a');
                   a.href = blobUrl;
                   a.download = attachment.originalName;
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
-                  
+
                   URL.revokeObjectURL(blobUrl);
             } catch (error) {
                   console.error('Download failed:', error);
@@ -80,21 +82,21 @@ export function AudioAttachment({ attachment, className }: AudioAttachmentProps)
                                           onClick={handleDownload}
                                           disabled={isDownloading}
                                           className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${isDownloading ? 'text-blue-300 cursor-not-allowed bg-blue-50' : 'text-gray-500 hover:text-blue-600 hover:bg-black/5'}`}
-                                          title="Tải xuống"
+                                          title={t('conversation.attachments.download')}
                                     >
                                           <DownloadOutlined className={isDownloading ? "text-lg animate-pulse" : "text-lg"} />
                                     </button>
                               )}
                         </div>
                   ) : isFailed ? (
-                        <div className="text-xs text-red-500">Lỗi xử lý audio</div>
+                        <div className="text-xs text-red-500">{t('conversation.attachments.audioProcessingError')}</div>
                   ) : (
                         <div className="flex items-center gap-1.5 text-xs text-gray-400">
                               <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                               </svg>
-                              <span>Đang xử lý...</span>
+                              <span>{t('conversation.attachments.processing')}</span>
                         </div>
                   )}
             </div>

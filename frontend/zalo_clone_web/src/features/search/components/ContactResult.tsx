@@ -8,6 +8,7 @@
  * - Actions: Nhắn tin / Kết bạn
  */
 
+import { useTranslation } from 'react-i18next';
 import { Avatar, Typography, Tag, Button } from 'antd';
 import {
       MessageOutlined,
@@ -38,6 +39,7 @@ export function ContactResult({
       onAcceptRequest,
       onCancelRequest,
 }: ContactResultProps) {
+      const { t } = useTranslation();
       const relationLabel = getRelationshipLabel(
             data.relationshipStatus,
             data.requestDirection,
@@ -102,7 +104,7 @@ export function ContactResult({
                                     size="small"
                                     icon={<MessageOutlined />}
                                     className="text-blue-500"
-                                    title="Nhắn tin"
+                                    title={t('search.contactResult.sendMessage')}
                                     onClick={(e) => {
                                           e.stopPropagation();
                                           onSendMessage?.(data.id);
@@ -115,7 +117,7 @@ export function ContactResult({
                                     size="small"
                                     icon={<UserAddOutlined />}
                                     className="text-blue-500"
-                                    title="Kết bạn"
+                                    title={t('search.contactResult.addFriend')}
                                     onClick={(e) => {
                                           e.stopPropagation();
                                           onAddFriend?.(data.id);
@@ -128,7 +130,7 @@ export function ContactResult({
                                     size="small"
                                     icon={<RollbackOutlined />}
                                     className="text-orange-500"
-                                    title="Thu hồi lời mời"
+                                    title={t('search.contactResult.cancelRequest')}
                                     onClick={(e) => {
                                           e.stopPropagation();
                                           onCancelRequest?.(data.pendingRequestId!, data.id);
@@ -141,7 +143,7 @@ export function ContactResult({
                                     size="small"
                                     icon={<CheckOutlined />}
                                     className="text-green-600"
-                                    title="Chấp nhận kết bạn"
+                                    title={t('search.contactResult.acceptRequest')}
                                     onClick={(e) => {
                                           e.stopPropagation();
                                           onAcceptRequest?.(data.pendingRequestId!, data.id);

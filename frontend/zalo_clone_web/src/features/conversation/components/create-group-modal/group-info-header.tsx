@@ -6,6 +6,7 @@
  */
 
 import { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Input, Avatar, notification } from 'antd';
 import { CameraOutlined, TeamOutlined } from '@ant-design/icons';
 import { useCreateGroupStore } from '../../stores/create-group.store';
@@ -15,6 +16,7 @@ const MAX_NAME_LENGTH = 100;
 const MAX_FILE_SIZE = FILE_SIZE_LIMITS_MB.IMAGE * 1024 * 1024;
 
 export function GroupInfoHeader() {
+      const { t } = useTranslation();
       const groupName = useCreateGroupStore((s) => s.groupName);
       const avatarPreview = useCreateGroupStore((s) => s.avatarPreview);
       const setGroupName = useCreateGroupStore((s) => s.setGroupName);
@@ -31,12 +33,12 @@ export function GroupInfoHeader() {
             if (!file) return;
 
             if (!FileUtils.isImageFile(file)) {
-                  notification.warning({ message: 'Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF...)' });
+                  notification.warning({ message: t('conversation.createGroupModal.groupInfoHeader.imageWarning') });
                   return;
             }
 
             if (file.size > MAX_FILE_SIZE) {
-                  notification.warning({ message: 'Kích thước ảnh tối đa 5MB' });
+                  notification.warning({ message: t('conversation.createGroupModal.groupInfoHeader.imageSizeWarning') });
                   return;
             }
 
@@ -72,7 +74,7 @@ export function GroupInfoHeader() {
 
                   {/* Name input */}
                   <Input
-                        placeholder="Nhập tên nhóm..."
+                        placeholder={t('conversation.createGroupModal.groupInfoHeader.nameInputPlaceholder')}
                         value={groupName}
                         onChange={(e) => setGroupName(e.target.value)}
                         maxLength={MAX_NAME_LENGTH}

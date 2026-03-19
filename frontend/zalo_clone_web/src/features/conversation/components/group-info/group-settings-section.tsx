@@ -3,6 +3,7 @@
  *
  * Includes: require approval toggle, transfer admin, dissolve group.
  */
+import { useTranslation } from 'react-i18next';
 import { Switch, Modal } from 'antd';
 import {
       SwapOutlined,
@@ -26,6 +27,7 @@ export function GroupSettingsSection({
       onTransferAdmin,
       onDissolveGroup,
 }: GroupSettingsSectionProps) {
+      const { t } = useTranslation();
       if (!isAdmin) return null;
 
       const handleToggleApproval = async (checked: boolean) => {
@@ -38,13 +40,12 @@ export function GroupSettingsSection({
 
       const handleDissolve = () => {
             Modal.confirm({
-                  title: 'Giải tán nhóm',
+                  title: t('conversation.groupInfo.settingsSection.dissolveConfirmTitle'),
                   icon: <ExclamationCircleOutlined />,
-                  content:
-                        'Bạn có chắc chắn muốn giải tán nhóm? Tất cả tin nhắn và dữ liệu nhóm sẽ bị xóa. Hành động này không thể hoàn tác.',
-                  okText: 'Giải tán',
+                  content: t('conversation.groupInfo.settingsSection.dissolveConfirmContent'),
+                  okText: t('conversation.groupInfo.settingsSection.dissolveConfirmOk'),
                   okType: 'danger',
-                  cancelText: 'Hủy',
+                  cancelText: t('conversation.groupInfo.settingsSection.dissolveConfirmCancel'),
                   onOk: onDissolveGroup,
             });
       };
@@ -54,7 +55,7 @@ export function GroupSettingsSection({
                   <div className="flex items-center gap-2 px-4 py-3">
                         <SettingOutlined className="text-gray-500" />
                         <span className="text-sm font-medium text-gray-700">
-                              Thiết lập nhóm
+                              {t('conversation.groupInfo.settingsSection.title')}
                         </span>
                   </div>
 
@@ -62,7 +63,7 @@ export function GroupSettingsSection({
                         {/* Require Approval Toggle */}
                         <div className="flex items-center justify-between py-2 px-1">
                               <span className="text-sm text-gray-600">
-                                    Phê duyệt thành viên mới
+                                    {t('conversation.groupInfo.settingsSection.requireApproval')}
                               </span>
                               <Switch
                                     size="small"
@@ -78,7 +79,7 @@ export function GroupSettingsSection({
                         >
                               <SwapOutlined className="text-gray-500" />
                               <span className="text-sm text-gray-600">
-                                    Chuyển quyền trưởng nhóm
+                                    {t('conversation.groupInfo.settingsSection.transferAdminButton')}
                               </span>
                         </button>
 
@@ -89,7 +90,7 @@ export function GroupSettingsSection({
                         >
                               <CloseCircleOutlined className="text-red-500" />
                               <span className="text-sm text-red-500">
-                                    Giải tán nhóm
+                                    {t('conversation.groupInfo.settingsSection.dissolveButton')}
                               </span>
                         </button>
                   </div>

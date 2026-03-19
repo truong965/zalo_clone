@@ -7,6 +7,7 @@
  */
 
 import { useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Spin, Empty, Typography, Alert } from 'antd';
 import { MemberListItem } from './member-list-item';
 import { useFriendSearch } from '../../hooks/use-friend-search';
@@ -15,6 +16,7 @@ import { useCreateGroupStore } from '../../stores/create-group.store';
 const { Text } = Typography;
 
 export function MemberList() {
+      const { t } = useTranslation();
       const searchTab = useCreateGroupStore((s) => s.searchTab);
       const searchKeyword = useCreateGroupStore((s) => s.searchKeyword);
 
@@ -52,8 +54,8 @@ export function MemberList() {
                         <Alert
                               type="info"
                               showIcon
-                              message="Nhập đúng số điện thoại"
-                              description="Nhập số điện thoại đầy đủ (VD: 0901234567) để tìm người dùng."
+                              message={t('conversation.createGroupModal.memberList.phoneInputPrompt')}
+                              description={t('conversation.createGroupModal.memberList.phoneFormatHint')}
                         />
                   </div>
             );
@@ -64,7 +66,7 @@ export function MemberList() {
             return (
                   <div className="flex items-center justify-center py-12 text-gray-400">
                         <Text type="secondary">
-                              Nhập số điện thoại để tìm người dùng
+                              {t('conversation.createGroupModal.memberList.phoneInputPrompt')}
                         </Text>
                   </div>
             );
@@ -86,15 +88,15 @@ export function MemberList() {
                         <Alert
                               type="error"
                               showIcon
-                              message="Không thể tải danh sách"
-                              description="Đã xảy ra lỗi khi tải dữ liệu. Vui lòng thử lại."
+                              message={t('conversation.createGroupModal.memberList.loadError')}
+                              description={t('conversation.createGroupModal.memberList.loadErrorDesc')}
                               action={
                                     <button
                                           type="button"
                                           className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                                           onClick={() => void refetch()}
                                     >
-                                          Thử lại
+                                          {t('conversation.createGroupModal.memberList.retryButton')}
                                     </button>
                               }
                         />
@@ -109,8 +111,8 @@ export function MemberList() {
                         description={
                               <Text type="secondary">
                                     {searchKeyword
-                                          ? 'Không tìm thấy kết quả'
-                                          : 'Chưa có bạn bè nào'}
+                                          ? t('conversation.createGroupModal.memberList.noSearchResults')
+                                          : t('conversation.createGroupModal.memberList.noFriends')}
                               </Text>
                         }
                         className="py-8"

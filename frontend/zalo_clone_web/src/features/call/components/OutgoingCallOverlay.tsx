@@ -16,10 +16,12 @@ import { useCallback } from 'react';
 import { Avatar, Button, Typography } from 'antd';
 import { PhoneOutlined, VideoCameraOutlined, UserOutlined } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
 export function OutgoingCallOverlay() {
+      const { t } = useTranslation();
       const callStatus = useCallStore((s) => s.callStatus);
       const callType = useCallStore((s) => s.callType);
       const peerInfo = useCallStore((s) => s.peerInfo);
@@ -38,7 +40,7 @@ export function OutgoingCallOverlay() {
                         {/* Call type indicator */}
                         <div className="flex items-center gap-2 text-gray-400 text-sm">
                               {isVideo ? <VideoCameraOutlined /> : <PhoneOutlined />}
-                              <span>{isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}</span>
+                              <span>{isVideo ? t('call.outgoingVideo') : t('call.outgoingVoice')}</span>
                         </div>
 
                         {/* Callee avatar with slow pulse animation */}
@@ -55,9 +57,9 @@ export function OutgoingCallOverlay() {
                         {/* Callee name + status */}
                         <div className="text-center">
                               <Title level={4} className="!text-white !mb-1">
-                                    {peerInfo?.displayName ?? 'Đang gọi…'}
+                                    {peerInfo?.displayName ?? t('call.callingStatus')}
                               </Title>
-                              <Text className="!text-gray-400 text-sm">Đang gọi…</Text>
+                              <Text className="!text-gray-400 text-sm">{t('call.callingStatus')}</Text>
                         </div>
 
                         {/* Hangup button */}
@@ -70,7 +72,7 @@ export function OutgoingCallOverlay() {
                                     onClick={handleHangup}
                                     className="!w-16 !h-16 !text-xl"
                               />
-                              <Text className="!text-gray-400 text-xs">Kết thúc</Text>
+                              <Text className="!text-gray-400 text-xs">{t('call.endCall')}</Text>
                         </div>
                   </div>
             </div>

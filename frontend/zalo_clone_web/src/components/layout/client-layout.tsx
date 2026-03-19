@@ -56,7 +56,7 @@ export function ClientLayout() {
 
                   {/* Phần nội dung chính */}
                   <Layout className="flex-1 bg-white h-full relative">
-                        <Content className="h-full overflow-hidden flex flex-col bg-white">
+                        <Content className="h-full overflow-hidden flex flex-col">
                               {/* Outlet ở đây sẽ render các trang con (Chat, Contacts...).
                                 Các trang này nên tự handle việc scroll của riêng nó.
                               */}

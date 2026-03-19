@@ -16,7 +16,7 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import {
-      Collapse, Modal, Spin, Result, Button,
+      Collapse, Modal, Spin, Result, Button, notification,
 } from 'antd';
 import {
       RightOutlined,
@@ -24,6 +24,8 @@ import {
       ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import type { ConversationUI } from '@/types/api';
+import apiClient from '@/lib/axios';
+import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import {
       useConversationMembers,
       useInvalidateConversations,
@@ -44,6 +46,7 @@ import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
 import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
 import { RecentFileItem } from '@/features/chat/components/recent-file-item';
 import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
+import { useTranslation } from 'react-i18next';
 
 interface GroupInfoContentProps {
       conversation: ConversationUI;
@@ -64,6 +67,7 @@ export function GroupInfoContent({
       onLeaveGroup,
       onOpenMediaBrowser,
 }: GroupInfoContentProps) {
+      const { t } = useTranslation();
       const [showAddMembers, setShowAddMembers] = useState(false);
       const [showTransferAdmin, setShowTransferAdmin] = useState(false);
       const [joinRequestRefreshTrigger, setJoinRequestRefreshTrigger] = useState(0);
@@ -205,6 +209,39 @@ export function GroupInfoContent({
             invalidateDetail(conversationId);
       };
 
+      async function uploadGroupAvatarFile(file: File): Promise<string> {
+            const { data: initRes } = await apiClient.post(API_ENDPOINTS.MEDIA.UPLOAD_AVATAR, {
+                  fileName: file.name,
+                  mimeType: file.type,
+                  fileSize: file.size,
+            });
+
+            const { presignedUrl, fileUrl } = initRes.data;
+
+            const uploadRes = await fetch(presignedUrl, {
+                  method: 'PUT',
+                  body: file,
+                  headers: { 'Content-Type': file.type },
+            });
+
+            if (!uploadRes.ok) {
+                  throw new Error(`Upload failed: ${uploadRes.status}`);
+            }
+
+            return fileUrl;
+      }
+
+      const handleUpdateGroupAvatar = useCallback(async (file: File) => {
+            try {
+                  const avatarUrl = await uploadGroupAvatarFile(file);
+                  await updateGroup(conversationId, { avatarUrl: avatarUrl });
+                  invalidateDetail(conversationId);
+                  notification.success({ message: 'Cập nhật ảnh đại diện nhóm thành công' });
+            } catch {
+                  notification.error({ message: 'Không thể tải ảnh lên' });
+            }
+      }, [conversationId, invalidateDetail, updateGroup]);
+
       const handleAddMembers = async (userIds: string[]) => {
             // If non-admin and group requires approval → invite via GroupJoinRequest
             if (!isAdmin && conversation.requireApproval) {
@@ -223,12 +260,12 @@ export function GroupInfoContent({
       const handleRemoveMember = (userId: string) => {
             const member = members.find((m) => m.id === userId);
             Modal.confirm({
-                  title: 'Xóa thành viên',
+                  title: t('chat.infoSidebar.removeMemberTitle'),
                   icon: <ExclamationCircleOutlined />,
-                  content: `Bạn có chắc chắn muốn xóa "${member?.displayName ?? 'thành viên này'}" khỏi nhóm?`,
-                  okText: 'Xóa',
+                  content: t('chat.infoSidebar.removeMemberConfirm', { name: member?.displayName ?? 'thành viên này' }),
+                  okText: t('chat.infoSidebar.remove'),
                   okType: 'danger',
-                  cancelText: 'Hủy',
+                  cancelText: t('chat.infoSidebar.blockConfirmCancel'),
                   onOk: async () => {
                         try {
                               await removeMember(conversationId, userId);
@@ -280,12 +317,12 @@ export function GroupInfoContent({
       const mediaItems = [
             {
                   key: '1',
-                  label: <span className="font-medium">Ảnh/Video</span>,
+                  label: <span className="font-medium">{t('chat.infoSidebar.media')}</span>,
                   children: (
                         <>
                               {!recentMedia?.length ? (
                                     <div className="text-gray-500 text-center py-2 text-xs">
-                                          Chưa có Ảnh/Video được chia sẻ
+                                          {t('chat.infoSidebar.noMedia')}
                                     </div>
                               ) : (
                                     <>
@@ -307,7 +344,7 @@ export function GroupInfoContent({
                                                 className="w-full mt-1 text-xs"
                                                 onClick={() => onOpenMediaBrowser?.('photos')}
                                           >
-                                                Xem tất cả
+                                                {t('chat.infoSidebar.viewAll')}
                                           </Button>
                                     </>
                               )}
@@ -316,12 +353,12 @@ export function GroupInfoContent({
             },
             {
                   key: '2',
-                  label: <span className="font-medium">File</span>,
+                  label: <span className="font-medium">{t('chat.infoSidebar.file')}</span>,
                   children: (
                         <>
                               {!recentFiles?.length ? (
                                     <div className="text-gray-500 text-center py-2 text-xs">
-                                          Chưa có File được chia sẻ
+                                          {t('chat.infoSidebar.noFile')}
                                     </div>
                               ) : (
                                     <>
@@ -343,7 +380,7 @@ export function GroupInfoContent({
                                                 className="w-full mt-1 text-xs"
                                                 onClick={() => onOpenMediaBrowser?.('files')}
                                           >
-                                                Xem tất cả
+                                                {t('chat.infoSidebar.viewAll')}
                                           </Button>
                                     </>
                               )}
@@ -356,7 +393,7 @@ export function GroupInfoContent({
       if (isLoadingMembers && members.length === 0) {
             return (
                   <div className="flex items-center justify-center h-full">
-                        <Spin tip="Đang tải thông tin nhóm..." />
+                        <Spin tip={t('chat.infoSidebar.loadingGroupInfo')} />
                   </div>
             );
       }
@@ -366,8 +403,8 @@ export function GroupInfoContent({
             return (
                   <Result
                         status="error"
-                        title="Không thể tải thông tin nhóm"
-                        subTitle="Vui lòng thử lại sau"
+                        title={t('chat.infoSidebar.errorTitle')}
+                        subTitle={t('chat.infoSidebar.errorSub')}
                   />
             );
       }
@@ -379,6 +416,7 @@ export function GroupInfoContent({
                         conversation={conversation}
                         isAdmin={isAdmin}
                         onUpdateName={handleUpdateName}
+                        onUpdateAvatar={handleUpdateGroupAvatar}
                         onAddMembers={() => setShowAddMembers(true)}
                         onTogglePin={() => togglePin(conversation.id, !!conversation.isPinned)}
                         onToggleMute={() => toggleMute(conversation.id, !!conversation.isMuted)}
@@ -393,7 +431,7 @@ export function GroupInfoContent({
                         >
                               <ClockCircleOutlined className="text-gray-500 text-lg" />
                               <span className="text-sm font-medium text-gray-600 flex-1">
-                                    Danh sách nhắc hẹn
+                                    {t('chat.infoSidebar.reminders')}
                               </span>
                               <RightOutlined
                                     rotate={showReminders ? 90 : 0}
@@ -410,7 +448,7 @@ export function GroupInfoContent({
                                                 icon={<ClockCircleOutlined />}
                                                 onClick={() => setShowCreateReminder(true)}
                                           >
-                                                Tạo nhắc hẹn
+                                                {t('chat.infoSidebar.createReminder')}
                                           </Button>
                                     </div>
                                     <ReminderList

@@ -7,6 +7,7 @@
  * - Badge: Đã tham gia / Chưa tham gia
  */
 
+import { useTranslation } from 'react-i18next';
 import { Avatar, Typography, Tag } from 'antd';
 import { TeamOutlined } from '@ant-design/icons';
 import type { GroupSearchResult } from '../types';
@@ -20,10 +21,11 @@ interface GroupResultProps {
 }
 
 export function GroupResult({ data, onClick }: GroupResultProps) {
+      const { t } = useTranslation();
       const membersText =
             data.membersPreview.length > 0
                   ? data.membersPreview.slice(0, 3).join(', ')
-                  : `${data.memberCount} thành viên`;
+                  : t('search.groupResult.members', { count: data.memberCount });
 
       return (
             <div
@@ -50,17 +52,17 @@ export function GroupResult({ data, onClick }: GroupResultProps) {
                                     className="text-[10px] leading-none border-0 m-0"
                                     color={data.isUserMember ? 'green' : 'default'}
                               >
-                                    {data.isUserMember ? 'Đã tham gia' : 'Chưa tham gia'}
+                                    {data.isUserMember ? t('search.groupResult.joined') : t('search.groupResult.notJoined')}
                               </Tag>
                         </div>
                         <Text className="text-xs text-gray-500 block truncate">
                               <TeamOutlined className="mr-1" />
-                              {data.memberCount} thành viên
+                              {t('search.groupResult.members', { count: data.memberCount })}
                               {data.membersPreview.length > 0 && ` · ${membersText}`}
                         </Text>
                         {data.lastMessageAt && (
                               <Text className="text-[11px] text-gray-400 block mt-0.5">
-                                    Hoạt động {formatSearchTimestamp(data.lastMessageAt)}
+                                    {t('search.groupResult.active')} {formatSearchTimestamp(data.lastMessageAt)}
                               </Text>
                         )}
                   </div>

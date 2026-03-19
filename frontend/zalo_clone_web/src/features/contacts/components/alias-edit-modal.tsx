@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { Button, Input, Modal, Space, Typography } from 'antd';
 import { useUpdateAlias } from '../hooks/use-update-alias';
 import { useContactCheck } from '../hooks/use-contact-check';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -45,6 +46,7 @@ export function AliasEditModal({
       currentAlias: currentAliasProp,
       onClose,
 }: AliasEditModalProps) {
+      const { t } = useTranslation();
       // Self-fetch only when caller didn't supply currentAlias
       const needsFetch = currentAliasProp === undefined;
       const { data: contactInfo } = useContactCheck(needsFetch && open ? contactUserId : null);
@@ -84,18 +86,18 @@ export function AliasEditModal({
       return (
             <Modal
                   open={open}
-                  title="Đặt tên gợi nhớ"
+                  title={t('contacts.alias.modalTitle')}
                   onCancel={onClose}
                   destroyOnHidden
                   footer={
                         <Space>
                               {resolvedAlias && (
                                     <Button danger onClick={handleReset} loading={isPending} disabled={isPending}>
-                                          Xoá biệt danh
+                                          {t('contacts.alias.deleteAlias')}
                                     </Button>
                               )}
                               <Button onClick={onClose} disabled={isPending}>
-                                    Huỷ
+                                    {t('contacts.alias.cancel')}
                               </Button>
                               <Button
                                     type="primary"
@@ -103,20 +105,19 @@ export function AliasEditModal({
                                     loading={isPending}
                                     disabled={!isEdited || isPending}
                               >
-                                    Lưu
+                                    {t('contacts.alias.save')}
                               </Button>
                         </Space>
                   }
             >
                   <Space direction="vertical" className="w-full" size="small">
                         <Text type="secondary">
-                              Tên gợi nhớ chỉ hiển thị với bạn. Tên thật:{' '}
-                              <strong>{contactDisplayName}</strong>
+                              {t('contacts.alias.hint', { name: contactDisplayName })}
                         </Text>
                         <Input
                               autoFocus
                               maxLength={50}
-                              placeholder={`Biệt danh cho ${contactDisplayName}`}
+                              placeholder={t('contacts.alias.placeholder', { name: contactDisplayName })}
                               value={inputValue}
                               onChange={(e) => setInputValue(e.target.value)}
                               onPressEnter={isEdited ? handleSave : undefined}

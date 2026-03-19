@@ -27,25 +27,24 @@ import {
 } from '@/features/search';
 import type { MessageSearchResult } from '@/features/search';
 import { conversationService } from '@/features/conversation';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
-
-dayjs.locale('vi');
 
 // ── Constants ────────────────────────────────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function formatDateDivider(dateKey: string): string {
+function formatDateDivider(dateKey: string, t: (key: string) => string): string {
       const d = dayjs(dateKey);
       const today = dayjs().startOf('day');
       const diff = today.diff(d, 'day');
-      if (diff === 0) return 'Hôm nay';
-      if (diff === 1) return 'Hôm qua';
+      if (diff === 0) return t('chat.today');
+      if (diff === 1) return t('chat.yesterday');
       if (diff < 7) return d.format('dddd');          // e.g. "thứ ba"
-      if (d.year() === today.year()) return d.format('D [tháng] M');
-      return d.format('D [tháng] M, YYYY');
+      if (d.year() === today.year()) return d.format(t('chat.searchSidebar.dateFormatSameYear'));
+      return d.format(t('chat.searchSidebar.dateFormatOtherYear'));
 }
 
 interface ChatSearchSidebarProps {
@@ -75,7 +74,14 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
             setFilters,
             closeSearch,
       } = useSearch({ conversationId, store: 'conversation' });
+      const { t, i18n } = useTranslation();
 
+      // Sync dayjs locale with i18next
+      useEffect(() => {
+            if (i18n.language) {
+                  dayjs.locale(i18n.language);
+            }
+      }, [i18n.language]);
       // Show filter panel if there are persisted active filters
       const hasActiveFilters = !!(filters.startDate || filters.endDate || filters.fromUserId);
       const [showFilters, setShowFilters] = useState(hasActiveFilters);
@@ -88,7 +94,7 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                   initialFiltersCleared.current = true;
                   setFilters({ startDate: undefined, endDate: undefined, fromUserId: undefined });
             }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+            // eslint-disable-next-line react-hooks/exhaustive-deps
       }, []);
 
       // Auto-search when initialKeyword is provided AND socket is connected
@@ -169,13 +175,13 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
             <div className="w-[340px] h-full border-l border-gray-200 bg-white flex flex-col animate-slide-in-right">
                   {/* Header */}
                   <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
-                        <Title level={5} className="m-0 !text-gray-700">Tìm kiếm trong trò chuyện</Title>
+                        <Title level={5} className="m-0 !text-gray-700">{t('chat.searchSidebar.title')}</Title>
                         <div className="flex items-center gap-1">
                               <Button
                                     type="text"
                                     icon={<FilterOutlined className={hasActiveFilters ? 'text-blue-500' : ''} />}
                                     onClick={() => setShowFilters((v) => !v)}
-                                    title="Bộ lọc"
+                                    title={t('chat.searchSidebar.filters')}
                               />
                               <Button type="text" icon={<CloseOutlined />} onClick={handleClose} />
                         </div>
@@ -191,7 +197,7 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                                           <SearchOutlined className="text-gray-400" />
                                     )
                               }
-                              placeholder="Nhập từ khóa để tìm kiếm"
+                              placeholder={t('chat.searchSidebar.searchPlaceholder')}
                               value={keyword}
                               onChange={(e) => handleKeywordChange(e.target.value)}
                               onPressEnter={(e) => triggerSearch((e.target as HTMLInputElement).value)}
@@ -205,7 +211,7 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                   {showFilters && (
                         <div className="px-3 py-2.5 border-b border-gray-100 bg-gray-50 space-y-2">
                               <div className="flex items-center justify-between">
-                                    <Text className="text-xs text-gray-500 font-medium">Bộ lọc nâng cao</Text>
+                                    <Text className="text-xs text-gray-500 font-medium">{t('chat.searchSidebar.advancedFilters')}</Text>
                                     {hasActiveFilters && (
                                           <Button
                                                 type="link"
@@ -213,19 +219,19 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                                                 className="text-xs p-0 h-auto"
                                                 onClick={handleClearFilters}
                                           >
-                                                Xóa bộ lọc
+                                                {t('chat.searchSidebar.clearFilters')}
                                           </Button>
                                     )}
                               </div>
 
                               {/* Date range filter */}
                               <div>
-                                    <Text className="text-[11px] text-gray-400 block mb-1">Khoảng thời gian</Text>
+                                    <Text className="text-[11px] text-gray-400 block mb-1">{t('chat.searchSidebar.dateRange')}</Text>
                                     <RangePicker
                                           size="small"
                                           className="w-full"
                                           format="DD/MM/YYYY"
-                                          placeholder={['Từ ngày', 'Đến ngày']}
+                                          placeholder={[t('chat.searchSidebar.startDate'), t('chat.searchSidebar.endDate')]}
                                           value={
                                                 filters.startDate || filters.endDate
                                                       ? [
@@ -241,11 +247,11 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
 
                               {/* Sender filter */}
                               <div>
-                                    <Text className="text-[11px] text-gray-400 block mb-1">Người gửi</Text>
+                                    <Text className="text-[11px] text-gray-400 block mb-1">{t('chat.searchSidebar.sender')}</Text>
                                     <Select
                                           size="small"
                                           className="w-full"
-                                          placeholder="Tất cả thành viên"
+                                          placeholder={t('chat.searchSidebar.allMembers')}
                                           value={filters.fromUserId}
                                           onChange={handleSenderChange}
                                           allowClear
@@ -289,10 +295,12 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                         {hasActiveFilters && !showFilters && (
                               <div className="px-3 py-1.5 bg-blue-50 border-b border-blue-100">
                                     <Text className="text-[11px] text-blue-600">
-                                          🔽 Đang lọc theo {[
-                                                (filters.startDate || filters.endDate) && 'thời gian',
-                                                filters.fromUserId && 'người gửi',
-                                          ].filter(Boolean).join(' và ')}
+                                          {t('chat.searchSidebar.activeFilterIndicator', {
+                                                filters: [
+                                                      (filters.startDate || filters.endDate) && t('chat.searchSidebar.filterTime'),
+                                                      filters.fromUserId && t('chat.searchSidebar.filterSender'),
+                                                ].filter(Boolean).join(t('chat.searchSidebar.filterAnd')),
+                                          })}
                                     </Text>
                               </div>
                         )}
@@ -311,8 +319,8 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                                     <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-4">
                                           <SearchOutlined className="text-5xl text-blue-300" />
                                     </div>
-                                    <Text strong className="block mb-1">Hãy nhập từ khóa để bắt đầu tìm kiếm</Text>
-                                    <Text type="secondary">tin nhắn và file trong trò chuyện</Text>
+                                    <Text strong className="block mb-1">{t('chat.searchSidebar.initialStateTitle')}</Text>
+                                    <Text type="secondary">{t('chat.searchSidebar.initialStateSub')}</Text>
                               </div>
                         )}
 
@@ -321,14 +329,14 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                               <div className="pb-4">
                                     <div className="px-3 py-1.5">
                                           <Text className="text-[11px] text-gray-400">
-                                                {messages.length} kết quả
+                                                {t('chat.searchSidebar.resultsCount', { count: messages.length })}
                                           </Text>
                                     </div>
                                     {groupedMessages.map(([dateKey, group]) => (
                                           <div key={dateKey}>
                                                 <Divider className="!my-1">
                                                       <Text className="text-[11px] text-gray-400">
-                                                            {formatDateDivider(dateKey)}
+                                                            {formatDateDivider(dateKey, t)}
                                                       </Text>
                                                 </Divider>
                                                 {group.map((msg) => (

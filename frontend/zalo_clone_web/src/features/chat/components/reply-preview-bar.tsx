@@ -11,6 +11,7 @@
  *   - rerender-memo: pure presentational, no internal state
  */
 
+import { useTranslation } from 'react-i18next';
 import { CloseOutlined, FileOutlined, PictureOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import type { ReplyTarget } from '../stores/chat.store';
 
@@ -30,23 +31,24 @@ function getMediaIcon(mediaType: string) {
       }
 }
 
-function getPreviewText(target: ReplyTarget): string {
-      if (target.content) return target.content;
-
-      const attachment = target.mediaAttachments?.[0];
-      if (attachment) {
-            const typeLabel = attachment.mediaType === 'IMAGE' ? 'Hình ảnh'
-                  : attachment.mediaType === 'VIDEO' ? 'Video'
-                        : attachment.mediaType === 'AUDIO' ? 'Audio'
-                              : 'File';
-            return `[${typeLabel}] ${attachment.originalName}`;
-      }
-
-      return '[Tin nhắn]';
-}
+// getPreviewText now handled in component with useTranslation
 
 export function ReplyPreviewBar({ target, onCancel }: ReplyPreviewBarProps) {
+      const { t } = useTranslation();
       const attachment = target.mediaAttachments?.[0];
+
+      const getPreviewText = (target: ReplyTarget): string => {
+            if (target.content) return target.content;
+            const attachment = target.mediaAttachments?.[0];
+            if (attachment) {
+                  const typeLabel = attachment.mediaType === 'IMAGE' ? t('chat.input.sendImageVideo')
+                        : attachment.mediaType === 'VIDEO' ? t('chat.header.videoCall')
+                              : attachment.mediaType === 'AUDIO' ? t('chat.messageList.callVoice')
+                                    : t('chat.input.attachFile');
+                  return `[${typeLabel}] ${attachment.originalName}`;
+            }
+            return `[${t('chat.messageList.messagePreview')}]`;
+      };
 
       return (
             <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-t border-gray-200">
@@ -63,7 +65,7 @@ export function ReplyPreviewBar({ target, onCancel }: ReplyPreviewBarProps) {
                   {/* Text content */}
                   <div className="flex-1 min-w-0">
                         <div className="text-xs font-medium text-blue-600 truncate">
-                              Trả lời {target.senderName}
+                              {t('chat.messageList.reply')} {target.senderName}
                         </div>
                         <div className="text-xs text-gray-500 truncate">
                               {getPreviewText(target)}
@@ -75,7 +77,7 @@ export function ReplyPreviewBar({ target, onCancel }: ReplyPreviewBarProps) {
                         type="button"
                         onClick={onCancel}
                         className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors text-gray-400 hover:text-gray-600"
-                        aria-label="Hủy trả lời"
+                        aria-label={t('chat.input.send')}
                   >
                         <CloseOutlined className="text-xs" />
                   </button>

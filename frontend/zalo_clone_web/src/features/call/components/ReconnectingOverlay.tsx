@@ -18,6 +18,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Button, Spin, Typography } from 'antd';
 import { PhoneOutlined } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
@@ -32,6 +33,7 @@ interface ReconnectingOverlayProps {
 }
 
 export function ReconnectingOverlay({ onHangup }: ReconnectingOverlayProps) {
+      const { t } = useTranslation();
       const peerInfo = useCallStore((s) => s.peerInfo);
       const reconnectStartedAt = useCallStore((s) => s.reconnectStartedAt);
 
@@ -63,13 +65,13 @@ export function ReconnectingOverlay({ onHangup }: ReconnectingOverlayProps) {
       // ── Status message based on phase ─────────────────────────────────
       let statusMessage: string;
       if (elapsedS < 6) {
-            statusMessage = `Đang kết nối lại với ${peerInfo?.displayName ?? 'đối phương'}…`;
+            statusMessage = t('call.reconnectPhase1', { name: peerInfo?.displayName ?? '' });
       } else if (elapsedS < SHOW_END_BUTTON_S) {
-            statusMessage = 'Đang thử kết nối lại lần 2…';
+            statusMessage = t('call.reconnectPhase2');
       } else if (nearAutoEnd) {
-            statusMessage = `Kết nối sẽ tự động kết thúc sau ${remainingS}s`;
+            statusMessage = t('call.reconnectAutoEnd', { s: remainingS });
       } else {
-            statusMessage = 'Kết nối kém, đang thử lại…';
+            statusMessage = t('call.reconnectWeak');
       }
 
       return (
@@ -77,7 +79,7 @@ export function ReconnectingOverlay({ onHangup }: ReconnectingOverlayProps) {
                   <Spin size="large" />
 
                   <Title level={4} className="!text-white !mt-6 !mb-2">
-                        Đang kết nối lại…
+                        {t('call.reconnecting')}
                   </Title>
 
                   <Text className="!text-gray-400 mb-2">
@@ -98,7 +100,7 @@ export function ReconnectingOverlay({ onHangup }: ReconnectingOverlayProps) {
                               icon={<PhoneOutlined className="rotate-[135deg]" />}
                               onClick={onHangup}
                         >
-                              Kết thúc cuộc gọi
+                              {t('call.endCallBtn')}
                         </Button>
                   )}
             </div>

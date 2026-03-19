@@ -21,6 +21,7 @@ import {
 import { useFriendshipStore, type FriendRequestTab } from '../stores/friendship.store';
 import { FriendCard } from './friend-card';
 import type { FriendRequestWithUserDto } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -31,13 +32,14 @@ const { Text } = Typography;
 function ReceivedRequestItem({ request }: { request: FriendRequestWithUserDto }) {
       const accept = useAcceptRequest();
       const decline = useDeclineRequest();
+      const { t } = useTranslation();
 
       const isLoading = accept.isPending || decline.isPending;
 
       return (
             <FriendCard
                   user={request.requester}
-                  subtitle={formatTimeAgo(request.createdAt)}
+                  subtitle={formatTimeAgo(request.createdAt, t)}
                   actions={
                         <>
                               <Button
@@ -48,7 +50,7 @@ function ReceivedRequestItem({ request }: { request: FriendRequestWithUserDto })
                                     disabled={isLoading}
                                     onClick={() => accept.mutate(request.id)}
                               >
-                                    Chấp nhận
+                                    {t('contacts.friendRequest.accept')}
                               </Button>
                               <Button
                                     size="small"
@@ -57,7 +59,7 @@ function ReceivedRequestItem({ request }: { request: FriendRequestWithUserDto })
                                     disabled={isLoading}
                                     onClick={() => decline.mutate(request.id)}
                               >
-                                    Từ chối
+                                    {t('contacts.friendRequest.decline')}
                               </Button>
                         </>
                   }
@@ -67,11 +69,12 @@ function ReceivedRequestItem({ request }: { request: FriendRequestWithUserDto })
 
 function SentRequestItem({ request }: { request: FriendRequestWithUserDto }) {
       const cancel = useCancelRequest();
+      const { t } = useTranslation();
 
       return (
             <FriendCard
                   user={request.target}
-                  subtitle={formatTimeAgo(request.createdAt)}
+                  subtitle={formatTimeAgo(request.createdAt, t)}
                   actions={
                         <Button
                               size="small"
@@ -79,7 +82,7 @@ function SentRequestItem({ request }: { request: FriendRequestWithUserDto }) {
                               loading={cancel.isPending}
                               onClick={() => cancel.mutate(request.id)}
                         >
-                              Thu hồi
+                              {t('contacts.friendRequest.recall')}
                         </Button>
                   }
             />
@@ -94,6 +97,7 @@ export function FriendRequestList() {
       const activeTab = useFriendshipStore((s) => s.activeTab);
       const setActiveTab = useFriendshipStore((s) => s.setActiveTab);
       const pendingReceivedCount = useFriendshipStore((s) => s.pendingReceivedCount);
+      const { t } = useTranslation();
 
       const received = useReceivedRequests();
       const sent = useSentRequests();
@@ -109,26 +113,26 @@ export function FriendRequestList() {
                                     key: 'received',
                                     label: (
                                           <Badge count={pendingReceivedCount} size="small" offset={[8, -2]}>
-                                                <span>Đã nhận</span>
+                                                <span>{t('contacts.friendRequest.tabReceived')}</span>
                                           </Badge>
                                     ),
                                     children: (
                                           <RequestTabContent
                                                 data={received.data}
                                                 isLoading={received.isLoading}
-                                                emptyText="Không có lời mời nào"
+                                                emptyText={t('contacts.friendRequest.emptyReceived')}
                                                 renderItem={(r) => <ReceivedRequestItem key={r.id} request={r} />}
                                           />
                                     ),
                               },
                               {
                                     key: 'sent',
-                                    label: 'Đã gửi',
+                                    label: t('contacts.friendRequest.tabSent'),
                                     children: (
                                           <RequestTabContent
                                                 data={sent.data}
                                                 isLoading={sent.isLoading}
-                                                emptyText="Bạn chưa gửi lời mời nào"
+                                                emptyText={t('contacts.friendRequest.emptySent')}
                                                 renderItem={(r) => <SentRequestItem key={r.id} request={r} />}
                                           />
                                     ),
@@ -173,14 +177,14 @@ function RequestTabContent({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatTimeAgo(dateStr: string): string {
+function formatTimeAgo(dateStr: string, t: any): string {
       const diff = Date.now() - new Date(dateStr).getTime();
       const minutes = Math.floor(diff / 60_000);
-      if (minutes < 1) return 'Vừa xong';
-      if (minutes < 60) return `${minutes} phút trước`;
+      if (minutes < 1) return t('contacts.friendRequest.justNow');
+      if (minutes < 60) return t('contacts.friendRequest.minutesAgo', { count: minutes });
       const hours = Math.floor(minutes / 60);
-      if (hours < 24) return `${hours} giờ trước`;
+      if (hours < 24) return t('contacts.friendRequest.hoursAgo', { count: hours });
       const days = Math.floor(hours / 24);
-      if (days < 30) return `${days} ngày trước`;
-      return new Date(dateStr).toLocaleDateString('vi-VN');
+      if (days < 30) return t('contacts.friendRequest.daysAgo', { count: days });
+      return new Date(dateStr).toLocaleDateString();
 }

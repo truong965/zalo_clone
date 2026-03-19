@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons';
 import { ConversationItem } from './conversation-item';
 import type { ConversationUI, ConversationFilterTab } from '../types';
+import { useTranslation } from 'react-i18next';
 
 interface ConversationSidebarProps {
       conversations: ConversationUI[];
@@ -52,6 +53,7 @@ export function ConversationSidebar({
       onToggleMute,
       onToggleArchive,
 }: ConversationSidebarProps) {
+      const { t } = useTranslation();
       const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
       const filteredConversations = activeTab === 'archived'
@@ -79,7 +81,7 @@ export function ConversationSidebar({
                   <div className="flex-none px-4 py-3 flex items-center gap-2 border-b border-gray-100">
                         <Input
                               prefix={<SearchOutlined className="text-gray-400" />}
-                              placeholder="Tìm kiếm"
+                              placeholder={t('chat.sidebar.searchPlaceholder')}
                               className="bg-gray-100 border-none rounded-lg"
                               readOnly={!!onSearchClick}
                               onClick={onSearchClick}
@@ -109,7 +111,7 @@ export function ConversationSidebar({
                                           }`}
                                     onClick={() => setActiveTab('all')}
                               >
-                                    Tất cả
+                                    {t('chat.sidebar.tabAll')}
                               </span>
                               <span
                                     className={`cursor-pointer transition-colors pb-1 ${activeTab === 'unread'
@@ -118,7 +120,7 @@ export function ConversationSidebar({
                                           }`}
                                     onClick={() => setActiveTab('unread')}
                               >
-                                    Chưa đọc
+                                    {t('chat.sidebar.tabUnread')}
                               </span>
                               <span
                                     className={`cursor-pointer transition-colors pb-1 ${activeTab === 'archived'
@@ -127,7 +129,7 @@ export function ConversationSidebar({
                                           }`}
                                     onClick={() => setActiveTab('archived')}
                               >
-                                    Lưu trữ
+                                    {t('chat.sidebar.tabArchived')}
                               </span>
                         </div>
                         {/* <div className="flex items-center gap-1 text-gray-500">
@@ -183,7 +185,7 @@ export function ConversationSidebar({
                               </>
                         ) : (
                               <div className="flex items-center justify-center py-8 text-gray-400">
-                                    Không có cuộc trò chuyện
+                                    {t('chat.sidebar.noConversations')}
                               </div>
                         )}
                   </div>

@@ -13,6 +13,7 @@ import {
 import dayjs from 'dayjs';
 import type { User } from '@/types/api'; //
 import { Gender } from '@/types/api';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
@@ -35,15 +36,16 @@ export function UserInfoView({
       actions,
       showAvatarActions,
 }: UserInfoViewProps) {
+      const { t } = useTranslation();
       const canEdit = showEdit && Boolean(onEdit);
       const shouldShowAvatarActions = showAvatarActions ?? canEdit;
 
       // Helper render giới tính
       const renderGender = (gender?: Gender) => {
-            if (gender === Gender.MALE) return <><ManOutlined className="mr-2 text-blue-500" />Nam</>;
-            if (gender === Gender.FEMALE) return <><WomanOutlined className="mr-2 text-pink-500" />Nữ</>;
+            if (gender === Gender.MALE) return <><ManOutlined className="mr-2 text-blue-500" />{t('profile.genderMale')}</>;
+            if (gender === Gender.FEMALE) return <><WomanOutlined className="mr-2 text-pink-500" />{t('profile.genderFemale')}</>;
             if (gender === undefined || gender === null) return null; // explicitly missing
-            return <><UserOutlined className="mr-2" />Khác</>;
+            return <><UserOutlined className="mr-2" />{t('profile.genderOther')}</>;
       };
 
       /** Blurred placeholder for privacy-limited fields */
@@ -58,40 +60,40 @@ export function UserInfoView({
       /** Render the personal-info section (shared between full and blurred views) */
       const renderInfoSection = (blurred: boolean) => (
             <div className="flex-1 px-4 py-6 space-y-6">
-                  <Title level={5} className="text-gray-700">Thông tin cá nhân</Title>
+                  <Title level={5} className="text-gray-700">{t('profile.infoTitle')}</Title>
 
                   <div className="space-y-4 text-base">
                         <div className="flex items-center text-gray-600">
-                              <span className="w-24 text-gray-500 font-medium">Giới tính:</span>
+                              <span className="w-24 text-gray-500 font-medium">{t('profile.gender')}</span>
                               <span className="text-gray-900 font-medium flex items-center">
                                     {blurred ? (
                                           <BlurredText width="w-16" />
                                     ) : (
-                                          renderGender(user.gender) ?? <><UserOutlined className="mr-2" />Khác</>
+                                          renderGender(user.gender) ?? <><UserOutlined className="mr-2" />{t('profile.genderOther')}</>
                                     )}
                               </span>
                         </div>
 
                         <div className="flex items-center text-gray-600">
-                              <span className="w-24 text-gray-500 font-medium">Ngày sinh:</span>
+                              <span className="w-24 text-gray-500 font-medium">{t('profile.dob')}</span>
                               <span className="text-gray-900 font-medium flex items-center">
                                     <CalendarOutlined className="mr-2 text-gray-400" />
                                     {blurred ? (
                                           <BlurredText width="w-24" />
                                     ) : (
-                                          user.dateOfBirth ? dayjs(user.dateOfBirth).format('DD/MM/YYYY') : 'Chưa cập nhật'
+                                          user.dateOfBirth ? dayjs(user.dateOfBirth).format('DD/MM/YYYY') : t('profile.dobEmpty')
                                     )}
                               </span>
                         </div>
 
                         <div className="flex items-center text-gray-600">
-                              <span className="w-24 text-gray-500 font-medium">Điện thoại:</span>
+                              <span className="w-24 text-gray-500 font-medium">{t('profile.phone')}</span>
                               <span className="text-gray-900 font-medium flex items-center">
                                     <PhoneOutlined className="mr-2 text-gray-400" />
                                     {blurred ? (
                                           <BlurredText width="w-28" />
                                     ) : (
-                                          user.phoneNumber || 'Chưa cập nhật'
+                                          user.phoneNumber || t('profile.phoneEmpty')
                                     )}
                               </span>
                         </div>
@@ -99,7 +101,7 @@ export function UserInfoView({
 
                   {!blurred && (
                         <div className="mt-4 text-sm text-gray-500 italic">
-                              Chỉ bạn bè có lưu số của bạn trong danh bạ máy xem được số này.
+                              {t('profile.phonePrivacyNote')}
                         </div>
                   )}
             </div>
@@ -149,14 +151,14 @@ export function UserInfoView({
                                     actions
                               ) : (
                                     <Button
-                                          type="text"
-                                          block
-                                          icon={<EditOutlined />}
-                                          className="bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 font-medium h-10 rounded-lg"
-                                          onClick={onEdit}
-                                    >
-                                          Cập nhật
-                                    </Button>
+                                    type="text"
+                                    block
+                                    icon={<EditOutlined />}
+                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 font-medium h-10 rounded-lg"
+                                    onClick={onEdit}
+                              >
+                                    {t('profile.editBtn')}
+                              </Button>
                               )}
                         </div>
                   ) : null}

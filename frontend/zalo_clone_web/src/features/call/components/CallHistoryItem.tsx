@@ -21,6 +21,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import type { CallHistoryRecord, CallParticipantRecord, CallType } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -39,44 +40,9 @@ function formatDuration(seconds: number | null): string {
       return `${mins}m ${secs}s`;
 }
 
-function formatTimestamp(iso: string): string {
-      const date = new Date(iso);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60_000);
-
-      if (diffMins < 1) return 'Vừa xong';
-      if (diffMins < 60) return `${diffMins} phút trước`;
-
-      const diffHours = Math.floor(diffMins / 60);
-      if (diffHours < 24) return `${diffHours} giờ trước`;
-
-      const diffDays = Math.floor(diffHours / 24);
-      if (diffDays < 7) return `${diffDays} ngày trước`;
-
-      return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
 type CallDirection = 'outgoing' | 'incoming';
 
-function getStatusLabel(status: CallHistoryRecord['status'], direction: CallDirection): string {
-      switch (status) {
-            case 'COMPLETED':
-                  return direction === 'outgoing' ? 'Gọi đi' : 'Gọi đến';
-            case 'MISSED':
-                  return 'Cuộc gọi nhỡ';
-            case 'REJECTED':
-                  return direction === 'outgoing' ? 'Bị từ chối' : 'Đã từ chối';
-            case 'CANCELLED':
-                  return 'Đã huỷ';
-            case 'NO_ANSWER':
-                  return 'Không trả lời';
-            case 'FAILED':
-                  return 'Thất bại';
-            default:
-                  return '';
-      }
-}
+
 
 function getStatusColor(status: CallHistoryRecord['status']): string {
       switch (status) {
@@ -163,9 +129,37 @@ interface CallHistoryItemProps {
 }
 
 export function CallHistoryItem({ record, onCallback }: CallHistoryItemProps) {
+      const { t } = useTranslation();
       const currentUserId = useAuthStore((s) => s.user?.id);
       const isOutgoing = record.initiatorId === currentUserId;
       const direction: CallDirection = isOutgoing ? 'outgoing' : 'incoming';
+
+      // Helper: format timestamp using translations
+      const getTimestamp = (iso: string) => {
+            const date = new Date(iso);
+            const now = new Date();
+            const diffMins = Math.floor((now.getTime() - date.getTime()) / 60_000);
+            if (diffMins < 1) return t('call.justNow');
+            if (diffMins < 60) return t('call.minsAgo', { n: diffMins });
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return t('call.hoursAgo', { n: diffHours });
+            const diffDays = Math.floor(diffHours / 24);
+            if (diffDays < 7) return t('call.daysAgo', { n: diffDays });
+            return date.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
+      };
+
+      // Helper: get status label using translations
+      const getStatusLabelT = (status: CallHistoryRecord['status'], dir: CallDirection): string => {
+            switch (status) {
+                  case 'COMPLETED': return dir === 'outgoing' ? t('call.statusOutgoing') : t('call.statusIncoming');
+                  case 'MISSED': return t('call.statusMissed');
+                  case 'REJECTED': return dir === 'outgoing' ? t('call.statusRejectedOut') : t('call.statusRejectedIn');
+                  case 'CANCELLED': return t('call.statusCancelled');
+                  case 'NO_ANSWER': return t('call.statusNoAnswer');
+                  case 'FAILED': return t('call.statusFailed');
+                  default: return '';
+            }
+      };
 
       // Derive variant: group (>2 participants) vs 1v1
       const isGroup = record.participantCount > 2;
@@ -175,19 +169,19 @@ export function CallHistoryItem({ record, onCallback }: CallHistoryItemProps) {
             (p) => p.userId !== currentUserId,
       );
       const peer = otherParticipant?.user ?? record.initiator;
-      const peerName = peer?.displayName ?? 'Người dùng';
+      const peerName = peer?.displayName ?? t('call.unknownUser');
       const peerAvatar = peer?.avatarUrl ?? undefined;
       const peerId: string =
             otherParticipant?.userId ?? record.initiatorId;
 
       // Group: display label
       const groupLabel = isGroup
-            ? `Cuộc gọi nhóm · ${record.participantCount} người`
+            ? t('call.groupCall', { count: record.participantCount })
             : peerName;
 
       const statusLabel = useMemo(
-            () => getStatusLabel(record.status, direction),
-            [record.status, direction],
+            () => getStatusLabelT(record.status, direction),
+            [record.status, direction, t],
       );
 
       const statusColor = useMemo(
@@ -197,10 +191,10 @@ export function CallHistoryItem({ record, onCallback }: CallHistoryItemProps) {
 
       const handleCallback = useCallback(() => {
             onCallback?.(peerId, record.callType, record.conversationId, {
-                  displayName: isGroup ? `Cuộc gọi nhóm · ${record.participantCount} người` : peerName,
+                  displayName: isGroup ? t('call.groupCall', { count: record.participantCount }) : peerName,
                   avatarUrl: isGroup ? null : (peerAvatar ?? null),
             });
-      }, [onCallback, peerId, record.callType, record.conversationId, isGroup, record.participantCount, peerName, peerAvatar]);
+      }, [onCallback, peerId, record.callType, record.conversationId, isGroup, record.participantCount, peerName, peerAvatar, t]);
 
       return (
             <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
@@ -253,12 +247,12 @@ export function CallHistoryItem({ record, onCallback }: CallHistoryItemProps) {
                   </div>
 
                   {/* Timestamp */}
-                  <Text className="!text-xs text-gray-400 flex-shrink-0">
-                        {formatTimestamp(record.startedAt)}
-                  </Text>
+                        <div className="flex flex-col gap-0.5 mt-1">
+                              <span>{getTimestamp(record.startedAt)}</span>
+                        </div>
 
                   {/* Callback button */}
-                  <Tooltip title={isGroup ? 'Gọi nhóm lại' : 'Gọi lại'}>
+                  <Tooltip title={isGroup ? t('call.callbackGroup') : t('call.callbackSingle')}>
                         <Button
                               type="text"
                               size="small"

@@ -3,6 +3,7 @@
  *
  * Shows a list of non-admin members to choose from.
  */
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { Modal, Avatar } from 'antd';
 import { CrownOutlined, ExclamationCircleOutlined, UserOutlined } from '@ant-design/icons';
@@ -23,6 +24,7 @@ export function TransferAdminModal({
       onClose,
       onTransfer,
 }: TransferAdminModalProps) {
+      const { t } = useTranslation();
       const [selectedId, setSelectedId] = useState<string | null>(null);
       const [isTransferring, setIsTransferring] = useState(false);
 
@@ -38,11 +40,11 @@ export function TransferAdminModal({
             if (!selectedMember) return;
 
             Modal.confirm({
-                  title: 'Xác nhận chuyển quyền',
+                  title: t('conversation.transferAdmin.confirmTitle'),
                   icon: <ExclamationCircleOutlined />,
-                  content: `Bạn có chắc chắn muốn chuyển quyền trưởng nhóm cho "${selectedMember.displayName}"? Bạn sẽ trở thành thành viên bình thường.`,
-                  okText: 'Chuyển quyền',
-                  cancelText: 'Hủy',
+                  content: t('conversation.transferAdmin.confirmContent', { name: selectedMember.displayName }),
+                  okText: t('conversation.transferAdmin.confirmOk'),
+                  cancelText: t('conversation.transferAdmin.confirmCancel'),
                   onOk: async () => {
                         setIsTransferring(true);
                         try {
@@ -64,27 +66,27 @@ export function TransferAdminModal({
 
       return (
             <Modal
-                  title="Chuyển quyền trưởng nhóm"
+                  title={t('conversation.transferAdmin.title')}
                   open={open}
                   onCancel={handleClose}
                   width={400}
                   destroyOnHidden
-                  okText="Chuyển quyền"
+                  okText={t('conversation.transferAdmin.transfer')}
                   okButtonProps={{
                         disabled: !selectedId,
                         loading: isTransferring,
                         icon: <CrownOutlined />,
                   }}
                   onOk={handleTransfer}
-                  cancelText="Hủy"
+                  cancelText={t('conversation.transferAdmin.cancel')}
             >
                   <p className="text-sm text-gray-500 mb-3">
-                        Chọn thành viên sẽ trở thành trưởng nhóm mới:
+                        {t('conversation.transferAdmin.description')}
                   </p>
                   <div className="max-h-[300px] overflow-y-auto">
                         {eligibleMembers.length === 0 ? (
                               <div className="text-center text-gray-400 py-8 text-sm">
-                                    Không có thành viên nào để chuyển quyền
+                                    {t('conversation.transferAdmin.empty')}
                               </div>
                         ) : (
                               eligibleMembers.map((member) => (

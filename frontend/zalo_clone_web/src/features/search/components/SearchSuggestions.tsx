@@ -8,6 +8,7 @@
  * Sử dụng useSearchSuggestions hook + useSearchHistory hook.
  */
 
+import { useTranslation } from 'react-i18next';
 import { Typography } from 'antd';
 import { HistoryOutlined, SearchOutlined } from '@ant-design/icons';
 import type { SearchSuggestion, SearchHistoryItem } from '../types';
@@ -33,6 +34,7 @@ export function SearchSuggestions({
       prefix,
       onSelect,
 }: SearchSuggestionsProps) {
+      const { t } = useTranslation();
       const trimmedPrefix = prefix.trim().toLowerCase();
       const hasContent = suggestions.length > 0 || history.length > 0;
 
@@ -49,7 +51,7 @@ export function SearchSuggestions({
                               <div className="px-3 py-1.5 flex items-center gap-1.5">
                                     <HistoryOutlined className="text-gray-400 text-xs" />
                                     <Text className="text-xs text-gray-400 font-medium">
-                                          Tìm kiếm gần đây
+                                          {t('search.recentSearches')}
                                     </Text>
                               </div>
                               {history.slice(0, 5).map((item, i) => (
@@ -77,7 +79,7 @@ export function SearchSuggestions({
                                     <div className="px-3 py-1.5 flex items-center gap-1.5">
                                           <SearchOutlined className="text-gray-400 text-xs" />
                                           <Text className="text-xs text-gray-400 font-medium">
-                                                Gợi ý
+                                                {t('search.suggestions')}
                                           </Text>
                                     </div>
                               )}

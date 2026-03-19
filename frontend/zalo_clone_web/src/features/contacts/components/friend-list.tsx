@@ -23,6 +23,7 @@ import { AliasEditModal } from './alias-edit-modal';
 import type { FriendWithUserDto } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
 import { conversationService } from '@/features/conversation';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -30,6 +31,7 @@ const ITEM_HEIGHT = 92;
 
 export function FriendList() {
       const navigate = useNavigate();
+      const { t } = useTranslation();
       const [search, setSearch] = useState('');
       const [debouncedSearch, setDebouncedSearch] = useState('');
       const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -99,7 +101,7 @@ export function FriendList() {
                   {/* Header */}
                   <div className="px-4 py-3 border-b border-gray-100">
                         <Text className="text-sm text-gray-500">
-                              Bạn bè {friendCount.data !== undefined ? `(${friendCount.data})` : ''}
+                              {t('contacts.friendList.title')} {friendCount.data !== undefined ? `(${friendCount.data})` : ''}
                         </Text>
                   </div>
 
@@ -107,7 +109,7 @@ export function FriendList() {
                   <div className="px-4 py-2">
                         <Input
                               prefix={<SearchOutlined className="text-gray-400" />}
-                              placeholder="Tìm bạn bè..."
+                              placeholder={t('contacts.friendList.searchPlaceholder')}
                               value={search}
                               onChange={handleSearchChange}
                               allowClear
@@ -124,7 +126,7 @@ export function FriendList() {
                               <Empty
                                     description={
                                           <Text type="secondary">
-                                                {debouncedSearch ? 'Không tìm thấy bạn bè phù hợp' : 'Chưa có bạn bè nào'}
+                                                {debouncedSearch ? t('contacts.friendList.emptySearch') : t('contacts.friendList.empty')}
                                           </Text>
                                     }
                                     className="py-12"
@@ -184,6 +186,7 @@ function FriendItem({
 }) {
       const queryClient = useQueryClient();
       const unfriend = useUnfriend();
+      const { t } = useTranslation();
       const [aliasModalOpen, setAliasModalOpen] = useState(false);
       const [unfriendPending, setUnfriendPending] = useState(false);
 
@@ -195,22 +198,22 @@ function FriendItem({
       const menuItems = useMemo(() => [
             {
                   key: 'message',
-                  label: loading ? 'Đang mở...' : 'Nhắn tin',
+                  label: loading ? t('contacts.friendList.menuOpening') : t('contacts.friendList.menuMessage'),
                   icon: <MessageOutlined />,
                   disabled: loading,
             },
             {
                   key: 'set-alias',
-                  label: 'Đặt tên gợi nhớ',
+                  label: t('contacts.friendList.menuSetAlias'),
                   icon: <EditOutlined />,
             },
             { type: 'divider' as const },
             {
                   key: 'unfriend',
-                  label: <span className="text-red-500">Hủy kết bạn</span>,
+                  label: <span className="text-red-500">{t('contacts.friendList.menuUnfriend')}</span>,
                   icon: <UserDeleteOutlined className="text-red-500" />,
             },
-      ], [loading]);
+      ], [loading, t]);
 
       const handleMenuClick = useCallback(({ key }: { key: string }) => {
             if (key === 'message') onMessage();
@@ -229,11 +232,11 @@ function FriendItem({
                         onClick={onMessage}
                         actions={
                               <Popconfirm
-                                    title="Hủy kết bạn"
-                                    description={`Xác nhận hủy kết bạn với ${friend.resolvedDisplayName ?? friend.displayName}?`}
+                                    title={t('contacts.friendList.unfriendTitle')}
+                                    description={t('contacts.friendList.unfriendDesc', { name: friend.resolvedDisplayName ?? friend.displayName })}
                                     open={unfriendPending}
-                                    okText="Xác nhận"
-                                    cancelText="Hủy"
+                                    okText={t('contacts.friendList.unfriendOk')}
+                                    cancelText={t('contacts.friendList.unfriendCancel')}
                                     okButtonProps={{ danger: true }}
                                     onConfirm={() => {
                                           unfriend.mutate(friend.userId, {

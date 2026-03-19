@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { Typography, Switch, Segmented } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
       readNotificationSoundSettings,
       writeNotificationSoundSetting,
@@ -63,38 +64,10 @@ function SettingRow({
 
 type BoolField = 'incomingCall' | 'messageDirect' | 'messageGroup' | 'social';
 
-const SOUND_TOGGLES: { field: BoolField; label: string; description: string }[] = [
-      {
-            field: 'incomingCall',
-            label: 'Cuộc gọi đến',
-            description: 'Phát nhạc chuông khi có cuộc gọi đến',
-      },
-      {
-            field: 'messageDirect',
-            label: 'Tin nhắn trực tiếp',
-            description: 'Âm thanh thông báo khi nhận tin nhắn riêng',
-      },
-      {
-            field: 'messageGroup',
-            label: 'Tin nhắn nhóm',
-            description: 'Âm thanh thông báo khi nhận tin nhắn trong nhóm',
-      },
-      {
-            field: 'social',
-            label: 'Cập nhật xã hội',
-            description: 'Lời mời kết bạn, chấp nhận bạn bè, sự kiện nhóm',
-      },
-];
-
-const VOLUME_OPTIONS = [
-      { label: '🔈 Thấp', value: 'low' as const },
-      { label: '🔉 Vừa', value: 'medium' as const },
-      { label: '🔊 Cao', value: 'high' as const },
-];
-
 // ── Component ─────────────────────────────────────────────────────────
 
 export function NotificationSoundSection() {
+      const { t } = useTranslation();
       // Local state initialised from localStorage
       const [settings, setSettings] = useState<NotificationSoundSettings>(readNotificationSoundSettings);
 
@@ -108,22 +81,51 @@ export function NotificationSoundSection() {
 
       const masterDisabled = !settings.master;
 
+      const SOUND_TOGGLES: { field: BoolField; label: string; description: string }[] = [
+            {
+                  field: 'incomingCall',
+                  label: t('notification.incomingCallLabel'),
+                  description: t('notification.incomingCallDesc'),
+            },
+            {
+                  field: 'messageDirect',
+                  label: t('notification.directMsgLabel'),
+                  description: t('notification.directMsgDesc'),
+            },
+            {
+                  field: 'messageGroup',
+                  label: t('notification.groupMsgLabel'),
+                  description: t('notification.groupMsgDesc'),
+            },
+            {
+                  field: 'social',
+                  label: t('notification.socialLabel'),
+                  description: t('notification.socialDesc'),
+            },
+      ];
+
+      const VOLUME_OPTIONS = [
+            { label: t('notification.volumeLow'), value: 'low' as const },
+            { label: t('notification.volumeMedium'), value: 'medium' as const },
+            { label: t('notification.volumeHigh'), value: 'high' as const },
+      ];
+
       return (
             <div className="space-y-6">
                   <div>
                         <Title level={4} className="!text-gray-900 dark:!text-white !mb-1">
-                              Âm thanh thông báo
+                              {t('notification.title')}
                         </Title>
                         <Paragraph className="!text-gray-500 dark:!text-gray-400 !text-sm !mb-0">
-                              Quản lý âm thanh thông báo khi nhận tin nhắn, cuộc gọi và cập nhật.
+                              {t('notification.subtitle')}
                         </Paragraph>
                   </div>
 
                   {/* Master toggle */}
                   <SectionCard>
                         <SettingRow
-                              label="Bật âm thanh thông báo"
-                              description="Tắt để im lặng tất cả thông báo trong trình duyệt"
+                              label={t('notification.masterLabel')}
+                              description={t('notification.masterDesc')}
                               last
                               control={
                                     <Switch
@@ -157,8 +159,8 @@ export function NotificationSoundSection() {
                   {/* Volume preset */}
                   <SectionCard>
                         <SettingRow
-                              label="Mức âm lượng"
-                              description="Áp dụng cho tất cả âm thanh thông báo"
+                              label={t('notification.volumeLabel')}
+                              description={t('notification.volumeDesc')}
                               last
                               disabled={masterDisabled}
                               control={
@@ -175,8 +177,7 @@ export function NotificationSoundSection() {
                   {/* Info tip */}
                   <div className="rounded-xl bg-blue-50 border border-blue-100 px-5 py-4">
                         <Text className="text-xs text-blue-600">
-                              💡 Cài đặt âm thanh được lưu trên trình duyệt hiện tại. Nếu đổi thiết bị hoặc
-                              trình duyệt, bạn cần cấu hình lại.
+                              {t('notification.storageNote')}
                         </Text>
                   </div>
             </div>

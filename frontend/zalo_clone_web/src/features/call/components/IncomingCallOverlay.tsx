@@ -15,6 +15,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Avatar, Badge, Button, Typography } from 'antd';
 import { PhoneOutlined, CloseOutlined, VideoCameraOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -22,6 +23,7 @@ const { Title, Text } = Typography;
 const RINGING_TIMEOUT_S = 30;
 
 export function IncomingCallOverlay() {
+      const { t } = useTranslation();
       const incomingCall = useCallStore((s) => s.incomingCall);
       const resetCallState = useCallStore((s) => s.resetCallState);
       const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -139,7 +141,7 @@ export function IncomingCallOverlay() {
 
       // For group calls: prefer conversation name, fallback to caller's name
       const displayTitle = isGroup
-            ? (conversationName || `Nhóm của ${callerInfo.displayName}`)
+            ? (conversationName || t('call.groupInviteText', { name: callerInfo.displayName }).split(' ')[0] + ` của ${callerInfo.displayName}`)
             : callerInfo.displayName;
 
       return (
@@ -150,16 +152,16 @@ export function IncomingCallOverlay() {
                               {isGroup ? <TeamOutlined /> : isVideo ? <VideoCameraOutlined /> : <PhoneOutlined />}
                               <span>
                                     {isGroup
-                                          ? `Cuộc gọi nhóm${isVideo ? ' video' : ''} đến`
+                                          ? t('call.incomingGroup') + (isVideo ? ' video' : '')
                                           : isVideo
-                                                ? 'Cuộc gọi video đến'
-                                                : 'Cuộc gọi thoại đến'}
+                                                ? t('call.incomingVideo')
+                                                : t('call.incomingVoice')}
                               </span>
                               {isGroup && participantCount > 0 && (
                                     <Badge
                                           count={participantCount}
                                           style={{ backgroundColor: '#1890ff' }}
-                                          title={`${participantCount} người tham gia`}
+                                          title={t('call.participantCount', { count: participantCount })}
                                     />
                               )}
                         </div>
@@ -187,8 +189,8 @@ export function IncomingCallOverlay() {
                               </Title>
                               <Text className="!text-gray-400 text-sm">
                                     {isGroup
-                                          ? `${callerInfo.displayName} đang mời bạn vào cuộc gọi nhóm…`
-                                          : 'Đang gọi cho bạn…'}
+                                          ? t('call.groupInviteText', { name: callerInfo.displayName })
+                                          : t('call.callingText')}
                               </Text>
                         </div>
 
@@ -204,7 +206,7 @@ export function IncomingCallOverlay() {
                                           onClick={handleReject}
                                           className="!w-16 !h-16 !text-xl"
                                     />
-                                    <Text className="!text-gray-400 text-xs">Từ chối</Text>
+                                    <Text className="!text-gray-400 text-xs">{t('call.decline')}</Text>
                               </div>
 
                               {/* Accept */}
@@ -216,7 +218,7 @@ export function IncomingCallOverlay() {
                                           onClick={handleAccept}
                                           className="!w-16 !h-16 !text-xl !bg-green-500 !border-green-500 !text-white hover:!bg-green-600"
                                     />
-                                    <Text className="!text-gray-400 text-xs">Chấp nhận</Text>
+                                    <Text className="!text-gray-400 text-xs">{t('call.accept')}</Text>
                               </div>
                         </div>
                   </div>

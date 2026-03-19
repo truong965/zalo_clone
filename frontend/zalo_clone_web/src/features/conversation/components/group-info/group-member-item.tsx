@@ -3,6 +3,7 @@
  *
  * Shows avatar, name, role badge, and action dropdown for admin.
  */
+import { useTranslation } from 'react-i18next';
 import { Avatar, Dropdown, Tag } from 'antd';
 import {
       CrownOutlined,
@@ -29,6 +30,7 @@ export function GroupMemberItem({
       onRemove,
       onTransferAdmin,
 }: GroupMemberItemProps) {
+      const { t } = useTranslation();
       const isAdmin = member.role === 'ADMIN';
 
       // Admin can act on non-admin members (not self)
@@ -37,14 +39,14 @@ export function GroupMemberItem({
       const menuItems: MenuProps['items'] = [
             {
                   key: 'transfer',
-                  label: 'Chuyển quyền trưởng nhóm',
+                  label: t('conversation.groupInfo.memberItem.transferAdminOption'),
                   icon: <SwapOutlined />,
                   onClick: () => onTransferAdmin(member.id),
             },
             { type: 'divider' },
             {
                   key: 'remove',
-                  label: 'Xóa khỏi nhóm',
+                  label: t('conversation.groupInfo.memberItem.removeOption'),
                   icon: <DeleteOutlined />,
                   danger: true,
                   onClick: () => onRemove(member.id),
@@ -64,7 +66,7 @@ export function GroupMemberItem({
                               <span className="text-sm font-medium truncate">
                                     {member.displayName}
                                     {isCurrentUser && (
-                                          <span className="text-gray-400 font-normal ml-1">(Bạn)</span>
+                                          <span className="text-gray-400 font-normal ml-1">{t('conversation.groupInfo.memberItem.you')}</span>
                                     )}
                               </span>
                               {isAdmin && (
@@ -73,7 +75,7 @@ export function GroupMemberItem({
                                           className="flex items-center gap-1 text-xs leading-none px-1.5 py-0"
                                     >
                                           <CrownOutlined className="text-[10px]" />
-                                          Trưởng nhóm
+                                          {t('conversation.groupInfo.memberItem.admin')}
                                     </Tag>
                               )}
                         </div>

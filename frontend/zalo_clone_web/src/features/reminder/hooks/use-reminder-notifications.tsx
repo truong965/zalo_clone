@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal } from 'antd';
 import { ClockCircleOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -79,11 +80,11 @@ function requestNotificationPermission() {
 }
 
 /** Show browser notification when tab is unfocused */
-function showBrowserNotification(content: string, conversationId: string | null) {
+function showBrowserNotification(t: any, content: string, conversationId: string | null) {
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
       if (document.hasFocus()) return; // Only for unfocused tab
 
-      const n = new Notification('⏰ Nhắc hẹn', {
+      const n = new Notification(t('reminder.notifications.modalTitle'), {
             body: content,
             icon: '/vite.svg',
             tag: 'reminder', // Prevent stacking
@@ -104,19 +105,20 @@ function showBrowserNotification(content: string, conversationId: string | null)
 
 /** Show persistent modal notification + acknowledge on dismiss */
 function showReminderModal(
+      t: any,
       payload: { reminderId: string; content: string; conversationId: string | null },
       onAcknowledge?: (reminderId: string) => void,
 ) {
       Modal.confirm({
-            title: '⏰ Nhắc hẹn',
+            title: t('reminder.notifications.modalTitle'),
             icon: <ClockCircleOutlined style={{ color: '#1890ff' }} />,
             content: (
                   <div className="py-2" >
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap" > {payload.content} </p>
+                        <p className="text-sm whitespace-pre-wrap" > {payload.content} </p>
                   </div>
             ),
-            okText: 'Đã xem',
-            cancelText: 'Để sau',
+            okText: t('reminder.notifications.okText'),
+            cancelText: t('reminder.notifications.cancelText'),
             centered: true,
             onOk: () => {
                   onAcknowledge?.(payload.reminderId);
@@ -126,6 +128,7 @@ function showReminderModal(
 }
 
 export function useReminderNotifications() {
+      const { t } = useTranslation();
       const { socket, isConnected, connectionNonce } = useSocket();
       const queryClient = useQueryClient();
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -178,10 +181,10 @@ export function useReminderNotifications() {
                   // Creator sees persistent modal with "complete" action;
                   // other members see it as view-only (modal closes without API call)
                   const isCreator = currentUserId === payload.creatorId;
-                  showReminderModal(payload, isCreator ? acknowledgeReminder : undefined);
+                  showReminderModal(t, payload, isCreator ? acknowledgeReminder : undefined);
 
                   // Show browser notification if tab unfocused
-                  showBrowserNotification(payload.content, payload.conversationId);
+                  showBrowserNotification(t, payload.content, payload.conversationId);
 
                   // Invalidate cache to refresh lists
                   void queryClient.invalidateQueries({ queryKey: REMINDERS_BASE_KEY });
@@ -210,6 +213,7 @@ export function useReminderNotifications() {
                         const missed = await reminderApi.getUndelivered();
                         for (const reminder of missed) {
                               showReminderModal(
+                                    t,
                                     {
                                           reminderId: reminder.id,
                                           content: reminder.content,

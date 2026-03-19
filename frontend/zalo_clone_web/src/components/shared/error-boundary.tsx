@@ -15,6 +15,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button, Typography } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
+import i18n from '@/lib/i18n';
 
 const { Text } = Typography;
 
@@ -75,10 +76,10 @@ export class ErrorBoundary extends Component<
                   <div className="flex flex-col items-center justify-center gap-3 py-12 px-4 text-center">
                         <WarningOutlined className="text-3xl text-orange-400" />
                         <Text type="secondary">
-                              Đã xảy ra lỗi không mong muốn
+                              {i18n.t('common.errorBoundary.message')}
                         </Text>
                         <Button size="small" onClick={this.handleReset}>
-                              Thử lại
+                              {i18n.t('common.errorBoundary.retry')}
                         </Button>
                   </div>
             );

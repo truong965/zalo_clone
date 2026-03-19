@@ -6,6 +6,7 @@
  * PENDING | UPLOADED | CONFIRMED | PROCESSING.
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 interface ProcessingOverlayProps {
@@ -15,7 +16,9 @@ interface ProcessingOverlayProps {
       className?: string;
 }
 
-export function ProcessingOverlay({ label = 'Đang xử lý...', className }: ProcessingOverlayProps) {
+export function ProcessingOverlay({ label, className }: ProcessingOverlayProps) {
+      const { t } = useTranslation();
+      const displayLabel = label ?? t('chat.messageList.processing');
       return (
             <div
                   className={cn(
@@ -44,8 +47,8 @@ export function ProcessingOverlay({ label = 'Đang xử lý...', className }: Pr
                               d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                         />
                   </svg>
-                  {label && (
-                        <span className="mt-1 text-[10px] text-white/90 select-none">{label}</span>
+                  {displayLabel && (
+                        <span className="mt-1 text-[10px] text-white/90 select-none">{displayLabel}</span>
                   )}
             </div>
       );

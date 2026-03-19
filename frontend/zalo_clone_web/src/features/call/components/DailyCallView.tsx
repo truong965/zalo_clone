@@ -19,12 +19,13 @@ import { useRef, useEffect, useCallback } from 'react';
 import { useCallStore } from '../stores/call.store';
 import { QualityIndicator } from './QualityIndicator';
 import type { DailyParticipant } from '../types';
+import { useTranslation } from 'react-i18next';
 
 // ============================================================================
 // PARTICIPANT TILE
 // ============================================================================
 
-function ParticipantTile({ participant }: { participant: DailyParticipant }) {
+function ParticipantTile({ participant, youLabel }: { participant: DailyParticipant; youLabel: string }) {
       const videoRef = useRef<HTMLVideoElement>(null);
 
       useEffect(() => {
@@ -76,7 +77,7 @@ function ParticipantTile({ participant }: { participant: DailyParticipant }) {
                                     </div>
                               )}
                               <span className="text-sm text-white/80">
-                                    {participant.isLocal ? 'Bạn' : participant.displayName}
+                                    {participant.isLocal ? youLabel : participant.displayName}
                               </span>
                         </div>
                   )}
@@ -91,7 +92,7 @@ function ParticipantTile({ participant }: { participant: DailyParticipant }) {
                         {!participant.audioEnabled && (
                               <span className="text-red-400">🔇</span>
                         )}
-                        <span>{participant.isLocal ? 'Bạn' : participant.displayName}</span>
+                        <span>{participant.isLocal ? youLabel : participant.displayName}</span>
                   </div>
             </div>
       );
@@ -113,6 +114,7 @@ function getGridClass(count: number): string {
 // ============================================================================
 
 export function DailyCallView() {
+      const { t } = useTranslation();
       const participants = useCallStore((s) => s.dailyParticipants);
       const connectionQuality = useCallStore((s) => s.connectionQuality);
 
@@ -143,6 +145,7 @@ export function DailyCallView() {
                               <ParticipantTile
                                     key={participant.sessionId}
                                     participant={participant}
+                                    youLabel={t('call.youLabel')}
                               />
                         ))}
                   </div>
@@ -151,7 +154,7 @@ export function DailyCallView() {
                   {participants.length === 0 && (
                         <div className="absolute inset-0 flex items-center justify-center">
                               <div className="text-white/60 text-lg">
-                                    Đang kết nối Daily.co…
+                                    {t('call.dailyConnecting')}
                               </div>
                         </div>
                   )}

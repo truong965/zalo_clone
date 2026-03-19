@@ -6,6 +6,7 @@
  * Rules: composition-patterns, react-best-practices.
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { MediaProcessingStatus } from '@/types/api';
 import type { MessageMediaAttachmentItem } from '@/types/api';
@@ -67,6 +68,7 @@ function getFileIconConfig(fileName: string, mimeType?: string | null): FileIcon
 }
 
 export function DocumentAttachment({ attachment, className }: DocumentAttachmentProps) {
+      const { t } = useTranslation();
       const [isDownloading, setIsDownloading] = useState(false);
       const isReady = attachment.processingStatus === MediaProcessingStatus.READY;
       const isFailed = attachment.processingStatus === MediaProcessingStatus.FAILED;
@@ -81,14 +83,14 @@ export function DocumentAttachment({ attachment, className }: DocumentAttachment
                   const response = await fetch(attachment.cdnUrl);
                   const blob = await response.blob();
                   const blobUrl = URL.createObjectURL(blob);
-                  
+
                   const a = document.createElement('a');
                   a.href = blobUrl;
                   a.download = attachment.originalName;
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
-                  
+
                   URL.revokeObjectURL(blobUrl);
             } catch (error) {
                   console.error('Download failed:', error);
@@ -122,8 +124,8 @@ export function DocumentAttachment({ attachment, className }: DocumentAttachment
                         </p>
                         <p className="text-xs text-gray-500">
                               {attachment.size > 0 ? formatBytes(attachment.size) : ''}
-                              {isFailed && <span className="ml-1 text-red-500">· Lỗi xử lý</span>}
-                              {isProcessing && <span className="ml-1 text-gray-400">· Đang xử lý...</span>}
+                              {isFailed && <span className="ml-1 text-red-500">· {t('conversation.attachments.processingError')}</span>}
+                              {isProcessing && <span className="ml-1 text-gray-400">· {t('conversation.attachments.processing')}</span>}
                         </p>
                   </div>
 
@@ -131,7 +133,7 @@ export function DocumentAttachment({ attachment, className }: DocumentAttachment
                         <a
                               href={attachment.cdnUrl}
                               onClick={handleDownload}
-                              className={`flex-shrink-0 transition-colors title="Tải xuống" ${isDownloading ? 'text-blue-300 cursor-not-allowed' : 'text-gray-500 hover:text-blue-500'}`}
+                              className={`flex-shrink-0 transition-colors title="${t('conversation.attachments.download')}" ${isDownloading ? 'text-blue-300 cursor-not-allowed' : 'text-gray-500 hover:text-blue-500'}`}
                         >
                               <DownloadOutlined className={isDownloading ? "text-lg animate-pulse" : "text-lg"} />
                         </a>

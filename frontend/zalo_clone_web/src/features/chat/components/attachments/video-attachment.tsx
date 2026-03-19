@@ -8,6 +8,7 @@
  * Rules: composition-patterns, react-best-practices.
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { MediaProcessingStatus } from '@/types/api';
 import type { MessageMediaAttachmentItem } from '@/types/api';
@@ -20,6 +21,7 @@ interface VideoAttachmentProps {
 }
 
 export function VideoAttachment({ attachment, className }: VideoAttachmentProps) {
+      const { t } = useTranslation();
       const isReady = attachment.processingStatus === MediaProcessingStatus.READY;
       const isFailed = attachment.processingStatus === MediaProcessingStatus.FAILED;
 
@@ -90,7 +92,7 @@ export function VideoAttachment({ attachment, className }: VideoAttachmentProps)
                   {/* Failed state */}
                   {isFailed && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                              <span className="text-xs text-red-300">Lỗi xử lý video</span>
+                              <span className="text-xs text-red-300">{t('conversation.attachments.videoProcessingError')}</span>
                         </div>
                   )}
 

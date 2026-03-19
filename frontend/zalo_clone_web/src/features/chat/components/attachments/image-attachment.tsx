@@ -11,6 +11,7 @@
  * Rules: composition-patterns (single-purpose component), react-best-practices.
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { MediaProcessingStatus } from '@/types/api';
 import type { MessageMediaAttachmentItem } from '@/types/api';
@@ -32,6 +33,7 @@ const READY_STATUSES = new Set<string>([MediaProcessingStatus.READY]);
 const FAILED_STATUSES = new Set<string>([MediaProcessingStatus.FAILED]);
 
 export function ImageAttachment({ attachment, className, isSingle = false }: ImageAttachmentProps) {
+      const { t } = useTranslation();
       const isReady = READY_STATUSES.has(attachment.processingStatus);
       const isFailed = FAILED_STATUSES.has(attachment.processingStatus);
 
@@ -106,7 +108,7 @@ export function ImageAttachment({ attachment, className, isSingle = false }: Ima
 
                   {isFailed && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                              <span className="text-xs text-red-300">Lỗi xử lý</span>
+                              <span className="text-xs text-red-300">{t('conversation.attachments.processingError')}</span>
                         </div>
                   )}
             </div>

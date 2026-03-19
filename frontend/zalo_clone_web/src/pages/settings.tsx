@@ -16,6 +16,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
       Layout,
       Menu,
@@ -93,30 +94,31 @@ function SettingRow({
 
 function AppearanceSection() {
       const { theme, setTheme } = useAppStore();
+      const { t } = useTranslation();
 
       return (
             <div className="space-y-6">
                   <div>
                         <Title level={4} className="!text-gray-900 dark:!text-white !mb-1">
-                              Giao diện
+                              {t('settings.appearance.title')}
                         </Title>
                         <Paragraph className="!text-gray-500 dark:!text-gray-400 !text-sm !mb-0">
-                              Tùy chỉnh cách ứng dụng hiển thị trên thiết bị của bạn.
+                              {t('settings.appearance.description')}
                         </Paragraph>
                   </div>
 
                   <SectionCard>
                         <SettingRow
-                              label="Chủ đề màu sắc"
-                              description="Chọn giao diện sáng hoặc tối"
+                              label={t('settings.appearance.themeColor')}
+                              description={t('settings.appearance.themeColorDesc')}
                               last
                               control={
                                     <Segmented
                                           value={theme}
                                           onChange={(v) => setTheme(v as 'light' | 'dark')}
                                           options={[
-                                                { label: '☀️  Sáng', value: 'light' },
-                                                { label: '🌙 Tối', value: 'dark' },
+                                                { label: t('settings.appearance.light'), value: 'light' },
+                                                { label: t('settings.appearance.dark'), value: 'dark' },
                                           ]}
                                     />
                               }
@@ -125,7 +127,7 @@ function AppearanceSection() {
 
                   <div className="rounded-xl bg-blue-50 border border-blue-100 px-5 py-4">
                         <Text className="text-xs text-blue-600">
-                              Chủ đề tối giúp giảm mỏi mắt khi sử dụng vào ban đêm và tiết kiệm pin trên màn hình OLED.
+                              {t('settings.appearance.darkThemeNote')}
                         </Text>
                   </div>
             </div>
@@ -138,30 +140,33 @@ function AppearanceSection() {
 
 function LanguageSection() {
       const { language, setLanguage } = useAppStore();
+      const { t } = useTranslation();
 
       return (
             <div className="space-y-6">
                   <div>
                         <Title level={4} className="!text-gray-900 dark:!text-white !mb-1">
-                              Ngôn ngữ
+                              {t('settings.language.title')}
                         </Title>
                         <Paragraph className="!text-gray-500 dark:!text-gray-400 !text-sm !mb-0">
-                              Chọn ngôn ngữ hiển thị của ứng dụng.
+                              {t('settings.language.description')}
                         </Paragraph>
                   </div>
 
                   <SectionCard>
                         <SettingRow
-                              label="Ngôn ngữ hiển thị"
-                              description="Áp dụng cho toàn bộ giao diện"
+                              label={t('settings.language.displayLanguage')}
+                              description={t('settings.language.displayLanguageDesc')}
                               last
                               control={
                                     <Segmented
                                           value={language}
-                                          onChange={(v) => setLanguage(v as string)}
+                                          onChange={(v) => {
+                                                setLanguage(v as string);
+                                          }}
                                           options={[
-                                                { label: 'Tiếng Việt', value: 'vi' },
-                                                { label: 'English', value: 'en' },
+                                                { label: t('settings.language.vi'), value: 'vi' },
+                                                { label: t('settings.language.en'), value: 'en' },
                                           ]}
                                     />
                               }
@@ -183,25 +188,26 @@ interface PrivacyFormState {
       whoCanCallMe: PrivacyLevel;
 }
 
-const PRIVACY_ROWS: { field: PrivacyField; label: string; description: string }[] = [
+const PRIVACY_ROWS: { field: PrivacyField; labelKey: string; descriptionKey: string }[] = [
       {
             field: 'showProfile',
-            label: 'Xem hồ sơ của tôi',
-            description: 'Ai có thể xem ảnh đại diện, tên và thông tin cá nhân',
+            labelKey: 'settings.privacy.showProfile',
+            descriptionKey: 'settings.privacy.showProfileDesc',
       },
       {
             field: 'whoCanMessageMe',
-            label: 'Nhắn tin cho tôi',
-            description: 'Ai có thể bắt đầu cuộc trò chuyện với bạn',
+            labelKey: 'settings.privacy.whoCanMessageMe',
+            descriptionKey: 'settings.privacy.whoCanMessageMeDesc',
       },
       {
             field: 'whoCanCallMe',
-            label: 'Gọi điện cho tôi',
-            description: 'Ai có thể thực hiện cuộc gọi thoại / video',
+            labelKey: 'settings.privacy.whoCanCallMe',
+            descriptionKey: 'settings.privacy.whoCanCallMeDesc',
       },
 ];
 
 function PrivacySection() {
+      const { t } = useTranslation();
       const { data: serverSettings, isLoading } = usePrivacySettings();
       const { mutate: update, isPending } = useUpdatePrivacySettings();
 
@@ -232,10 +238,10 @@ function PrivacySection() {
       function handleSave() {
             if (!form) return;
             Modal.confirm({
-                  title: 'Xác nhận cập nhật quyền riêng tư',
-                  content: 'Thay đổi sẽ có hiệu lực ngay sau khi lưu.',
-                  okText: 'Lưu thay đổi',
-                  cancelText: 'Hủy',
+                  title: t('settings.privacy.confirmTitle'),
+                  content: t('settings.privacy.confirmContent'),
+                  okText: t('settings.privacy.saveChanges'),
+                  cancelText: t('settings.privacy.cancel'),
                   centered: true,
                   onOk: () =>
                         update(form, {
@@ -250,10 +256,10 @@ function PrivacySection() {
                   <div className="space-y-6">
                         <div>
                               <Title level={4} className="!text-gray-900 dark:!text-white !mb-1">
-                                    Quyền riêng tư
+                                    {t('settings.privacy.title')}
                               </Title>
                               <Paragraph className="!text-gray-500 !text-sm !mb-0">
-                                    Kiểm soát ai có thể xem thông tin và liên hệ với bạn.
+                                    {t('settings.privacy.description')}
                               </Paragraph>
                         </div>
                         <div className="flex justify-center py-16">
@@ -268,10 +274,10 @@ function PrivacySection() {
                   <div className="flex items-start justify-between gap-4">
                         <div>
                               <Title level={4} className="!text-gray-900 dark:!text-white !mb-1">
-                                    Quyền riêng tư
+                                    {t('settings.privacy.title')}
                               </Title>
                               <Paragraph className="!text-gray-500 dark:!text-gray-400 !text-sm !mb-0">
-                                    Kiểm soát ai có thể xem thông tin và liên hệ với bạn.
+                                    {t('settings.privacy.description')}
                               </Paragraph>
                         </div>
                         {isDirty && (
@@ -282,7 +288,7 @@ function PrivacySection() {
                                     onClick={handleSave}
                                     className="flex-shrink-0"
                               >
-                                    Lưu thay đổi
+                                    {t('settings.privacy.saveChanges')}
                               </Button>
                         )}
                   </div>
@@ -291,8 +297,8 @@ function PrivacySection() {
                         {PRIVACY_ROWS.map((row, idx) => (
                               <SettingRow
                                     key={row.field}
-                                    label={row.label}
-                                    description={row.description}
+                                    label={t(row.labelKey)}
+                                    description={t(row.descriptionKey)}
                                     last={idx === PRIVACY_ROWS.length - 1}
                                     control={
                                           <Select<PrivacyLevel>
@@ -301,8 +307,8 @@ function PrivacySection() {
                                                 disabled={isPending}
                                                 className="w-48"
                                                 options={[
-                                                      { value: 'EVERYONE', label: 'Tất cả mọi người' },
-                                                      { value: 'CONTACTS', label: 'Chỉ bạn bè' },
+                                                      { value: 'EVERYONE', label: t('settings.privacy.everyone') },
+                                                      { value: 'CONTACTS', label: t('settings.privacy.contacts') },
                                                 ]}
                                           />
                                     }
@@ -314,7 +320,7 @@ function PrivacySection() {
                   {isDirty && (
                         <div className="rounded-xl bg-amber-50 border border-amber-100 px-5 py-4">
                               <Text className="text-xs text-amber-600">
-                                    ⚠️ Bạn có thay đổi chưa lưu. Nhấn &ldquo;Lưu thay đổi&rdquo; để áp dụng.
+                                    ⚠️ {t('settings.privacy.unsavedChanges')}
                               </Text>
                         </div>
                   )}
@@ -327,14 +333,6 @@ function PrivacySection() {
 // ============================================================================
 
 type SectionKey = 'appearance' | 'language' | 'privacy' | 'notifications' | 'devices';
-
-const MENU_ITEMS = [
-      { key: 'appearance' as SectionKey, icon: <BgColorsOutlined />, label: 'Giao diện' },
-      { key: 'language' as SectionKey, icon: <GlobalOutlined />, label: 'Ngôn ngữ' },
-      { key: 'privacy' as SectionKey, icon: <LockOutlined />, label: 'Quyền riêng tư' },
-      { key: 'notifications' as SectionKey, icon: <SoundOutlined />, label: 'Âm thanh thông báo' },
-      { key: 'devices' as SectionKey, icon: <DesktopOutlined />, label: 'Quản lý thiết bị' },
-];
 
 function ActiveSection({ activeKey }: { activeKey: SectionKey }) {
       switch (activeKey) {
@@ -357,6 +355,15 @@ function ActiveSection({ activeKey }: { activeKey: SectionKey }) {
 
 export function SettingsPage() {
       const [activeKey, setActiveKey] = useState<SectionKey>('appearance');
+      const { t } = useTranslation();
+
+      const MENU_ITEMS = [
+            { key: 'appearance' as SectionKey, icon: <BgColorsOutlined />, label: t('settings.menu.appearance') },
+            { key: 'language' as SectionKey, icon: <GlobalOutlined />, label: t('settings.menu.language') },
+            { key: 'privacy' as SectionKey, icon: <LockOutlined />, label: t('settings.menu.privacy') },
+            { key: 'notifications' as SectionKey, icon: <SoundOutlined />, label: t('settings.menu.notifications') },
+            { key: 'devices' as SectionKey, icon: <DesktopOutlined />, label: t('settings.menu.devices') },
+      ];
 
       return (
             <Layout className="min-h-screen bg-gray-50">
@@ -367,7 +374,7 @@ export function SettingsPage() {
                   >
                         <div className="px-5 pt-8 pb-5">
                               <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                    Cài đặt
+                                    {t('settings.title')}
                               </Text>
                         </div>
                         <Divider className="!my-0 !border-gray-100 dark:!border-gray-800" />

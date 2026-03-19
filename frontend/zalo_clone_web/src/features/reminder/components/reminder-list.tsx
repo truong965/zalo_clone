@@ -10,6 +10,8 @@
  *   TRIGGERED: isTriggered=true, isCompleted=false — "Đã đến hạn" (red)
  */
 
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Empty, Spin, Button, Popconfirm, Tag } from 'antd';
 import {
       CheckOutlined,
@@ -23,7 +25,6 @@ import 'dayjs/locale/vi';
 import type { ReminderItem } from '@/types/api';
 
 dayjs.extend(relativeTime);
-dayjs.locale('vi');
 
 interface ReminderListProps {
       reminders: ReminderItem[];
@@ -44,6 +45,14 @@ export function ReminderList({
       conversationId,
       currentUserId,
 }: ReminderListProps) {
+      const { t, i18n } = useTranslation();
+
+      // Sync dayjs locale with i18next
+      useEffect(() => {
+            if (i18n.language) {
+                  dayjs.locale(i18n.language);
+            }
+      }, [i18n.language]);
       // Filter by conversation if provided
       const filtered = conversationId
             ? reminders.filter((r) => r.conversationId === conversationId)
@@ -61,7 +70,7 @@ export function ReminderList({
             return (
                   <Empty
                         image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description="Chưa có nhắc hẹn nào"
+                        description={t('reminder.list.noReminders')}
                         className="py-4"
                   />
             );
@@ -87,8 +96,8 @@ export function ReminderList({
                               <div
                                     key={reminder.id}
                                     className={`rounded-lg p-3 border ${isTriggered
-                                                ? 'bg-red-50 border-red-200'
-                                                : 'bg-gray-50 border-gray-100'
+                                          ? 'bg-red-50 border-red-200'
+                                          : 'bg-gray-50 border-gray-100'
                                           }`}
                               >
                                     <div className="flex items-start justify-between gap-2">
@@ -109,11 +118,11 @@ export function ReminderList({
                                                 </span>
                                                 {isTriggered ? (
                                                       <Tag color="red" className="text-[10px] leading-tight ml-1">
-                                                            Đã đến hạn
+                                                            {t('reminder.list.dueSoon')}
                                                       </Tag>
                                                 ) : isPast ? (
                                                       <Tag color="orange" className="text-[10px] leading-tight ml-1">
-                                                            Quá hạn
+                                                            {t('reminder.list.overdue')}
                                                       </Tag>
                                                 ) : null}
                                           </div>
@@ -130,20 +139,20 @@ export function ReminderList({
                                                                               : 'text-green-500 hover:text-green-600'
                                                                   }
                                                                   onClick={() => onComplete(reminder.id)}
-                                                                  title={isTriggered ? 'Xác nhận đã xem' : 'Hoàn thành'}
+                                                                  title={isTriggered ? t('reminder.list.confirmViewed') : t('reminder.list.complete')}
                                                             />
                                                             <Popconfirm
-                                                                  title="Xóa nhắc hẹn này?"
+                                                                  title={t('reminder.list.deleteConfirmTitle')}
                                                                   onConfirm={() => onDelete(reminder.id)}
-                                                                  okText="Xóa"
-                                                                  cancelText="Hủy"
+                                                                  okText={t('reminder.list.deleteConfirmOk')}
+                                                                  cancelText={t('reminder.list.deleteConfirmCancel')}
                                                             >
                                                                   <Button
                                                                         type="text"
                                                                         size="small"
                                                                         icon={<DeleteOutlined />}
                                                                         className="text-gray-400 hover:text-red-500"
-                                                                        title="Xóa"
+                                                                        title={t('reminder.list.delete')}
                                                                   />
                                                             </Popconfirm>
                                                       </>

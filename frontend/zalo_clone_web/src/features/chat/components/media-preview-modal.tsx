@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Modal } from 'antd';
 import {
       DownloadOutlined,
@@ -22,6 +23,7 @@ export function MediaPreviewModal({
       initialIndex,
       onClose,
 }: MediaPreviewModalProps) {
+      const { t } = useTranslation();
       const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
       // Reset to initial index when modal opens
@@ -110,7 +112,7 @@ export function MediaPreviewModal({
                               <button
                                     onClick={() => handleDownload(currentItem.cdnUrl ?? '', currentItem.originalName)}
                                     className="text-white bg-black/50 hover:bg-black/70 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
-                                    title="Tải xuống"
+                                    title={t('chat.messageList.actions.download')}
                               >
                                     <DownloadOutlined />
                               </button>
@@ -141,7 +143,7 @@ export function MediaPreviewModal({
                                           onClick={() =>
                                                 handleDownload(items[currentIndex].cdnUrl ?? '', items[currentIndex].originalName)
                                           }
-                                          title="Tải xuống"
+                                          title={t('chat.messageList.actions.download')}
                                     />
                                     <ZoomOutOutlined
                                           disabled={scale === 1}

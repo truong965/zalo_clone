@@ -7,6 +7,7 @@
  * Disables button during creation to prevent duplicates (B1).
  */
 
+import { useTranslation } from 'react-i18next';
 import { Modal, Button, Alert } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
@@ -27,6 +28,7 @@ interface CreateGroupModalProps {
 }
 
 export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
+      const { t } = useTranslation();
       const isOpen = useCreateGroupStore((s) => s.isOpen);
       const error = useCreateGroupStore((s) => s.error);
       const selectedCount = useCreateGroupStore(selectSelectedCount);
@@ -40,12 +42,11 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
             // Confirm close if user has made selections (U5)
             if (selectedCount > 0 || groupName.trim().length > 0) {
                   Modal.confirm({
-                        title: 'Hủy tạo nhóm?',
+                        title: t('conversation.createGroup.cancelConfirmTitle'),
                         icon: <ExclamationCircleOutlined />,
-                        content:
-                              'Bạn đã chọn thành viên và nhập thông tin. Tất cả sẽ bị mất nếu đóng.',
-                        okText: 'Đóng',
-                        cancelText: 'Tiếp tục',
+                        content: t('conversation.createGroup.cancelConfirmContent'),
+                        okText: t('conversation.createGroup.cancelConfirmClose'),
+                        cancelText: t('conversation.createGroup.cancelConfirmContinue'),
                         okButtonProps: { danger: true },
                         onOk: close,
                   });
@@ -63,7 +64,7 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
 
       return (
             <Modal
-                  title="Tạo nhóm"
+                  title={t('conversation.createGroup.title')}
                   open={isOpen}
                   onCancel={handleClose}
                   width="min(96vw, 900px)"
@@ -72,7 +73,7 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
                   footer={
                         <div className="flex justify-end gap-2">
                               <Button onClick={handleClose} disabled={isCreating}>
-                                    Hủy
+                                    {t('conversation.createGroup.cancel')}
                               </Button>
                               <Button
                                     type="primary"
@@ -80,7 +81,7 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
                                     disabled={!canCreate}
                                     loading={isCreating}
                               >
-                                    Tạo nhóm
+                                    {t('conversation.createGroup.create')}
                                     {selectedCount > 0 ? ` (${selectedCount})` : ''}
                               </Button>
                         </div>

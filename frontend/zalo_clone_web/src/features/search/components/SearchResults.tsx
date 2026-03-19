@@ -29,6 +29,7 @@ import { SearchLoading } from './SearchLoading';
 import { RealtimeBanner } from './RealtimeBanner';
 import { formatExecutionTime } from '../utils/search.util';
 import type { SearchStatus } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -91,6 +92,7 @@ export function SearchResults({
       onAcceptRequest,
       onCancelRequest,
 }: SearchResultsProps) {
+      const { t } = useTranslation();
       const isLoading = status === 'loading';
       const hasSearched = status === 'success' || status === 'error';
       const hasResults =
@@ -103,11 +105,11 @@ export function SearchResults({
       const msgCount = results?.conversationMessages?.length ?? 0;
 
       const tabItems = [
-            { key: 'all' as SearchTab, label: 'Tất cả' },
-            { key: 'messages' as SearchTab, label: `Tin nhắn${msgCount ? ` (${msgCount})` : ''}` },
-            { key: 'contacts' as SearchTab, label: `Liên hệ${results?.contacts.length ? ` (${results.contacts.length})` : ''}` },
-            { key: 'groups' as SearchTab, label: `Nhóm${results?.groups.length ? ` (${results.groups.length})` : ''}` },
-            { key: 'media' as SearchTab, label: `Media${results?.media.length ? ` (${results.media.length})` : ''}` },
+            { key: 'all' as SearchTab, label: t('search.tabAll') },
+            { key: 'messages' as SearchTab, label: msgCount ? `${t('search.tabMessages')} (${msgCount})` : t('search.tabMessages') },
+            { key: 'contacts' as SearchTab, label: results?.contacts.length ? `${t('search.tabContacts')} (${results.contacts.length})` : t('search.tabContacts') },
+            { key: 'groups' as SearchTab, label: results?.groups.length ? `${t('search.tabGroups')} (${results.groups.length})` : t('search.tabGroups') },
+            { key: 'media' as SearchTab, label: results?.media.length ? `${t('search.tabMedia')} (${results.media.length})` : t('search.tabMedia') },
       ];
 
       return (
@@ -158,7 +160,7 @@ export function SearchResults({
                                     {activeTab === 'all' && (
                                           <>
                                                 <ResultSection
-                                                      title="Liên hệ"
+                                                      title={t('search.sectionContacts')}
                                                       count={results!.contacts.length}
                                                       show={results!.contacts.length > 0}
                                                       hasMore={results!.contacts.length > ALL_TAB_PREVIEW_LIMIT}
@@ -178,7 +180,7 @@ export function SearchResults({
                                                 </ResultSection>
 
                                                 <ResultSection
-                                                      title="Nhóm"
+                                                      title={t('search.sectionGroups')}
                                                       count={results!.groups.length}
                                                       show={results!.groups.length > 0}
                                                       hasMore={results!.groups.length > ALL_TAB_PREVIEW_LIMIT}
@@ -190,7 +192,7 @@ export function SearchResults({
                                                 </ResultSection>
 
                                                 <ResultSection
-                                                      title="Tin nhắn"
+                                                      title={t('search.sectionMessages')}
                                                       count={results!.conversationMessages?.length ?? 0}
                                                       show={(results!.conversationMessages?.length ?? 0) > 0}
                                                       hasMore={(results!.conversationMessages?.length ?? 0) > ALL_TAB_PREVIEW_LIMIT}
@@ -202,7 +204,7 @@ export function SearchResults({
                                                 </ResultSection>
 
                                                 <ResultSection
-                                                      title="Media"
+                                                      title={t('search.sectionMedia')}
                                                       count={results!.media.length}
                                                       show={results!.media.length > 0}
                                                       hasMore={results!.media.length > ALL_TAB_PREVIEW_LIMIT}

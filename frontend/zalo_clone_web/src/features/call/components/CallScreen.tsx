@@ -17,11 +17,12 @@ import { VoiceCallView } from './VoiceCallView';
 import { DailyCallView } from './DailyCallView';
 import { CallControls } from './CallControls';
 import { ReconnectingOverlay } from './ReconnectingOverlay';
-
+import { useTranslation } from 'react-i18next';
 export function CallScreen() {
       const callStatus = useCallStore((s) => s.callStatus);
       const callType = useCallStore((s) => s.callType);
       const provider = useCallStore((s) => s.provider);
+      const { t } = useTranslation();
 
       // ── Hangup handler (dispatches to CallManager) ──────────────────────
       const handleHangup = useCallback(() => {
@@ -53,12 +54,13 @@ export function CallScreen() {
       if (callStatus === 'IDLE' || callStatus === 'ENDED') {
             return (
                   <div className="flex h-full w-full items-center justify-center bg-gray-900 text-white">
-                        Cuộc gọi đã kết thúc
+                        {t('call.callHasEnded')}
                   </div>
             );
       }
 
       return (
+
             <div className="relative flex h-full w-full flex-col bg-gray-900">
                   {/* ── Main view area ────────────────────────────────────────────── */}
                   <div className="flex-1 overflow-hidden">

@@ -4,6 +4,7 @@
  * Shows first N members with "Xem tất cả" expansion.
  * Admin sees action dropdown per member.
  */
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { Spin } from 'antd';
 import { GroupMemberItem } from './group-member-item';
@@ -28,6 +29,7 @@ export function GroupMembersSection({
       onRemoveMember,
       onTransferAdmin,
 }: GroupMembersSectionProps) {
+      const { t } = useTranslation();
       const [showAll, setShowAll] = useState(false);
 
       const displayedMembers = showAll
@@ -51,14 +53,14 @@ export function GroupMembersSection({
                   {/* Section Header */}
                   <div className="flex items-center justify-between px-4 py-3">
                         <span className="text-sm font-medium text-gray-700">
-                              Thành viên ({members.length})
+                              {t('conversation.groupInfo.membersSection.title', { count: members.length })}
                         </span>
                         {hasMore && (
                               <button
                                     className="text-xs text-blue-500 hover:text-blue-600 transition-colors"
                                     onClick={() => setShowAll(!showAll)}
                               >
-                                    {showAll ? 'Thu gọn' : 'Xem tất cả'}
+                                    {showAll ? t('conversation.groupInfo.membersSection.collapse') : t('conversation.groupInfo.membersSection.viewAll')}
                               </button>
                         )}
                   </div>

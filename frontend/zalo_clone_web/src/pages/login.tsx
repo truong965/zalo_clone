@@ -14,6 +14,7 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { QrLoginView } from '@/features/auth/components/qr-login-view';
 import { ROUTES } from '@/config/routes';
 import { ApiError } from '@/lib/api-error';
+import { useTranslation } from 'react-i18next';
 
 const { Title, Text } = Typography;
 
@@ -22,6 +23,7 @@ export function LoginPage() {
   const [form] = Form.useForm();
   // [THAY ĐỔI 2]: Khởi tạo hook notification
   const [api, contextHolder] = notification.useNotification();
+  const { t } = useTranslation();
 
   const redirectAfterAuth = () => {
     const currentUser = useAuthStore.getState().user;
@@ -56,15 +58,15 @@ export function LoginPage() {
       });
       // Dùng notification thay cho message để đồng bộ
       api.success({
-        message: 'Thành công',
-        description: 'Đăng nhập thành công!',
+        message: t('auth.login.successTitle'),
+        description: t('auth.login.successDesc'),
         placement: 'bottomRight',
       });
     } catch (err: unknown) {
       // [THAY ĐỔI 4]: Sử dụng notification error ở góc dưới phải
       api.error({
-        message: 'Đăng nhập thất bại',
-        description: ApiError.from(err).message || 'Vui lòng kiểm tra lại thông tin.',
+        message: t('auth.login.failTitle'),
+        description: ApiError.from(err).message || t('auth.login.failDesc'),
         placement: 'bottomRight', // Vị trí hiển thị
         duration: 4.5, // Thời gian hiển thị (giây)
       });
@@ -82,9 +84,9 @@ export function LoginPage() {
         <Space direction="vertical" className="w-full" size="large">
           <div className="text-center">
             <Title level={2} className="!mb-2">
-              Đăng Nhập
+              {t('auth.login.title')}
             </Title>
-            <Text type="secondary">Zalo Clone - Chat Application</Text>
+            <Text type="secondary">{t('auth.login.subtitle')}</Text>
           </div>
 
           {/* [THAY ĐỔI 6]: Đã XÓA đoạn code <Alert /> ở đây */}
@@ -98,15 +100,15 @@ export function LoginPage() {
                 label: (
                   <span className="flex items-center gap-1">
                     <QrcodeOutlined />
-                    Quét Mã QR
+                    {t('auth.login.qrLogin')}
                   </span>
                 ),
                 children: (
                   <QrLoginView
                     onLoginSuccess={async () => {
                       api.success({
-                        message: 'Thành công',
-                        description: 'Đăng nhập thành công qua QR!',
+                        message: t('auth.login.successTitle'),
+                        description: t('auth.login.qrSuccessDesc'),
                         placement: 'bottomRight',
                       });
                       // Fetch user profile to update auth state → triggers useEffect redirect
@@ -115,7 +117,7 @@ export function LoginPage() {
                     }}
                     onError={(msg) => {
                       api.error({
-                        message: 'Lỗi',
+                        message: t('auth.login.errorTitle'),
                         description: msg,
                         placement: 'bottomRight',
                       });
@@ -128,7 +130,7 @@ export function LoginPage() {
                 label: (
                   <span className="flex items-center gap-1">
                     <MobileOutlined />
-                    Số Điện Thoại
+                    {t('auth.login.phoneLogin')}
                   </span>
                 ),
                 children: (
@@ -140,36 +142,36 @@ export function LoginPage() {
                     size="large"
                   >
                     <Form.Item
-                      label="Số Điện Thoại"
+                      label={t('auth.login.phoneLabel')}
                       name="phoneNumber"
                       rules={[
-                        { required: true, message: 'Vui lòng nhập số điện thoại' },
+                        { required: true, message: t('auth.login.phoneRequired') },
                         {
-                          message: 'Số điện thoại không đúng định dạng (VD: 0987654321)',
+                          message: t('auth.login.phoneInvalid'),
                         },
                       ]}
                     >
                       <Input
                         prefix={<UserOutlined />}
-                        placeholder="Nhập số điện thoại (VD: 0987654321)"
+                        placeholder={t('auth.login.phonePlaceholder')}
                         disabled={isLoading}
                       />
                     </Form.Item>
 
                     <Form.Item
-                      label="Mật Khẩu"
+                      label={t('auth.login.passwordLabel')}
                       name="password"
                       rules={[
-                        { required: true, message: 'Vui lòng nhập mật khẩu' },
+                        { required: true, message: t('auth.login.passwordRequired') },
                         {
                           min: 6,
-                          message: 'Mật khẩu phải có ít nhất 6 ký tự',
+                          message: t('auth.login.passwordMin'),
                         },
                       ]}
                     >
                       <Input.Password
                         prefix={<LockOutlined />}
-                        placeholder="Nhập mật khẩu"
+                        placeholder={t('auth.login.passwordPlaceholder')}
                         disabled={isLoading}
                       />
                     </Form.Item>
@@ -183,7 +185,7 @@ export function LoginPage() {
                         loading={isLoading}
                         disabled={isLoading}
                       >
-                        {isLoading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
+                        {isLoading ? t('auth.login.loading') : t('auth.login.submit')}
                       </Button>
                     </Form.Item>
                   </Form>
@@ -192,12 +194,12 @@ export function LoginPage() {
             ]}
           />
 
-          <Divider>Hoặc</Divider>
+          <Divider>{t('auth.login.or')}</Divider>
 
           <div className="text-center">
-            <Text>Chưa có tài khoản? </Text>
+            <Text>{t('auth.login.noAccount')}</Text>
             <Link to="/register" className="font-semibold text-blue-600 hover:text-blue-700">
-              Đăng ký ngay
+              {t('auth.login.registerNow')}
             </Link>
           </div>
         </Space>

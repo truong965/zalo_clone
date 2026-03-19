@@ -11,12 +11,14 @@ import {
 import { useAuth } from '@/hooks';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '@/config/routes';
+import { useTranslation } from 'react-i18next';
 
 const { Header } = Layout;
 
 export function AdminHeader() {
       const { user, logout } = useAuth();
       const navigate = useNavigate();
+      const { t } = useTranslation();
 
       const handleLogout = () => {
             logout();
@@ -27,7 +29,7 @@ export function AdminHeader() {
             {
                   key: 'settings',
                   icon: <SettingOutlined />,
-                  label: 'Admin Settings',
+                  label: t('layout.admin.adminSettings'),
                   onClick: () => navigate(ROUTES.ADMIN_SETTINGS),
             },
             {
@@ -36,7 +38,7 @@ export function AdminHeader() {
             {
                   key: 'logout',
                   icon: <LogoutOutlined />,
-                  label: 'Logout',
+                  label: t('layout.admin.logout'),
                   onClick: handleLogout,
                   danger: true,
             },

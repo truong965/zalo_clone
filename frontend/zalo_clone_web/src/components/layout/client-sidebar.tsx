@@ -16,6 +16,7 @@ import { UserProfileModal } from '@/features/profile/components/user-profile-mod
 import { useFriendshipStore } from '@/features/contacts/stores/friendship.store';
 import { useMissedCallCount } from '@/features/call';
 import { ROUTES } from '@/config/routes';
+import { useTranslation } from 'react-i18next';
 
 const { Sider } = Layout;
 
@@ -54,6 +55,7 @@ export function ClientSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore(); // Lấy user từ store
+  const { t } = useTranslation();
   const pendingReceivedCount = useFriendshipStore((s) => s.pendingReceivedCount);
   const { data: missedCallData } = useMissedCallCount();
   const missedCallCount = missedCallData?.count ?? 0;
@@ -61,15 +63,14 @@ export function ClientSidebar() {
   // State quản lý Modal
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
-  // --- XỬ LÝ LOGOUT ---
   const handleLogout = () => {
     // [3] Hiện Modal xác nhận
     Modal.confirm({
-      title: 'Đăng xuất',
+      title: t('layout.client.logoutConfirmTitle'),
       icon: <ExclamationCircleOutlined />,
-      content: 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?',
-      okText: 'Đăng xuất',
-      cancelText: 'Hủy',
+      content: t('layout.client.logoutConfirmContent'),
+      okText: t('layout.client.logout'),
+      cancelText: t('layout.client.cancel'),
       okButtonProps: { danger: true }, // Nút màu đỏ để cảnh báo
       centered: true,
       onOk: async () => {
@@ -92,7 +93,7 @@ export function ClientSidebar() {
   const userProfileContent = (
     <div className="w-60">
       <div className="p-3 border-b border-gray-100 mb-2">
-        <p className="font-bold text-gray-800 text-base">{user?.displayName || 'Người dùng'}</p>
+        <p className="font-bold text-gray-800 text-base">{user?.displayName || t('layout.client.defaultUser')}</p>
       </div>
       <Button
         type="text"
@@ -101,7 +102,7 @@ export function ClientSidebar() {
         icon={<ProfileOutlined />}
         onClick={handleOpenProfile} // Gọi hàm mở modal
       >
-        Hồ sơ cá nhân
+        {t('layout.client.profile')}
       </Button>
     </div>
   );
@@ -116,7 +117,7 @@ export function ClientSidebar() {
         icon={<LogoutOutlined />}
         onClick={handleLogout}
       >
-        Đăng xuất
+        {t('layout.client.logout')}
       </Button>
     </div>
   );
@@ -158,14 +159,14 @@ export function ClientSidebar() {
             <div className="w-full space-y-2">
               <SidebarIcon
                 icon={<MessageOutlined />}
-                label="Tin nhắn"
+                label={t('layout.client.messages')}
                 isActive={location.pathname.startsWith(ROUTES.CHAT)}
                 onClick={() => navigate(ROUTES.CHAT)}
               />
 
               <SidebarIcon
                 icon={<ContainerOutlined />}
-                label="Danh bạ"
+                label={t('layout.client.contacts')}
                 isActive={location.pathname.startsWith(ROUTES.CONTACTS)}
                 onClick={() => navigate(ROUTES.CONTACTS)}
                 badgeCount={pendingReceivedCount}
@@ -173,7 +174,7 @@ export function ClientSidebar() {
 
               <SidebarIcon
                 icon={<PhoneOutlined />}
-                label="Cuộc gọi"
+                label={t('layout.client.calls')}
                 isActive={location.pathname.startsWith(ROUTES.CALLS)}
                 onClick={() => navigate(ROUTES.CALLS)}
                 badgeCount={missedCallCount > 0 ? missedCallCount : undefined}
@@ -206,7 +207,7 @@ export function ClientSidebar() {
 
             <SidebarIcon
               icon={<SettingOutlined />}
-              label="Cài đặt"
+              label={t('layout.client.settings')}
               isBottom={true}
               isActive={location.pathname.startsWith(ROUTES.SETTINGS)}
               onClick={() => navigate(ROUTES.SETTINGS)}
@@ -215,7 +216,7 @@ export function ClientSidebar() {
               <div>
                 <SidebarIcon
                   icon={<LogoutOutlined />}
-                  label="Đăng xuất"
+                  label={t('layout.client.logout')}
                   isBottom={true}
                 />
               </div>

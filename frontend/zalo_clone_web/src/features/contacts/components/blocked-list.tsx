@@ -13,12 +13,13 @@ import { useInView } from 'react-intersection-observer';
 import { useBlockedList, useUnblockUser } from '../hooks/use-block';
 import { useDebounce } from '@/hooks';
 import type { BlockedUserItem } from '@/types/api';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
 function formatBlockedDate(isoDate: string): string {
       const date = new Date(isoDate);
-      return date.toLocaleDateString('vi-VN', {
+      return date.toLocaleDateString(undefined, {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric',
@@ -29,10 +30,12 @@ function BlockedUserCard({
       item,
       onUnblock,
       isUnblocking,
+      t,
 }: {
       item: BlockedUserItem;
       onUnblock: (userId: string) => void;
       isUnblocking: boolean;
+      t: any;
 }) {
       return (
             <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50">
@@ -48,21 +51,21 @@ function BlockedUserCard({
                               {item.displayName}
                         </Text>
                         <Text type="secondary" className="text-xs">
-                              Đã chặn {formatBlockedDate(item.blockedAt)}
+                              {t('contacts.blocked.blockedAt', { date: formatBlockedDate(item.blockedAt) })}
                         </Text>
                         {item.reason && (
                               <Text type="secondary" className="text-xs block truncate">
-                                    Lý do: {item.reason}
+                                    {t('contacts.blocked.reason', { reason: item.reason })}
                               </Text>
                         )}
                   </div>
 
                   <Popconfirm
-                        title="Bỏ chặn người dùng?"
-                        description={`Bỏ chặn ${item.displayName}?`}
+                        title={t('contacts.blocked.unblockTitle')}
+                        description={t('contacts.blocked.unblockDesc', { name: item.displayName })}
                         onConfirm={() => onUnblock(item.userId)}
-                        okText="Bỏ chặn"
-                        cancelText="Hủy"
+                        okText={t('contacts.blocked.unblockOk')}
+                        cancelText={t('contacts.blocked.unblockCancel')}
                         okButtonProps={{ danger: true }}
                   >
                         <Button
@@ -71,7 +74,7 @@ function BlockedUserCard({
                               loading={isUnblocking}
                               icon={<StopOutlined />}
                         >
-                              Bỏ chặn
+                              {t('contacts.blocked.unblockBtn')}
                         </Button>
                   </Popconfirm>
             </div>
@@ -81,6 +84,7 @@ function BlockedUserCard({
 export function BlockedList() {
       const [search, setSearch] = useState('');
       const debouncedSearch = useDebounce(search, 350);
+      const { t } = useTranslation();
 
       const {
             data,
@@ -127,7 +131,7 @@ export function BlockedList() {
                         <Empty
                               description={
                                     <Text type="secondary">
-                                          Không thể tải danh sách. Vui lòng thử lại.
+                                          {t('contacts.blocked.errorLoad')}
                                     </Text>
                               }
                         />
@@ -140,13 +144,13 @@ export function BlockedList() {
                   <div className="px-4 py-3 border-b border-gray-100 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                               <Text className="text-sm text-gray-500">
-                                    Người dùng bị chặn
-                                    {totalCount !== undefined && ` (${totalCount})`}
-                              </Text>
+                              {t('contacts.blocked.title')}
+                              {totalCount !== undefined && ` (${totalCount})`}
+                        </Text>
                         </div>
                         <Input
                               prefix={<SearchOutlined className="text-gray-400" />}
-                              placeholder="Tìm kiếm người bị chặn"
+                              placeholder={t('contacts.blocked.searchPlaceholder')}
                               value={search}
                               onChange={(e) => setSearch(e.target.value)}
                               allowClear
@@ -161,7 +165,7 @@ export function BlockedList() {
                                     image={<StopOutlined className="text-5xl text-gray-300" />}
                                     description={
                                           <Text type="secondary">
-                                                Bạn chưa chặn người dùng nào
+                                                {t('contacts.blocked.empty')}
                                           </Text>
                                     }
                               />
@@ -177,6 +181,7 @@ export function BlockedList() {
                                                 unblockMutation.isPending &&
                                                 unblockMutation.variables === item.userId
                                           }
+                                          t={t}
                                     />
                               ))}
 

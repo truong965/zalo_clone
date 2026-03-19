@@ -6,6 +6,7 @@ import type { ChatMessage } from '../types';
 import type { DirectReceipts } from '@/types/api';
 import { ImageAttachment, VideoAttachment, AudioAttachment, DocumentAttachment } from './attachments';
 import { ReplyQuote } from './reply-quote';
+import { useTranslation } from 'react-i18next';
 
 interface MessageListProps {
       messages: ChatMessage[];
@@ -39,7 +40,7 @@ interface MessageListProps {
 
 // ── Date-divider helpers ──
 
-function formatDateLabel(isoString: string): string {
+function formatDateLabel(isoString: string, t: any): string {
       const msgDate = new Date(isoString);
       const today = new Date();
       const yesterday = new Date(today);
@@ -50,8 +51,8 @@ function formatDateLabel(isoString: string): string {
             a.getMonth() === b.getMonth() &&
             a.getDate() === b.getDate();
 
-      if (sameDay(msgDate, today)) return 'Hôm nay';
-      if (sameDay(msgDate, yesterday)) return 'Hôm qua';
+      if (sameDay(msgDate, today)) return t('chat.messageList.today');
+      if (sameDay(msgDate, yesterday)) return t('chat.messageList.yesterday');
 
       const dd = String(msgDate.getDate()).padStart(2, '0');
       const mm = String(msgDate.getMonth() + 1).padStart(2, '0');
@@ -78,36 +79,38 @@ interface CallLogMeta {
       duration?: number; // seconds
 }
 
-function formatCallDuration(seconds: number): string {
+function formatCallDuration(seconds: number, t: any): string {
       const m = Math.floor(seconds / 60);
       const s = seconds % 60;
-      if (m === 0) return `${s} giây`;
-      if (s === 0) return `${m} phút`;
-      return `${m} phút ${s} giây`;
+      if (m === 0) return t('chat.messageList.durationSec', { s });
+      if (s === 0) return t('chat.messageList.durationMin', { m });
+      return t('chat.messageList.durationMinSec', { m, s });
 }
 
-function getCallLogLabel(meta: CallLogMeta): string {
-      const typeLabel = meta.callType === 'VIDEO' ? 'Video' : 'Thoại';
+function getCallLogLabel(meta: CallLogMeta, t: any): string {
+      const typeLabel = meta.callType === 'VIDEO' ? t('chat.messageList.callVideo') : t('chat.messageList.callVoice');
+      const typeLabelLower = typeLabel.toLowerCase();
+      const duration = meta.duration ? formatCallDuration(meta.duration, t) : '';
       switch (meta.status) {
             case 'COMPLETED':
-                  return `Cuộc gọi ${typeLabel.toLowerCase()}${meta.duration ? ` · ${formatCallDuration(meta.duration)}` : ''}`;
+                  return t('chat.messageList.callCompleted', { type: typeLabelLower, duration });
             case 'MISSED':
-                  return `Cuộc gọi ${typeLabel.toLowerCase()} nhỡ`;
+                  return t('chat.messageList.callMissed', { type: typeLabelLower });
             case 'REJECTED':
-                  return `Cuộc gọi ${typeLabel.toLowerCase()} bị từ chối`;
+                  return t('chat.messageList.callRejected', { type: typeLabelLower });
             case 'CANCELLED':
-                  return `Cuộc gọi ${typeLabel.toLowerCase()} đã huỷ`;
+                  return t('chat.messageList.callCancelled', { type: typeLabelLower });
             case 'NO_ANSWER':
-                  return `${typeLabel} không được trả lời`;
+                  return t('chat.messageList.callNoAnswer', { type: typeLabel });
             case 'FAILED':
-                  return `Cuộc gọi ${typeLabel.toLowerCase()} thất bại`;
+                  return t('chat.messageList.callFailed', { type: typeLabelLower });
             default:
-                  return `Cuộc gọi ${typeLabel.toLowerCase()}`;
+                  return t('chat.messageList.callDefault', { type: typeLabelLower });
       }
 }
 
 /** Centered pill display for CALL_LOG system messages */
-function CallLogEntry({ msg }: { msg: ChatMessage }) {
+function CallLogEntry({ msg, t }: { msg: ChatMessage, t: any }) {
       const meta = (msg.metadata ?? {}) as unknown as CallLogMeta;
 
       if (meta.action !== 'CALL_LOG') {
@@ -131,7 +134,7 @@ function CallLogEntry({ msg }: { msg: ChatMessage }) {
                               {isVideo ? '📹' : '📞'}
                         </span>
                         <span className={isMissed ? 'text-red-500' : 'text-gray-600'}>
-                              {getCallLogLabel(meta)}
+                              {getCallLogLabel(meta, t)}
                         </span>
                   </div>
             </div>
@@ -295,7 +298,7 @@ function ReceiptTick({ state }: { state: ReceiptDisplayState }) {
 }
 
 /** Group receipt counter — e.g. "3/10 đã xem" */
-function GroupSeenCounter({ msg }: { msg: ChatMessage }) {
+function GroupSeenCounter({ msg, t }: { msg: ChatMessage, t: any }) {
       const total = msg.totalRecipients ?? 0;
       if (total === 0) return null;
       const seen = Math.min(msg.seenCount ?? 0, total);
@@ -303,20 +306,20 @@ function GroupSeenCounter({ msg }: { msg: ChatMessage }) {
 
       return (
             <span className="text-[10px] text-blue-500">
-                  {seen}/{total} đã xem
+                  {t('chat.messageList.groupSeen', { seen, total })}
             </span>
       );
 }
 
 /** Vietnamese text labels for receipt status */
-function getReceiptText(state: ReceiptDisplayState): string {
+function getReceiptText(state: ReceiptDisplayState, t: any): string {
       switch (state) {
             case 'sent':
-                  return 'Đã gửi';
+                  return t('chat.messageList.statusSent');
             case 'delivered':
-                  return 'Đã nhận';
+                  return t('chat.messageList.statusDelivered');
             case 'seen':
-                  return 'Đã xem';
+                  return t('chat.messageList.statusSeen');
             default:
                   return '';
       }
@@ -341,6 +344,7 @@ export function MessageList({
       onPinMessage,
       onUnpinMessage,
 }: MessageListProps) {
+      const { t } = useTranslation();
       // Find the latest (newest) message sent by "me" — receipt ticks only appear on this one
       const latestMyMessageId = (() => {
             for (let i = messages.length - 1; i >= 0; i--) {
@@ -361,9 +365,9 @@ export function MessageList({
                   {messages.length > 0 ? (
                         <div className="space-y-3">
                               {messages.map((msg, idx) => {
-                                    const dateLabel = formatDateLabel(msg.createdAt);
+                                    const dateLabel = formatDateLabel(msg.createdAt, t);
                                     const prevDateLabel = idx > 0
-                                          ? formatDateLabel(messages[idx - 1].createdAt)
+                                          ? formatDateLabel(messages[idx - 1].createdAt, t)
                                           : '';
                                     const showDivider = dateLabel !== prevDateLabel;
                                     const isHighlighted = highlightedMessageId === msg.id;
@@ -373,16 +377,16 @@ export function MessageList({
                                                 {showDivider && <DateDivider label={dateLabel} />}
                                                 {msg.type === 'SYSTEM' ? (
                                                       <div data-message-id={msg.id}>
-                                                            <CallLogEntry msg={msg} />
+                                                            <CallLogEntry msg={msg} t={t} />
                                                       </div>
                                                 ) : (() => {
                                                       // Build menu config once, shared between contextMenu + hover button
                                                       const menuProps: MenuProps = {
                                                             items: [
-                                                                  { key: 'reply', label: 'Trả lời' },
+                                                                  { key: 'reply', label: t('chat.messageList.reply') },
                                                                   pinnedMessageIds?.has(msg.id)
-                                                                        ? { key: 'unpin', label: 'Bỏ ghim' }
-                                                                        : { key: 'pin', label: 'Ghim tin nhắn' },
+                                                                        ? { key: 'unpin', label: t('chat.messageList.unpinMsg') }
+                                                                        : { key: 'pin', label: t('chat.messageList.pinMsg') },
                                                             ],
                                                             onClick: ({ key }) => {
                                                                   if (key === 'reply') onReply?.(msg);
@@ -428,14 +432,14 @@ export function MessageList({
                                                                               {renderMessageBody(msg)}
                                                                               {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
                                                                                     <div className="mt-2 flex items-center justify-end gap-2">
-                                                                                          <span className="text-[11px] text-red-600 opacity-90">Gửi thất bại</span>
+                                                                                          <span className="text-[11px] text-red-600 opacity-90">{t('chat.messageList.sendFail')}</span>
                                                                                           <Button
                                                                                                 size="small"
                                                                                                 type="link"
                                                                                                 className="!p-0 !h-auto"
                                                                                                 onClick={() => onRetry?.(msg)}
                                                                                           >
-                                                                                                Gửi lại
+                                                                                                {t('chat.messageList.retry')}
                                                                                           </Button>
                                                                                     </div>
                                                                               )}
@@ -443,7 +447,7 @@ export function MessageList({
                                                                                     {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'SENDING' && (
                                                                                           <span className="inline-flex items-center gap-1">
                                                                                                 <Spin size="small" />
-                                                                                                <span>Đang gửi...</span>
+                                                                                                <span>{t('chat.messageList.sending')}</span>
                                                                                           </span>
                                                                                     )}
                                                                                     <span>{msg.displayTimestamp}</span>
@@ -455,9 +459,9 @@ export function MessageList({
                                                                                                 <span className="inline-flex items-center gap-1">
                                                                                                       <ReceiptTick state={state} />
                                                                                                       <span className={state === 'seen' ? 'text-blue-500' : 'text-gray-400'}>
-                                                                                                            {getReceiptText(state)}
+                                                                                                            {getReceiptText(state, t)}
                                                                                                       </span>
-                                                                                                      {!isDirect && <GroupSeenCounter msg={msg} />}
+                                                                                                      {!isDirect && <GroupSeenCounter msg={msg} t={t} />}
                                                                                                 </span>
                                                                                           );
                                                                                     })()}
@@ -469,7 +473,7 @@ export function MessageList({
                                                                               onClick={(e) => e.stopPropagation()}
                                                                         >
                                                                               <Dropdown menu={menuProps} trigger={['click']} placement={msg.senderSide === 'me' ? 'bottomRight' : 'bottomLeft'}>
-                                                                                    <Tooltip title="Thao tác">
+                                                                                    <Tooltip title={t('chat.messageList.actionTooltip')}>
                                                                                           <button className="p-1 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors">
                                                                                                 <MoreOutlined style={{ fontSize: 16 }} />
                                                                                           </button>
@@ -487,7 +491,7 @@ export function MessageList({
                   ) : (
                         //  HIỂN THỊ KHI KHÔNG CÓ TIN NHẮN
                         <div className="flex h-full flex-col items-center justify-center text-gray-500">
-                              <Empty description="Chưa có tin nhắn nào" />
+                              <Empty description={t('chat.messageList.noMessages')} />
                         </div>
                   )}
                   {/* Load Newer Trigger (Bottom) — only when jumped away */}

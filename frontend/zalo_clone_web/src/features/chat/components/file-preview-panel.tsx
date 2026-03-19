@@ -24,7 +24,6 @@ import {
       FileZipOutlined,
       FileTextOutlined,
       PlayCircleOutlined,
-      SoundOutlined,
       CodeOutlined,
       AudioOutlined,
       ReloadOutlined,
@@ -36,6 +35,7 @@ import { formatBytes } from '@/lib/utils';
 import type { PendingFile } from '../hooks/use-media-upload';
 import { FileUtils } from '@/utils/file.utils';
 import type { MediaType } from '@/types/api';
+import { useTranslation } from 'react-i18next';
 
 // ============================================================================
 // PROPS
@@ -154,7 +154,7 @@ function ProcessingOverlay() {
 }
 
 /** Error overlay with retry button for any card. */
-function ErrorOverlay({ onRetry }: { onRetry: () => void }) {
+function ErrorOverlay({ onRetry, t }: { onRetry: () => void, t: any }) {
       return (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 rounded-lg">
                   <WarningOutlined className="text-orange-400 text-lg" />
@@ -167,7 +167,7 @@ function ErrorOverlay({ onRetry }: { onRetry: () => void }) {
                         className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-white bg-white/20 hover:bg-white/30 rounded transition-colors"
                   >
                         <ReloadOutlined className="text-[10px]" />
-                        Thử lại
+                        {t('chat.filePreview.retry')}
                   </button>
             </div>
       );
@@ -180,11 +180,13 @@ function VisualFileCard({
       onRemove,
       onRetry,
       disabled,
+      t,
 }: {
       file: PendingFile;
       onRemove: () => void;
       onRetry: () => void;
       disabled: boolean;
+      t: any;
 }) {
       const isActive = isActiveUpload(file.state);
       const isVideo = file.file.type.startsWith('video/');
@@ -236,7 +238,7 @@ function VisualFileCard({
                   ) : null}
 
                   {/* Error overlay */}
-                  {file.state === 'error' ? <ErrorOverlay onRetry={onRetry} /> : null}
+                  {file.state === 'error' ? <ErrorOverlay onRetry={onRetry} t={t} /> : null}
 
                   {/* Confirmed checkmark */}
                   {file.state === 'confirmed' ? (
@@ -251,7 +253,7 @@ function VisualFileCard({
                               type="button"
                               onClick={onRemove}
                               className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-700 hover:bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                              aria-label={`Xóa ${file.file.name}`}
+                              aria-label={t('chat.filePreview.remove')}
                         >
                               <CloseOutlined className="text-[9px]" />
                         </button>
@@ -267,11 +269,13 @@ function DocumentFileCard({
       onRemove,
       onRetry,
       disabled,
+      t,
 }: {
       file: PendingFile;
       onRemove: () => void;
       onRetry: () => void;
       disabled: boolean;
+      t: any;
 }) {
       const isActive = isActiveUpload(file.state);
 
@@ -325,7 +329,7 @@ function DocumentFileCard({
 
                   {/* Error state */}
                   {file.state === 'error' ? (
-                        <Tooltip title={file.error ?? 'Upload thất bại'}>
+                        <Tooltip title={file.error ?? t('chat.filePreview.uploadFail')}>
                               <button
                                     type="button"
                                     onClick={onRetry}
@@ -342,7 +346,7 @@ function DocumentFileCard({
                               type="button"
                               onClick={onRemove}
                               className="absolute top-1/2 -translate-y-1/2 right-1.5 w-5 h-5 text-gray-400 hover:text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              aria-label={`Xóa ${file.file.name}`}
+                              aria-label={t('chat.filePreview.remove')}
                         >
                               <CloseOutlined className="text-[10px]" />
                         </button>
@@ -356,6 +360,7 @@ function DocumentFileCard({
 // ============================================================================
 
 export function FilePreviewPanel({ files, onRemove, onRetry, disabled = false }: FilePreviewPanelProps) {
+      const { t } = useTranslation();
       if (files.length === 0) return null;
 
       return (
@@ -374,6 +379,7 @@ export function FilePreviewPanel({ files, onRemove, onRetry, disabled = false }:
                                           onRemove={handleRemove}
                                           onRetry={handleRetry}
                                           disabled={disabled}
+                                          t={t}
                                     />
                               ) : (
                                     <DocumentFileCard
@@ -382,6 +388,7 @@ export function FilePreviewPanel({ files, onRemove, onRetry, disabled = false }:
                                           onRemove={handleRemove}
                                           onRetry={handleRetry}
                                           disabled={disabled}
+                                          t={t}
                                     />
                               );
                         })}
@@ -389,7 +396,7 @@ export function FilePreviewPanel({ files, onRemove, onRetry, disabled = false }:
 
                   {/* File count summary */}
                   <p className="text-[10px] text-gray-400 mt-1">
-                        {files.length} file{files.length > 1 ? 's' : ''} đã chọn
+                        {t('chat.filePreview.selected', { count: files.length })}
                   </p>
             </div>
       );

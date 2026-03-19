@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Input, DatePicker, message } from 'antd';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -36,20 +37,21 @@ export function CreateReminderModal({
       defaultContent = '',
       isSubmitting = false,
 }: CreateReminderModalProps) {
+      const { t } = useTranslation();
       const [content, setContent] = useState(defaultContent);
       const [remindAt, setRemindAt] = useState<Dayjs | null>(null);
 
       const handleOk = async () => {
             if (!content.trim()) {
-                  void message.warning('Vui lòng nhập nội dung nhắc hẹn.');
+                  void message.warning(t('reminder.createModal.emptyContentWarning'));
                   return;
             }
             if (!remindAt) {
-                  void message.warning('Vui lòng chọn thời gian nhắc hẹn.');
+                  void message.warning(t('reminder.createModal.noTimeWarning'));
                   return;
             }
             if (remindAt.isBefore(dayjs().add(1, 'minute'))) {
-                  void message.warning('Thời gian nhắc hẹn phải ít nhất 1 phút trong tương lai.');
+                  void message.warning(t('reminder.createModal.tooSoonWarning'));
                   return;
             }
 
@@ -64,9 +66,9 @@ export function CreateReminderModal({
                   setContent('');
                   setRemindAt(null);
                   onClose();
-                  void message.success('Đã tạo nhắc hẹn!');
+                  void message.success(t('reminder.createModal.createSuccess'));
             } catch {
-                  void message.error('Không thể tạo nhắc hẹn. Vui lòng thử lại.');
+                  void message.error(t('reminder.createModal.createError'));
             }
       };
 
@@ -81,24 +83,24 @@ export function CreateReminderModal({
 
       return (
             <Modal
-                  title="⏰ Tạo nhắc hẹn"
+                  title={t('reminder.createModal.title')}
                   open={open}
                   onOk={handleOk}
                   onCancel={handleCancel}
-                  okText="Tạo"
-                  cancelText="Hủy"
+                  okText={t('reminder.createModal.createButton')}
+                  cancelText={t('reminder.createModal.cancelButton')}
                   confirmLoading={isSubmitting}
                   destroyOnHidden
             >
                   <div className="flex flex-col gap-4 py-2">
                         <div>
                               <label className="block text-sm font-medium text-gray-600 mb-1">
-                                    Nội dung nhắc hẹn
+                                    {t('reminder.createModal.contentLabel')}
                               </label>
                               <TextArea
                                     value={content}
                                     onChange={(e) => setContent(e.target.value)}
-                                    placeholder="Nhập nội dung nhắc hẹn..."
+                                    placeholder={t('reminder.createModal.contentPlaceholder')}
                                     maxLength={500}
                                     autoSize={{ minRows: 2, maxRows: 4 }}
                                     showCount
@@ -106,7 +108,7 @@ export function CreateReminderModal({
                         </div>
                         <div>
                               <label className="block text-sm font-medium text-gray-600 mb-1">
-                                    Thời gian nhắc
+                                    {t('reminder.createModal.timeLabel')}
                               </label>
                               <DatePicker
                                     showTime={{ format: 'HH:mm' }}
@@ -114,15 +116,15 @@ export function CreateReminderModal({
                                     value={remindAt}
                                     onChange={setRemindAt}
                                     disabledDate={disabledDate}
-                                    placeholder="Chọn ngày giờ"
+                                    placeholder={t('reminder.createModal.timePlaceholder')}
                                     className="w-full"
                                     showNow={false}
                               />
                         </div>
                         {conversationId && (
                               <p className="text-xs text-gray-400">
-                                    Nhắc hẹn sẽ liên kết với cuộc trò chuyện hiện tại.
-                                    {messageId && ' và tin nhắn đã chọn.'}
+                                    {t('reminder.createModal.linkedNote')}
+                                    {messageId && t('reminder.createModal.linkedNoteWithMessage')}
                               </p>
                         )}
                   </div>

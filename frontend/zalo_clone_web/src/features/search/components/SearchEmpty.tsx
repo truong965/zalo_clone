@@ -6,6 +6,7 @@
  * - Không có kết quả matching
  */
 
+import { useTranslation } from 'react-i18next';
 import { Typography } from 'antd';
 import { SearchOutlined, InboxOutlined } from '@ant-design/icons';
 
@@ -19,6 +20,7 @@ interface SearchEmptyProps {
 }
 
 export function SearchEmpty({ hasSearched = false, keyword }: SearchEmptyProps) {
+      const { t } = useTranslation();
       if (hasSearched) {
             return (
                   <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
@@ -26,15 +28,15 @@ export function SearchEmpty({ hasSearched = false, keyword }: SearchEmptyProps) 
                               <InboxOutlined className="text-3xl text-gray-300" />
                         </div>
                         <Text strong className="block mb-1 text-gray-600">
-                              Không tìm thấy kết quả
+                              {t('search.noResults')}
                         </Text>
                         {keyword && (
                               <Text type="secondary" className="text-sm">
-                                    Không có kết quả phù hợp với &ldquo;{keyword}&rdquo;
+                                    {t('search.noResultsKeyword', { keyword })}
                               </Text>
                         )}
                         <Text type="secondary" className="text-xs mt-2">
-                              Thử tìm kiếm với từ khóa khác
+                              {t('search.tryOtherKeyword')}
                         </Text>
                   </div>
             );
@@ -46,10 +48,10 @@ export function SearchEmpty({ hasSearched = false, keyword }: SearchEmptyProps) 
                         <SearchOutlined className="text-5xl text-blue-300" />
                   </div>
                   <Text strong className="block mb-1 text-gray-600">
-                        Tìm kiếm
+                        {t('search.search')}
                   </Text>
                   <Text type="secondary" className="text-sm">
-                        Tìm tin nhắn, liên hệ, nhóm và file
+                        {t('search.searchDescription')}
                   </Text>
             </div>
       );

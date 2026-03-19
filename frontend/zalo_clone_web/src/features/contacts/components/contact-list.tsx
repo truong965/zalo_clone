@@ -11,6 +11,7 @@
  * `selectedForAlias` state) to avoid mounting N modals in the virtual list.
  */
 
+import { useTranslation } from 'react-i18next';
 import {
       useRef,
       useCallback,
@@ -53,6 +54,7 @@ const ITEM_HEIGHT = 92;
 // ============================================================================
 
 export function ContactList() {
+      const { t } = useTranslation();
       const navigate = useNavigate();
 
       // ── Search ─────────────────────────────────────────────────────────────────
@@ -124,14 +126,14 @@ export function ContactList() {
             <div className="h-full flex flex-col">
                   {/* Header */}
                   <div className="px-4 py-3 border-b border-gray-100">
-                        <Text className="text-sm text-gray-500">Gợi ý kết bạn từ danh bạ</Text>
+                        <Text className="text-sm text-gray-500">{t('contacts.contactList.header')}</Text>
                   </div>
 
                   {/* Search */}
                   <div className="px-4 py-2">
                         <Input
                               prefix={<SearchOutlined className="text-gray-400" />}
-                              placeholder="Tìm trong danh bạ..."
+                              placeholder={t('contacts.contactList.searchPlaceholder')}
                               value={search}
                               onChange={handleSearchChange}
                               allowClear
@@ -149,8 +151,8 @@ export function ContactList() {
                                     description={
                                           <Text type="secondary">
                                                 {debouncedSearch
-                                                      ? 'Không tìm thấy liên hệ phù hợp'
-                                                      : 'Chưa có liên hệ nào trong danh bạ'}
+                                                      ? t('contacts.contactList.noSearchResults')
+                                                      : t('contacts.contactList.noContacts')}
                                           </Text>
                                     }
                                     className="py-12"
@@ -220,28 +222,29 @@ function ContactItem({
       onMessage: () => void;
       onSetAlias: () => void;
 }) {
+      const { t } = useTranslation();
       const removeContact = useRemoveContact();
       const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
 
       const menuItems = useMemo(() => [
             {
                   key: 'message',
-                  label: loading ? 'Đang mở...' : 'Nhắn tin',
+                  label: loading ? t('contacts.contactList.menu.opening') : t('contacts.contactList.menu.message'),
                   icon: <MessageOutlined />,
                   disabled: loading,
             },
             {
                   key: 'set-alias',
-                  label: contact.aliasName ? 'Đổi tên gợi nhớ' : 'Đặt tên gợi nhớ',
+                  label: contact.aliasName ? t('contacts.contactList.menu.changeAlias') : t('contacts.contactList.menu.setAlias'),
                   icon: <EditOutlined />,
             },
             { type: 'divider' as const },
             {
                   key: 'remove',
-                  label: <span className="text-red-500">Xoá khỏi danh bạ</span>,
+                  label: <span className="text-red-500">{t('contacts.contactList.menu.remove')}</span>,
                   icon: <DeleteOutlined className="text-red-500" />,
             },
-      ], [contact.aliasName, loading]);
+      ], [contact.aliasName, loading, t]);
 
       const handleMenuClick = useCallback(({ key }: { key: string }) => {
             if (key === 'message') onMessage();
@@ -252,10 +255,10 @@ function ContactItem({
       // Subtitle: show alias hint or phone book source
       const subtitle = useMemo(() => {
             if (contact.aliasName && contact.aliasName !== contact.phoneBookName) {
-                  return `Tên gợi nhớ: ${contact.aliasName}`;
+                  return t('contacts.contactList.aliasHint', { alias: contact.aliasName });
             }
             return undefined;
-      }, [contact.aliasName, contact.phoneBookName]);
+      }, [contact.aliasName, contact.phoneBookName, t]);
 
       return (
             <FriendCard
@@ -268,16 +271,16 @@ function ContactItem({
                   onClick={onMessage}
                   extra={
                         contact.source === 'PHONE_SYNC' ? (
-                              <Tag color="blue" className="mt-0.5 text-xs">Từ danh bạ</Tag>
+                              <Tag color="blue" className="mt-0.5 text-xs">{t('contacts.contactList.fromContacts')}</Tag>
                         ) : undefined
                   }
                   actions={
                         <Popconfirm
-                              title="Xoá khỏi danh bạ"
-                              description={`Xoá ${contact.displayName} khỏi danh bạ?`}
+                              title={t('contacts.contactList.removeConfirm.title')}
+                              description={t('contacts.contactList.removeConfirm.description', { name: contact.displayName })}
                               open={removeConfirmOpen}
-                              okText="Xoá"
-                              cancelText="Huỷ"
+                              okText={t('contacts.contactList.removeConfirm.ok')}
+                              cancelText={t('contacts.contactList.removeConfirm.cancel')}
                               okButtonProps={{ danger: true }}
                               onConfirm={() => {
                                     removeContact.mutate(contact.contactUserId, {

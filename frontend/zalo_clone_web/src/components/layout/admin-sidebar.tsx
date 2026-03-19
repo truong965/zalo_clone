@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const { Sider } = Layout;
 
@@ -20,6 +21,7 @@ export function AdminSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { t } = useTranslation();
 
   const currentPath = location.pathname;
 
@@ -27,37 +29,37 @@ export function AdminSidebar() {
     {
       key: '/admin/dashboard',
       icon: <DashboardOutlined />,
-      label: 'Dashboard',
+      label: t('layout.admin.dashboard'),
       onClick: () => navigate('/admin/dashboard'),
     },
     {
       key: '/admin/users',
       icon: <UserOutlined />,
-      label: 'Users',
+      label: t('layout.admin.users'),
       onClick: () => navigate('/admin/users'),
     },
     {
       key: '/admin/messages',
       icon: <MessageOutlined />,
-      label: 'Messages',
+      label: t('layout.admin.messages'),
       onClick: () => navigate('/admin/messages'),
     },
     {
       key: '/admin/calls',
       icon: <PhoneOutlined />,
-      label: 'Calls',
+      label: t('layout.admin.calls'),
       onClick: () => navigate('/admin/calls'),
     },
     {
       key: '/admin/activity',
       icon: <AlertOutlined />,
-      label: 'Activity',
+      label: t('layout.admin.activity'),
       onClick: () => navigate('/admin/activity'),
     },
     {
       key: '/admin/settings',
       icon: <SettingOutlined />,
-      label: 'Settings',
+      label: t('layout.admin.settings'),
       onClick: () => navigate('/admin/settings'),
     },
   ];

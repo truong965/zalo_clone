@@ -5,6 +5,7 @@
  * Scrollable with "và N người khác" overflow indicator.
  */
 
+import { useTranslation } from 'react-i18next';
 import { Avatar, Tag, Typography } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import {
@@ -15,6 +16,7 @@ import {
 const { Text } = Typography;
 
 export function SelectedMembersPanel() {
+      const { t } = useTranslation();
       const selectedMembers = useCreateGroupStore((s) => s.selectedMembers);
       const selectedCount = useCreateGroupStore(selectSelectedCount);
       const removeMember = useCreateGroupStore((s) => s.removeMember);
@@ -23,7 +25,7 @@ export function SelectedMembersPanel() {
             return (
                   <div className="flex items-center justify-center h-full text-gray-400">
                         <Text type="secondary" className="text-xs text-center px-2">
-                              Chọn ít nhất 2 người để tạo nhóm
+                              {t('conversation.createGroupModal.selectedMembersPanel.minMembersHint')}
                         </Text>
                   </div>
             );
@@ -35,7 +37,7 @@ export function SelectedMembersPanel() {
             <div className="flex flex-col h-full">
                   <div className="px-3 py-2 border-b border-gray-100">
                         <Text strong className="text-xs">
-                              Đã chọn ({selectedCount})
+                              {t('conversation.createGroupModal.selectedMembersPanel.selectedCount', { count: selectedCount })}
                         </Text>
                   </div>
                   <div className="flex-1 overflow-y-auto px-3 py-2">

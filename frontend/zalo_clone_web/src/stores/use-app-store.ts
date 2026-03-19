@@ -4,6 +4,7 @@
 
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
+import i18n from '@/lib/i18n';
 
 /** Apply or remove the `dark` class on <html> for Tailwind dark mode */
 function applyThemeToDom(theme: 'light' | 'dark') {
@@ -49,6 +50,7 @@ export const useAppStore = create<AppState>((set) => ({
   language: localStorage.getItem(STORAGE_KEYS.LANGUAGE) || 'vi',
   setLanguage: (lang) => {
     localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
+    i18n.changeLanguage(lang);
     set({ language: lang });
   },
 }));

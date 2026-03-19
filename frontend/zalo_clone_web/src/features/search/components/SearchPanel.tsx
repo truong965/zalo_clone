@@ -20,6 +20,7 @@ import { FriendRequestModal, useAcceptRequest, useCancelRequest } from '@/featur
 import { conversationService } from '@/features/conversation';
 import { searchService } from '../api/search.service';
 import { handleInteractionError } from '@/utils/interaction-error';
+import { useTranslation } from 'react-i18next';
 import type {
       ConversationMessageGroup,
       ContactSearchResult,
@@ -53,6 +54,7 @@ export function SearchPanel({
       onNavigateToConversationSearch,
 }: SearchPanelProps) {
       const queryClient = useQueryClient();
+      const { t } = useTranslation();
       const {
             keyword,
             activeTab,
@@ -234,44 +236,42 @@ export function SearchPanel({
             (contactId: string) => {
                   const contact = results?.contacts.find((c) => c.id === contactId);
                   if (!contact?.pendingRequestId) {
-                        notification.warning({ message: 'Thiếu mã lời mời để chấp nhận' });
-                        return;
-                  }
+                  notification.warning({ message: t('search.missingAcceptId') });
+                  return;
+            }
 
-                  acceptRequest.mutate(contact.pendingRequestId, {
-                        onSuccess: () => {
-                              notification.success({ message: 'Đã chấp nhận lời mời kết bạn' });
-                              triggerSearch(keyword);
-                              void queryClient.invalidateQueries({ queryKey: ['friendship'] });
-                        },
-                        onError: () => {
-                              notification.error({ message: 'Không thể chấp nhận lời mời' });
-                        },
-                  });
-            },
-            [acceptRequest, keyword, results, triggerSearch, queryClient],
+            acceptRequest.mutate(contact.pendingRequestId, {
+                  onSuccess: () => {
+                        notification.success({ message: t('search.acceptSuccess') });
+                        triggerSearch(keyword);
+                        void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+                  },
+                  onError: () => {
+                        notification.error({ message: t('search.acceptFail') });
+                  },
+            });      },
+            [acceptRequest, keyword, results, triggerSearch, queryClient, t],
       );
 
       const handleCancelFriendRequest = useCallback(
             (contactId: string) => {
                   const contact = results?.contacts.find((c) => c.id === contactId);
                   if (!contact?.pendingRequestId) {
-                        notification.warning({ message: 'Thiếu mã lời mời để thu hồi' });
-                        return;
-                  }
+                  notification.warning({ message: t('search.missingRecallId') });
+                  return;
+            }
 
-                  cancelRequest.mutate(contact.pendingRequestId, {
-                        onSuccess: () => {
-                              notification.success({ message: 'Đã thu hồi lời mời kết bạn' });
-                              triggerSearch(keyword);
-                              void queryClient.invalidateQueries({ queryKey: ['friendship'] });
-                        },
-                        onError: () => {
-                              notification.error({ message: 'Không thể thu hồi lời mời' });
-                        },
-                  });
-            },
-            [cancelRequest, keyword, results, triggerSearch, queryClient],
+            cancelRequest.mutate(contact.pendingRequestId, {
+                  onSuccess: () => {
+                        notification.success({ message: t('search.recallSuccess') });
+                        triggerSearch(keyword);
+                        void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+                  },
+                  onError: () => {
+                        notification.error({ message: t('search.recallFail') });
+                  },
+            });      },
+            [cancelRequest, keyword, results, triggerSearch, queryClient, t],
       );
 
       const handleClose = useCallback(() => {
@@ -291,7 +291,7 @@ export function SearchPanel({
                         onSuggestionSelect={handleSuggestionSelect}
                         onSearch={triggerSearch}
                         onBack={handleClose}
-                        placeholder="Tìm kiếm tin nhắn, liên hệ..."
+                        placeholder={t('search.placeholder')}
                         autoFocus
                   />
 

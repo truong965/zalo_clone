@@ -4,6 +4,7 @@
  * Uses useFriendSearch with params for tab-aware searching (friends/strangers).
  * Filters existing members via excludeIds parameter.
  */
+import { useTranslation } from 'react-i18next';
 import { useState, useRef, useCallback } from 'react';
 import { Modal, Avatar, Button, Spin, Empty, Alert, Typography, Input, Segmented } from 'antd';
 import { UserAddOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons';
@@ -28,6 +29,7 @@ export function AddMembersModal({
       onClose,
       onAdd,
 }: AddMembersModalProps) {
+      const { t } = useTranslation();
       const [localValue, setLocalValue] = useState('');
       const [keyword, setKeyword] = useState('');
       const [searchTab, setSearchTab] = useState<SearchTab>('friends');
@@ -90,15 +92,15 @@ export function AddMembersModal({
 
       // Determine placeholder based on tab
       const inputPlaceholder = searchTab === 'strangers'
-            ? 'Nhập số điện thoại để tìm (VD: 0901234567)'
-            : 'Tìm bạn bè...';
+            ? t('conversation.addMembers.searchStrangersPlaceholder')
+            : t('conversation.addMembers.searchFriendsPlaceholder');
 
       // Check if we should show phone hint
       const isValidPhone = searchTab === 'strangers' && PHONE_REGEX.test(keyword);
 
       return (
             <Modal
-                  title="Thêm thành viên"
+                  title={t('conversation.addMembers.title')}
                   open={open}
                   onCancel={handleClose}
                   width={420}
@@ -106,7 +108,7 @@ export function AddMembersModal({
                   footer={
                         <div className="flex justify-end gap-2">
                               <Button onClick={handleClose} disabled={isAdding}>
-                                    Hủy
+                                    {t('conversation.addMembers.cancel')}
                               </Button>
                               <Button
                                     type="primary"
@@ -115,7 +117,7 @@ export function AddMembersModal({
                                     loading={isAdding}
                                     onClick={handleAdd}
                               >
-                                    Thêm ({selectedIds.size})
+                                    {t('conversation.addMembers.addWithCount', { count: selectedIds.size })}
                               </Button>
                         </div>
                   }
@@ -138,8 +140,8 @@ export function AddMembersModal({
                               value={searchTab}
                               onChange={(val) => handleTabChange(val as SearchTab)}
                               options={[
-                                    { label: 'Bạn bè', value: 'friends' },
-                                    { label: 'Tìm người lạ', value: 'strangers' },
+                                    { label: t('conversation.addMembers.tabFriends'), value: 'friends' },
+                                    { label: t('conversation.addMembers.tabStrangers'), value: 'strangers' },
                               ]}
                               size="small"
                         />
@@ -151,8 +153,8 @@ export function AddMembersModal({
                               <Alert
                                     type="info"
                                     showIcon
-                                    message="Nhập đúng số điện thoại"
-                                    description="Nhập số điện thoại đầy đủ (VD: 0901234567) để tìm người dùng."
+                                    message={t('conversation.addMembers.phoneHintMessage')}
+                                    description={t('conversation.addMembers.phoneHintDescription')}
                                     className="mb-3"
                               />
                         )}
@@ -161,7 +163,7 @@ export function AddMembersModal({
                         {searchTab === 'strangers' && !keyword && (
                               <div className="flex items-center justify-center py-12 text-gray-400">
                                     <Text type="secondary">
-                                          Nhập số điện thoại để tìm người dùng
+                                          {t('conversation.addMembers.strangersEmptyText')}
                                     </Text>
                               </div>
                         )}
@@ -233,7 +235,7 @@ export function AddMembersModal({
                                                       loading={isFetchingNextPage}
                                                       onClick={() => fetchNextPage()}
                                                 >
-                                                      Tải thêm
+                                                      {t('conversation.addMembers.loadMore')}
                                                 </Button>
                                           </div>
                                     )}

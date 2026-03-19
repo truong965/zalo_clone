@@ -26,6 +26,7 @@ import { FilePreviewPanel } from './file-preview-panel';
 import { useMediaUpload } from '../hooks/use-media-upload';
 import { batchFilesByType } from '../utils/batch-files';
 import type { MessageType } from '@/types/api';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
@@ -80,6 +81,7 @@ interface ChatInputProps {
 // ============================================================================
 
 export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminder }: ChatInputProps) {
+      const { t } = useTranslation();
       const [message, setMessage] = useState('');
       const [isSending, setIsSending] = useState(false);
       const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -193,7 +195,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
             // Cannot send while errors exist — user must retry or remove
             if (hasErrors) {
                   notification.warning({
-                        message: 'Vui lòng thử lại hoặc xóa các file lỗi trước khi gửi',
+                        message: t('chat.input.errorHasFiles'),
                         placement: 'topRight',
                   });
                   return;
@@ -221,7 +223,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
 
                         if (confirmedFiles.length === 0) {
                               notification.error({
-                                    message: 'Không có file nào upload thành công',
+                                    message: t('chat.input.errorNoSuccess'),
                                     placement: 'topRight',
                               });
                               return;
@@ -267,7 +269,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                         }
                         if (!sentAny) {
                               notification.error({
-                                    message: 'Không có nội dung hoặc file hợp lệ để gửi',
+                                    message: t('chat.input.errorEmpty'),
                                     placement: 'topRight',
                               });
                               return;
@@ -283,7 +285,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                   // Upload errors are shown per-file in FilePreviewPanel.
                   // The user can retry individual files and press Send again.
                   notification.error({
-                        message: 'Upload thất bại. Vui lòng thử lại các file lỗi.',
+                        message: t('chat.input.errorUploadAll'),
                         placement: 'topRight',
                   });
             } finally {
@@ -341,7 +343,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                               />
                         </Tooltip> */}
 
-                        <Tooltip title="Gửi hình ảnh / video" placement="top">
+                        <Tooltip title={t('chat.input.sendImageVideo')} placement="top">
                               <Button
                                     type="text"
                                     icon={<PictureOutlined />}
@@ -352,7 +354,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                               />
                         </Tooltip>
 
-                        <Tooltip title="Đính kèm file / audio" placement="top">
+                        <Tooltip title={t('chat.input.attachFile')} placement="top">
                               <Button
                                     type="text"
                                     icon={<PaperClipOutlined />}
@@ -363,7 +365,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                               />
                         </Tooltip>
 
-                        <Tooltip title="Nhắc hẹn" placement="top">
+                        <Tooltip title={t('chat.input.setReminder')} placement="top">
                               <Button
                                     type="text"
                                     icon={<ClockCircleOutlined />}
@@ -385,7 +387,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                                           setMessage(e.target.value);
                                           emitTypingStart();
                                     }}
-                                    placeholder={conversationId ? 'Nhập tin nhắn' : 'Chọn một cuộc trò chuyện để bắt đầu'}
+                                    placeholder={conversationId ? t('chat.input.placeholder') : t('chat.input.placeholderEmpty')}
                                     autoSize={{ minRows: 1, maxRows: 5 }}
                                     className="!bg-transparent !resize-none pr-8 text-[15px]"
                                     variant="borderless"
@@ -404,7 +406,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                         <div className="flex items-center gap-2 pb-1">
                               {/* Biểu cảm */}
                               <div className="relative">
-                                    <Tooltip title="Biểu cảm" open={showEmojiPicker ? false : undefined}>
+                                    <Tooltip title={t('chat.input.emoji')} open={showEmojiPicker ? false : undefined}>
                                           <Button
                                                 ref={emojiButtonRef}
                                                 type="text"
@@ -441,7 +443,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
 
                               {/* Send button */}
                               <div className="border-l border-gray-200 pl-2">
-                                    <Tooltip title={fileCount > 0 ? 'Upload & Gửi (Enter)' : 'Gửi tin nhắn (Enter)'}>
+                                    <Tooltip title={fileCount > 0 ? t('chat.input.uploadSend') : t('chat.input.send')}>
                                           <Button
                                                 type="text"
                                                 disabled={!canSend}

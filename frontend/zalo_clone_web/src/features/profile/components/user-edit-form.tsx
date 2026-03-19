@@ -3,6 +3,7 @@ import { Form, Input, Radio, DatePicker, Button } from 'antd';
 import type { User } from '@/types/api';
 import { Gender } from '@/types/api';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 interface UserEditFormProps {
       user: User;
@@ -13,6 +14,7 @@ interface UserEditFormProps {
 
 export function UserEditForm({ user, onCancel, onSave, loading }: UserEditFormProps) {
       const [form] = Form.useForm();
+      const { t } = useTranslation();
 
       // Map data từ user vào form
       const initialValues = {
@@ -41,33 +43,33 @@ export function UserEditForm({ user, onCancel, onSave, loading }: UserEditFormPr
                         >
                               {/* Tên hiển thị */}
                               <Form.Item
-                                    label="Tên hiển thị"
+                                    label={t('profile.formDisplayName')}
                                     name="displayName"
-                                    rules={[{ required: true, message: 'Vui lòng nhập tên hiển thị' }]}
+                                    rules={[{ required: true, message: t('profile.formDisplayNameRequired') }]}
                               >
-                                    <Input placeholder="Nhập tên hiển thị" />
+                                    <Input placeholder={t('profile.formDisplayNamePlaceholder')} />
                               </Form.Item>
 
                               {/* Giới tính - Dùng Radio giống ảnh mẫu */}
-                              <Form.Item label="Thông tin cá nhân" className="mb-2">
+                              <Form.Item label={t('profile.formPersonalInfo')} className="mb-2">
                                     <Form.Item name="gender" className="mb-0">
                                           <Radio.Group className="flex gap-8">
-                                                <Radio value={Gender.MALE}>Nam</Radio>
-                                                <Radio value={Gender.FEMALE}>Nữ</Radio>
-                                                <Radio value={Gender.OTHER}>Khác</Radio>
+                                                <Radio value={Gender.MALE}>{t('profile.genderMale')}</Radio>
+                                                <Radio value={Gender.FEMALE}>{t('profile.genderFemale')}</Radio>
+                                                <Radio value={Gender.OTHER}>{t('profile.genderOther')}</Radio>
                                           </Radio.Group>
                                     </Form.Item>
                               </Form.Item>
 
                               {/* Ngày sinh - Dùng DatePicker cho tiện thay vì 3 select box */}
                               <Form.Item
-                                    label="Ngày sinh"
+                                    label={t('profile.formDob')}
                                     name="dateOfBirth"
                               >
                                     <DatePicker
                                           format="DD/MM/YYYY"
                                           className="w-full"
-                                          placeholder="Chọn ngày sinh"
+                                          placeholder={t('profile.formDobPlaceholder')}
                                     />
                               </Form.Item>
                         </Form>
@@ -76,7 +78,7 @@ export function UserEditForm({ user, onCancel, onSave, loading }: UserEditFormPr
                   {/* Footer Actions */}
                   <div className="p-4 border-t border-gray-100 flex gap-3 justify-end bg-gray-50">
                         <Button size="large" onClick={onCancel}>
-                              Hủy
+                              {t('profile.formCancel')}
                         </Button>
                         <Button
                               type="primary"
@@ -85,7 +87,7 @@ export function UserEditForm({ user, onCancel, onSave, loading }: UserEditFormPr
                               loading={loading}
                               className="bg-blue-600"
                         >
-                              Cập nhật
+                              {t('profile.formSave')}
                         </Button>
                   </div>
             </div>

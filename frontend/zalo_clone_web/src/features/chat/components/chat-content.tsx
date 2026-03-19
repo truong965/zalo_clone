@@ -2,7 +2,7 @@ import type { ChatMessage } from '../types';
 import { Badge, FloatButton, Button } from 'antd';
 import { DownOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons';
 import { MessageList } from './message-list';
-
+import { useTranslation } from 'react-i18next';
 interface ChatContentProps {
       messages: ChatMessage[];
       isLoadingMsg: boolean;
@@ -68,7 +68,7 @@ export function ChatContent({
       const showReturnToLatest = isJumpedAway && onReturnToLatest;
       const showNewMessageBadge = !isJumpedAway && !isAtBottom && newMessageCount > 0;
       const showScrollDown = !isJumpedAway && !isAtBottom && newMessageCount === 0;
-
+      const { t } = useTranslation();
       return (
             <div
                   ref={messagesContainerRef}
@@ -101,7 +101,7 @@ export function ChatContent({
                                     onClick={onReturnToLatest}
                                     className="shadow-lg"
                               >
-                                    Quay về tin nhắn mới nhất
+                                    {t('chat.returnToLatest')}
                               </Button>
                         </div>
                   )}

@@ -7,6 +7,7 @@ import { UserEditForm } from './user-edit-form';
 import { useAuthStore } from '@/features/auth';
 import apiClient from '@/lib/axios';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
+import { useTranslation } from 'react-i18next';
 
 interface UserProfileModalProps {
       open: boolean;
@@ -37,6 +38,7 @@ async function uploadAvatarFile(file: File): Promise<string> {
 
 export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
       const { user, getProfile } = useAuthStore();
+      const { t } = useTranslation();
       const [isEditing, setIsEditing] = useState(false);
       const [loading, setLoading] = useState(false);
       const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -57,10 +59,10 @@ export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
             try {
                   setLoading(true);
                   await patchProfile(values);
-                  notification.success({ message: 'Cập nhật thành công' });
+                  notification.success({ message: t('profile.updateSuccess') });
                   setIsEditing(false);
             } catch {
-                  notification.error({ message: 'Cập nhật thất bại' });
+                  notification.error({ message: t('profile.updateFail') });
             } finally {
                   setLoading(false);
             }
@@ -81,9 +83,9 @@ export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
                   setLoading(true);
                   const avatarUrl = await uploadAvatarFile(file);
                   await patchProfile({ avatarUrl });
-                  notification.success({ message: 'Cập nhật ảnh đại diện thành công' });
+                  notification.success({ message: t('profile.avatarSuccess') });
             } catch {
-                  notification.error({ message: 'Không thể tải ảnh lên' });
+                  notification.error({ message: t('profile.avatarFail') });
             } finally {
                   setLoading(false);
             }
@@ -104,8 +106,8 @@ export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
                               />
                         )}
                         <span className="font-semibold text-lg text-gray-800">
-                              {isEditing ? 'Cập nhật thông tin' : 'Thông tin tài khoản'}
-                        </span>
+                        {isEditing ? t('profile.modalEditTitle') : t('profile.modalViewTitle')}
+                  </span>
                   </div>
             </div>
       );

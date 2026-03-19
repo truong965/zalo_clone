@@ -16,7 +16,7 @@ import { Avatar, Typography } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
 import { QualityIndicator } from './QualityIndicator';
-
+import { useTranslation } from 'react-i18next';
 const { Title, Text } = Typography;
 
 export function VoiceCallView() {
@@ -25,7 +25,7 @@ export function VoiceCallView() {
       const callStatus = useCallStore((s) => s.callStatus);
       const connectionQuality = useCallStore((s) => s.connectionQuality);
       const remoteStream = useCallStore((s) => s.remoteStream);
-
+      const { t } = useTranslation();
       const audioRef = useRef<HTMLAudioElement>(null);
 
       // Attach remote stream to hidden <audio> for playback
@@ -44,11 +44,11 @@ export function VoiceCallView() {
       const statusText = useMemo(() => {
             switch (callStatus) {
                   case 'DIALING':
-                        return 'Đang gọi…';
+                        return t('call.dialing');
                   case 'RINGING':
-                        return 'Đang đổ chuông…';
+                        return t('call.ringing');
                   case 'RECONNECTING':
-                        return 'Đang kết nối lại…';
+                        return t('call.reconnecting');
                   case 'ACTIVE':
                         return formattedDuration;
                   default:

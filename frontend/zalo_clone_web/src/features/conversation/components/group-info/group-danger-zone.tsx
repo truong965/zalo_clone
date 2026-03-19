@@ -3,6 +3,7 @@
  *
  * Admin sees a warning if they try to leave without transferring admin first.
  */
+import { useTranslation } from 'react-i18next';
 import { Button, Modal } from 'antd';
 import {
       InboxOutlined,
@@ -25,36 +26,34 @@ export function GroupDangerZone({
       onLeaveGroup,
       onArchiveConversation,
 }: GroupDangerZoneProps) {
+      const { t } = useTranslation();
       const handleLeave = () => {
             // R1: Admin cannot leave — show a helpful message
             if (isAdmin) {
                   if (memberCount <= 1) {
                         // Solo admin — suggest dissolve
                         Modal.warning({
-                              title: 'Không thể rời nhóm',
-                              content:
-                                    'Bạn là thành viên duy nhất trong nhóm. Hãy giải tán nhóm nếu không cần nữa.',
-                              okText: 'Đã hiểu',
+                              title: t('conversation.groupInfo.dangerZone.cannotLeaveTitle'),
+                              content: t('conversation.groupInfo.dangerZone.soloAdminContent'),
+                              okText: t('conversation.groupInfo.dangerZone.understood'),
                         });
                   } else {
                         Modal.warning({
-                              title: 'Không thể rời nhóm',
-                              content:
-                                    'Bạn là trưởng nhóm. Vui lòng chuyển quyền trưởng nhóm cho thành viên khác trước khi rời.',
-                              okText: 'Đã hiểu',
+                              title: t('conversation.groupInfo.dangerZone.cannotLeaveTitle'),
+                              content: t('conversation.groupInfo.dangerZone.adminContent'),
+                              okText: t('conversation.groupInfo.dangerZone.understood'),
                         });
                   }
                   return;
             }
 
             Modal.confirm({
-                  title: 'Rời nhóm',
+                  title: t('conversation.groupInfo.dangerZone.leaveConfirmTitle'),
                   icon: <ExclamationCircleOutlined />,
-                  content:
-                        'Bạn có chắc chắn muốn rời khỏi nhóm? Bạn sẽ không thể xem tin nhắn mới của nhóm.',
-                  okText: 'Rời nhóm',
+                  content: t('conversation.groupInfo.dangerZone.leaveConfirmContent'),
+                  okText: t('conversation.groupInfo.dangerZone.leaveConfirmOk'),
                   okType: 'danger',
-                  cancelText: 'Hủy',
+                  cancelText: t('conversation.groupInfo.dangerZone.leaveConfirmCancel'),
                   onOk: async () => {
                         try {
                               await onLeaveGroup();
@@ -70,21 +69,28 @@ export function GroupDangerZone({
                   <Button
                         type="text"
                         block
-                        className="text-left flex items-center gap-2 h-10"
-                        icon={<InboxOutlined />}
+                        className="h-10 px-4"
                         onClick={onArchiveConversation}
                   >
-                        {isArchived ? 'Bỏ lưu trữ' : 'Lưu trữ hội thoại'}
+                        {/* Cấu trúc lại children thay vì dùng prop icon */}
+                        <span className="flex items-center justify-start gap-2 w-full text-gray-700">
+                              <InboxOutlined />
+                              <span>{isArchived ? t('conversation.groupInfo.dangerZone.unarchiveButton') : t('conversation.groupInfo.dangerZone.archiveButton')}</span>
+                        </span>
                   </Button>
+
                   <Button
                         type="text"
                         danger
                         block
-                        className="text-left flex items-center gap-2 h-10"
-                        icon={<LogoutOutlined />}
+                        className="h-10 px-4 mt-1"
                         onClick={handleLeave}
                   >
-                        Rời nhóm
+                        {/* Cấu trúc lại children thay vì dùng prop icon */}
+                        <span className="flex items-center justify-start gap-2 w-full">
+                              <LogoutOutlined />
+                              <span>{t('conversation.groupInfo.dangerZone.leaveButton')}</span>
+                        </span>
                   </Button>
             </div>
       );

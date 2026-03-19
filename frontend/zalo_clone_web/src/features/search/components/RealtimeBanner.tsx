@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Typography } from 'antd';
 import { BellOutlined } from '@ant-design/icons';
 
@@ -23,6 +24,7 @@ interface RealtimeBannerProps {
 }
 
 export function RealtimeBanner({ count, onMerge }: RealtimeBannerProps) {
+      const { t } = useTranslation();
       const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
       // Auto-merge after 5 seconds
@@ -54,7 +56,7 @@ export function RealtimeBanner({ count, onMerge }: RealtimeBannerProps) {
                         className="rounded-lg text-xs"
                   >
                         <Text className="text-xs">
-                              {count} kết quả mới
+                              {t('search.newMatches', { count })}
                         </Text>
                   </Button>
             </div>

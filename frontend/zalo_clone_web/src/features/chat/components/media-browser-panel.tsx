@@ -19,6 +19,7 @@ import { useMediaBrowser } from '@/features/chat/hooks/use-media-browser';
 import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
 import { RecentFileItem } from '@/features/chat/components/recent-file-item';
 import type { RecentMediaItem, MessageType } from '@/types/api';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -38,12 +39,12 @@ interface MediaBrowserPanelProps {
 const PHOTO_TYPES: MessageType[] = ['IMAGE', 'VIDEO'];
 const FILE_TYPES: MessageType[] = ['FILE'];
 
-function formatDate(isoDate: string): string {
+function formatDate(isoDate: string, t: any): string {
       const d = dayjs(isoDate);
       const today = dayjs().startOf('day');
       const diff = today.diff(d, 'day');
-      if (diff === 0) return 'Hôm nay';
-      if (diff === 1) return 'Hôm qua';
+      if (diff === 0) return t('chat.mediaBrowser.today');
+      if (diff === 1) return t('chat.mediaBrowser.yesterday');
       if (diff < 7) return d.format('dddd');
       if (d.year() === today.year()) return d.format('D [tháng] M');
       return d.format('D [tháng] M, YYYY');
@@ -109,6 +110,7 @@ export function MediaBrowserPanel({
       initialTab = 'photos',
       onClose,
 }: MediaBrowserPanelProps) {
+      const { t } = useTranslation();
       const [activeTab, setActiveTab] = useState<MediaTab>(initialTab);
       const [fileKeyword, setFileKeyword] = useState('');
       const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -174,7 +176,7 @@ export function MediaBrowserPanel({
                               icon={<ArrowLeftOutlined />}
                               onClick={onClose}
                         />
-                        <Text strong className="text-base">Kho lưu trữ</Text>
+                        <Text strong className="text-base">{t('chat.mediaBrowser.title')}</Text>
                   </div>
 
                   {/* Tab bar */}
@@ -188,7 +190,7 @@ export function MediaBrowserPanel({
                                           : 'text-gray-500 hover:text-gray-700'
                               }`}
                         >
-                              Ảnh/Video
+                              {t('chat.mediaBrowser.photos')}
                         </button>
                         <button
                               type="button"
@@ -199,7 +201,7 @@ export function MediaBrowserPanel({
                                           : 'text-gray-500 hover:text-gray-700'
                               }`}
                         >
-                              File
+                              {t('chat.mediaBrowser.files')}
                         </button>
                   </div>
 
@@ -208,7 +210,7 @@ export function MediaBrowserPanel({
                         <div className="px-3 py-2 border-b border-gray-100">
                               <Input
                                     prefix={<SearchOutlined className="text-gray-400" />}
-                                    placeholder="Tìm theo tên file"
+                                    placeholder={t('chat.mediaBrowser.searchPlaceholder')}
                                     value={fileKeyword}
                                     onChange={(e) => setFileKeyword(e.target.value)}
                                     allowClear
@@ -237,10 +239,10 @@ export function MediaBrowserPanel({
                                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                                     description={
                                           activeTab === 'photos'
-                                                ? 'Chưa có ảnh/video được chia sẻ'
+                                                ? t('chat.mediaBrowser.emptyPhotos')
                                                 : fileKeyword.trim()
-                                                      ? `Không tìm thấy file "${fileKeyword.trim()}"`
-                                                      : 'Chưa có file được chia sẻ'
+                                                      ? t('chat.mediaBrowser.emptyFilesSearch', { keyword: fileKeyword.trim() })
+                                                      : t('chat.mediaBrowser.emptyFiles')
                                     }
                                     className="mt-12"
                               />
@@ -255,7 +257,8 @@ export function MediaBrowserPanel({
                                           (item) => {
                                                 const idx = allItems.findIndex((x) => x.mediaId === item.mediaId);
                                                 if (idx !== -1) setPreviewIndex(idx);
-                                          }
+                                          },
+                                          t
                                     )}
                               </div>
                         ) : null}
@@ -284,12 +287,13 @@ function groupedMessages(
       groups: [string, RecentMediaItem[]][],
       tab: MediaTab,
       onPhotoClick: (item: RecentMediaItem) => void,
+      t: any
 ) {
       return groups.map(([dateKey, items]) => (
             <div key={dateKey}>
                   <div className="px-3 py-1.5">
                         <Text className="text-[11px] text-gray-400 font-medium">
-                              {formatDate(dateKey)}
+                              {formatDate(dateKey, t)}
                         </Text>
                   </div>
                   {tab === 'photos' ? (

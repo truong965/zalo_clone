@@ -7,6 +7,7 @@
  */
 
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Avatar, Typography, Badge } from 'antd';
 import { TeamOutlined } from '@ant-design/icons';
 import type { GroupListItem } from '../../types';
@@ -31,7 +32,7 @@ function formatTimestamp(dateStr: string | null): string {
                   minute: '2-digit',
             });
       }
-      if (diffDays === 1) return 'Hôm qua';
+      if (diffDays === 1) return t('conversation.groupListItem.yesterday');
       if (diffDays < 7) {
             return date.toLocaleDateString('vi-VN', { weekday: 'short' });
       }
@@ -43,9 +44,10 @@ function formatTimestamp(dateStr: string | null): string {
 
 function getLastMessagePreview(
       lastMessage: GroupListItem['lastMessage'],
+      t: any
 ): string {
-      if (!lastMessage) return 'Chưa có tin nhắn nào';
-      if (lastMessage.type !== 'TEXT') return '📎 Tệp đính kèm';
+      if (!lastMessage) return t('conversation.groupListItem.noMessages');
+      if (lastMessage.type !== 'TEXT') return t('conversation.groupListItem.attachment');
       return lastMessage.content ?? '';
 }
 
@@ -53,7 +55,8 @@ export const GroupListItemCard = memo(function GroupListItemCard({
       group,
       onClick,
 }: GroupListItemProps) {
-      const preview = getLastMessagePreview(group.lastMessage);
+      const { t } = useTranslation();
+      const preview = getLastMessagePreview(group.lastMessage, t);
       const timestamp = formatTimestamp(group.lastMessageAt);
       const hasUnread = (group.unreadCount ?? 0) > 0;
 
@@ -68,7 +71,11 @@ export const GroupListItemCard = memo(function GroupListItemCard({
             <div
                   role="button"
                   tabIndex={0}
-                  aria-label={`Nhóm ${group.name ?? 'Nhóm không tên'}, ${group.memberCount} thành viên${hasUnread ? `, ${group.unreadCount} tin nhắn chưa đọc` : ''}`}
+                  aria-label={t('conversation.groupListItem.ariaLabel', {
+                        name: group.name ?? t('conversation.groupListItem.noName'),
+                        count: group.memberCount,
+                        unread: hasUnread ? t('conversation.groupListItem.unreadAria', { count: group.unreadCount }) : ''
+                  })}
                   className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${hasUnread ? 'bg-blue-50/30' : ''}`}
                   onClick={() => onClick?.(group.id)}
                   onKeyDown={handleKeyDown}
@@ -88,7 +95,7 @@ export const GroupListItemCard = memo(function GroupListItemCard({
                                     strong={hasUnread}
                                     className="block truncate text-sm max-w-[200px]"
                               >
-                                    {group.name ?? 'Nhóm không tên'}
+                                    {group.name ?? t('conversation.groupListItem.noName')}
                               </Text>
                               {timestamp && (
                                     <Text
@@ -119,7 +126,7 @@ export const GroupListItemCard = memo(function GroupListItemCard({
                         {/* Member count */}
                         <Text type="secondary" className="text-xs">
                               <TeamOutlined className="mr-1" />
-                              {group.memberCount} thành viên
+                              {t('conversation.groupListItem.members', { count: group.memberCount })}
                         </Text>
                   </div>
             </div>

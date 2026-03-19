@@ -7,6 +7,7 @@ import {
 import { BellSlashedIcon } from '@/components/icons/bell-slashed';
 import type { ConversationUI } from '../types';
 import { MessageType } from '@/types/api';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -19,25 +20,26 @@ interface ConversationItemProps {
       onToggleArchive?: (conversationId: string, currentlyArchived: boolean) => void;
 }
 
-function getLastMessagePreview(data: ConversationUI): string {
+function getLastMessagePreview(data: ConversationUI, t: any): string {
       const msg = data.lastMessageObj;
       // Nếu lastMessageObj null thì fallback về string cũ (nếu có)
       if (!msg) return data.lastMessage || '';
 
       if (msg.type !== MessageType.TEXT) {
-            if (msg.type === MessageType.IMAGE) return '[Hình ảnh]';
-            if (msg.type === MessageType.VIDEO) return '[Video]';
-            if (msg.type === MessageType.FILE) return '[Tệp]';
-            if (msg.type === MessageType.STICKER) return '[Sticker]';
-            if (msg.type === MessageType.AUDIO || msg.type === MessageType.VOICE) return '[Ghi âm]';
-            return '[Tin nhắn]';
+            if (msg.type === MessageType.IMAGE) return t('chat.conversationItem.previewImage');
+            if (msg.type === MessageType.VIDEO) return t('chat.conversationItem.previewVideo');
+            if (msg.type === MessageType.FILE) return t('chat.conversationItem.previewFile');
+            if (msg.type === MessageType.STICKER) return t('chat.conversationItem.previewSticker');
+            if (msg.type === MessageType.AUDIO || msg.type === MessageType.VOICE) return t('chat.conversationItem.previewAudio');
+            return t('chat.conversationItem.previewMessage');
       }
 
       return msg.content ?? '';
 }
 
 export function ConversationItem({ data, isSelected, onClick, onTogglePin, onToggleMute, onToggleArchive }: ConversationItemProps) {
-      const preview = getLastMessagePreview(data);
+      const { t } = useTranslation();
+      const preview = getLastMessagePreview(data, t);
       const unreadCount = data.unreadCount ?? data.unread ?? 0;
       const isUnread = unreadCount > 0;
       const isMuted = !!data.isMuted;
@@ -71,24 +73,24 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
       const menuItems: MenuProps['items'] = [
             {
                   key: 'pin',
-                  label: data.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại',
+                  label: data.isPinned ? t('chat.conversationItem.unpin') : t('chat.conversationItem.pin'),
                   icon: <PushpinOutlined />,
             },
             {
                   key: 'muted',
-                  label: isMuted ? 'Bật thông báo' : 'Tắt thông báo',
+                  label: isMuted ? t('chat.conversationItem.unmute') : t('chat.conversationItem.mute'),
                   icon: isMuted ? <BellSlashedIcon /> : <BellOutlined />,
             },
             { type: 'divider' },
             isArchived
                   ? {
                         key: 'archive',
-                        label: 'Bỏ lưu trữ',
+                        label: t('chat.conversationItem.unarchive'),
                         icon: <InboxOutlined />,
                   }
                   : {
                         key: 'archive',
-                        label: 'Lưu trữ hội thoại',
+                        label: t('chat.conversationItem.archive'),
                         icon: <InboxOutlined />,
                   },
       ];
@@ -129,7 +131,7 @@ export function ConversationItem({ data, isSelected, onClick, onTogglePin, onTog
                                                 strong={showUnreadHighlight}
                                                 className={`truncate text-[15px] ${showUnreadHighlight ? 'text-gray-900' : 'text-gray-800'}`}
                                           >
-                                                {data.name || 'Người dùng ẩn danh'}
+                                                {data.name || t('chat.conversationItem.anonymous')}
                                           </Text>
                                           {isMuted && (
                                                 <BellSlashedIcon className="text-gray-400 text-[11px] ml-1.5 flex-shrink-0" />

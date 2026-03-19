@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PushpinOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import { Button, Tooltip } from 'antd';
 import type { PinnedMessageItem } from '@/types/api';
@@ -25,27 +26,29 @@ function truncate(text: string | null | undefined, max: number): string {
       return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
-function getMediaTypeLabel(type: string): string {
-      switch (type) {
-            case 'IMAGE': return '🖼️ Hình ảnh';
-            case 'VIDEO': return '🎥 Video';
-            case 'AUDIO': return '🎵 Audio';
-            case 'DOCUMENT': return '📄 File';
-            default: return '📎 Đính kèm';
-      }
-}
+// Note: getMediaTypeLabel is now handled via translation keys in the component
 
-function PinnedItemPreview({ item }: { item: PinnedMessageItem }) {
+function PinnedItemPreview({ item, t }: { item: PinnedMessageItem; t: any }) {
       if (item.deletedAt) {
-            return <span className="italic text-gray-400">Tin nhắn đã bị xóa</span>;
+            return <span className="italic text-gray-400">{t('chat.messageList.deletedMessage')}</span>;
       }
       if (item.content) {
             return <span>{truncate(item.content, 60)}</span>;
       }
       if (item.mediaAttachments?.length) {
-            return <span className="text-gray-500">{getMediaTypeLabel(item.mediaAttachments[0].mediaType)}</span>;
+            const mediaType = item.mediaAttachments[0].mediaType;
+            const typeLabel = mediaType === 'IMAGE'
+                  ? '🖼️ ' + t('chat.infoSidebar.media')
+                  : mediaType === 'VIDEO'
+                        ? '🎥 ' + t('chat.messageList.callVideo')
+                        : mediaType === 'AUDIO'
+                              ? '🎵 ' + t('chat.messageList.callVoice')
+                              : mediaType === 'DOCUMENT'
+                                    ? '📄 ' + t('chat.input.attachFile')
+                                    : '📎 ' + t('chat.infoSidebar.media');
+            return <span className="text-gray-500">{typeLabel}</span>;
       }
-      return <span className="text-gray-400">Tin nhắn</span>;
+      return <span className="text-gray-400">{t('chat.messageList.messagePreview')}</span>;
 }
 
 export function PinnedMessagesBanner({
@@ -53,6 +56,7 @@ export function PinnedMessagesBanner({
       onJumpToMessage,
       onUnpin,
 }: PinnedMessagesBannerProps) {
+      const { t } = useTranslation();
       const [expanded, setExpanded] = useState(false);
 
       if (pinnedMessages.length === 0) return null;
@@ -70,12 +74,12 @@ export function PinnedMessagesBanner({
                         <PushpinOutlined className="text-blue-500 text-sm" />
                         <div className="flex-1 min-w-0 text-sm text-gray-700 truncate">
                               <span className="font-medium text-blue-600 mr-1">
-                                    {latest.sender?.displayName ?? 'Người dùng'}:
+                                    {latest.sender?.displayName ?? t('layout.client.defaultUser')}:
                               </span>
-                              <PinnedItemPreview item={latest} />
+                              <PinnedItemPreview item={latest} t={t} />
                         </div>
                         <span className="text-[11px] text-gray-400 whitespace-nowrap">
-                              {pinnedMessages.length > 1 ? `${pinnedMessages.length} tin ghim` : '1 tin ghim'}
+                              {pinnedMessages.length > 1 ? t('chat.infoSidebar.pinnedMultiple', { count: pinnedMessages.length }) : t('chat.infoSidebar.pinnedSingle')}
                         </span>
                   </div>
 
@@ -85,7 +89,7 @@ export function PinnedMessagesBanner({
                               <div className="px-4 py-2 flex items-center justify-between border-b border-gray-100">
                                     <span className="text-sm font-medium text-gray-700">
                                           <PushpinOutlined className="mr-1 text-blue-500" />
-                                          Tin nhắn đã ghim ({pinnedMessages.length})
+                                          {t('chat.infoSidebar.pinnedMessagesTitle', { count: pinnedMessages.length })}
                                     </span>
                                     <Button
                                           type="text"
@@ -114,11 +118,11 @@ export function PinnedMessagesBanner({
                                                             {item.sender?.displayName ?? 'Người dùng'}
                                                       </div>
                                                       <div className="text-sm text-gray-700 truncate">
-                                                            <PinnedItemPreview item={item} />
+                                                            <PinnedItemPreview item={item} t={t} />
                                                       </div>
                                                 </div>
                                                 {/* Unpin button */}
-                                                <Tooltip title="Bỏ ghim">
+                                                <Tooltip title={t('chat.messageList.unpinMsg')}>
                                                       <Button
                                                             type="text"
                                                             size="small"

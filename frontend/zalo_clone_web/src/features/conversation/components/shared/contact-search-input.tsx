@@ -5,12 +5,12 @@
  * Includes debouncing to prevent excessive API calls.
  */
 
+import { useTranslation } from 'react-i18next';
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { Input, Segmented } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 
 const DEBOUNCE_MS = 300;
-const PHONE_HINT = 'Nhập số điện thoại để tìm (VD: 0901234567)';
 
 export type SearchTab = 'friends' | 'strangers';
 
@@ -34,6 +34,7 @@ export function ContactSearchInput({
       showTabs = true,
       placeholder,
 }: ContactSearchInputProps) {
+      const { t } = useTranslation();
       const [localValue, setLocalValue] = useState('');
       const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,7 +73,7 @@ export function ContactSearchInput({
 
       const inputPlaceholder =
             placeholder ??
-            (tab === 'strangers' ? PHONE_HINT : 'Tìm bạn bè...');
+            (tab === 'strangers' ? t('conversation.contactSearch.phoneHint') : t('conversation.contactSearch.friendsPlaceholder'));
 
       return (
             <div className="space-y-2">
@@ -90,8 +91,8 @@ export function ContactSearchInput({
                               value={tab}
                               onChange={(val) => handleTabChange(val as SearchTab)}
                               options={[
-                                    { label: 'Bạn bè', value: 'friends' },
-                                    { label: 'Tìm người lạ', value: 'strangers' },
+                                    { label: t('conversation.contactSearch.tabFriends'), value: 'friends' },
+                                    { label: t('conversation.contactSearch.tabStrangers'), value: 'strangers' },
                               ]}
                               size="small"
                         />
