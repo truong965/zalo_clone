@@ -21,6 +21,7 @@ import type { GroupListItemDto } from '../dto/group-list-item.dto';
 import { MAX_PINNED_CONVERSATIONS } from '../constants/conversation.constants';
 import type { GroupSettings } from './group.service';
 import { ConversationArchivedEvent, ConversationMutedEvent } from '../events';
+import { safeJSON } from 'src/common/utils/json.util';
 
 type UserProfile = {
   id: string;
@@ -978,7 +979,7 @@ export class ConversationService {
       if (!media.messageId) continue;
       const msgIdStr = media.messageId.toString();
       if (!mediaMap.has(msgIdStr)) mediaMap.set(msgIdStr, []);
-      mediaMap.get(msgIdStr)!.push(media);
+      mediaMap.get(msgIdStr)!.push(safeJSON(media));
     }
 
     const nameMap =

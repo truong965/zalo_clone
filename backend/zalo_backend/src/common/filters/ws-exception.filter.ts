@@ -59,16 +59,30 @@ export class WsExceptionFilter extends BaseWsExceptionFilter {
                   );
             }
 
+            const args = host.getArgs();
+            const ackCallback = args.find((arg) => typeof arg === 'function');
+            const hasAckCallback = !!ackCallback;
+
             const clientMessageId =
                   data && typeof data === 'object' && 'clientMessageId' in data
                         ? (data as Record<string, unknown>).clientMessageId
                         : undefined;
 
-            client.emit(SocketEvents.ERROR, {
-                  ...errorResponse,
-                  event: eventName,
-                  ...(clientMessageId ? { clientMessageId } : {}),
-            });
+            if (hasAckCallback) {
+                  // If frontend used emitWithAck (callback provided), send the error back via ack
+                  ackCallback({
+                        error: typeof errorResponse.message === 'string'
+                              ? errorResponse.message
+                              : errorResponse.code
+                  });
+            } else {
+                  // Fallback: emit global ERROR event
+                  client.emit(SocketEvents.ERROR, {
+                        ...errorResponse,
+                        event: eventName,
+                        ...(clientMessageId ? { clientMessageId } : {}),
+                  });
+            }
       }
 
       private extractEventName(data: unknown): string {

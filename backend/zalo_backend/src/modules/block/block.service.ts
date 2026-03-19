@@ -65,7 +65,7 @@ export class BlockService {
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) {}
+  ) { }
 
   /**
    * Block a user (Idempotent)
@@ -102,6 +102,16 @@ export class BlockService {
       throw new SelfActionException('Cannot block yourself');
     }
 
+    const existingBlock = await this.blockRepository.findByPair(
+      blockerId,
+      targetUserId,
+    );
+
+    if (existingBlock) {
+      this.logger.log(`⚠️ Already blocked (idempotent - pre-check): ${blockerId} → ${targetUserId}`);
+      // Trả về luôn, không tạo mới, KHÔNG bắn event
+      return this.mapToResponseDto(existingBlock);
+    }
     try {
       // STEP 1: Create block record (atomic operation)
       const block = await this.prisma.block.create({
@@ -142,29 +152,25 @@ export class BlockService {
 
       return this.mapToResponseDto(block);
     } catch (error) {
-      // Handle unique constraint violation (P2002 = duplicate block)
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002' &&
-        error.meta?.target &&
-        Array.isArray(error.meta.target) &&
-        error.meta.target.includes('blockerId')
-      ) {
-        // Already blocked - idempotent behavior: return existing block
-        this.logger.log(
-          `⚠️  Already blocked (idempotent): ${blockerId} → ${targetUserId}`,
-        );
+      // ==========================================
+      // STEP 3: FALLBACK (Dự phòng cho Race Condition)
+      // ==========================================
+      // Nếu 2 request đến cùng một phần nghìn giây và đều vượt qua STEP 1, 
+      // request thứ 2 sẽ rơi vào lỗi P2002 ở đây. Lúc này ta không cần soi chuỗi error phức tạp nữa.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        this.logger.log(`⚠️ Already blocked (idempotent - race fallback): ${blockerId} → ${targetUserId}`);
 
-        const existingBlock = await this.blockRepository.findByPair(
+        const raceConditionBlock = await this.blockRepository.findByPair(
           blockerId,
           targetUserId,
         );
-        if (existingBlock) {
-          return this.mapToResponseDto(existingBlock);
+
+        if (raceConditionBlock) {
+          return this.mapToResponseDto(raceConditionBlock);
         }
       }
 
-      // Re-throw all other errors
+      // Re-throw các lỗi DB thực sự nguy hiểm khác (ví dụ sập kết nối)
       throw error;
     }
   }
@@ -429,9 +435,9 @@ export class BlockService {
     const blockedUsers =
       blockedIds.length > 0
         ? await this.prisma.user.findMany({
-            where: { id: { in: blockedIds } },
-            select: { id: true, displayName: true, avatarUrl: true },
-          })
+          where: { id: { in: blockedIds } },
+          select: { id: true, displayName: true, avatarUrl: true },
+        })
         : [];
     const blockedUserMap = new Map(blockedUsers.map((u) => [u.id, u]));
 

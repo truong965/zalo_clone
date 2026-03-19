@@ -13,6 +13,7 @@ import {
   Inject,
   UseGuards,
   UsePipes,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
@@ -31,6 +32,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import type { ISocketEmitEvent } from '@common/events/outbound-socket.event';
 import { OUTBOUND_SOCKET_EVENT } from '@common/events/outbound-socket.event';
 import { InternalEventNames } from '@common/contracts/events';
+import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
 
 @WebSocketGateway({
   cors: {
@@ -66,6 +68,7 @@ import { InternalEventNames } from '@common/contracts/events';
 @UseGuards(WsThrottleGuard)
 // Validation pipe for incoming messages
 @UsePipes(WsValidationPipe)
+@UseInterceptors(WsTransformInterceptor)
 export class SocketGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -241,7 +244,6 @@ export class SocketGateway
    */
   async handleConnection(@ConnectedSocket() client: AuthenticatedSocket) {
     try {
-      this.logger.log(`Socket connecting: ${client.id}`);
 
       // Reject connections during shutdown
       if (this.shuttingDown) {
@@ -321,13 +323,6 @@ export class SocketGateway
         },
         30_000,
       );
-
-      // PHASE 2: Emit event for presence tracking
-      // MessagingUserPresenceListener will react to this
-      this.logger.debug(
-        `[Socket] User ${client.userId} connected on socket ${client.id}`,
-      );
-
       this.logger.log(
         `✅ Socket authenticated: ${client.id} | User: ${user.id} | ${user.displayName}`,
       );
@@ -387,9 +382,6 @@ export class SocketGateway
         reason,
       });
 
-      this.logger.debug(
-        `[Socket] User ${client.userId} disconnected from socket ${client.id}`,
-      );
     } catch (error) {
       this.logger.error('Error handling disconnect:', error);
     } finally {

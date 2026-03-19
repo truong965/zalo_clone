@@ -117,50 +117,36 @@ export class SearchGateway {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: SearchSubscribePayload,
   ): Promise<{ status: string; keyword: string; message?: string }> {
-    try {
-      const userId = client.userId;
+    const userId = client.userId;
 
-      if (!userId) {
-        this.emitError(client, 'UNAUTHORIZED', 'User not authenticated');
-        return { status: 'error', keyword: payload.keyword };
-      }
-
-      this.logger.log(
-        `User ${userId} subscribing to search: "${payload.keyword}" (socket: ${client.id})`,
-      );
-
-      // Subscribe and get initial results
-      const initialResults = await this.realTimeSearchService.subscribe(
-        userId,
-        client.id,
-        payload,
-      );
-
-      // Emit initial results to client
-      client.emit(SocketEvents.SEARCH_RESULTS, safeJSON(initialResults));
-
-      this.logger.log(
-        `Sent ${initialResults.totalCount} initial results to user ${userId}`,
-      );
-
-      return {
-        status: 'subscribed',
-        keyword: payload.keyword,
-        message: `Subscribed to search: "${payload.keyword}"`,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Failed to subscribe to search: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-
-      this.emitError(
-        client,
-        'SERVER_ERROR',
-        error instanceof Error ? error.message : 'Failed to subscribe',
-      );
-
+    if (!userId) {
+      this.emitError(client, 'UNAUTHORIZED', 'User not authenticated');
       return { status: 'error', keyword: payload.keyword };
     }
+
+    this.logger.log(
+      `User ${userId} subscribing to search: "${payload.keyword}" (socket: ${client.id})`,
+    );
+
+    // Subscribe and get initial results
+    const initialResults = await this.realTimeSearchService.subscribe(
+      userId,
+      client.id,
+      payload,
+    );
+
+    // Emit initial results to client
+    client.emit(SocketEvents.SEARCH_RESULTS, safeJSON(initialResults));
+
+    this.logger.log(
+      `Sent ${initialResults.totalCount} initial results to user ${userId}`,
+    );
+
+    return {
+      status: 'subscribed',
+      keyword: payload.keyword,
+      message: `Subscribed to search: "${payload.keyword}"`,
+    };
   }
 
   /**
@@ -173,26 +159,20 @@ export class SearchGateway {
   handleSearchUnsubscribe(
     @ConnectedSocket() client: AuthenticatedSocket,
   ): { status: string } {
-    try {
-      const userId = client.userId;
 
-      if (!userId) {
-        return { status: 'error' };
-      }
+    const userId = client.userId;
 
-      this.realTimeSearchService.unsubscribe(userId, client.id);
-
-      this.logger.log(
-        `User ${userId} unsubscribed from search (socket: ${client.id})`,
-      );
-
-      return { status: 'unsubscribed' };
-    } catch (error) {
-      this.logger.error(
-        `Failed to unsubscribe: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+    if (!userId) {
       return { status: 'error' };
     }
+
+    this.realTimeSearchService.unsubscribe(userId, client.id);
+
+    this.logger.log(
+      `User ${userId} unsubscribed from search (socket: ${client.id})`,
+    );
+
+    return { status: 'unsubscribed' };
   }
 
   /**
@@ -209,39 +189,33 @@ export class SearchGateway {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: SearchUpdateQueryPayload,
   ): Promise<{ status: string }> {
-    try {
-      const userId = client.userId;
 
-      if (!userId) {
-        return { status: 'error' };
-      }
+    const userId = client.userId;
 
-      // Unsubscribe from old query
-      this.realTimeSearchService.unsubscribe(userId, client.id);
-
-      // Subscribe to new query
-      const subscribePayload: SearchSubscribePayload = {
-        keyword: payload.keyword,
-        conversationId: payload.conversationId,
-        searchType: 'CONVERSATION',
-      };
-
-      const results = await this.realTimeSearchService.subscribe(
-        userId,
-        client.id,
-        subscribePayload,
-      );
-
-      // Emit updated results
-      client.emit(SocketEvents.SEARCH_RESULTS, safeJSON(results));
-
-      return { status: 'updated' };
-    } catch (error) {
-      this.logger.error(
-        `Failed to update query: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+    if (!userId) {
       return { status: 'error' };
     }
+
+    // Unsubscribe from old query
+    this.realTimeSearchService.unsubscribe(userId, client.id);
+
+    // Subscribe to new query
+    const subscribePayload: SearchSubscribePayload = {
+      keyword: payload.keyword,
+      conversationId: payload.conversationId,
+      searchType: 'CONVERSATION',
+    };
+
+    const results = await this.realTimeSearchService.subscribe(
+      userId,
+      client.id,
+      subscribePayload,
+    );
+
+    // Emit updated results
+    client.emit(SocketEvents.SEARCH_RESULTS, safeJSON(results));
+
+    return { status: 'updated' };
   }
 
   /**
@@ -258,40 +232,27 @@ export class SearchGateway {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: SearchLoadMorePayload,
   ): Promise<{ status: string }> {
-    try {
-      const userId = client.userId;
 
-      if (!userId) {
-        this.emitError(client, 'UNAUTHORIZED', 'User not authenticated');
-        return { status: 'error' };
-      }
+    const userId = client.userId;
 
-      this.logger.debug(
-        `User ${userId} loadMore: ${payload.searchType} cursor=${payload.cursor} (socket: ${client.id})`,
-      );
-
-      const moreResults = await this.realTimeSearchService.handleLoadMore(
-        userId,
-        payload,
-      );
-
-      // Emit more results to client
-      client.emit(SocketEvents.SEARCH_MORE_RESULTS, safeJSON(moreResults));
-
-      return { status: 'ok' };
-    } catch (error) {
-      this.logger.error(
-        `Failed to load more: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-
-      this.emitError(
-        client,
-        'SERVER_ERROR',
-        error instanceof Error ? error.message : 'Failed to load more results',
-      );
-
+    if (!userId) {
+      this.emitError(client, 'UNAUTHORIZED', 'User not authenticated');
       return { status: 'error' };
     }
+
+    this.logger.debug(
+      `User ${userId} loadMore: ${payload.searchType} cursor=${payload.cursor} (socket: ${client.id})`,
+    );
+
+    const moreResults = await this.realTimeSearchService.handleLoadMore(
+      userId,
+      payload,
+    );
+
+    // Emit more results to client
+    client.emit(SocketEvents.SEARCH_MORE_RESULTS, safeJSON(moreResults));
+
+    return { status: 'ok' };
   }
 
   // ============================================================================
@@ -331,53 +292,48 @@ export class SearchGateway {
       userId?: string;
     }>;
   }): Promise<void> {
-    try {
-      const { message, subscriptions } = event;
 
-      for (const subscription of subscriptions) {
-        // Resolve sender display name per viewer using contact aliases
-        let senderName = message.sender?.displayName || 'Unknown';
-        if (subscription.userId && message.senderId) {
-          const resolved = await this.displayNameResolver.resolve(
-            subscription.userId,
-            message.senderId,
-          );
-          if (resolved) {
-            senderName = resolved;
-          }
-        }
+    const { message, subscriptions } = event;
 
-        const payload: SearchNewMatchPayload = {
-          keyword: subscription.keyword,
-          message: {
-            id: message.id.toString(),
-            conversationId: message.conversationId,
-            senderId: message.senderId || '',
-            senderName,
-            senderAvatarUrl: message.sender?.avatarUrl || undefined,
-            content: message.content || '',
-            type: message.type as MessageType,
-            createdAt: message.createdAt,
-            conversationType: message.conversation?.type || 'DIRECT',
-            conversationName: message.conversation?.name || undefined,
-            preview: message.content || '',
-            highlights: [],
-          },
-          conversationId: message.conversationId,
-          matchedAt: new Date(),
-        };
-
-        this.server
-          .to(subscription.socketId)
-          .emit(SocketEvents.SEARCH_NEW_MATCH, safeJSON(payload));
-
-        this.logger.debug(
-          `Emitted new match to socket ${subscription.socketId} for keyword "${subscription.keyword}"`,
+    for (const subscription of subscriptions) {
+      // Resolve sender display name per viewer using contact aliases
+      let senderName = message.sender?.displayName || 'Unknown';
+      if (subscription.userId && message.senderId) {
+        const resolved = await this.displayNameResolver.resolve(
+          subscription.userId,
+          message.senderId,
         );
+        if (resolved) {
+          senderName = resolved;
+        }
       }
-    } catch (error) {
-      this.logger.error(
-        `Failed to handle ${InternalEventNames.SEARCH_INTERNAL_NEW_MATCH}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+
+      const payload: SearchNewMatchPayload = {
+        keyword: subscription.keyword,
+        message: {
+          id: message.id.toString(),
+          conversationId: message.conversationId,
+          senderId: message.senderId || '',
+          senderName,
+          senderAvatarUrl: message.sender?.avatarUrl || undefined,
+          content: message.content || '',
+          type: message.type as MessageType,
+          createdAt: message.createdAt,
+          conversationType: message.conversation?.type || 'DIRECT',
+          conversationName: message.conversation?.name || undefined,
+          preview: message.content || '',
+          highlights: [],
+        },
+        conversationId: message.conversationId,
+        matchedAt: new Date(),
+      };
+
+      this.server
+        .to(subscription.socketId)
+        .emit(SocketEvents.SEARCH_NEW_MATCH, safeJSON(payload));
+
+      this.logger.debug(
+        `Emitted new match to socket ${subscription.socketId} for keyword "${subscription.keyword}"`,
       );
     }
   }
@@ -394,37 +350,32 @@ export class SearchGateway {
     messageId: string;
     conversationId: string;
   }): void {
-    try {
-      // A2: Only notify subscribers whose search scope includes this conversation
-      const affectedSubscriptions =
-        this.realTimeSearchService.getSubscriptionsForConversation(
-          event.conversationId,
-        );
 
-      if (affectedSubscriptions.length === 0) {
-        return;
-      }
-
-      const payload: SearchResultRemovedPayload = {
-        messageId: event.messageId,
-        conversationId: event.conversationId,
-        removedAt: new Date(),
-      };
-
-      for (const subscription of affectedSubscriptions) {
-        this.server
-          .to(subscription.socketId)
-          .emit(SocketEvents.SEARCH_RESULT_REMOVED, payload);
-      }
-
-      this.logger.debug(
-        `Emitted ${SocketEvents.SEARCH_RESULT_REMOVED} for message ${event.messageId} to ${affectedSubscriptions.length} subscriber(s)`,
+    // A2: Only notify subscribers whose search scope includes this conversation
+    const affectedSubscriptions =
+      this.realTimeSearchService.getSubscriptionsForConversation(
+        event.conversationId,
       );
-    } catch (error) {
-      this.logger.error(
-        `Failed to handle ${InternalEventNames.SEARCH_INTERNAL_RESULT_REMOVED}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+
+    if (affectedSubscriptions.length === 0) {
+      return;
     }
+
+    const payload: SearchResultRemovedPayload = {
+      messageId: event.messageId,
+      conversationId: event.conversationId,
+      removedAt: new Date(),
+    };
+
+    for (const subscription of affectedSubscriptions) {
+      this.server
+        .to(subscription.socketId)
+        .emit(SocketEvents.SEARCH_RESULT_REMOVED, payload);
+    }
+
+    this.logger.debug(
+      `Emitted ${SocketEvents.SEARCH_RESULT_REMOVED} for message ${event.messageId} to ${affectedSubscriptions.length} subscriber(s)`,
+    );
   }
 
   // ============================================================================

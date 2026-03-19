@@ -92,7 +92,7 @@ export class FriendshipService {
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) {}
+  ) { }
 
   /**
    * Send a friend request
@@ -172,6 +172,7 @@ export class FriendshipService {
               acceptedAt: null,
               declinedAt: null,
               lastActionAt: new Date(),
+              createdAt: new Date(),
               lastActionBy: requesterId,
               expiresAt: this.calculateExpiryDate(
                 this.config.cooldowns.requestExpiryDays,
@@ -797,27 +798,27 @@ export class FriendshipService {
     const friendUsers =
       friendUserIds.length > 0
         ? await this.prisma.user.findMany({
-            where: { id: { in: friendUserIds } },
-            select: {
-              id: true,
-              displayName: true,
-              avatarUrl: true,
-              phoneNumber: true,
-            },
-          })
+          where: { id: { in: friendUserIds } },
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            phoneNumber: true,
+          },
+        })
         : [];
     const friendUserMap = new Map(friendUsers.map((u) => [u.id, u]));
 
     const contactEntries =
       friendUserIds.length > 0
         ? await this.prisma.userContact.findMany({
-            where: { ownerId: userId, contactUserId: { in: friendUserIds } },
-            select: {
-              contactUserId: true,
-              aliasName: true,
-              phoneBookName: true,
-            },
-          })
+          where: { ownerId: userId, contactUserId: { in: friendUserIds } },
+          select: {
+            contactUserId: true,
+            aliasName: true,
+            phoneBookName: true,
+          },
+        })
         : [];
 
     const contactMap = new Map(contactEntries.map((c) => [c.contactUserId, c]));
