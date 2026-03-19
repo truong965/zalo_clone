@@ -61,8 +61,7 @@ function BlockedUserCard({
                   </div>
 
                   <Popconfirm
-                        title={t('contacts.blocked.unblockTitle')}
-                        description={t('contacts.blocked.unblockDesc', { name: item.displayName })}
+                        title={t('contacts.blocked.unblockDesc', { name: item.displayName })}
                         onConfirm={() => onUnblock(item.userId)}
                         okText={t('contacts.blocked.unblockOk')}
                         cancelText={t('contacts.blocked.unblockCancel')}
@@ -144,9 +143,9 @@ export function BlockedList() {
                   <div className="px-4 py-3 border-b border-gray-100 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                               <Text className="text-sm text-gray-500">
-                              {t('contacts.blocked.title')}
-                              {totalCount !== undefined && ` (${totalCount})`}
-                        </Text>
+                                    {t('contacts.blocked.title')}
+                                    {totalCount !== undefined && ` (${totalCount})`}
+                              </Text>
                         </div>
                         <Input
                               prefix={<SearchOutlined className="text-gray-400" />}

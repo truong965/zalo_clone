@@ -99,7 +99,7 @@ async function checkFriendshipStatus(
       const { data: response } = await apiClient.get(
             API_ENDPOINTS.FRIENDS.CHECK_STATUS(targetUserId),
       );
-      return response.data;
+      return response?.data?.status ?? null;
 }
 
 async function getMutualFriends(
@@ -176,7 +176,7 @@ export function useCheckStatus(
             queryKey: friendshipKeys.checkStatus(targetUserId ?? ''),
             queryFn: () => checkFriendshipStatus(targetUserId!),
             enabled: !!targetUserId,
-            staleTime: 60_000,
+            staleTime: 10_000,
             ...options,
       });
 }
@@ -192,7 +192,7 @@ export function useMutualFriends(
             queryKey: friendshipKeys.mutual(targetUserId ?? ''),
             queryFn: () => getMutualFriends(targetUserId!),
             enabled: !!targetUserId,
-            staleTime: 60_000,
+            staleTime: 10_000,
             ...options,
       });
 }
@@ -223,7 +223,8 @@ export function useSendFriendRequest() {
             mutationFn: (targetUserId: string) => sendFriendRequest(targetUserId),
             onSuccess: () => {
                   void queryClient.invalidateQueries({
-                        queryKey: friendshipKeys.sentRequests(),
+                        queryKey: friendshipKeys.all,
+                        exact: false,
                   });
             },
       });
@@ -238,6 +239,10 @@ export function useAcceptRequest() {
       return useMutation({
             mutationFn: (requestId: string) => acceptRequest(requestId),
             onSuccess: () => {
+                  void queryClient.invalidateQueries({
+                        queryKey: friendshipKeys.all,
+                        exact: false,
+                  });
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.friendsList(),
                   });
@@ -263,6 +268,10 @@ export function useDeclineRequest() {
             mutationFn: (requestId: string) => declineRequest(requestId),
             onSuccess: () => {
                   void queryClient.invalidateQueries({
+                        queryKey: friendshipKeys.all,
+                        exact: false,
+                  });
+                  void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.receivedRequests(),
                   });
             },
@@ -279,6 +288,10 @@ export function useCancelRequest() {
             mutationFn: (requestId: string) => cancelRequest(requestId),
             onSuccess: () => {
                   void queryClient.invalidateQueries({
+                        queryKey: friendshipKeys.all,
+                        exact: false,
+                  });
+                  void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.sentRequests(),
                   });
             },
@@ -294,6 +307,10 @@ export function useUnfriend() {
       return useMutation({
             mutationFn: (targetUserId: string) => unfriend(targetUserId),
             onSuccess: () => {
+                  void queryClient.invalidateQueries({
+                        queryKey: friendshipKeys.all,
+                        exact: false,
+                  });
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.friendsList(),
                   });

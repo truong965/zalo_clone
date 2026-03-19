@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { socketManager, type Socket } from '@/lib/socket';
 import { authService, useAuthStore } from '@/features/auth';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
+import { notification } from 'antd';
 
 // Inject auth callbacks once at module load so SocketManager never imports feature modules.
 socketManager.init({
@@ -10,6 +11,13 @@ socketManager.init({
       refreshToken: async () => { await authService.refresh(); },
       onLogout: () => useAuthStore.getState().logout(),
       onReset: () => useAuthStore.getState().reset(),
+      onError: (message: string) => {
+            notification.error({
+                  message: 'Lỗi kết nối',
+                  description: message,
+                  placement: 'topRight',
+            });
+      },
 });
 
 export function useSocket() {

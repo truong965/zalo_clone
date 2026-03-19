@@ -256,7 +256,7 @@
     "infoSidebar": {
       "groupInfo": "Thông tin nhóm",
       "directInfo": "Thông tin hội thoại",
-      "media": "ẢNh/Video",
+      "media": "Ảnh/Video",
       "noMedia": "Chưa có Ảnh/Video được chia sẻ",
       "file": "File",
       "noFile": "Chưa có File được chia sẻ",
@@ -681,7 +681,8 @@
         "understood": "Đã hiểu",
         "cannotLeaveTitle": "Không thể rời nhóm",
         "soloAdminContent": "Bạn là thành viên duy nhất trong nhóm. Hãy giải tán nhóm nếu không cần nữa.",
-        "adminContent": "Bạn là trưởng nhóm. Vui lòng chuyển quyền trưởng nhóm cho thành viên khác trước khi rời."
+        "adminContent": "Bạn là trưởng nhóm. Vui lòng chuyển quyền trưởng nhóm cho thành viên khác trước khi rời.",
+        "leaveErrorTitle": "Không thể rời nhóm"
       },
       "joinRequests": {
         "title": "Yêu cầu tham gia"

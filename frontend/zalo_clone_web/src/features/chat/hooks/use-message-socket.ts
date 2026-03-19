@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { QueryKey } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/hooks/use-socket';
+import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
 import type { MessageListItem } from '@/types/api';
 import { useAuthStore } from '@/features/auth';
@@ -22,12 +23,8 @@ import type {
 // Re-export shared types so existing consumers keep working
 export type { MessagesPage, MessagesInfiniteData } from '../utils/message-cache-helpers';
 
-type SocketAck<T> = ({ error?: undefined } & T) | { error: string };
-
 type MessageNewPayload = { message: MessageListItem; conversationId: string };
-
 type MessagesSyncPayload = { messages: MessageListItem[]; count: number };
-
 type TypingStatusPayload = {
       conversationId: string;
       userId: string;
@@ -160,8 +157,8 @@ export function useMessageSocket(params: {
                         // conversations, messagesQueryKeyRef would point to the wrong cache.
                         const factory = buildMessagesQueryKeyRef.current;
                         const targetKey = factory && payload.conversationId
-                              ? factory(payload.conversationId)
-                              : messagesQueryKeyRef.current;
+                               ? factory(payload.conversationId)
+                               : messagesQueryKeyRef.current;
                         applyReceiptUpdateToCache(queryClient, targetKey, payload);
                   } catch {
                         // ignore handler errors
@@ -184,8 +181,8 @@ export function useMessageSocket(params: {
                   try {
                         if (payload.event !== SocketEvents.MESSAGE_SEND) return;
                         const errorMsg = typeof payload.error === 'string'
-                              ? payload.error
-                              : (typeof payload.message === 'string' ? payload.message : 'Send failed');
+                               ? payload.error
+                               : (typeof payload.message === 'string' ? payload.message : 'Send failed');
                         applySendFailedToCache(queryClient, messagesQueryKeyRef.current, {
                               ...payload,
                               error: errorMsg,
@@ -237,12 +234,8 @@ export function useMessageSocket(params: {
                   if (!socket) return;
                   socket.emit(SocketEvents.MESSAGE_SEEN, dto);
             },
-            emitSendMessage: <T extends Record<string, unknown>>(
-                  dto: T,
-                  ack?: (response: SocketAck<{ messageId: string }>) => void,
-            ) => {
-                  if (!socket) return;
-                  socket.emit(SocketEvents.MESSAGE_SEND, dto, ack);
+            emitSendMessage: <T extends Record<string, unknown>>(dto: T) => {
+                  return socketManager.emitWithAck<{ messageId: string }>(SocketEvents.MESSAGE_SEND, dto);
             },
             emitTypingStart: (dto: { conversationId: string }) => {
                   if (!socket) return;

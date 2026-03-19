@@ -9,6 +9,7 @@ interface SocketAuthCallbacks {
   refreshToken: () => Promise<void>;
   onLogout: () => Promise<void>;
   onReset: () => void;
+  onError?: (message: string) => void;
 }
 
 class SocketManager {
@@ -25,6 +26,7 @@ class SocketManager {
   private refreshTokenFn: () => Promise<void> = async () => { };
   private onLogoutFn: () => Promise<void> = async () => { };
   private onResetFn: () => void = () => { };
+  private onErrorFn: (message: string) => void = (msg) => console.error('Socket Global Error:', msg);
 
   /**
    * Inject auth callbacks so this class never imports from @/features/auth.
@@ -35,6 +37,9 @@ class SocketManager {
     this.refreshTokenFn = callbacks.refreshToken;
     this.onLogoutFn = callbacks.onLogout;
     this.onResetFn = callbacks.onReset;
+    if (callbacks.onError) {
+      this.onErrorFn = callbacks.onError;
+    }
   }
 
   private ensureSocket(): Socket {
@@ -90,7 +95,14 @@ class SocketManager {
     });
 
     this.socket.on('error', (error) => {
-      console.error('❌ Socket error:', error);
+      console.error('❌ Socket transport error:', error);
+    });
+
+    // Application-level error events from the backend (WsExceptionFilter fallback)
+    this.socket.on(SocketEvents.ERROR, (payload: any) => {
+      console.error('❌ Socket error:', payload);
+      const message = payload.message || payload.error || 'Unknown socket error';
+      this.onErrorFn(message);
     });
 
     return this.socket;
@@ -190,6 +202,44 @@ class SocketManager {
 
   isConnected(): boolean {
     return this.socket?.connected ?? false;
+  }
+
+  /**
+   * Unified emit with acknowledgment.
+   * Automatically handles { error: string } from backend and triggers global notification.
+   */
+  async emitWithAck<T>(
+    event: string,
+    data: any,
+    options?: { skipGlobalError?: boolean }
+  ): Promise<T> {
+    const socket = this.ensureSocket();
+
+    return new Promise((resolve, reject) => {
+      socket.emit(event, data, (response: any) => {
+        if (response && typeof response === 'object' && 'error' in response) {
+          const errorMsg = response.error || 'Unknown error';
+          if (!options?.skipGlobalError) {
+            this.onErrorFn(errorMsg);
+          }
+          reject(new Error(errorMsg));
+          return;
+        }
+
+        // Backend WsTransformInterceptor wraps success in { success: true, data: T }
+        if (
+          response &&
+          typeof response === 'object' &&
+          'success' in response &&
+          'data' in response
+        ) {
+          resolve(response.data as T);
+        } else {
+          // Fallback for non-wrapped responses
+          resolve(response as T);
+        }
+      });
+    });
   }
 }
 

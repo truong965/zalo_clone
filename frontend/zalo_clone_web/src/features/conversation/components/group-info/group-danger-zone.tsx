@@ -54,13 +54,7 @@ export function GroupDangerZone({
                   okText: t('conversation.groupInfo.dangerZone.leaveConfirmOk'),
                   okType: 'danger',
                   cancelText: t('conversation.groupInfo.dangerZone.leaveConfirmCancel'),
-                  onOk: async () => {
-                        try {
-                              await onLeaveGroup();
-                        } catch {
-                              // Error notification handled by use-group-notifications
-                        }
-                  },
+                  onOk: () => onLeaveGroup().catch(() => {}), // catch error to close modal even if notify error occurred
             });
       };
 

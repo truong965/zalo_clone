@@ -12,13 +12,14 @@ import {
       BellOutlined,
       PushpinOutlined,
       StopOutlined,
-      ExclamationCircleFilled,
       UserOutlined,
 } from '@ant-design/icons';
 import { BellSlashedIcon } from '@/components/icons/bell-slashed';
 import type { ConversationUI } from '@/types/api';
 import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
-import { useBlockUser } from '@/features/contacts/hooks/use-block';
+import { useBlockUser } from '@/hooks/use-block';
+import { useConversation } from '@/hooks/use-conversation';
+import { useInvalidateConversations } from '@/features/conversation/hooks/use-conversation-queries';
 import { usePinConversation, useMuteConversation, useArchiveConversation } from '@/features/conversation';
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -33,23 +34,25 @@ const { Title } = Typography;
 interface DirectInfoContentProps {
       conversation: ConversationUI;
       onOpenMediaBrowser?: (tab: MediaBrowserTab) => void;
-      onClose?: () => void;
+      onCloseSidebar: () => void;
 }
 
-export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }: DirectInfoContentProps) {
+export function DirectInfoContent({ conversation, onOpenMediaBrowser, onCloseSidebar }: DirectInfoContentProps) {
       const { t } = useTranslation();
-      const blockMutation = useBlockUser();
+      const { clearCurrentConversation } = useConversation();
+      const { mutateAsync: blockUserAsync, isPending: isBlocking } = useBlockUser();
+      const { removeFromCache, invalidateAll } = useInvalidateConversations();
+
       const { togglePin } = usePinConversation();
       const { toggleMute } = useMuteConversation();
       const { toggleArchive, isArchiving } = useArchiveConversation();
-      const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
       const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversation.id);
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
 
-      const [previewItems, setPreviewItems] = useState<typeof recentMedia>([]);
+      const [previewItems, setPreviewItems] = useState<any[]>([]);
       const [previewIndex, setPreviewIndex] = useState(-1);
 
       // async-parallel: two independent queries run in parallel
@@ -62,10 +65,42 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
 
       const handleBlockConfirm = () => {
             if (!otherUserId) return;
-            blockMutation.mutate(
-                  { targetUserId: otherUserId },
-                  { onSettled: () => setIsBlockModalOpen(false) },
-            );
+
+            Modal.confirm({
+                  title: (
+                        <span className="flex items-center gap-2">
+                              {t('chat.infoSidebar.blockConfirmTitle', { name: otherUserName })}
+                        </span>
+                  ),
+                  content: (
+                        <p >
+                              {t('chat.infoSidebar.blockWarning', { name: otherUserName })}
+                        </p>
+                  ),
+                  okText: t('chat.infoSidebar.block'),
+                  okType: 'danger',
+                  okButtonProps: { danger: true, loading: isBlocking },
+                  onOk: async () => {
+                        try {
+                              // 1. GỌI API CHẶN (REST API)
+                              await blockUserAsync({ targetUserId: otherUserId, reason: 'N/A' });
+
+                              // 2. ĐÓNG SIDEBAR
+                              onCloseSidebar();
+
+                              // 3. XÓA CUỘC TRÒ CHUYỆN KHỎI MÀN HÌNH CHÍNH
+                              clearCurrentConversation();
+
+                              // 4. XÓA CACHE ĐỂ TRÁNH LỖI KHI REFETCH
+                              await removeFromCache(conversation.id);
+
+                              // 5. LÀM MỚI TOÀN BỘ DANH SÁCH CONVERSATION
+                              void invalidateAll();
+                        } catch (error) {
+                              console.error('Failed to block user within UI context:', error);
+                        }
+                  },
+            });
       };
 
       const items = [
@@ -148,24 +183,17 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                         <div className="flex flex-col gap-3">
                               <button
                                     type="button"
-                                    onClick={() => setIsBlockModalOpen(true)}
-                                    disabled={!otherUserId || blockMutation.isPending}
+                                    onClick={handleBlockConfirm}
+                                    disabled={!otherUserId || isBlocking}
                                     className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 p-1 rounded w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                     <StopOutlined className="text-red-500" />
                                     <div className="flex-1">
                                           <div className="text-sm text-red-600">
-                                                {blockMutation.isPending ? t('chat.infoSidebar.blocking') : t('chat.infoSidebar.block')}
+                                                {isBlocking ? t('chat.infoSidebar.blocking') : t('chat.infoSidebar.block')}
                                           </div>
                                     </div>
                               </button>
-                              {/* <div className="flex items-center justify-between p-1">
-                                    <div className="flex items-center gap-3">
-                                          <EyeInvisibleOutlined className="text-gray-500" />
-                                          <span className="text-sm">Ẩn trò chuyện</span>
-                                    </div>
-                                    <Switch size="small" />
-                              </div> */}
                         </div>
                   ),
             },
@@ -225,14 +253,6 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                                           {conversation.isPinned ? t('chat.infoSidebar.unpin') : t('chat.infoSidebar.pin')}
                                     </span>
                               </div>
-                              {/* <div className="flex flex-col items-center gap-2 cursor-pointer group">
-                                    <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                                          <UsergroupAddOutlined className="text-gray-600 group-hover:text-blue-600" />
-                                    </div>
-                                    <span className="text-xs text-gray-500 text-center max-w-[60px]">
-                                          Tạo nhóm
-                                    </span>
-                              </div> */}
                         </div>
                   </div>
 
@@ -303,29 +323,6 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                         </div>
                   </div>
 
-                  {/* Block confirmation modal */}
-                  <Modal
-                        title={
-                              <span className="flex items-center gap-2">
-                                    <ExclamationCircleFilled className="text-red-500" />
-                                    {t('chat.infoSidebar.blockConfirmTitle', { name: otherUserName })}
-                              </span>
-                        }
-                        open={isBlockModalOpen}
-                        onOk={handleBlockConfirm}
-                        onCancel={() => setIsBlockModalOpen(false)}
-                        okText={t('chat.infoSidebar.blockConfirmOk')}
-                        cancelText={t('chat.infoSidebar.blockConfirmCancel')}
-                        okButtonProps={{
-                              danger: true,
-                              loading: blockMutation.isPending,
-                        }}
-                  >
-                        <p className="text-gray-600">
-                              {t('chat.infoSidebar.blockWarning', { name: otherUserName })}
-                        </p>
-                  </Modal>
-
                   {/* Archive confirmation modal */}
                   <Modal
                         title={conversation.isArchived ? t('chat.infoSidebar.unarchiveModalTitle') : t('chat.infoSidebar.archiveModalTitle')}
@@ -333,7 +330,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onClose }:
                         onOk={() => {
                               toggleArchive(conversation.id, !!conversation.isArchived);
                               setIsArchiveModalOpen(false);
-                              onClose?.();
+                              onCloseSidebar();
                         }}
                         onCancel={() => setIsArchiveModalOpen(false)}
                         okText={conversation.isArchived ? t('chat.infoSidebar.unarchiveModalOk') : t('chat.infoSidebar.archiveModalOk')}

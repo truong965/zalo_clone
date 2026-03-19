@@ -19,7 +19,7 @@ interface GroupListItemProps {
       onClick?: (groupId: string) => void;
 }
 
-function formatTimestamp(dateStr: string | null): string {
+function formatTimestamp(dateStr: string | null, t: any): string {
       if (!dateStr) return '';
       const date = new Date(dateStr);
       const now = new Date();
@@ -57,7 +57,7 @@ export const GroupListItemCard = memo(function GroupListItemCard({
 }: GroupListItemProps) {
       const { t } = useTranslation();
       const preview = getLastMessagePreview(group.lastMessage, t);
-      const timestamp = formatTimestamp(group.lastMessageAt);
+      const timestamp = formatTimestamp(group.lastMessageAt, t);
       const hasUnread = (group.unreadCount ?? 0) > 0;
 
       const handleKeyDown = (e: React.KeyboardEvent) => {

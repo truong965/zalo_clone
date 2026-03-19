@@ -1,5 +1,6 @@
-import { useMemo, useState, useCallback } from 'react';
-import { Avatar, Button, Dropdown, Modal, Typography } from 'antd';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Avatar, Button, Dropdown, Modal, Typography, Popover, Space, notification } from 'antd';
+import { ApiError } from '@/lib/api-error';
 import {
       SearchOutlined,
       VideoCameraOutlined,
@@ -10,6 +11,8 @@ import {
       PhoneOutlined,
       UserOutlined,
       TeamOutlined,
+      UserAddOutlined,
+      CloseOutlined,
 } from '@ant-design/icons';
 import {
       useContactCheck,
@@ -20,6 +23,7 @@ import type { CallType, PeerInfo } from '@/features/call/types';
 import { conversationApi } from '@/features/conversation';
 import { useAuthStore } from '@/features/auth';
 import { useTranslation } from 'react-i18next';
+import { useFriendRequestStatus } from '@/features/contacts/hooks/use-friend-request-status';
 
 const { Title } = Typography;
 
@@ -53,8 +57,25 @@ export function ChatHeader({
       const [aliasModalOpen, setAliasModalOpen] = useState(false);
       const [callLoading, setCallLoading] = useState(false);
       const [callModalOpen, setCallModalOpen] = useState(false);
-      const currentUserId = useAuthStore((s) => s.user?.id);
+      const [popoverOpen, setPopoverOpen] = useState(false);
+      const user = useAuthStore((s) => s.user);
       const { t } = useTranslation();
+
+      const {
+            isLoading,
+            isFriend,
+            pendingRequestDirection,
+            sentRequest,
+            receivedRequest,
+            sendRequest,
+            acceptRequest,
+            declineRequest,
+            cancelRequest,
+            isSendingRequest,
+            isAcceptingRequest,
+            isDecliningRequest,
+            isCancellingRequest,
+      } = useFriendRequestStatus(isDirect ? otherUserId ?? null : null);
 
       // Only enabled for 1-to-1 conversations
       const { data: contactInfo } = useContactCheck(isDirect ? otherUserId : null);
@@ -131,7 +152,7 @@ export function ChatHeader({
                               const members = await conversationApi.getConversationMembers(conversationId);
                               const receiverIds = members
                                     .map((m) => m.id)
-                                    .filter((id) => id !== currentUserId);
+                                    .filter((id) => id !== user?.id);
                               if (receiverIds.length === 0) return;
                               window.dispatchEvent(
                                     new CustomEvent('call:initiate', {
@@ -152,7 +173,139 @@ export function ChatHeader({
                         }
                   }
             },
-            [conversationId, isDirect, otherUserId, conversationName, avatarUrl, currentUserId],
+            [conversationId, isDirect, otherUserId, conversationName, avatarUrl, user?.id],
+      );
+
+      const showFriendAction =
+            isDirect &&
+            !!otherUserId &&
+            !!user?.id &&
+            otherUserId !== user.id &&
+            !isFriend;
+
+      const isFriendActionDisabled = isLoading;
+
+      useEffect(() => {
+            setPopoverOpen(showFriendAction ?? false);
+      }, [showFriendAction]);
+
+      const handleSendRequest = () => {
+            if (!otherUserId) return;
+            sendRequest.mutate(otherUserId, {
+                  onSuccess: () => {
+                        notification.success({
+                              message: t('contacts.search.sentSuccess', 'Đã gửi lời mời kết bạn'),
+                        });
+                        setPopoverOpen(false);
+                  },
+                  onError: (error: unknown) => {
+                        const apiErr = ApiError.from(error);
+                        if (apiErr.status === 409) {
+                              notification.warning({
+                                    message: t('contacts.search.duplicateTitle', 'Lưu ý'),
+                                    description: apiErr.message || t('contacts.search.duplicateDesc', 'Bạn đã là bạn bè hoặc đang có lời mời chờ xử lý'),
+                              });
+                        } else {
+                              notification.error({
+                                    message: apiErr.message || t('contacts.search.cannotSend', 'Không thể gửi kết bạn'),
+                              });
+                        }
+                        setPopoverOpen(false);
+                  },
+            });
+      };
+
+      const handleCancelRequest = () => {
+            if (!sentRequest) return;
+            cancelRequest.mutate(sentRequest.id, {
+                  onSuccess: () => {
+                        notification.success({ message: t('contacts.search.recallSuccess', 'Đã thu hồi lời mời') });
+                        setPopoverOpen(false);
+                  },
+                  onError: () => {
+                        notification.error({ message: t('contacts.search.recallFail', 'Không thể thu hồi') });
+                        setPopoverOpen(false);
+                  },
+            });
+      };
+
+      const handleAcceptRequest = () => {
+            if (!receivedRequest) return;
+            acceptRequest.mutate(receivedRequest.id, {
+                  onSuccess: () => {
+                        notification.success({ message: t('contacts.search.acceptSuccess', 'Đã chấp nhận kết bạn') });
+                        setPopoverOpen(false);
+                  },
+                  onError: () => {
+                        notification.error({ message: t('contacts.search.acceptFail', 'Không thể chấp nhận') });
+                        setPopoverOpen(false);
+                  },
+            });
+      };
+
+      const handleDeclineRequest = () => {
+            if (!receivedRequest) return;
+            declineRequest.mutate(receivedRequest.id, {
+                  onSuccess: () => setPopoverOpen(false),
+            });
+      };
+
+      const popoverContent = (
+            <div className="relative p-2" style={{ minWidth: 260 }}>
+                  <CloseOutlined
+                        className="absolute top-2 right-2 cursor-pointer text-gray-400 hover:text-gray-600"
+                        onClick={() => setPopoverOpen(false)}
+                  />
+                  <div className="mb-3 text-sm pr-6">
+                        {pendingRequestDirection === 'sent' ? (
+                              t('chat.header.friendRequestSent', 'Đã gửi lời mời kết bạn')
+                        ) : pendingRequestDirection === 'received' ? (
+                              t('chat.header.friendRequestReceived', 'Đã nhận lời mời kết bạn')
+                        ) : (
+                              t('chat.header.addFriendSuggestion', 'Bạn có muốn kết bạn với người này không?')
+                        )}
+                  </div>
+                  <Space className="w-full justify-center">
+                        {pendingRequestDirection === 'sent' ? (
+                              <Button
+                                    size="small"
+                                    type="primary"
+                                    danger
+                                    onClick={handleCancelRequest}
+                                    loading={isCancellingRequest}
+                              >
+                                    {t('contacts.friendRequest.recall', 'Hủy')}
+                              </Button>
+                        ) : pendingRequestDirection === 'received' ? (
+                              <>
+                                    <Button
+                                          size="small"
+                                          onClick={handleDeclineRequest}
+                                          loading={isDecliningRequest}
+                                    >
+                                          {t('contacts.friendRequest.decline', 'Từ chối')}
+                                    </Button>
+                                    <Button
+                                          size="small"
+                                          type="primary"
+                                          onClick={handleAcceptRequest}
+                                          loading={isAcceptingRequest}
+                                    >
+                                          {t('contacts.friendRequest.accept', 'Chấp nhận')}
+                                    </Button>
+                              </>
+                        ) : (
+                              <Button
+                                    size="small"
+                                    type="primary"
+                                    onClick={handleSendRequest}
+                                    loading={isSendingRequest}
+                              >
+                                    {t('common.addFriend', 'Kết bạn')}
+                              </Button>
+                        )}
+                  </Space>
+            </div>
       );
 
       return (
@@ -178,12 +331,23 @@ export function ChatHeader({
                         </div>
 
                         <div className="flex gap-1">
-                              {/* <Button
-                              icon={<UsergroupAddOutlined />}
-                              type="text"
-                              className="text-gray-500 hover:bg-gray-100"
-                              title="Thêm thành viên"
-                        /> */}
+                              {showFriendAction && (
+                                    <Popover
+                                          content={popoverContent}
+                                          open={popoverOpen}
+                                          onOpenChange={setPopoverOpen}
+                                          placement="bottomRight"
+                                          trigger="click"
+                                    >
+                                          <Button
+                                                icon={<UserAddOutlined />}
+                                                type="text"
+                                                loading={isFriendActionDisabled}
+                                                className="text-gray-500 hover:bg-gray-100"
+                                                title={t('chat.header.addFriendTooltip', 'Thêm bạn bè')}
+                                          />
+                                    </Popover>
+                              )}
                               {(isDirect ? !!otherUserId : true) && (
                                     <Button
                                           icon={isDirect ? <PhoneOutlined /> : <VideoCameraOutlined />}

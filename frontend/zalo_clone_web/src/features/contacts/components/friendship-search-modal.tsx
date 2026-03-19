@@ -12,6 +12,7 @@ import { useSearch } from '@/features/search/hooks/use-search';
 import { UserInfoView } from '@/features/profile/components/user-info-view';
 import { conversationService } from '@/features/conversation';
 import { useSendFriendRequest, useCancelRequest, useAcceptRequest } from '../api/friendship.api';
+
 import type { ContactSearchResult } from '@/features/search/types';
 import type { User } from '@/types/api';
 import { FriendRequestModal } from './friend-request-modal';
@@ -54,6 +55,7 @@ export function FriendshipSearchModal({
       const cancelReq = useCancelRequest();
       const acceptReq = useAcceptRequest();
 
+
       useEffect(() => {
             setSearchType('CONTACT');
       }, [setSearchType]);
@@ -68,6 +70,19 @@ export function FriendshipSearchModal({
       }, [open, resetSearch]);
 
       const normalizedInput = useMemo(() => phoneInput.replace(/\s+/g, ''), [phoneInput]);
+
+      const contactRaw = (results?.contacts?.[0] as ContactSearchResult | undefined) ?? undefined;
+
+      const contact = contactRaw;
+
+
+
+
+      useEffect(() => {
+            if (!showFriendRequestModal && contact && normalizedInput) {
+                  triggerSearch(normalizedInput);
+            }
+      }, [showFriendRequestModal, contact, normalizedInput, triggerSearch]);
 
       const handleSearch = useCallback(() => {
             if (!normalizedInput) {
@@ -87,7 +102,6 @@ export function FriendshipSearchModal({
             triggerSearch(normalizedInput);
       }, [handleKeywordChange, normalizedInput, resetSearch, triggerSearch]);
 
-      const contact = (results?.contacts?.[0] as ContactSearchResult | undefined) ?? undefined;
       const isPrivacyLimited = contact?.isPrivacyLimited ?? false;
 
       // Bug 7 fix: Only show alias for friends; strangers always see original name
@@ -128,9 +142,13 @@ export function FriendshipSearchModal({
                   return;
             }
 
-            // Nếu chưa là bạn bè, check quyền privacy
+            // Nếu đã có request hoặc blocked -> Không mở modal
+            if (contact.relationshipStatus === 'REQUEST' || contact.relationshipStatus === 'BLOCKED') {
+                  return;
+            }
+
+            // Nếu chưa là bạn bè và privacy chặn -> Mở modal gợi ý kết bạn
             if (contact.canMessage === false) {
-                  // Privacy chặn -> Mở modal gợi ý kết bạn
                   setShowFriendRequestModal(true);
             } else {
                   // Privacy cho phép (EVERYONE) -> Nhắn tin bình thường
@@ -296,7 +314,6 @@ export function FriendshipSearchModal({
                   </div>
             );
       };
-
       return (
             <>
                   <Modal
@@ -359,6 +376,7 @@ export function FriendshipSearchModal({
                         <FriendRequestModal
                               visible={showFriendRequestModal}
                               onClose={() => setShowFriendRequestModal(false)}
+                              onAfterSend={() => triggerSearch(normalizedInput)}
                               target={{
                                     userId: contact.id,
                                     displayName: effectiveDisplayName,

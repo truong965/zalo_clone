@@ -40,10 +40,7 @@ interface UseSendMessageParams {
       currentUserId: string | null;
       messagesQueryKey: QueryKey;
       isMsgSocketConnected: boolean;
-      emitSendMessage: <T extends Record<string, unknown>>(
-            dto: T,
-            ack?: (response: ({ error?: undefined } & { messageId: string }) | { error: string }) => void,
-      ) => void;
+      emitSendMessage: <T extends Record<string, unknown>>(dto: T) => Promise<{ messageId: string }>;
 }
 
 export function useSendMessage(params: UseSendMessageParams) {
@@ -133,8 +130,9 @@ export function useSendMessage(params: UseSendMessageParams) {
             };
 
             if (isMsgSocketConnected) {
-                  emitSendMessage(sendDto, (ack) => {
-                        if (!ack || !('error' in ack) || !ack.error) return;
+                  try {
+                        await emitSendMessage(sendDto);
+                  } catch (error: any) {
                         queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
                               if (!prev) return prev;
                               const pages = prev.pages.map((p) => ({
@@ -143,13 +141,17 @@ export function useSendMessage(params: UseSendMessageParams) {
                                           if (m.clientMessageId !== clientMessageId) return m;
                                           return {
                                                 ...m,
-                                                metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: ack.error },
+                                                metadata: {
+                                                      ...(m.metadata ?? {}),
+                                                      sendStatus: 'FAILED',
+                                                      sendError: error.message || 'Gửi thất bại',
+                                                },
                                           };
                                     }),
                               }));
                               return { ...prev, pages };
                         });
-                  });
+                  }
                   return;
             }
 
@@ -174,7 +176,7 @@ export function useSendMessage(params: UseSendMessageParams) {
             }
       }, [selectedId, currentUserId, queryClient, messagesQueryKey, isMsgSocketConnected, emitSendMessage, api]);
 
-      const handleRetryMessage = useCallback((msg: MessageListItem) => {
+      const handleRetryMessage = useCallback(async (msg: MessageListItem) => {
             if (!selectedId) return;
             if (!isMsgSocketConnected) return;
             if (!msg.clientMessageId) return;
@@ -194,13 +196,14 @@ export function useSendMessage(params: UseSendMessageParams) {
                   return { ...prev, pages };
             });
 
-            emitSendMessage({
-                  conversationId: selectedId,
-                  clientMessageId: msg.clientMessageId,
-                  type: msg.type,
-                  content: msg.content,
-            }, (ack) => {
-                  if (!ack || !('error' in ack) || !ack.error) return;
+            try {
+                  await emitSendMessage({
+                        conversationId: selectedId,
+                        clientMessageId: msg.clientMessageId,
+                        type: msg.type,
+                        content: msg.content,
+                  });
+            } catch (error: any) {
                   queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
                         if (!prev) return prev;
                         const pages = prev.pages.map((p) => ({
@@ -209,13 +212,17 @@ export function useSendMessage(params: UseSendMessageParams) {
                                     if (m.clientMessageId !== msg.clientMessageId) return m;
                                     return {
                                           ...m,
-                                          metadata: { ...(m.metadata ?? {}), sendStatus: 'FAILED', sendError: ack.error },
+                                          metadata: {
+                                                ...(m.metadata ?? {}),
+                                                sendStatus: 'FAILED',
+                                                sendError: error.message || 'Gửi thất bại',
+                                          },
                                     };
                               }),
                         }));
                         return { ...prev, pages };
                   });
-            });
+            }
       }, [selectedId, isMsgSocketConnected, queryClient, messagesQueryKey, emitSendMessage]);
 
       return { handleSendMessage, handleRetryMessage };

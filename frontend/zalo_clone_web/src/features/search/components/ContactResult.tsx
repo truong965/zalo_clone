@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons';
 import type { ContactSearchResult } from '../types';
 import { getRelationshipLabel } from '../utils/search.util';
+import { useFriendRequestStatus } from '@/features/contacts/hooks/use-friend-request-status';
 
 const { Text } = Typography;
 
@@ -40,25 +41,47 @@ export function ContactResult({
       onCancelRequest,
 }: ContactResultProps) {
       const { t } = useTranslation();
+      const {
+            isFriend,
+            pendingRequestDirection,
+            sentRequest,
+            receivedRequest,
+      } = useFriendRequestStatus(data.id);
+
+      // Override relationship state with live data from TanStack Query (Synchronization Fix)
+      const effectiveStatus = isFriend
+            ? 'FRIEND'
+            : pendingRequestDirection
+                  ? 'REQUEST'
+                  : data.relationshipStatus;
+
+      const effectiveDirection = pendingRequestDirection
+            ? (pendingRequestDirection === 'sent' ? 'OUTGOING' : 'INCOMING')
+            : data.requestDirection;
+
+      const effectivePendingId = pendingRequestDirection
+            ? (pendingRequestDirection === 'sent' ? sentRequest?.id : receivedRequest?.id)
+            : data.pendingRequestId;
+
       const relationLabel = getRelationshipLabel(
-            data.relationshipStatus,
-            data.requestDirection,
+            effectiveStatus,
+            effectiveDirection,
       );
 
       // Bug 7 fix: Only show alias (displayNameFinal) for friends.
       // For non-friends, always show the original displayName to prevent
       // stale alias data from appearing for strangers.
       const effectiveName =
-            data.relationshipStatus === 'FRIEND'
+            effectiveStatus === 'FRIEND'
                   ? (data.displayNameFinal || data.displayName)
                   : data.displayName;
 
       const tagColor =
-            data.relationshipStatus === 'FRIEND'
+            effectiveStatus === 'FRIEND'
                   ? 'green'
-                  : data.relationshipStatus === 'REQUEST'
+                  : effectiveStatus === 'REQUEST'
                         ? 'orange'
-                        : data.relationshipStatus === 'BLOCKED'
+                        : effectiveStatus === 'BLOCKED'
                               ? 'red'
                               : 'default';
 
@@ -111,7 +134,7 @@ export function ContactResult({
                                     }}
                               />
                         )}
-                        {data.relationshipStatus === 'NONE' && (
+                        {effectiveStatus === 'NONE' && (
                               <Button
                                     type="text"
                                     size="small"
@@ -124,7 +147,7 @@ export function ContactResult({
                                     }}
                               />
                         )}
-                        {data.relationshipStatus === 'REQUEST' && data.requestDirection === 'OUTGOING' && data.pendingRequestId && (
+                        {effectiveStatus === 'REQUEST' && effectiveDirection === 'OUTGOING' && effectivePendingId && (
                               <Button
                                     type="text"
                                     size="small"
@@ -133,11 +156,11 @@ export function ContactResult({
                                     title={t('search.contactResult.cancelRequest')}
                                     onClick={(e) => {
                                           e.stopPropagation();
-                                          onCancelRequest?.(data.pendingRequestId!, data.id);
+                                          onCancelRequest?.(effectivePendingId, data.id);
                                     }}
                               />
                         )}
-                        {data.relationshipStatus === 'REQUEST' && data.requestDirection === 'INCOMING' && data.pendingRequestId && (
+                        {effectiveStatus === 'REQUEST' && effectiveDirection === 'INCOMING' && effectivePendingId && (
                               <Button
                                     type="text"
                                     size="small"
@@ -146,7 +169,8 @@ export function ContactResult({
                                     title={t('search.contactResult.acceptRequest')}
                                     onClick={(e) => {
                                           e.stopPropagation();
-                                          onAcceptRequest?.(data.pendingRequestId!, data.id);
+                                          console.log("effectivePendingId, data.id", effectivePendingId, data.id)
+                                          onAcceptRequest?.(effectivePendingId, data.id);
                                     }}
                               />
                         )}

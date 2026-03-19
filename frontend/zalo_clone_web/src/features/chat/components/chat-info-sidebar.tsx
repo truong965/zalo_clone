@@ -56,12 +56,16 @@ export function ChatInfoSidebar({
                               conversation={conversation}
                               conversationId={conversationId}
                               currentUserId={currentUserId}
-                              onClose={onClose}
+                              onCloseSidebar={onClose}
                               onLeaveGroup={onLeaveGroup}
                               onOpenMediaBrowser={onOpenMediaBrowser}
                         />
                   ) : (
-                        <DirectInfoContent conversation={conversation} onOpenMediaBrowser={onOpenMediaBrowser} onClose={onClose} />
+                        <DirectInfoContent
+                              conversation={conversation}
+                              onOpenMediaBrowser={onOpenMediaBrowser}
+                              onCloseSidebar={onClose}
+                        />
                   )}
             </div>
       );

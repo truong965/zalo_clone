@@ -6,6 +6,7 @@
  */
 import { useEffect, useCallback, useRef } from 'react';
 import { useSocket } from '@/hooks/use-socket';
+import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
 import type { Conversation } from '@/types/api';
 
@@ -19,14 +20,6 @@ type GroupYouWereRemovedPayload = { conversationId: string; removedBy: string };
 type GroupMemberJoinedPayload = { conversationId: string; userId: string };
 type GroupAdminTransferredPayload = { conversationId: string; oldAdminId: string; newAdminId: string };
 type GroupJoinRequestReceivedPayload = { conversationId: string; requestId: string; userId: string };
-
-/**
- * Socket ack response type.
- * WsTransformInterceptor wraps handler return as { success, data: T }.
- * Error responses carry { error: string }.
- */
-type WsWrapped<T> = { success: boolean; data: T };
-type SocketAck<T> = WsWrapped<T> | { error: string };
 
 interface ConversationSocketHandlers {
       onConversationCreated?: (conversation: Conversation) => void;
@@ -171,23 +164,8 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
             avatarUrl?: string;
             requireApproval?: boolean;
       }) => {
-            if (!socket) return;
-
-            return new Promise<{ group: Conversation }>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_CREATE,
-                        dto,
-                        (response: SocketAck<{ group: Conversation }>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    // Unwrap WsTransformInterceptor envelope
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<{ group: Conversation }>(SocketEvents.GROUP_CREATE, dto);
+      }, []);
 
       // Emit: Update Group
       const updateGroup = useCallback((conversationId: string, updates: {
@@ -195,176 +173,54 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
             avatarUrl?: string;
             requireApproval?: boolean;
       }) => {
-            if (!socket) return;
-
-            return new Promise<{ updated: unknown }>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_UPDATE,
-                        { conversationId, updates },
-                        (response: SocketAck<{ updated: unknown }>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    // Unwrap WsTransformInterceptor envelope
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<{ updated: unknown }>(SocketEvents.GROUP_UPDATE, { conversationId, updates });
+      }, []);
 
       // Emit: Leave Group
       const leaveGroup = useCallback((conversationId: string) => {
-            if (!socket) return;
-
-            return new Promise<boolean>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_LEAVE,
-                        { conversationId },
-                        (response: SocketAck<boolean>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    // Unwrap WsTransformInterceptor envelope
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_LEAVE, { conversationId });
+      }, []);
 
       // Emit: Add Members to Group
       const addMembers = useCallback((conversationId: string, userIds: string[]) => {
-            if (!socket) return;
-
-            return new Promise<{ addedMemberIds: string[] }>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_ADD_MEMBERS,
-                        { conversationId, userIds },
-                        (response: SocketAck<{ addedMemberIds: string[] }>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<{ addedMemberIds: string[] }>(SocketEvents.GROUP_ADD_MEMBERS, { conversationId, userIds });
+      }, []);
 
       // Emit: Remove Member from Group
       const removeMember = useCallback((conversationId: string, userId: string) => {
-            if (!socket) return;
-
-            return new Promise<boolean>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_REMOVE_MEMBER,
-                        { conversationId, userId },
-                        (response: SocketAck<boolean>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_REMOVE_MEMBER, { conversationId, userId });
+      }, []);
 
       // Emit: Transfer Admin
       const transferAdmin = useCallback((conversationId: string, newAdminId: string) => {
-            if (!socket) return;
-
-            return new Promise<boolean>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_TRANSFER_ADMIN,
-                        { conversationId, newAdminId },
-                        (response: SocketAck<boolean>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_TRANSFER_ADMIN, { conversationId, newAdminId });
+      }, []);
 
       // Emit: Dissolve Group
       const dissolveGroup = useCallback((conversationId: string) => {
-            if (!socket) return;
-
-            return new Promise<boolean>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_DISSOLVE,
-                        { conversationId },
-                        (response: SocketAck<boolean>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_DISSOLVE, { conversationId });
+      }, []);
 
       // Emit: Get Pending Join Requests
       const getPendingRequests = useCallback((conversationId: string) => {
-            if (!socket) return;
-
-            return new Promise<unknown[]>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_GET_PENDING,
-                        { conversationId },
-                        (response: SocketAck<unknown[]>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<unknown[]>(SocketEvents.GROUP_GET_PENDING, { conversationId });
+      }, []);
 
       // Emit: Review Join Request
       const reviewJoinRequest = useCallback((requestId: string, approve: boolean) => {
-            if (!socket) return;
-
-            return new Promise<{ success: boolean; status?: string; alreadyMember?: boolean; message?: string }>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_REVIEW_JOIN,
-                        { requestId, approve },
-                        (response: SocketAck<{ success: boolean; status?: string; alreadyMember?: boolean; message?: string }>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<{ success: boolean; status?: string; alreadyMember?: boolean; message?: string }>(
+                  SocketEvents.GROUP_REVIEW_JOIN,
+                  { requestId, approve }
+            );
+      }, []);
 
       // Emit: Invite Members (non-admin with requireApproval → creates join requests)
       const inviteMembers = useCallback((conversationId: string, userIds: string[]) => {
-            if (!socket) return;
-
-            return new Promise<{ result: { invitedCount: number; skippedCount: number } }>((resolve, reject) => {
-                  socket.emit(
-                        SocketEvents.GROUP_INVITE_MEMBERS,
-                        { conversationId, userIds },
-                        (response: SocketAck<{ result: { invitedCount: number; skippedCount: number } }>) => {
-                              if ('error' in response) {
-                                    reject(new Error(response.error));
-                              } else {
-                                    resolve(response.data);
-                              }
-                        }
-                  );
-            });
-      }, [socket]);
+            return socketManager.emitWithAck<{ result: { invitedCount: number; skippedCount: number } }>(
+                  SocketEvents.GROUP_INVITE_MEMBERS,
+                  { conversationId, userIds }
+            );
+      }, []);
 
       return {
             isConnected,

@@ -30,12 +30,8 @@ export function GroupSettingsSection({
       const { t } = useTranslation();
       if (!isAdmin) return null;
 
-      const handleToggleApproval = async (checked: boolean) => {
-            try {
-                  await onToggleApproval(checked);
-            } catch {
-                  // Error notification handled by use-group-notifications
-            }
+      const handleToggleApproval = (checked: boolean) => {
+            return onToggleApproval(checked);
       };
 
       const handleDissolve = () => {

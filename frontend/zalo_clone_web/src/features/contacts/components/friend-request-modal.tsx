@@ -19,9 +19,10 @@ interface FriendRequestModalProps {
             avatarUrl?: string;
       } | null;
       onClose: () => void;
+      onAfterSend?: () => void;
 }
 
-export function FriendRequestModal({ visible, target, onClose }: FriendRequestModalProps) {
+export function FriendRequestModal({ visible, target, onClose, onAfterSend }: FriendRequestModalProps) {
       const { t } = useTranslation();
       const sendRequest = useSendFriendRequest();
 
@@ -33,11 +34,21 @@ export function FriendRequestModal({ visible, target, onClose }: FriendRequestMo
                               message: t('contacts.friendRequest.sendSuccess'),
                               description: t('contacts.friendRequest.sendSuccessDesc', { name: target.displayName }),
                         });
+                        onAfterSend?.();
                         onClose();
                   },
                   onError: (error: unknown) => {
-                        const msg = ApiError.from(error).message || t('contacts.friendRequest.sendError');
-                        notification.error({ message: msg });
+                        const apiErr = ApiError.from(error);
+                        if (apiErr.status === 409) {
+                              notification.warning({
+                                    message: t('contacts.search.duplicateTitle', 'Lưu ý'),
+                                    description: apiErr.message || t('contacts.search.duplicateDesc', 'Bạn đã là bạn bè hoặc đang có lời mời chờ xử lý'),
+                              });
+                        } else {
+                              const msg = apiErr.message || t('contacts.friendRequest.sendError');
+                              notification.error({ message: msg });
+                        }
+                        onClose();
                   },
             });
       };

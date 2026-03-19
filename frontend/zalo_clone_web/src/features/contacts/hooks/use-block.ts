@@ -65,7 +65,6 @@ export function useBlockUser() {
                   void queryClient.invalidateQueries({ queryKey: blockKeys.all });
                   notification.success({
                         message: 'Đã chặn người dùng',
-                        description: 'Người dùng đã bị chặn thành công.',
                   });
             },
             onError: (error) => {

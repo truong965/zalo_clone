@@ -681,7 +681,8 @@
         "understood": "Understood",
         "cannotLeaveTitle": "Cannot leave group",
         "soloAdminContent": "You are the only member in the group. Please dissolve the group if you no longer need it.",
-        "adminContent": "You are the group admin. Please transfer admin rights to another member before leaving."
+        "adminContent": "You are the group admin. Please transfer admin rights to another member before leaving.",
+        "leaveErrorTitle": "Failed to leave group"
       },
       "joinRequests": {
         "title": "Join requests"

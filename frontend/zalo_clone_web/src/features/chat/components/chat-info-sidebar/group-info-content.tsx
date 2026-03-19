@@ -52,7 +52,7 @@ interface GroupInfoContentProps {
       conversation: ConversationUI;
       conversationId: string;
       currentUserId: string;
-      onClose: () => void;
+      onCloseSidebar: () => void;
       /** Called when user leaves/is kicked from group, to navigate away */
       onLeaveGroup?: () => void;
       /** Called when user clicks "Xem tất cả" to open media browser */
@@ -63,7 +63,7 @@ export function GroupInfoContent({
       conversation,
       conversationId,
       currentUserId,
-      onClose,
+      onCloseSidebar,
       onLeaveGroup,
       onOpenMediaBrowser,
 }: GroupInfoContentProps) {
@@ -82,7 +82,7 @@ export function GroupInfoContent({
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
 
-      const [previewItems, setPreviewItems] = useState<typeof recentMedia>([]);
+      const [previewItems, setPreviewItems] = useState<any[]>([]);
       const [previewIndex, setPreviewIndex] = useState(-1);
 
       // async-parallel: two independent queries run in parallel
@@ -123,28 +123,26 @@ export function GroupInfoContent({
             onGroupYouWereRemoved: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              // Notification handled by use-group-notifications
-                              onClose();
-                              onLeaveGroup?.();
+                               onCloseSidebar();
+                               onLeaveGroup?.();
                         }
                   },
-                  [conversationId, onClose, onLeaveGroup],
+                  [conversationId, onCloseSidebar, onLeaveGroup],
             ),
             onGroupDissolved: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              // Notification handled by use-group-notifications
-                              onClose();
-                              onLeaveGroup?.();
+                               onCloseSidebar();
+                               onLeaveGroup?.();
                         }
                   },
-                  [conversationId, onClose, onLeaveGroup],
+                  [conversationId, onCloseSidebar, onLeaveGroup],
             ),
             // Realtime member updates → invalidate queries
             onGroupMembersAdded: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateMembers(conversationId);
+                               invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -152,7 +150,7 @@ export function GroupInfoContent({
             onGroupMemberRemoved: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateMembers(conversationId);
+                               invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -160,7 +158,7 @@ export function GroupInfoContent({
             onGroupMemberLeft: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateMembers(conversationId);
+                               invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -168,7 +166,7 @@ export function GroupInfoContent({
             onGroupUpdated: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateDetail(conversationId);
+                               invalidateDetail(conversationId);
                         }
                   },
                   [conversationId, invalidateDetail],
@@ -176,7 +174,7 @@ export function GroupInfoContent({
             onGroupMemberJoined: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateMembers(conversationId);
+                               invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -185,8 +183,8 @@ export function GroupInfoContent({
             onGroupAdminTransferred: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateMembers(conversationId);
-                              invalidateDetail(conversationId);
+                               invalidateMembers(conversationId);
+                               invalidateDetail(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers, invalidateDetail],
@@ -195,7 +193,7 @@ export function GroupInfoContent({
             onGroupJoinRequestReceived: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              setJoinRequestRefreshTrigger((n) => n + 1);
+                               setJoinRequestRefreshTrigger((n) => n + 1);
                         }
                   },
                   [conversationId],
@@ -237,20 +235,18 @@ export function GroupInfoContent({
                   await updateGroup(conversationId, { avatarUrl: avatarUrl });
                   invalidateDetail(conversationId);
                   notification.success({ message: 'Cập nhật ảnh đại diện nhóm thành công' });
-            } catch {
-                  notification.error({ message: 'Không thể tải ảnh lên' });
+            } catch (error: any) {
+                  // Only show manual error if not a socket rejection (already handled globally)
+                  if (error.name !== 'Error' || !error.message.includes('socket')) {
+                        notification.error({ message: error.message || 'Không thể tải ảnh lên' });
+                  }
             }
       }, [conversationId, invalidateDetail, updateGroup]);
 
       const handleAddMembers = async (userIds: string[]) => {
             // If non-admin and group requires approval → invite via GroupJoinRequest
             if (!isAdmin && conversation.requireApproval) {
-                  try {
-                        await inviteMembers(conversationId, userIds);
-                        // Notification handled by use-group-notifications
-                  } catch {
-                        // Error notification handled by use-group-notifications
-                  }
+                  await inviteMembers(conversationId, userIds);
                   return;
             }
             await addMembers(conversationId, userIds);
@@ -266,15 +262,9 @@ export function GroupInfoContent({
                   okText: t('chat.infoSidebar.remove'),
                   okType: 'danger',
                   cancelText: t('chat.infoSidebar.blockConfirmCancel'),
-                  onOk: async () => {
-                        try {
-                              await removeMember(conversationId, userId);
-                              invalidateMembers(conversationId);
-                              // Notification handled by use-group-notifications
-                        } catch {
-                              // Error notification handled by use-group-notifications
-                        }
-                  },
+                  onOk: () => removeMember(conversationId, userId).then(() => {
+                        invalidateMembers(conversationId);
+                  }).catch(() => {}), // catch error to close modal even if notify error occurred
             });
       };
 
@@ -296,21 +286,23 @@ export function GroupInfoContent({
       const handleDissolveGroup = async () => {
             try {
                   await dissolveGroup(conversationId);
-                  onClose();
+            } finally {
+                  // Always close even if it failed, as user clicked dissolve and error is already notified
+                  onCloseSidebar();
                   onLeaveGroup?.();
                   void invalidateAll();
-            } catch {
-                  // Error notification handled by use-group-notifications
             }
       };
 
       const handleLeaveGroup = async () => {
-            await leaveGroup(conversationId);
-            // Clear selection and close sidebar FIRST to prevent stale API calls,
-            // then invalidate queries in the background
-            onClose();
-            onLeaveGroup?.();
-            void invalidateAll();
+            try {
+                  await leaveGroup(conversationId);
+            } finally {
+                  // Clear selection and close sidebar even on failure (error notified by socket manager)
+                  onCloseSidebar();
+                  onLeaveGroup?.();
+                  void invalidateAll();
+            }
       };
 
       // Shared media collapse items
@@ -514,7 +506,7 @@ export function GroupInfoContent({
                               onLeaveGroup={handleLeaveGroup}
                               onArchiveConversation={() => {
                                     toggleArchive(conversationId, !!conversation.isArchived);
-                                    onClose();
+                                    onCloseSidebar();
                               }}
                         />
                   </div>
