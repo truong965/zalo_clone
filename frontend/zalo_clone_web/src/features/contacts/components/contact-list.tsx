@@ -33,17 +33,17 @@ import {
 import {
       SearchOutlined,
       MoreOutlined,
-      MessageOutlined,
       EditOutlined,
       DeleteOutlined,
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useContactsList, useRemoveContact } from '../hooks/use-contacts-list';
 import { FriendCard } from './friend-card';
 import { AliasEditModal } from './alias-edit-modal';
 import type { ContactResponseDto } from '../types/contact.types';
-import { conversationService } from '@/features/conversation';
+import { conversationApi } from '@/features/conversation';
+import { handleInteractionError } from '@/utils/interaction-error';
+import { useQueryClient } from '@tanstack/react-query';
 
 const { Text } = Typography;
 
@@ -53,9 +53,13 @@ const ITEM_HEIGHT = 92;
 // ContactList
 // ============================================================================
 
-export function ContactList() {
+export function ContactList({
+      onNavigateToConversation
+}: {
+      onNavigateToConversation?: (conversationId: string) => void;
+}) {
       const { t } = useTranslation();
-      const navigate = useNavigate();
+      const queryClient = useQueryClient();
 
       // ── Search ─────────────────────────────────────────────────────────────────
       const [search, setSearch] = useState('');
@@ -108,18 +112,28 @@ export function ContactList() {
       // ── Message navigation ─────────────────────────────────────────────────────
       const [navigatingId, setNavigatingId] = useState<string | null>(null);
 
-      const handleMessage = useCallback(async (contactUserId: string) => {
+      const handleMessage = useCallback(async (contact: ContactResponseDto) => {
             if (navigatingId) return;
-            setNavigatingId(contactUserId);
+            setNavigatingId(contact.contactUserId);
             try {
-                  const conv = await conversationService.getOrCreateDirectConversation(contactUserId);
-                  navigate(`/chat/${conv.id}`);
-            } catch {
-                  // Error handled by axios interceptor (network/auth errors)
+                  const conv = await conversationApi.getOrCreateDirectConversation(contact.contactUserId);
+                  await queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                  if (onNavigateToConversation) {
+                        onNavigateToConversation(conv.id);
+                  }
+            } catch (error) {
+                  handleInteractionError(error, {
+                        target: {
+                              userId: contact.contactUserId,
+                              displayName: contact.displayName,
+                              avatarUrl: contact.avatarUrl ?? undefined,
+                        },
+                  });
+
             } finally {
                   setNavigatingId(null);
             }
-      }, [navigate, navigatingId]);
+      }, [navigatingId, onNavigateToConversation, queryClient]);
 
       // ── Render ─────────────────────────────────────────────────────────────────
       return (
@@ -184,7 +198,7 @@ export function ContactList() {
                                                             <ContactItem
                                                                   contact={contact}
                                                                   loading={navigatingId === contact.contactUserId}
-                                                                  onMessage={() => void handleMessage(contact.contactUserId)}
+                                                                  onMessage={() => void handleMessage(contact)}
                                                                   onSetAlias={() => setSelectedForAlias(contact)}
                                                             />
                                                       )}
@@ -228,12 +242,6 @@ function ContactItem({
 
       const menuItems = useMemo(() => [
             {
-                  key: 'message',
-                  label: loading ? t('contacts.contactList.menu.opening') : t('contacts.contactList.menu.message'),
-                  icon: <MessageOutlined />,
-                  disabled: loading,
-            },
-            {
                   key: 'set-alias',
                   label: contact.aliasName ? t('contacts.contactList.menu.changeAlias') : t('contacts.contactList.menu.setAlias'),
                   icon: <EditOutlined />,
@@ -247,7 +255,6 @@ function ContactItem({
       ], [contact.aliasName, loading, t]);
 
       const handleMenuClick = useCallback(({ key }: { key: string }) => {
-            if (key === 'message') onMessage();
             if (key === 'set-alias') onSetAlias();
             if (key === 'remove') setRemoveConfirmOpen(true);
       }, [onMessage, onSetAlias]);

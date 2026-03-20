@@ -48,7 +48,6 @@ async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> 
             swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
                   scope: '/',
             });
-            console.log('[fcm] Service Worker registered:', swRegistration.scope);
             return swRegistration;
       } catch (error) {
             console.error('[fcm] Service Worker registration failed:', error);

@@ -15,6 +15,7 @@ import {
       useQuery,
       useMutation,
       useQueryClient,
+      type UseMutationOptions,
 } from '@tanstack/react-query';
 import {
       getStatsOverview,
@@ -41,6 +42,9 @@ import type {
       UserListQuery,
       CallListQuery,
       ConversationListQuery,
+      ActionResponse,
+      AdminRole,
+      UpdateRoleDto,
 } from '../types';
 
 // ============================================================================
@@ -147,13 +151,17 @@ export function useAdminUserDetail(id: string | null) {
 /**
  * Suspend user mutation. Invalidates user list + detail + activity on success.
  */
-export function useSuspendUser() {
+export function useSuspendUser(
+      options?: UseMutationOptions<ActionResponse, any, string, any>
+) {
       const qc = useQueryClient();
       return useMutation({
+            ...options,
             mutationFn: suspendUser,
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void qc.invalidateQueries({ queryKey: adminKeys.users() });
                   void qc.invalidateQueries({ queryKey: adminKeys.activitySuspended() });
+                  options?.onSuccess?.(...args);
             },
       });
 }
@@ -161,13 +169,17 @@ export function useSuspendUser() {
 /**
  * Activate user mutation. Invalidates user list + activity on success.
  */
-export function useActivateUser() {
+export function useActivateUser(
+      options?: UseMutationOptions<ActionResponse, any, string, any>
+) {
       const qc = useQueryClient();
       return useMutation({
+            ...options,
             mutationFn: activateUser,
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void qc.invalidateQueries({ queryKey: adminKeys.users() });
                   void qc.invalidateQueries({ queryKey: adminKeys.activitySuspended() });
+                  options?.onSuccess?.(...args);
             },
       });
 }
@@ -175,15 +187,19 @@ export function useActivateUser() {
 /**
  * Force logout mutation. Invalidates user detail (sessions change).
  */
-export function useForceLogoutUser() {
+export function useForceLogoutUser(
+      options?: UseMutationOptions<ActionResponse, any, string, any>
+) {
       const qc = useQueryClient();
       return useMutation({
+            ...options,
             mutationFn: forceLogoutUser,
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void qc.invalidateQueries({ queryKey: adminKeys.users() });
                   void qc.invalidateQueries({
                         queryKey: adminKeys.activityMultiDevice(),
                   });
+                  options?.onSuccess?.(...args);
             },
       });
 }
@@ -302,12 +318,16 @@ export function useAdminRoles(params?: { current?: number; pageSize?: number }) 
 /**
  * Create role mutation.
  */
-export function useCreateRole() {
+export function useCreateRole(
+      options?: UseMutationOptions<AdminRole, any, any, any>
+) {
       const qc = useQueryClient();
       return useMutation({
+            ...options,
             mutationFn: createRole,
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void qc.invalidateQueries({ queryKey: adminKeys.roles() });
+                  options?.onSuccess?.(...args);
             },
       });
 }
@@ -315,12 +335,16 @@ export function useCreateRole() {
 /**
  * Update role mutation.
  */
-export function useUpdateRole() {
+export function useUpdateRole(
+      options?: UseMutationOptions<AdminRole, any, UpdateRoleDto & { id: string }, any>
+) {
       const qc = useQueryClient();
       return useMutation({
+            ...options,
             mutationFn: updateRole,
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void qc.invalidateQueries({ queryKey: adminKeys.roles() });
+                  options?.onSuccess?.(...args);
             },
       });
 }
@@ -328,12 +352,16 @@ export function useUpdateRole() {
 /**
  * Delete role mutation.
  */
-export function useDeleteRole() {
+export function useDeleteRole(
+      options?: UseMutationOptions<ActionResponse, any, string, any>
+) {
       const qc = useQueryClient();
       return useMutation({
+            ...options,
             mutationFn: deleteRole,
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void qc.invalidateQueries({ queryKey: adminKeys.roles() });
+                  options?.onSuccess?.(...args);
             },
       });
 }

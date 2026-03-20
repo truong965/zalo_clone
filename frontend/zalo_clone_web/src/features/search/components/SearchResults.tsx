@@ -19,7 +19,7 @@
 
 import { Tabs, Typography, Button } from 'antd';
 import { RightOutlined } from '@ant-design/icons';
-import type { SearchTab, GlobalSearchResults, ConversationMessageGroup, ContactSearchResult, GroupSearchResult, MediaSearchResult } from '../types';
+import type { SearchTab, GlobalSearchResults, ConversationMessageGroup, ContactSearchResult, GroupSearchResult, MediaSearchResult, RelationshipStatus } from '../types';
 import { ConversationSearchResult } from './ConversationSearchResult';
 import { ContactResult } from './ContactResult';
 import { GroupResult } from './GroupResult';
@@ -58,7 +58,12 @@ interface SearchResultsProps {
       /** Called when a conversation message group is clicked */
       onConversationMessageClick?: (data: ConversationMessageGroup) => void;
       /** Called when a contact result is clicked */
-      onContactClick?: (result: ContactSearchResult) => void;
+      onContactClick?: (
+            result: ContactSearchResult,
+            effectiveStatus: RelationshipStatus,
+            effectiveDirection?: 'OUTGOING' | 'INCOMING' | null,
+            effectivePendingId?: string | null,
+      ) => void;
       /** Called when a group result is clicked */
       onGroupClick?: (result: GroupSearchResult) => void;
       /** Called when a media result is clicked */
@@ -110,6 +115,7 @@ export function SearchResults({
             { key: 'contacts' as SearchTab, label: results?.contacts.length ? `${t('search.tabContacts')} (${results.contacts.length})` : t('search.tabContacts') },
             { key: 'groups' as SearchTab, label: results?.groups.length ? `${t('search.tabGroups')} (${results.groups.length})` : t('search.tabGroups') },
             { key: 'media' as SearchTab, label: results?.media.length ? `${t('search.tabMedia')} (${results.media.length})` : t('search.tabMedia') },
+            { key: '__spacer__', label: '', disabled: true },
       ];
 
       return (
@@ -121,7 +127,7 @@ export function SearchResults({
                         items={tabItems}
                         size="small"
                         className="search-tabs"
-                        tabBarStyle={{ marginBottom: 0, paddingInline: 12 }}
+                        tabBarStyle={{ marginBottom: 0, paddingInline: 12, paddingBottom: 8 }}
                   />
 
                   {/* Results Area */}
@@ -170,7 +176,9 @@ export function SearchResults({
                                                             <ContactResult
                                                                   key={c.id}
                                                                   data={c}
-                                                                  onClick={onContactClick}
+                                                                  onClick={(result, effectiveStatus, effectiveDirection, effectivePendingId) =>
+                                                                        onContactClick?.(result, effectiveStatus, effectiveDirection, effectivePendingId)
+                                                                  }
                                                                   onSendMessage={onSendMessage}
                                                                   onAddFriend={onAddFriend}
                                                                   onAcceptRequest={onAcceptRequest}
@@ -233,7 +241,9 @@ export function SearchResults({
                                                       <ContactResult
                                                             key={c.id}
                                                             data={c}
-                                                            onClick={onContactClick}
+                                                            onClick={(result, effectiveStatus, effectiveDirection, effectivePendingId) =>
+                                                                  onContactClick?.(result, effectiveStatus, effectiveDirection, effectivePendingId)
+                                                            }
                                                             onSendMessage={onSendMessage}
                                                             onAddFriend={onAddFriend}
                                                             onAcceptRequest={onAcceptRequest}

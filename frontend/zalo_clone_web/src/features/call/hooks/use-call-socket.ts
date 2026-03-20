@@ -17,6 +17,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useSocket } from '@/hooks/use-socket';
+import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
 import { useCallStore } from '../stores/call.store';
 
@@ -229,83 +230,81 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
       // ── Emit functions (client → server) ────────────────────────────────
 
       const emitInitiateCall = useCallback(
-            (payload: InitiateCallRequest) => {
-                  // Use Socket.IO acknowledgment to receive callId from server
-                  socket?.emit(
-                        SocketEvents.CALL_INITIATE,
-                        payload,
-                        (ack: { callId?: string; error?: string }) => {
-                              if (ack?.callId) {
-                                    dbg('emitInitiateCall ACK success', { callId: ack.callId });
-                                    useCallStore.getState().setCallId(ack.callId);
-                              } else if (ack?.error) {
-                                    dbg('emitInitiateCall ACK ERROR', ack.error);
-                                    useCallStore.getState().setError(ack.error);
-                                    useCallStore.getState().resetCallState();
-                              } else {
-                                    dbg('emitInitiateCall ACK: no callId or error', ack);
-                              }
-                        },
-                  );
+            async (payload: InitiateCallRequest, options?: { skipGlobalError?: boolean }) => {
+                  try {
+                        const ack = await socketManager.emitWithAck<{ callId?: string }>(
+                              SocketEvents.CALL_INITIATE,
+                              payload,
+                              options
+                        );
+                        if (ack?.callId) {
+                              dbg('emitInitiateCall ACK success', { callId: ack.callId });
+                              useCallStore.getState().setCallId(ack.callId);
+                        }
+                  } catch (err: any) {
+                        dbg('emitInitiateCall ERROR', err.message);
+                        useCallStore.getState().setError(err.message);
+                        useCallStore.getState().resetCallState();
+                  }
             },
-            [socket],
+            [],
       );
 
       const emitAcceptCall = useCallback(
-            (payload: CallIdRequest) => {
-                  socket?.emit(SocketEvents.CALL_ACCEPT, payload);
+            (payload: CallIdRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_ACCEPT, payload, options);
             },
-            [socket],
+            [],
       );
 
       const emitRejectCall = useCallback(
-            (payload: CallIdRequest) => {
-                  socket?.emit(SocketEvents.CALL_REJECT, payload);
+            (payload: CallIdRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_REJECT, payload, options);
             },
-            [socket],
+            [],
       );
 
       const emitHangup = useCallback(
-            (payload: CallIdRequest) => {
-                  socket?.emit(SocketEvents.CALL_HANGUP, payload);
+            (payload: CallIdRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_HANGUP, payload, options);
             },
-            [socket],
+            [],
       );
 
       const emitOffer = useCallback(
-            (payload: SdpRequest) => {
-                  socket?.emit(SocketEvents.CALL_OFFER, payload);
+            (payload: SdpRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_OFFER, payload, options);
             },
-            [socket],
+            [],
       );
 
       const emitAnswer = useCallback(
-            (payload: SdpRequest) => {
-                  socket?.emit(SocketEvents.CALL_ANSWER, payload);
+            (payload: SdpRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_ANSWER, payload, options);
             },
-            [socket],
+            [],
       );
 
       const emitIceCandidate = useCallback(
-            (payload: IceCandidateRequest) => {
-                  socket?.emit(SocketEvents.CALL_ICE_CANDIDATE, payload);
+            (payload: IceCandidateRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_ICE_CANDIDATE, payload, options);
             },
-            [socket],
+            [],
       );
 
       const emitIceRestart = useCallback(
-            (payload: CallIdRequest) => {
-                  socket?.emit(SocketEvents.CALL_ICE_RESTART, payload);
+            (payload: CallIdRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_ICE_RESTART, payload, options);
             },
-            [socket],
+            [],
       );
 
       /** Phase 4: Request switch from P2P to Daily.co SFU */
       const emitSwitchToDaily = useCallback(
-            (payload: CallIdRequest) => {
-                  socket?.emit(SocketEvents.CALL_SWITCH_TO_DAILY, payload);
+            (payload: CallIdRequest, options?: { skipGlobalError?: boolean }) => {
+                  return socketManager.emitWithAck<void>(SocketEvents.CALL_SWITCH_TO_DAILY, payload, options);
             },
-            [socket],
+            [],
       );
 
       return {

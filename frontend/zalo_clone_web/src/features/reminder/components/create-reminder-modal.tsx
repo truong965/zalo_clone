@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Input, DatePicker, message } from 'antd';
+import { Modal, Input, DatePicker, notification, message } from 'antd';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import type { CreateReminderParams } from '@/types/api';
@@ -66,9 +66,9 @@ export function CreateReminderModal({
                   setContent('');
                   setRemindAt(null);
                   onClose();
-                  void message.success(t('reminder.createModal.createSuccess'));
+                  notification.success({ message: t('reminder.createModal.createSuccess') });
             } catch {
-                  void message.error(t('reminder.createModal.createError'));
+                  // Error is handled globally by QueryClient
             }
       };
 

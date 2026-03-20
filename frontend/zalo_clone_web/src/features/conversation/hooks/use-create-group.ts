@@ -98,11 +98,14 @@ export function useCreateGroup() {
                   // 2. Emit socket group:create (with 15s timeout)
                   const SOCKET_TIMEOUT_MS = 15_000;
 
-                  const emitPromise = createGroup?.({
-                        name: sanitizedName,
-                        memberIds: selectedIds,
-                        avatarUrl,
-                  });
+                  const emitPromise = createGroup?.(
+                        {
+                              name: sanitizedName,
+                              memberIds: selectedIds,
+                              avatarUrl,
+                        },
+                        { skipGlobalError: true }
+                  );
 
                   if (!emitPromise) {
                         throw new Error('Socket not connected');

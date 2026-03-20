@@ -39,7 +39,6 @@ import { GroupJoinRequests } from '@/features/conversation/components/group-info
 import { AddMembersModal } from '@/features/conversation/components/add-members-modal';
 import { TransferAdminModal } from '@/features/conversation/components/transfer-admin-modal';
 import { useSocket } from '@/hooks/use-socket';
-import { usePinConversation, useArchiveConversation, useMuteConversation } from '@/features/conversation';
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
 import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
@@ -52,6 +51,9 @@ interface GroupInfoContentProps {
       conversation: ConversationUI;
       conversationId: string;
       currentUserId: string;
+      onTogglePin: (conversationId: string, currentlyPinned: boolean) => void;
+      onToggleMute: (conversationId: string, currentlyMuted: boolean) => void;
+      onToggleArchive: (conversationId: string, currentlyArchived: boolean) => void;
       onCloseSidebar: () => void;
       /** Called when user leaves/is kicked from group, to navigate away */
       onLeaveGroup?: () => void;
@@ -63,6 +65,9 @@ export function GroupInfoContent({
       conversation,
       conversationId,
       currentUserId,
+      onTogglePin,
+      onToggleMute,
+      onToggleArchive,
       onCloseSidebar,
       onLeaveGroup,
       onOpenMediaBrowser,
@@ -75,9 +80,6 @@ export function GroupInfoContent({
       const { connectionNonce } = useSocket();
       const { invalidateMembers, invalidateDetail, invalidateAll } =
             useInvalidateConversations();
-      const { togglePin } = usePinConversation();
-      const { toggleArchive } = useArchiveConversation();
-      const { toggleMute } = useMuteConversation();
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversationId);
       const [showReminders, setShowReminders] = useState(false);
       const [showCreateReminder, setShowCreateReminder] = useState(false);
@@ -123,8 +125,8 @@ export function GroupInfoContent({
             onGroupYouWereRemoved: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               onCloseSidebar();
-                               onLeaveGroup?.();
+                              onCloseSidebar();
+                              onLeaveGroup?.();
                         }
                   },
                   [conversationId, onCloseSidebar, onLeaveGroup],
@@ -132,8 +134,8 @@ export function GroupInfoContent({
             onGroupDissolved: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               onCloseSidebar();
-                               onLeaveGroup?.();
+                              onCloseSidebar();
+                              onLeaveGroup?.();
                         }
                   },
                   [conversationId, onCloseSidebar, onLeaveGroup],
@@ -142,7 +144,7 @@ export function GroupInfoContent({
             onGroupMembersAdded: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               invalidateMembers(conversationId);
+                              invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -150,7 +152,7 @@ export function GroupInfoContent({
             onGroupMemberRemoved: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               invalidateMembers(conversationId);
+                              invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -158,7 +160,7 @@ export function GroupInfoContent({
             onGroupMemberLeft: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               invalidateMembers(conversationId);
+                              invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -166,7 +168,7 @@ export function GroupInfoContent({
             onGroupUpdated: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               invalidateDetail(conversationId);
+                              invalidateDetail(conversationId);
                         }
                   },
                   [conversationId, invalidateDetail],
@@ -174,7 +176,7 @@ export function GroupInfoContent({
             onGroupMemberJoined: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               invalidateMembers(conversationId);
+                              invalidateMembers(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers],
@@ -183,8 +185,8 @@ export function GroupInfoContent({
             onGroupAdminTransferred: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               invalidateMembers(conversationId);
-                               invalidateDetail(conversationId);
+                              invalidateMembers(conversationId);
+                              invalidateDetail(conversationId);
                         }
                   },
                   [conversationId, invalidateMembers, invalidateDetail],
@@ -193,7 +195,7 @@ export function GroupInfoContent({
             onGroupJoinRequestReceived: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                               setJoinRequestRefreshTrigger((n) => n + 1);
+                              setJoinRequestRefreshTrigger((n) => n + 1);
                         }
                   },
                   [conversationId],
@@ -264,7 +266,7 @@ export function GroupInfoContent({
                   cancelText: t('chat.infoSidebar.blockConfirmCancel'),
                   onOk: () => removeMember(conversationId, userId).then(() => {
                         invalidateMembers(conversationId);
-                  }).catch(() => {}), // catch error to close modal even if notify error occurred
+                  }).catch(() => { }), // catch error to close modal even if notify error occurred
             });
       };
 
@@ -410,8 +412,8 @@ export function GroupInfoContent({
                         onUpdateName={handleUpdateName}
                         onUpdateAvatar={handleUpdateGroupAvatar}
                         onAddMembers={() => setShowAddMembers(true)}
-                        onTogglePin={() => togglePin(conversation.id, !!conversation.isPinned)}
-                        onToggleMute={() => toggleMute(conversation.id, !!conversation.isMuted)}
+                        onTogglePin={() => onTogglePin(conversation.id, !!conversation.isPinned)}
+                        onToggleMute={() => onToggleMute(conversation.id, !!conversation.isMuted)}
                   />
 
                   {/* Scrollable Content */}
@@ -505,8 +507,7 @@ export function GroupInfoContent({
                               memberCount={members.length}
                               onLeaveGroup={handleLeaveGroup}
                               onArchiveConversation={() => {
-                                    toggleArchive(conversationId, !!conversation.isArchived);
-                                    onCloseSidebar();
+                                    onToggleArchive(conversationId, !!conversation.isArchived);
                               }}
                         />
                   </div>

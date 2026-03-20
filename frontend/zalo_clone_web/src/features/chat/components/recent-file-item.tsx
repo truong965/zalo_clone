@@ -88,7 +88,6 @@ const FileTypeIcon = memo(function FileTypeIcon({
       extension: string;
       mimeType?: string | null;
 }) {
-      console.log("extension+ minetype", extension, mimeType);
       const { icon: Icon, color, bg } = getFileIconConfig(extension, mimeType);
 
       return (
@@ -148,7 +147,6 @@ export const RecentFileItem = memo(function RecentFileItem({
       const handleItemClick = () => {
             if (viewable && cdnUrl) window.open(cdnUrl, '_blank');
       };
-      console.log("originalName: ", originalName);
       return (
 
             <div
@@ -177,8 +175,8 @@ export const RecentFileItem = memo(function RecentFileItem({
                         onClick={handleDownload}
                         disabled={downloading}
                         className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors opacity-0 group-hover:opacity-100 ${downloading
-                                    ? 'text-blue-400 bg-blue-50 opacity-100 cursor-not-allowed'
-                                    : 'text-gray-500 hover:text-blue-600 hover:bg-black/5'
+                              ? 'text-blue-400 bg-blue-50 opacity-100 cursor-not-allowed'
+                              : 'text-gray-500 hover:text-blue-600 hover:bg-black/5'
                               }`}
                         title={t('chat.infoSidebar.media')}
                   >

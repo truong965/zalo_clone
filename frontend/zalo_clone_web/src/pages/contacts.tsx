@@ -21,6 +21,8 @@ import { FriendList, FriendRequestList, useFriendshipStore, BlockedList, Contact
 import { GroupList } from '@/features/conversation';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
 import { useTranslation } from 'react-i18next';
+import { useChatStore } from '@/features/chat/stores/chat.store';
+import { useNavigate } from 'react-router-dom';
 
 const { Text } = Typography;
 
@@ -37,6 +39,13 @@ export function ContactsPage() {
   const [activeTab, setActiveTab] = useState<ContactTab>('friends');
   const pendingReceivedCount = useFriendshipStore((s) => s.pendingReceivedCount);
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const setSelectedId = useChatStore((s) => s.setSelectedId);
+
+  const handleNavigate = (id: string) => {
+    setSelectedId(id);
+    navigate('/chat');
+  };
 
   const tabs: TabConfig[] = [
     {
@@ -111,16 +120,16 @@ export function ContactsPage() {
         id={`tabpanel-${activeTab}`}
         aria-labelledby={`tab-${activeTab}`}
       >
-        {activeTab === 'friends' && <FriendList />}
+        {activeTab === 'friends' && <FriendList onNavigateToConversation={handleNavigate} />}
         {activeTab === 'requests' && <FriendRequestList />}
         {activeTab === 'contacts' && (
           <ErrorBoundary>
-            <ContactList />
+            <ContactList onNavigateToConversation={handleNavigate} />
           </ErrorBoundary>
         )}
         {activeTab === 'groups' && (
           <ErrorBoundary>
-            <GroupList />
+            <GroupList onNavigateToConversation={handleNavigate} />
           </ErrorBoundary>
         )}
         {activeTab === 'blocked' && (

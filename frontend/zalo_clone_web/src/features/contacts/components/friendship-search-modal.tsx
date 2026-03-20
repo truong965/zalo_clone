@@ -51,7 +51,9 @@ export function FriendshipSearchModal({
       const [showFriendRequestModal, setShowFriendRequestModal] = useState(false);
 
       // Mutation hooks for direct actions (Bug 7: no extra modal)
-      const sendRequest = useSendFriendRequest();
+      const sendRequest = useSendFriendRequest({
+            meta: { skipGlobalError: true },
+      });
       const cancelReq = useCancelRequest();
       const acceptReq = useAcceptRequest();
 
@@ -200,7 +202,6 @@ export function FriendshipSearchModal({
                         triggerSearch(normalizedInput);
                         onClose();
                   },
-                  onError: () => notification.error({ message: t('contacts.search.recallFail') }),
             });
       }, [contact, cancelReq, triggerSearch, normalizedInput]);
 
@@ -216,7 +217,6 @@ export function FriendshipSearchModal({
                         triggerSearch(normalizedInput);
                         onClose();
                   },
-                  onError: () => notification.error({ message: t('contacts.search.acceptFail') }),
             });
       }, [acceptReq, contact, triggerSearch, normalizedInput]);
 

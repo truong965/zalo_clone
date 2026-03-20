@@ -7,7 +7,6 @@
 import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { QueryKey } from '@tanstack/react-query';
-import { notification } from 'antd';
 import type { SendPayload } from '../components/chat-input';
 import { messageService } from '../api/message.api';
 import type { MessageListItem, MessageType, MediaProcessingStatus } from '@/types/api';
@@ -35,6 +34,8 @@ function buildOptimisticParentMessage(target: ReplyTarget) {
       };
 }
 
+import { handleInteractionError } from '@/utils/interaction-error';
+
 interface UseSendMessageParams {
       selectedId: string | null;
       currentUserId: string | null;
@@ -46,7 +47,6 @@ interface UseSendMessageParams {
 export function useSendMessage(params: UseSendMessageParams) {
       const { selectedId, currentUserId, messagesQueryKey, isMsgSocketConnected, emitSendMessage } = params;
       const queryClient = useQueryClient();
-      const [api] = notification.useNotification();
 
       const handleSendMessage = useCallback(async (payload: SendPayload) => {
             if (!selectedId) return;
@@ -157,7 +157,7 @@ export function useSendMessage(params: UseSendMessageParams) {
 
             try {
                   await messageService.sendMessage(sendDto);
-            } catch {
+            } catch (error: any) {
                   queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey, (prev) => {
                         if (!prev) return prev;
                         const pages = prev.pages.map((p) => ({
@@ -172,9 +172,9 @@ export function useSendMessage(params: UseSendMessageParams) {
                         }));
                         return { ...prev, pages };
                   });
-                  api.error({ message: 'Gửi tin nhắn thất bại', placement: 'topRight' });
+                  handleInteractionError(error);
             }
-      }, [selectedId, currentUserId, queryClient, messagesQueryKey, isMsgSocketConnected, emitSendMessage, api]);
+      }, [selectedId, currentUserId, queryClient, messagesQueryKey, isMsgSocketConnected, emitSendMessage]);
 
       const handleRetryMessage = useCallback(async (msg: MessageListItem) => {
             if (!selectedId) return;

@@ -19,6 +19,10 @@ interface ChatInfoSidebarProps {
       onClose: () => void;
       conversationId: string;
       currentUserId: string;
+      onTogglePin: (conversationId: string, currentlyPinned: boolean) => void;
+      onToggleMute: (conversationId: string, currentlyMuted: boolean) => void;
+      onToggleArchive: (conversationId: string, currentlyArchived: boolean) => void;
+      isArchiving: boolean;
       /** Called when user leaves/gets kicked → navigate away from conversation */
       onLeaveGroup?: () => void;
       /** Called when user clicks "Xem tất cả" in media panel → open media browser */
@@ -29,6 +33,10 @@ export function ChatInfoSidebar({
       onClose,
       conversationId,
       currentUserId,
+      onTogglePin,
+      onToggleMute,
+      onToggleArchive,
+      isArchiving,
       onLeaveGroup,
       onOpenMediaBrowser,
 }: ChatInfoSidebarProps) {
@@ -42,7 +50,7 @@ export function ChatInfoSidebar({
                   {/* Header */}
                   <div className="flex-none h-14 flex items-center justify-center border-b border-gray-100">
                         <Title level={5} className="m-0">
-                              {isGroup ? t('chat.infoSidebar.groupInfo') : t('chat.infoSidebar.directInfo')}
+                               {isGroup ? t('chat.infoSidebar.groupInfo') : t('chat.infoSidebar.directInfo')}
                         </Title>
                   </div>
 
@@ -56,6 +64,9 @@ export function ChatInfoSidebar({
                               conversation={conversation}
                               conversationId={conversationId}
                               currentUserId={currentUserId}
+                              onTogglePin={onTogglePin}
+                              onToggleMute={onToggleMute}
+                              onToggleArchive={onToggleArchive}
                               onCloseSidebar={onClose}
                               onLeaveGroup={onLeaveGroup}
                               onOpenMediaBrowser={onOpenMediaBrowser}
@@ -63,6 +74,10 @@ export function ChatInfoSidebar({
                   ) : (
                         <DirectInfoContent
                               conversation={conversation}
+                              onTogglePin={onTogglePin}
+                              onToggleMute={onToggleMute}
+                              onToggleArchive={onToggleArchive}
+                              isArchiving={isArchiving}
                               onOpenMediaBrowser={onOpenMediaBrowser}
                               onCloseSidebar={onClose}
                         />

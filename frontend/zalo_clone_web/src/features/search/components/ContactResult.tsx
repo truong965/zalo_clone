@@ -25,7 +25,12 @@ const { Text } = Typography;
 
 interface ContactResultProps {
       data: ContactSearchResult;
-      onClick?: (result: ContactSearchResult) => void;
+      onClick?: (
+            result: ContactSearchResult,
+            effectiveStatus: 'FRIEND' | 'REQUEST' | 'NONE' | 'BLOCKED',
+            effectiveDirection?: 'OUTGOING' | 'INCOMING' | null,
+            effectivePendingId?: string | null,
+      ) => void;
       onSendMessage?: (contactId: string) => void;
       onAddFriend?: (contactId: string) => void;
       onAcceptRequest?: (requestId: string, contactId: string) => void;
@@ -57,7 +62,7 @@ export function ContactResult({
 
       const effectiveDirection = pendingRequestDirection
             ? (pendingRequestDirection === 'sent' ? 'OUTGOING' : 'INCOMING')
-            : data.requestDirection;
+            : (data.requestDirection ?? null);
 
       const effectivePendingId = pendingRequestDirection
             ? (pendingRequestDirection === 'sent' ? sentRequest?.id : receivedRequest?.id)
@@ -65,7 +70,7 @@ export function ContactResult({
 
       const relationLabel = getRelationshipLabel(
             effectiveStatus,
-            effectiveDirection,
+            effectiveDirection ?? undefined,
       );
 
       // Bug 7 fix: Only show alias (displayNameFinal) for friends.
@@ -88,7 +93,14 @@ export function ContactResult({
       return (
             <div
                   className="flex items-center gap-3 px-3 py-3 cursor-pointer rounded-lg hover:bg-gray-50 transition-colors group"
-                  onClick={() => onClick?.(data)}
+                  onClick={() =>
+                        onClick?.(
+                              data,
+                              effectiveStatus,
+                              effectiveDirection ?? undefined,
+                              effectivePendingId,
+                        )
+                  }
             >
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
@@ -169,7 +181,6 @@ export function ContactResult({
                                     title={t('search.contactResult.acceptRequest')}
                                     onClick={(e) => {
                                           e.stopPropagation();
-                                          console.log("effectivePendingId, data.id", effectivePendingId, data.id)
                                           onAcceptRequest?.(effectivePendingId, data.id);
                                     }}
                               />

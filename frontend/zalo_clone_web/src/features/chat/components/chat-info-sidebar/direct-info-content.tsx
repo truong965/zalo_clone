@@ -20,7 +20,6 @@ import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
 import { useBlockUser } from '@/hooks/use-block';
 import { useConversation } from '@/hooks/use-conversation';
 import { useInvalidateConversations } from '@/features/conversation/hooks/use-conversation-queries';
-import { usePinConversation, useMuteConversation, useArchiveConversation } from '@/features/conversation';
 import { useReminders, ReminderList, CreateReminderModal } from '@/features/reminder';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
@@ -33,19 +32,27 @@ const { Title } = Typography;
 
 interface DirectInfoContentProps {
       conversation: ConversationUI;
+      onTogglePin: (conversationId: string, currentlyPinned: boolean) => void;
+      onToggleMute: (conversationId: string, currentlyMuted: boolean) => void;
+      onToggleArchive: (conversationId: string, currentlyArchived: boolean) => void;
+      isArchiving: boolean;
       onOpenMediaBrowser?: (tab: MediaBrowserTab) => void;
       onCloseSidebar: () => void;
 }
 
-export function DirectInfoContent({ conversation, onOpenMediaBrowser, onCloseSidebar }: DirectInfoContentProps) {
+export function DirectInfoContent({
+      conversation,
+      onTogglePin,
+      onToggleMute,
+      onToggleArchive,
+      isArchiving,
+      onOpenMediaBrowser,
+      onCloseSidebar,
+}: DirectInfoContentProps) {
       const { t } = useTranslation();
       const { clearCurrentConversation } = useConversation();
       const { mutateAsync: blockUserAsync, isPending: isBlocking } = useBlockUser();
       const { removeFromCache, invalidateAll } = useInvalidateConversations();
-
-      const { togglePin } = usePinConversation();
-      const { toggleMute } = useMuteConversation();
-      const { toggleArchive, isArchiving } = useArchiveConversation();
       const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
       const { reminders, isLoading: isLoadingReminders, completeReminder, deleteReminder, createReminder, isCreating: isReminderCreating } = useReminders(conversation.id);
@@ -224,7 +231,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onCloseSid
                         <div className="flex gap-8 justify-center w-full px-4">
                               <div
                                     className="flex flex-col items-center gap-2 cursor-pointer group"
-                                    onClick={() => toggleMute(conversation.id, !!conversation.isMuted)}
+                                    onClick={() => onToggleMute(conversation.id, !!conversation.isMuted)}
                               >
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${conversation.isMuted
                                           ? 'bg-blue-100'
@@ -241,14 +248,15 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onCloseSid
                               </div>
                               <div
                                     className="flex flex-col items-center gap-2 cursor-pointer group"
-                                    onClick={() => togglePin(conversation.id, !!conversation.isPinned)}
+                                    onClick={() => onTogglePin(conversation.id, !!conversation.isPinned)}
                               >
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${conversation.isPinned
-                                          ? 'bg-blue-100'
+                                          ? 'bg-blue-100 text-blue-600'
                                           : 'bg-gray-100 group-hover:bg-blue-50'
                                           }`}>
                                           <PushpinOutlined className={conversation.isPinned ? 'text-blue-600' : 'text-gray-600 group-hover:text-blue-600'} />
                                     </div>
+
                                     <span className="text-xs text-gray-500 text-center max-w-[60px]">
                                           {conversation.isPinned ? t('chat.infoSidebar.unpin') : t('chat.infoSidebar.pin')}
                                     </span>
@@ -328,7 +336,7 @@ export function DirectInfoContent({ conversation, onOpenMediaBrowser, onCloseSid
                         title={conversation.isArchived ? t('chat.infoSidebar.unarchiveModalTitle') : t('chat.infoSidebar.archiveModalTitle')}
                         open={isArchiveModalOpen}
                         onOk={() => {
-                              toggleArchive(conversation.id, !!conversation.isArchived);
+                              onToggleArchive(conversation.id, !!conversation.isArchived);
                               setIsArchiveModalOpen(false);
                               onCloseSidebar();
                         }}

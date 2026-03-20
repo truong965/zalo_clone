@@ -12,6 +12,7 @@ import {
       useQuery,
       useMutation,
       useQueryClient,
+      type UseMutationOptions,
 } from '@tanstack/react-query';
 import { conversationApi } from '../api/conversation.api';
 import { useSocket } from '@/hooks/use-socket';
@@ -46,10 +47,14 @@ export function usePinMessage(conversationId: string | null) {
       const pinMutation = useMutation({
             mutationFn: (messageId: string) =>
                   conversationApi.pinMessage(conversationId!, messageId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({
                         queryKey: pinnedMessagesKey(conversationId),
                   });
+                  const [, , context] = args as any;
+                  if (typeof context === 'object' && context?.onSuccess) {
+                        (context.onSuccess as Function)(...args);
+                  }
             },
       });
 
@@ -57,10 +62,14 @@ export function usePinMessage(conversationId: string | null) {
       const unpinMutation = useMutation({
             mutationFn: (messageId: string) =>
                   conversationApi.unpinMessage(conversationId!, messageId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({
                         queryKey: pinnedMessagesKey(conversationId),
                   });
+                  const [, , context] = args as any;
+                  if (typeof context === 'object' && context?.onSuccess) {
+                        (context.onSuccess as Function)(...args);
+                  }
             },
       });
 
@@ -95,12 +104,14 @@ export function usePinMessage(conversationId: string | null) {
 
       // ── Stable callbacks ─────────────────────────────────────────────────
       const pinMessage = useCallback(
-            (messageId: string) => pinMutation.mutate(messageId),
+            (messageId: string, options?: UseMutationOptions<any, any, string, any>) =>
+                  pinMutation.mutate(messageId, options),
             [pinMutation],
       );
 
       const unpinMessage = useCallback(
-            (messageId: string) => unpinMutation.mutate(messageId),
+            (messageId: string, options?: UseMutationOptions<any, any, string, any>) =>
+                  unpinMutation.mutate(messageId, options),
             [unpinMutation],
       );
 

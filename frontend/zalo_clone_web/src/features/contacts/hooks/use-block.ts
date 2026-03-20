@@ -9,10 +9,11 @@ import {
       useInfiniteQuery,
       useMutation,
       useQueryClient,
+      type UseMutationOptions,
 } from '@tanstack/react-query';
 import { notification } from 'antd';
 import { blockApi } from '../api/block.api';
-import { handleInteractionError } from '@/utils/interaction-error';
+import type { Block } from '@/types/api';
 
 // ============================================================================
 // Query Keys
@@ -53,22 +54,22 @@ export function useBlockedList(params?: { limit?: number; search?: string }) {
 /**
  * Mutation to block a user.
  * On success: invalidates blocked list + shows success notification.
- * On 403 error: uses handleInteractionError for consistent UX.
  */
-export function useBlockUser() {
+export function useBlockUser(
+      options?: UseMutationOptions<Block, any, { targetUserId: string; reason?: string }, any>
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
+            ...options,
             mutationFn: ({ targetUserId, reason }: { targetUserId: string; reason?: string }) =>
                   blockApi.blockUser(targetUserId, reason),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: blockKeys.all });
                   notification.success({
                         message: 'Đã chặn người dùng',
                   });
-            },
-            onError: (error) => {
-                  handleInteractionError(error);
+                  options?.onSuccess?.(...args);
             },
       });
 }
@@ -77,21 +78,22 @@ export function useBlockUser() {
  * Mutation to unblock a user.
  * On success: invalidates blocked list + shows success notification.
  */
-export function useUnblockUser() {
+export function useUnblockUser(
+      options?: UseMutationOptions<void, any, string, any>
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
+            ...options,
             mutationFn: (targetUserId: string) =>
                   blockApi.unblockUser(targetUserId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: blockKeys.all });
                   notification.success({
                         message: 'Đã bỏ chặn',
                         description: 'Người dùng đã được bỏ chặn.',
                   });
-            },
-            onError: (error) => {
-                  handleInteractionError(error);
+                  options?.onSuccess?.(...args);
             },
       });
 }

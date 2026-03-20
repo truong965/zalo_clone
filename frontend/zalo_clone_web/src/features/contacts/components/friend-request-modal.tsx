@@ -24,7 +24,9 @@ interface FriendRequestModalProps {
 
 export function FriendRequestModal({ visible, target, onClose, onAfterSend }: FriendRequestModalProps) {
       const { t } = useTranslation();
-      const sendRequest = useSendFriendRequest();
+      const sendRequest = useSendFriendRequest({
+            meta: { skipGlobalError: true },
+      });
 
       const handleSendRequest = () => {
             if (!target) return;

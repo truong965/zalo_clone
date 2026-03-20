@@ -10,6 +10,7 @@ import {
       useMutation,
       useQueryClient,
       type InfiniteData,
+      type UseMutationOptions,
 } from '@tanstack/react-query';
 import { conversationApi } from '../api/conversation.api';
 import { conversationKeys } from './use-conversation-queries';
@@ -25,10 +26,13 @@ const LIST_QUERY_KEY = ['conversations', 'list'] as const;
 /**
  * Hook providing pin/unpin mutation with optimistic cache update.
  */
-export function usePinConversation() {
+export function usePinConversation(
+      options?: UseMutationOptions<any, any, string, any>
+) {
       const queryClient = useQueryClient();
 
       const pinMutation = useMutation({
+            ...options,
             mutationFn: (conversationId: string) =>
                   conversationApi.pinConversation(conversationId),
             onMutate: async (conversationId) => {
@@ -66,22 +70,28 @@ export function usePinConversation() {
                         (old) => (old ? { ...old, isPinned: true, pinnedAt: now } : old),
                   );
 
-                  return { previous };
+                  const customOnMutate = await (options?.onMutate as any)?.(conversationId);
+
+                  return { previous, ...(customOnMutate || {}) };
             },
-            onError: (_err, _id, context) => {
+            onError: (...args) => {
+                  const [, , context] = args;
                   // Rollback on error
-                  if (context?.previous) {
-                        for (const [key, data] of context.previous) {
+                  if ((context as any)?.previous) {
+                        for (const [key, data] of (context as any).previous) {
                               if (data) queryClient.setQueryData(key, data);
                         }
                   }
+                  options?.onError?.(...args);
             },
-            onSettled: () => {
+            onSettled: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+                  options?.onSettled?.(...args);
             },
       });
 
       const unpinMutation = useMutation({
+            ...options,
             mutationFn: (conversationId: string) =>
                   conversationApi.unpinConversation(conversationId),
             onMutate: async (conversationId) => {
@@ -115,17 +125,22 @@ export function usePinConversation() {
                         (old) => (old ? { ...old, isPinned: false, pinnedAt: null } : old),
                   );
 
-                  return { previous };
+                  const customOnMutate = await (options?.onMutate as any)?.(conversationId);
+
+                  return { previous, ...(customOnMutate || {}) };
             },
-            onError: (_err, _id, context) => {
-                  if (context?.previous) {
-                        for (const [key, data] of context.previous) {
+            onError: (...args) => {
+                  const [, , context] = args;
+                  if ((context as any)?.previous) {
+                        for (const [key, data] of (context as any).previous) {
                               if (data) queryClient.setQueryData(key, data);
                         }
                   }
+                  options?.onError?.(...args);
             },
-            onSettled: () => {
+            onSettled: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+                  options?.onSettled?.(...args);
             },
       });
 

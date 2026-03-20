@@ -73,13 +73,14 @@ export function handleInteractionError(
             const lowerMsg = (serverMessage ?? '').toLowerCase();
             const isBlocked = lowerMsg.includes('block');
 
-            if (isBlocked) {
-                  // User is blocked → show UI notification, no friend request option
-                  notification.warning({
-                        message: 'Không thể thực hiện',
-                        description: 'Bạn không thể tương tác với người dùng này.',
-                  });
-            }
+
+            // User is blocked → show UI notification, no friend request option
+            notification.warning({
+                  message: 'Không thể thực hiện',
+                  description: lowerMsg,
+                  placement: 'topRight',
+            });
+
 
             return {
                   isForbidden: true,
@@ -95,6 +96,7 @@ export function handleInteractionError(
                   ? 'Không thể tạo cuộc trò chuyện'
                   : 'Đã xảy ra lỗi',
             description: serverMessage,
+            placement: 'topRight',
       });
 
       return {

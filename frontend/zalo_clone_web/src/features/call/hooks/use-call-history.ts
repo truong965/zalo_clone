@@ -13,6 +13,7 @@ import {
       useQuery,
       useMutation,
       useQueryClient,
+      type UseMutationOptions,
 } from '@tanstack/react-query';
 import {
       getCallHistory,
@@ -72,13 +73,17 @@ export function useMissedCallCount() {
 /**
  * Mark all missed calls as viewed → invalidate missed count.
  */
-export function useMarkMissedAsViewed() {
+export function useMarkMissedAsViewed(
+      options?: UseMutationOptions<void, any, void, any>
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
+            ...options,
             mutationFn: markMissedAsViewed,
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: callQueryKeys.missedCount });
+                  options?.onSuccess?.(...args);
             },
       });
 }
@@ -86,10 +91,13 @@ export function useMarkMissedAsViewed() {
 /**
  * Delete a single call log entry (optimistic removal from cache).
  */
-export function useDeleteCallLog() {
+export function useDeleteCallLog(
+      options?: UseMutationOptions<void, any, string, any>
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
+            ...options,
             mutationFn: deleteCallLog,
             onMutate: async (callId: string) => {
                   // Cancel any outgoing refetches to avoid race conditions
@@ -114,18 +122,26 @@ export function useDeleteCallLog() {
                         },
                   );
 
-                  return { previousData };
+                  const customOnMutate = await (options?.onMutate as any)?.(callId);
+
+                  return { previousData, ...(customOnMutate as any) };
             },
-            onError: (_err, _callId, context) => {
+            onError: (...args) => {
+                  const [, , context] = args;
                   // Rollback on error
-                  if (context?.previousData) {
-                        for (const [queryKey, data] of context.previousData) {
+                  if ((context as any)?.previousData) {
+                        for (const [queryKey, data] of (context as any).previousData) {
                               queryClient.setQueryData(queryKey, data);
                         }
                   }
+                  options?.onError?.(...args);
             },
-            onSettled: () => {
+            onSuccess: (...args) => {
+                  options?.onSuccess?.(...args);
+            },
+            onSettled: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: callQueryKeys.all });
+                  options?.onSettled?.(...args);
             },
       });
 }

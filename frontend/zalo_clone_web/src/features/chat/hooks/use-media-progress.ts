@@ -145,12 +145,19 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
             if (!socket || !isConnected) return;
             if (mediaIds.length === 0) return;
 
+            // DEBUG: Log media progress subscription
+            console.log('🔄 [MediaProgress] Subscribing to media progress for:', mediaIds);
+            console.log('📊 [MediaProgress] Total media items:', mediaIds.length);
+
             const handlers = new Map<string, (payload: MediaProgressPayload) => void>();
 
             for (const mediaId of mediaIds) {
                   const eventName = `progress:${mediaId}`;
 
                   const handler = (payload: MediaProgressPayload) => {
+                        // DEBUG: Log received progress event
+                        console.log(`📡 [MediaProgress] Event for ${mediaId}:`, payload);
+
                         queryClientRef.current.setQueryData<MessagesInfiniteData>(
                               queryKeyRef.current,
                               (prev) => updateAttachmentInCache(prev, mediaId, payload),
@@ -203,9 +210,19 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                   let retries = 0;
 
                   const poll = () => {
+                        // DEBUG: Log polling attempt
+                        console.log(`🔍 [MediaProgress] Polling media ${mediaId} (attempt ${retries + 1}/${MAX_RETRIES})`);
+
                         mediaService.getMedia(mediaId)
                               .then((result) => {
                                     if (cancelled) return;
+
+                                    // DEBUG: Log poll result
+                                    console.log(`📊 [MediaProgress] Media ${mediaId} result:`, {
+                                          status: result.processingStatus,
+                                          hasThumb: !!result.thumbnailUrl,
+                                          mediaType: result.mediaType,
+                                    });
 
                                     // Bug 2 fix: for VIDEO/IMAGE, READY is only truly terminal
                                     // once thumbnailUrl is populated. The worker adds the thumbnail
@@ -216,6 +233,9 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                                           (result.mediaType === 'VIDEO' || result.mediaType === 'IMAGE');
 
                                     if ((result.processingStatus === 'READY' && !needsThumb) || result.processingStatus === 'FAILED') {
+                                          // DEBUG: Log completion
+                                          console.log(`✅ [MediaProgress] Media ${mediaId} processing complete:`, result.processingStatus);
+
                                           queryClientRef.current.setQueryData<MessagesInfiniteData>(
                                                 queryKeyRef.current,
                                                 (prev) => updateAttachmentInCache(prev, mediaId, {
@@ -236,11 +256,14 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                                     }
                               })
                               .catch((err: unknown) => {
+                                    // DEBUG: Log errors
+                                    const status = (err as { response?: { status?: number } })?.response?.status;
+                                    console.log(`❌ [MediaProgress] Media ${mediaId} poll error (status: ${status}):`, err);
+
                                     // 403 = not the media owner (user B).
                                     // The backend now broadcasts progress:{mediaId} to all conversation
                                     // members, so stop polling and let the socket event handle it.
                                     // 404 = media deleted; also stop.
-                                    const status = (err as { response?: { status?: number } })?.response?.status;
                                     if (status === 403 || status === 404 || cancelled || retries >= MAX_RETRIES) return;
                                     retries++;
                                     timerId = setTimeout(poll, POLL_INTERVAL_MS);

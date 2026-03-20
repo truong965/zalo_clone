@@ -6,10 +6,10 @@
  */
 
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { UseMutationOptions } from '@tanstack/react-query';
 import { notification } from 'antd';
 import { contactsApi } from '../api/contacts.api';
 import { contactKeys } from './use-contact-check';
-import { handleInteractionError } from '@/utils/interaction-error';
 
 // ============================================================================
 // Contacts List Hook
@@ -46,22 +46,24 @@ export function useContactsList(params?: { search?: string; limit?: number; excl
  * Mutation to remove a contact entry (does not affect the friendship).
  * On success: invalidates contacts list + contact check for that user.
  */
-export function useRemoveContact() {
+export function useRemoveContact(
+      options?: UseMutationOptions<void, any, string, any>
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
+            ...options,
             mutationFn: (contactUserId: string) =>
                   contactsApi.removeContact(contactUserId),
 
-            onSuccess: (_data, contactUserId) => {
+            onSuccess: (...args) => {
+                  const [, contactUserId] = args;
                   // Use prefix key ['contacts', 'list'] to match all list variants
                   void queryClient.invalidateQueries({ queryKey: ['contacts', 'list'] });
                   void queryClient.invalidateQueries({ queryKey: contactKeys.check(contactUserId) });
                   notification.success({ message: 'Đã xoá khỏi danh bạ' });
-            },
 
-            onError: (error) => {
-                  handleInteractionError(error);
+                  options?.onSuccess?.(...args);
             },
       });
 }

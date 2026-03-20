@@ -26,6 +26,7 @@ import type {
       ContactSearchResult,
       GroupSearchResult,
       MediaSearchResult,
+      RelationshipStatus,
 } from '../types';
 
 /**
@@ -71,8 +72,8 @@ export function SearchPanel({
             closeSearch,
       } = useSearch();
 
-      const acceptRequest = useAcceptRequest();
-      const cancelRequest = useCancelRequest();
+      const acceptRequest = useAcceptRequest({ meta: { skipGlobalError: true } });
+      const cancelRequest = useCancelRequest({ meta: { skipGlobalError: true } });
 
       // --- Friend Request Modal state ---
       const [friendRequestTarget, setFriendRequestTarget] = useState<{
@@ -96,12 +97,17 @@ export function SearchPanel({
 
       /**
        * Contact click handler — 3 cases:
-       * 1. existingConversationId → navigate directly
-       * 2. canMessage === false → show friend request modal
+       * 1. canMessage === false → show friend request modal
+       * 2. existingConversationId → navigate directl
        * 3. canMessage === true → call API to create conversation, refresh list, navigate
        */
       const handleContactClick = useCallback(
-            async (result: ContactSearchResult) => {
+            async (
+                  result: ContactSearchResult,
+                  effectiveStatus: RelationshipStatus,
+                  effectiveDirection?: 'OUTGOING' | 'INCOMING' | null,
+                  _effectivePendingId?: string | null,
+            ) => {
                   // Guard: prevent duplicate calls while async is in-flight
                   if (isContactActionLoading) return;
 
@@ -111,43 +117,72 @@ export function SearchPanel({
                         searchService.trackResultClick(trimmedKw, result.id).catch(() => { });
                   }
 
-                  // Case 1: Already have a conversation → navigate directly
+                  // If the user is already friend, open conversation directly
+                  if (effectiveStatus === 'FRIEND') {
+                        if (result.existingConversationId) {
+                              onNavigateToConversation?.(result.existingConversationId);
+                              return;
+                        }
+                        setIsContactActionLoading(true);
+                        try {
+                              const conv = await conversationService.getOrCreateDirectConversation(result.id);
+                              await queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                              onNavigateToConversation?.(conv.id);
+                        } catch (error) {
+                              handleInteractionError(error, {
+                                    target: { userId: result.id, displayName: resolveContactName(result), avatarUrl: result.avatarUrl },
+                              });
+                        } finally {
+                              setIsContactActionLoading(false);
+                        }
+                        return;
+                  }
+
+                  // If there's a pending friend request, do not show modal send-request again
+                  if (effectiveStatus === 'REQUEST') {
+                        if (effectiveDirection === 'OUTGOING') {
+                              notification.info({ message: 'Bạn đã gửi lời mời kết bạn rồi.' });
+                        } else if (effectiveDirection === 'INCOMING') {
+                              notification.info({ message: 'Bạn có lời mời kết bạn đến từ người này.' });
+                        } else {
+                              notification.info({ message: 'Đang có lời mời kết bạn tồn tại.' });
+                        }
+                        return;
+                  }
+
+                  // Blocked user: không cho mở modal
+                  if (effectiveStatus === 'BLOCKED') {
+                        notification.warning({ message: 'Người dùng đã bị chặn, không thể gửi lời mời.' });
+                        return;
+                  }
+
+                  // No relationship or declined path: can show friend request modal when cannot message
+                  if (result.canMessage === false) {
+                        return;
+                  }
+
                   if (result.existingConversationId) {
                         onNavigateToConversation?.(result.existingConversationId);
                         return;
                   }
 
-                  // Case 2: canMessage === false (privacy: CONTACTS only & not friend)
-                  if (result.canMessage === false) {
-                        setFriendRequestTarget({
-                              userId: result.id,
-                              displayName: resolveContactName(result),
-                              avatarUrl: result.avatarUrl,
-                        });
-                        return;
-                  }
-
-                  // Case 3: canMessage === true (or undefined for friends) → create conversation
+                  // No existing conv & can message → open/create conversation
                   setIsContactActionLoading(true);
                   try {
                         const conv = await conversationService.getOrCreateDirectConversation(result.id);
-                        // Invalidate conversations cache so the new conversation appears in the list
                         await queryClient.invalidateQueries({ queryKey: ['conversations'] });
                         onNavigateToConversation?.(conv.id);
                   } catch (error) {
                         const errResult = handleInteractionError(error, {
                               target: { userId: result.id, displayName: resolveContactName(result), avatarUrl: result.avatarUrl },
                         });
-                        // 403 privacy restriction (not blocked) → show friend request modal
-                        if (errResult.isPrivacyRestriction) {
+                        if (errResult.isPrivacyRestriction && effectiveStatus === 'NONE') {
                               setFriendRequestTarget({
                                     userId: result.id,
                                     displayName: resolveContactName(result),
                                     avatarUrl: result.avatarUrl,
                               });
                         }
-                        // isBlocked → notification already shown by handleInteractionError
-                        // other errors → notification already shown by handleInteractionError
                   } finally {
                         setIsContactActionLoading(false);
                   }
@@ -236,20 +271,21 @@ export function SearchPanel({
             (contactId: string) => {
                   const contact = results?.contacts.find((c) => c.id === contactId);
                   if (!contact?.pendingRequestId) {
-                  notification.warning({ message: t('search.missingAcceptId') });
-                  return;
-            }
+                        notification.warning({ message: t('search.missingAcceptId') });
+                        return;
+                  }
 
-            acceptRequest.mutate(contact.pendingRequestId, {
-                  onSuccess: () => {
-                        notification.success({ message: t('search.acceptSuccess') });
-                        triggerSearch(keyword);
-                        void queryClient.invalidateQueries({ queryKey: ['friendship'] });
-                  },
-                  onError: () => {
-                        notification.error({ message: t('search.acceptFail') });
-                  },
-            });      },
+                  acceptRequest.mutate(contact.pendingRequestId, {
+                        onSuccess: () => {
+                              notification.success({ message: t('search.acceptSuccess') });
+                              triggerSearch(keyword);
+                              void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+                        },
+                        onError: () => {
+                              notification.error({ message: t('search.acceptFail') });
+                        },
+                  });
+            },
             [acceptRequest, keyword, results, triggerSearch, queryClient, t],
       );
 
@@ -257,20 +293,21 @@ export function SearchPanel({
             (contactId: string) => {
                   const contact = results?.contacts.find((c) => c.id === contactId);
                   if (!contact?.pendingRequestId) {
-                  notification.warning({ message: t('search.missingRecallId') });
-                  return;
-            }
+                        notification.warning({ message: t('search.missingRecallId') });
+                        return;
+                  }
 
-            cancelRequest.mutate(contact.pendingRequestId, {
-                  onSuccess: () => {
-                        notification.success({ message: t('search.recallSuccess') });
-                        triggerSearch(keyword);
-                        void queryClient.invalidateQueries({ queryKey: ['friendship'] });
-                  },
-                  onError: () => {
-                        notification.error({ message: t('search.recallFail') });
-                  },
-            });      },
+                  cancelRequest.mutate(contact.pendingRequestId, {
+                        onSuccess: () => {
+                              notification.success({ message: t('search.recallSuccess') });
+                              triggerSearch(keyword);
+                              void queryClient.invalidateQueries({ queryKey: ['friendship'] });
+                        },
+                        onError: () => {
+                              notification.error({ message: t('search.recallFail') });
+                        },
+                  });
+            },
             [cancelRequest, keyword, results, triggerSearch, queryClient, t],
       );
 

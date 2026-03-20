@@ -24,13 +24,19 @@ import type { FriendWithUserDto } from '../types';
 import { useQueryClient } from '@tanstack/react-query';
 import { conversationService } from '@/features/conversation';
 import { useTranslation } from 'react-i18next';
+import { handleInteractionError } from '@/utils/interaction-error';
 
 const { Text } = Typography;
 
 const ITEM_HEIGHT = 92;
 
-export function FriendList() {
+export function FriendList({
+      onNavigateToConversation
+}: {
+      onNavigateToConversation?: (conversationId: string) => void;
+}) {
       const navigate = useNavigate();
+      const queryClient = useQueryClient();
       const { t } = useTranslation();
       const [search, setSearch] = useState('');
       const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -81,13 +87,16 @@ export function FriendList() {
             setNavigatingId(userId);
             try {
                   const conv = await conversationService.getOrCreateDirectConversation(userId);
-                  navigate(`/chat/${conv.id}`);
-            } catch {
-                  // Error handled by axios interceptor
+                  await queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                  if (onNavigateToConversation) {
+                        onNavigateToConversation(conv.id);
+                  }
+            } catch (error) {
+                  handleInteractionError(error);
             } finally {
                   setNavigatingId(null);
             }
-      }, [navigate, navigatingId]);
+      }, [navigate, navigatingId, onNavigateToConversation, queryClient]);
 
       useEffect(() => {
             if (lastVirtualItem == null) return;

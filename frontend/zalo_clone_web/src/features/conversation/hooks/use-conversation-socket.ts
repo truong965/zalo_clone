@@ -158,67 +158,105 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
       }, [socket, isConnected]);
 
       // Emit: Create Group
-      const createGroup = useCallback((dto: {
-            name: string;
-            memberIds: string[];
-            avatarUrl?: string;
-            requireApproval?: boolean;
-      }) => {
-            return socketManager.emitWithAck<{ group: Conversation }>(SocketEvents.GROUP_CREATE, dto);
+      const createGroup = useCallback((
+            dto: {
+                  name: string;
+                  memberIds: string[];
+                  avatarUrl?: string;
+                  requireApproval?: boolean;
+            },
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<{ group: Conversation }>(SocketEvents.GROUP_CREATE, dto, options);
       }, []);
 
       // Emit: Update Group
-      const updateGroup = useCallback((conversationId: string, updates: {
-            name?: string;
-            avatarUrl?: string;
-            requireApproval?: boolean;
-      }) => {
-            return socketManager.emitWithAck<{ updated: unknown }>(SocketEvents.GROUP_UPDATE, { conversationId, updates });
+      const updateGroup = useCallback((
+            conversationId: string,
+            updates: {
+                  name?: string;
+                  avatarUrl?: string;
+                  requireApproval?: boolean;
+            },
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<{ updated: unknown }>(SocketEvents.GROUP_UPDATE, { conversationId, updates }, options);
       }, []);
 
       // Emit: Leave Group
-      const leaveGroup = useCallback((conversationId: string) => {
-            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_LEAVE, { conversationId });
+      const leaveGroup = useCallback((
+            conversationId: string,
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_LEAVE, { conversationId }, options);
       }, []);
 
       // Emit: Add Members to Group
-      const addMembers = useCallback((conversationId: string, userIds: string[]) => {
-            return socketManager.emitWithAck<{ addedMemberIds: string[] }>(SocketEvents.GROUP_ADD_MEMBERS, { conversationId, userIds });
+      const addMembers = useCallback((
+            conversationId: string,
+            userIds: string[],
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<{ addedMemberIds: string[] }>(SocketEvents.GROUP_ADD_MEMBERS, { conversationId, userIds }, options);
       }, []);
 
       // Emit: Remove Member from Group
-      const removeMember = useCallback((conversationId: string, userId: string) => {
-            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_REMOVE_MEMBER, { conversationId, userId });
+      const removeMember = useCallback((
+            conversationId: string,
+            userId: string,
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_REMOVE_MEMBER, { conversationId, userId }, options);
       }, []);
 
       // Emit: Transfer Admin
-      const transferAdmin = useCallback((conversationId: string, newAdminId: string) => {
-            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_TRANSFER_ADMIN, { conversationId, newAdminId });
+      const transferAdmin = useCallback((
+            conversationId: string,
+            newAdminId: string,
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_TRANSFER_ADMIN, { conversationId, newAdminId }, options);
       }, []);
 
       // Emit: Dissolve Group
-      const dissolveGroup = useCallback((conversationId: string) => {
-            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_DISSOLVE, { conversationId });
+      const dissolveGroup = useCallback((
+            conversationId: string,
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<boolean>(SocketEvents.GROUP_DISSOLVE, { conversationId }, options);
       }, []);
 
       // Emit: Get Pending Join Requests
-      const getPendingRequests = useCallback((conversationId: string) => {
-            return socketManager.emitWithAck<unknown[]>(SocketEvents.GROUP_GET_PENDING, { conversationId });
+      const getPendingRequests = useCallback((
+            conversationId: string,
+            options?: { skipGlobalError?: boolean }
+      ) => {
+            return socketManager.emitWithAck<unknown[]>(SocketEvents.GROUP_GET_PENDING, { conversationId }, options);
       }, []);
 
       // Emit: Review Join Request
-      const reviewJoinRequest = useCallback((requestId: string, approve: boolean) => {
+      const reviewJoinRequest = useCallback((
+            requestId: string,
+            approve: boolean,
+            options?: { skipGlobalError?: boolean }
+      ) => {
             return socketManager.emitWithAck<{ success: boolean; status?: string; alreadyMember?: boolean; message?: string }>(
                   SocketEvents.GROUP_REVIEW_JOIN,
-                  { requestId, approve }
+                  { requestId, approve },
+                  options
             );
       }, []);
 
       // Emit: Invite Members (non-admin with requireApproval → creates join requests)
-      const inviteMembers = useCallback((conversationId: string, userIds: string[]) => {
+      const inviteMembers = useCallback((
+            conversationId: string,
+            userIds: string[],
+            options?: { skipGlobalError?: boolean }
+      ) => {
             return socketManager.emitWithAck<{ result: { invitedCount: number; skippedCount: number } }>(
                   SocketEvents.GROUP_INVITE_MEMBERS,
-                  { conversationId, userIds }
+                  { conversationId, userIds },
+                  options
             );
       }, []);
 

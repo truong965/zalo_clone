@@ -24,7 +24,11 @@ const { Text } = Typography;
 
 const ITEM_HEIGHT = 84;
 
-export function GroupList() {
+export function GroupList({
+      onNavigateToConversation
+}: {
+      onNavigateToConversation?: (conversationId: string) => void;
+}) {
       const { t } = useTranslation();
       const navigate = useNavigate();
       const [search, setSearch] = useState('');
@@ -88,16 +92,24 @@ export function GroupList() {
 
       const handleGroupClick = useCallback(
             (groupId: string) => {
-                  navigate(`/chat?conversationId=${groupId}`);
+                  if (onNavigateToConversation) {
+                        onNavigateToConversation(groupId);
+                  } else {
+                        navigate(`/chat?conversationId=${groupId}`);
+                  }
             },
-            [navigate],
+            [navigate, onNavigateToConversation],
       );
-
+ 
       const handleGroupCreated = useCallback(
             (conversationId: string) => {
-                  navigate(`/chat?conversationId=${conversationId}`);
+                  if (onNavigateToConversation) {
+                        onNavigateToConversation(conversationId);
+                  } else {
+                        navigate(`/chat?conversationId=${conversationId}`);
+                  }
             },
-            [navigate],
+            [navigate, onNavigateToConversation],
       );
 
       return (

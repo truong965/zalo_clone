@@ -8,7 +8,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notification } from 'antd';
 import { contactsApi } from '../api/contacts.api';
 import { contactKeys } from './use-contact-check';
-import { handleInteractionError } from '@/utils/interaction-error';
 import { friendshipKeys } from '../api/friendship.api';
 
 // ============================================================================
@@ -55,10 +54,6 @@ export function useUpdateAlias() {
                               ? 'Đã cập nhật biệt danh'
                               : 'Đã xoá biệt danh',
                   });
-            },
-
-            onError: (error) => {
-                  handleInteractionError(error);
             },
       });
 }

@@ -53,6 +53,7 @@ export class ErrorBoundary extends Component<
 
       private handleReset = () => {
             this.setState({ error: null });
+            window.location.reload();
       };
 
       render() {

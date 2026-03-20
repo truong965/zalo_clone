@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { UseMutationOptions } from '@tanstack/react-query';
 import apiClient from '@/lib/axios';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import type { PrivacySettings, UpdatePrivacySettingsPayload } from '../types';
@@ -53,13 +54,18 @@ export function usePrivacySettings() {
       });
 }
 
-export function useUpdatePrivacySettings() {
+export function useUpdatePrivacySettings(
+      options?: UseMutationOptions<PrivacySettings, any, UpdatePrivacySettingsPayload, any>
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
+            ...options,
             mutationFn: updatePrivacySettings,
-            onSuccess: (updated) => {
+            onSuccess: (...args) => {
+                  const [updated] = args;
                   queryClient.setQueryData(privacyKeys.settings(), updated);
+                  options?.onSuccess?.(...args);
             },
       });
 }

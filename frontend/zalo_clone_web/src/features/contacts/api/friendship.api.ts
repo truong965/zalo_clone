@@ -216,29 +216,43 @@ export function useFriendCount() {
 /**
  * Send a friend request — invalidates received/sent queries.
  */
-export function useSendFriendRequest() {
+export function useSendFriendRequest(
+      options?: import('@tanstack/react-query').UseMutationOptions<
+            { id: string },
+            Error,
+            string
+      >,
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
             mutationFn: (targetUserId: string) => sendFriendRequest(targetUserId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.all,
                         exact: false,
                   });
+                  options?.onSuccess?.(...args);
             },
+            ...options,
       });
 }
 
 /**
  * Accept a friend request — invalidates friendsList + received.
  */
-export function useAcceptRequest() {
+export function useAcceptRequest(
+      options?: import('@tanstack/react-query').UseMutationOptions<
+            void,
+            Error,
+            string
+      >
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
             mutationFn: (requestId: string) => acceptRequest(requestId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.all,
                         exact: false,
@@ -254,19 +268,27 @@ export function useAcceptRequest() {
                   });
                   // P1-D: Cross-invalidate contacts (friend moved out of excludeFriends list)
                   void queryClient.invalidateQueries({ queryKey: contactKeys.all });
+                  options?.onSuccess?.(...args);
             },
+            ...options
       });
 }
 
 /**
  * Decline a friend request — invalidates received.
  */
-export function useDeclineRequest() {
+export function useDeclineRequest(
+      options?: import('@tanstack/react-query').UseMutationOptions<
+            void,
+            Error,
+            string
+      >
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
             mutationFn: (requestId: string) => declineRequest(requestId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.all,
                         exact: false,
@@ -274,19 +296,27 @@ export function useDeclineRequest() {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.receivedRequests(),
                   });
+                  options?.onSuccess?.(...args);
             },
+            ...options
       });
 }
 
 /**
  * Cancel a sent friend request — invalidates sent.
  */
-export function useCancelRequest() {
+export function useCancelRequest(
+      options?: import('@tanstack/react-query').UseMutationOptions<
+            void,
+            Error,
+            string
+      >
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
             mutationFn: (requestId: string) => cancelRequest(requestId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.all,
                         exact: false,
@@ -294,19 +324,27 @@ export function useCancelRequest() {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.sentRequests(),
                   });
+                  options?.onSuccess?.(...args);
             },
+            ...options
       });
 }
 
 /**
  * Unfriend a user — invalidates friendsList + count.
  */
-export function useUnfriend() {
+export function useUnfriend(
+      options?: import('@tanstack/react-query').UseMutationOptions<
+            void,
+            Error,
+            string
+      >
+) {
       const queryClient = useQueryClient();
 
       return useMutation({
             mutationFn: (targetUserId: string) => unfriend(targetUserId),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({
                         queryKey: friendshipKeys.all,
                         exact: false,
@@ -319,7 +357,9 @@ export function useUnfriend() {
                   });
                   // P1-D: Cross-invalidate contacts (user re-appears in excludeFriends list)
                   void queryClient.invalidateQueries({ queryKey: contactKeys.all });
+                  options?.onSuccess?.(...args);
             },
+            ...options
       });
 }
 

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { UseMutationOptions } from '@tanstack/react-query';
 import { authService } from '@/features/auth/api/auth.service';
 import type { DeviceSession } from '@/features/auth/api/auth.service';
 
@@ -15,12 +16,16 @@ export function useDeviceSessions() {
   });
 }
 
-export function useRevokeSession() {
+export function useRevokeSession(
+  options?: UseMutationOptions<void, any, string, any>
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...options,
     mutationFn: (deviceId: string) => authService.revokeSession(deviceId),
-    onSuccess: (_, deviceId) => {
+    onSuccess: (...args) => {
+      const [, deviceId] = args;
       // Optimistically remove the revoked device from the list
       queryClient.setQueryData(deviceKeys.lists(), (oldData: DeviceSession[] | undefined) => {
         if (!oldData) return [];
@@ -28,6 +33,8 @@ export function useRevokeSession() {
       });
       // Also trigger a background refetch
       queryClient.invalidateQueries({ queryKey: deviceKeys.lists() });
+
+      options?.onSuccess?.(...args);
     },
   });
 }

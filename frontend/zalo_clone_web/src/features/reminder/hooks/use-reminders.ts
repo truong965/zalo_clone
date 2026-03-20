@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { UseMutationOptions } from '@tanstack/react-query';
 import { reminderApi } from '../api/reminder.api';
 import { useSocket } from '@/hooks/use-socket';
 import { SocketEvents } from '@/constants/socket-events';
@@ -51,24 +52,36 @@ export function useReminders(conversationId?: string | null) {
 
       const createMutation = useMutation({
             mutationFn: (params: CreateReminderParams) => reminderApi.createReminder(params),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   // Invalidate all reminder queries (personal + all conversation-scoped)
                   void queryClient.invalidateQueries({ queryKey: REMINDERS_BASE_KEY });
+                  const [, , context] = args as any;
+                  if (typeof context === 'object' && context?.onSuccess) {
+                        (context.onSuccess as Function)(...args);
+                  }
             },
       });
 
       const updateMutation = useMutation({
             mutationFn: ({ id, params }: { id: string; params: UpdateReminderParams }) =>
                   reminderApi.updateReminder(id, params),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: REMINDERS_BASE_KEY });
+                  const [, , context] = args as any;
+                  if (typeof context === 'object' && context?.onSuccess) {
+                        (context.onSuccess as Function)(...args);
+                  }
             },
       });
 
       const deleteMutation = useMutation({
             mutationFn: (id: string) => reminderApi.deleteReminder(id),
-            onSuccess: () => {
+            onSuccess: (...args) => {
                   void queryClient.invalidateQueries({ queryKey: REMINDERS_BASE_KEY });
+                  const [, , context] = args as any;
+                  if (typeof context === 'object' && context?.onSuccess) {
+                        (context.onSuccess as Function)(...args);
+                  }
             },
       });
 
@@ -89,23 +102,26 @@ export function useReminders(conversationId?: string | null) {
 
       // ── Stable callbacks ─────────────────────────────────────────────────
       const createReminder = useCallback(
-            (params: CreateReminderParams) => createMutation.mutateAsync(params),
+            (params: CreateReminderParams, options?: UseMutationOptions<any, any, CreateReminderParams, any>) =>
+                  createMutation.mutateAsync(params, options),
             [createMutation],
       );
 
       const updateReminder = useCallback(
-            (id: string, params: UpdateReminderParams) =>
-                  updateMutation.mutateAsync({ id, params }),
+            (id: string, params: UpdateReminderParams, options?: UseMutationOptions<any, any, { id: string; params: UpdateReminderParams }, any>) =>
+                  updateMutation.mutateAsync({ id, params }, options),
             [updateMutation],
       );
 
       const deleteReminder = useCallback(
-            (id: string) => deleteMutation.mutateAsync(id),
+            (id: string, options?: UseMutationOptions<any, any, string, any>) =>
+                  deleteMutation.mutateAsync(id, options),
             [deleteMutation],
       );
 
       const completeReminder = useCallback(
-            (id: string) => updateMutation.mutateAsync({ id, params: { isCompleted: true } }),
+            (id: string, options?: UseMutationOptions<any, any, { id: string; params: UpdateReminderParams }, any>) =>
+                  updateMutation.mutateAsync({ id, params: { isCompleted: true } }, options),
             [updateMutation],
       );
 

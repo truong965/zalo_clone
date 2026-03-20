@@ -116,7 +116,6 @@ export function ChatFeature() {
                   messageId: '',
                   content: '',
             });
-            console.log('Setting reminder target:', selectedId);
       };
 
       // ── Hook: selection / URL sync ───────────────────────────────────────
@@ -158,7 +157,7 @@ export function ChatFeature() {
 
       // ── Hook: mute / archive conversation ─────────────────────────────────
       const { toggleMute } = useMuteConversation();
-      const { toggleArchive } = useArchiveConversation();
+      const { toggleArchive, isArchiving } = useArchiveConversation();
 
       // ── Hook: archived conversations ("Lưu trữ" tab) ──────────────────────
       const archivedQuery = useArchivedConversationsList();
@@ -312,6 +311,12 @@ export function ChatFeature() {
             }
             return ids;
       }, [messages]);
+
+      // DEBUG: Log pending media files
+      if (pendingMediaIds.length > 0) {
+            console.log('🎬 [Chat] Pending media files (PROCESSING):', pendingMediaIds);
+            console.log('📊 [Chat] Total pending media:', pendingMediaIds.length);
+      }
 
       useMediaProgress({ messagesQueryKey, mediaIds: pendingMediaIds });
 
@@ -502,6 +507,10 @@ export function ChatFeature() {
                               <ChatInfoSidebar
                                     conversationId={selectedId}
                                     currentUserId={currentUserId}
+                                    onTogglePin={togglePin}
+                                    onToggleMute={toggleMute}
+                                    onToggleArchive={handleToggleArchive}
+                                    isArchiving={isArchiving}
                                     onClose={() => setRightSidebar('none')}
                                     onOpenMediaBrowser={handleOpenMediaBrowser}
                                     onLeaveGroup={() => {

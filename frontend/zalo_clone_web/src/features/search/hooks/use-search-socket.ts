@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useSocket } from '@/hooks/use-socket';
+import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
 import type { SearchStoreApi } from '../stores/search.store';
 import type {
@@ -152,46 +153,42 @@ export function useSearchSocket(store: SearchStoreApi) {
        * Server will respond with search:results event
        */
       const subscribe = useCallback(
-            (payload: SearchSubscribePayload) => {
-                  if (!socket || !isConnected) {
+            async (payload: SearchSubscribePayload) => {
+                  if (!isConnected) {
                         console.warn('[SearchSocket] Cannot subscribe — socket not connected');
                         return;
                   }
 
                   storeRef.current.setStatus('loading');
 
-                  socket.emit(
-                        SocketEvents.SEARCH_SUBSCRIBE,
-                        payload,
-                        (ack: SearchSubscribeAck) => {
-                              if (ack.status === 'error') {
-                                    storeRef.current.setError(
-                                          ack.message ?? 'Failed to subscribe to search',
-                                    );
-                              }
-                              // On success, results will arrive via search:results event
-                        },
-                  );
+                  try {
+                        await socketManager.emitWithAck<SearchSubscribeAck>(
+                              SocketEvents.SEARCH_SUBSCRIBE,
+                              payload,
+                        );
+                        // On success, results will arrive via search:results event
+                  } catch (err: any) {
+                        storeRef.current.setError(err.message || 'Failed to subscribe');
+                  }
             },
-            [socket, isConnected],
+            [isConnected],
       );
 
       /**
        * Unsubscribe from current search — emits search:unsubscribe
        */
-      const unsubscribe = useCallback(() => {
-            if (!socket || !isConnected) return;
+      const unsubscribe = useCallback(async () => {
+            if (!isConnected) return;
 
-            socket.emit(
-                  SocketEvents.SEARCH_UNSUBSCRIBE,
-                  (ack: SearchUnsubscribeAck) => {
-                        // Best-effort unsubscribe — don't need to handle errors
-                        if (ack.status === 'error') {
-                              console.warn('[SearchSocket] Unsubscribe failed');
-                        }
-                  },
-            );
-      }, [socket, isConnected]);
+            try {
+                  await socketManager.emitWithAck<SearchUnsubscribeAck>(
+                        SocketEvents.SEARCH_UNSUBSCRIBE,
+                        {},
+                  );
+            } catch {
+                  console.warn('[SearchSocket] Unsubscribe failed');
+            }
+      }, [isConnected]);
 
       /**
        * Update search query — emits search:updateQuery
@@ -199,8 +196,8 @@ export function useSearchSocket(store: SearchStoreApi) {
        * Server will unsubscribe from old query and subscribe to new one
        */
       const updateQuery = useCallback(
-            (payload: SearchUpdateQueryPayload) => {
-                  if (!socket || !isConnected) {
+            async (payload: SearchUpdateQueryPayload) => {
+                  if (!isConnected) {
                         console.warn(
                               '[SearchSocket] Cannot update query — socket not connected',
                         );
@@ -209,18 +206,17 @@ export function useSearchSocket(store: SearchStoreApi) {
 
                   storeRef.current.setStatus('loading');
 
-                  socket.emit(
-                        SocketEvents.SEARCH_UPDATE_QUERY,
-                        payload,
-                        (ack: SearchUpdateQueryAck) => {
-                              if (ack.status === 'error') {
-                                    storeRef.current.setError('Failed to update search query');
-                              }
-                              // On success, updated results will arrive via search:results event
-                        },
-                  );
+                  try {
+                        await socketManager.emitWithAck<SearchUpdateQueryAck>(
+                              SocketEvents.SEARCH_UPDATE_QUERY,
+                              payload,
+                        );
+                        // On success, updated results will arrive via search:results event
+                  } catch (err: any) {
+                        storeRef.current.setError(err.message || 'Failed to update query');
+                  }
             },
-            [socket, isConnected],
+            [isConnected],
       );
 
       /**
@@ -228,27 +224,26 @@ export function useSearchSocket(store: SearchStoreApi) {
        * Server will respond with search:moreResults event
        */
       const loadMore = useCallback(
-            (payload: SearchLoadMorePayload) => {
-                  if (!socket || !isConnected) {
+            async (payload: SearchLoadMorePayload) => {
+                  if (!isConnected) {
                         console.warn('[SearchSocket] Cannot loadMore — socket not connected');
                         return;
                   }
 
                   storeRef.current.setIsLoadingMore(true);
 
-                  socket.emit(
-                        SocketEvents.SEARCH_LOAD_MORE,
-                        payload,
-                        (ack: { status: string }) => {
-                              if (ack.status === 'error') {
-                                    storeRef.current.setIsLoadingMore(false);
-                                    storeRef.current.setError('Failed to load more results');
-                              }
-                              // On success, results arrive via search:moreResults event
-                        },
-                  );
+                  try {
+                        await socketManager.emitWithAck<{ status: string }>(
+                              SocketEvents.SEARCH_LOAD_MORE,
+                              payload,
+                        );
+                        // On success, results arrive via search:moreResults event
+                  } catch (err: any) {
+                        storeRef.current.setIsLoadingMore(false);
+                        storeRef.current.setError(err.message || 'Failed to load more');
+                  }
             },
-            [socket, isConnected],
+            [isConnected],
       );
 
       return {
