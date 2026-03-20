@@ -8,6 +8,7 @@ import {
   Query,
   Param,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ContactService } from './contact.service';
@@ -18,11 +19,13 @@ import {
   UpdateContactAliasDto,
   GetContactsQueryDto,
 } from './dto/contact.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Social - Contacts')
 @Controller('contacts')
+@UseGuards(JwtAuthGuard)
 export class ContactController {
-  constructor(private readonly contactService: ContactService) {}
+  constructor(private readonly contactService: ContactService) { }
 
   @Post('sync')
   @ApiOperation({ summary: 'Sync phone contacts from mobile device' })

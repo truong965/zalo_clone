@@ -48,7 +48,7 @@ export class MediaUploadService {
     private readonly eventEmitter: EventEmitter2,
     @Inject(uploadConfig.KEY)
     private readonly config: ConfigType<typeof uploadConfig>,
-  ) {}
+  ) { }
 
   async getMediaById(
     userId: string,
@@ -77,6 +77,29 @@ export class MediaUploadService {
         select: { userId: true },
       });
       if (!membership) throw new ForbiddenException('Access denied');
+    }
+
+    // ── Guard: Prevent polling trap for partial uploads ──
+    // If processingStatus is PROCESSING and no permanent s3Key exists,
+    // someone created a fake record or the upload never confirmed.
+    // Mark as FAILED to stop polling, rather than returning an incomplete record.
+    if (
+      media.processingStatus === MediaProcessingStatus.PROCESSING &&
+      !media.s3Key
+    ) {
+      this.logger.warn('Detected incomplete upload without s3Key', { mediaId });
+      await this.markAsFailed(
+        mediaId,
+        'Upload was not confirmed; file missing from storage',
+      );
+      const updated = await this.prisma.mediaAttachment.findUnique({
+        where: { id: mediaId },
+      });
+      if (!updated)
+        throw new NotFoundException(
+          'Internal error: media record disappeared',
+        );
+      return this.formatMediaResponse(updated);
     }
 
     return this.formatMediaResponse(media);

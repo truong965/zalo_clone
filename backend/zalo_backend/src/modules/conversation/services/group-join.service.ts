@@ -7,6 +7,7 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import {
@@ -20,6 +21,8 @@ import { ReviewJoinRequestDto } from '../dto/review-join-request.dto';
 import { EventPublisher } from '@shared/events';
 import { DisplayNameResolver } from '@shared/services';
 import { ConversationMemberAddedEvent } from '../events';
+import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
+import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 
 @Injectable()
 export class GroupJoinService {
@@ -29,7 +32,9 @@ export class GroupJoinService {
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) {}
+    @Inject(BLOCK_CHECKER)
+    private readonly blockChecker: IBlockChecker,
+  ) { }
 
   async requestJoin(dto: CreateJoinRequestDto, userId: string) {
     const group = await this.prisma.conversation.findUnique({
@@ -173,6 +178,19 @@ export class GroupJoinService {
     const newStatus = dto.approve
       ? JoinRequestStatus.APPROVED
       : JoinRequestStatus.REJECTED;
+
+    // Check block relationship before approving join request
+    if (dto.approve) {
+      const blocked = await this.blockChecker.isBlocked(
+        adminId,
+        request.userId,
+      );
+      if (blocked) {
+        throw new ForbiddenException(
+          `Cannot approve join request: a block relationship exists between you and the requesting user`,
+        );
+      }
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.groupJoinRequest.update({
@@ -339,6 +357,16 @@ export class GroupJoinService {
 
     if (!inviterMember || inviterMember.status !== MemberStatus.ACTIVE) {
       throw new ForbiddenException('You are not a member of this group');
+    }
+
+    // Check block status: inviter cannot invite users they have a block relationship with
+    for (const targetUserId of targetUserIds) {
+      const blocked = await this.blockChecker.isBlocked(inviterId, targetUserId);
+      if (blocked) {
+        throw new ForbiddenException(
+          `Cannot invite user: a block relationship exists between you and the target`,
+        );
+      }
     }
 
     let invitedCount = 0;

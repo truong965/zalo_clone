@@ -1,8 +1,6 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { TransformInterceptor } from './common/interceptor/transform.interceptor';
 import {
-  ClassSerializerInterceptor,
   Logger,
   ValidationPipe,
   VersioningType,
@@ -23,10 +21,6 @@ async function bootstrap() {
 
   // 2. Chuyển đổi thành Array chuẩn để NestJS tự động xử lý logic trả về 1 origin
   const allowedOrigins = rawOrigins.split(',').map((origin) => origin.trim());
-
-  const reflector = app.get(Reflector);
-  app.useGlobalInterceptors(new TransformInterceptor(reflector));
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
   //Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({

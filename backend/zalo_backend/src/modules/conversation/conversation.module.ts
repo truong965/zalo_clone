@@ -10,6 +10,7 @@ import { AuthorizationModule } from '@modules/authorization/authorization.module
 import { SocketModule } from 'src/socket/socket.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import { PrivacyModule } from 'src/modules/privacy/privacy.module';
+import { BlockModule } from '@modules/block/block.module';
 
 // Services
 import { ConversationService } from './services/conversation.service';
@@ -56,6 +57,7 @@ import { ConversationGateway } from './conversation.gateway';
     PrivacyModule,
     SocketModule,
     IdempotencyModule,
+    BlockModule, // Provides BLOCK_CHECKER for GroupService block validation
   ],
   controllers: [ConversationController],
   providers: [

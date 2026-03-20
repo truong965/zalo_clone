@@ -9,17 +9,16 @@ import {
 import { Server } from 'socket.io';
 import {
   Logger,
-  UseFilters,
   Inject,
   UseGuards,
   UsePipes,
-  UseInterceptors,
 } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { DisconnectReason } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
+import { BaseGateway } from 'src/common/base/base.gateway';
 import { SocketAuthService } from './services/socket-auth.service';
 import { SocketStateService } from './services/socket-state.service';
 import { SocketPresenceService } from './services/socket-presence.service';
@@ -32,7 +31,6 @@ import { OnEvent } from '@nestjs/event-emitter';
 import type { ISocketEmitEvent } from '@common/events/outbound-socket.event';
 import { OUTBOUND_SOCKET_EVENT } from '@common/events/outbound-socket.event';
 import { InternalEventNames } from '@common/contracts/events';
-import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
 
 @WebSocketGateway({
   cors: {
@@ -62,19 +60,14 @@ import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.inte
     ? parseInt(process.env.PING_TIMEOUT, 10)
     : 20000, // 20 seconds
 })
-// Exception filter for handling WS exceptions
-@UseFilters(WsExceptionFilter)
-// rate limiting guard
-@UseGuards(WsThrottleGuard)
-// Validation pipe for incoming messages
-@UsePipes(WsValidationPipe)
-@UseInterceptors(WsTransformInterceptor)
 export class SocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+  extends BaseGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(SocketGateway.name);
+  protected readonly logger = new Logger(SocketGateway.name);
   private shuttingDown = false;
 
   // --- MEMORY MANAGEMENT START ---
@@ -89,7 +82,9 @@ export class SocketGateway
     private readonly eventEmitter: EventEmitter2,
     @Inject(socketConfig.KEY)
     private readonly config: ConfigType<typeof socketConfig>,
-  ) { }
+  ) {
+    super();
+  }
 
   /**
    * Gateway initialization

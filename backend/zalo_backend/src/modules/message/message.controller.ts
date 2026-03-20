@@ -11,6 +11,7 @@ import {
   HttpStatus,
   ParseBoolPipe,
   ParseUUIDPipe,
+  UseFilters,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { MessageService } from './services/message.service';
@@ -25,7 +26,7 @@ import { ParseBigIntPipe } from 'src/common/pipes/parse-bigint.pipe';
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
 export class MessageController {
-  constructor(private readonly messageService: MessageService) {}
+  constructor(private readonly messageService: MessageService) { }
 
   @Post()
   @ApiOperation({ summary: 'Send message via HTTP (fallback)' })

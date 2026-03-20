@@ -53,7 +53,9 @@ export class InteractionGuard implements CanActivate {
     try {
       targetUserId = extractTargetUserId(context);
     } catch {
-      return true;
+      throw new ForbiddenException(
+        'Cannot determine target user for permission check',
+      );
     }
 
     const result = await this.interactionAuth.canInteract(

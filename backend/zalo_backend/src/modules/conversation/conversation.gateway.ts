@@ -9,19 +9,12 @@ import {
 import { Server } from 'socket.io';
 import {
   Logger,
-  UseFilters,
-  UseGuards,
-  UseInterceptors,
-  UsePipes,
-  ValidationPipe,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
-import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
-import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
-import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
+import { BaseGateway } from 'src/common/base/base.gateway';
 
 import { ConversationService } from './services/conversation.service';
 import { GroupService } from './services/group.service';
@@ -50,15 +43,14 @@ import { InternalEventNames } from '@common/contracts/events/event-names';
   cors: { origin: '*', credentials: true },
   namespace: '/socket.io',
 })
-@UseGuards(WsThrottleGuard)
-@UsePipes(new ValidationPipe({ transform: true }))
-@UseInterceptors(WsTransformInterceptor)
-@UseFilters(WsExceptionFilter)
-export class ConversationGateway implements OnGatewayInit {
+export class ConversationGateway
+  extends BaseGateway
+  implements OnGatewayInit
+{
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(ConversationGateway.name);
+  protected readonly logger = new Logger(ConversationGateway.name);
 
   constructor(
     private readonly conversationService: ConversationService,
@@ -67,7 +59,9 @@ export class ConversationGateway implements OnGatewayInit {
     private readonly realtime: ConversationRealtimeService,
     private readonly socketState: SocketStateService,
     private readonly prisma: PrismaService,
-  ) { }
+  ) {
+    super();
+  }
 
   afterInit() {
     this.logger.log('🗣️ Conversation Gateway initialized');

@@ -8,10 +8,12 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { DatabaseModule } from './database/prisma.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { APP_GUARD } from '@nestjs/core';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import {
+  ClassSerializerInterceptor,
+} from '@nestjs/common';
 import { RedisModule } from '@shared/redis/redis.module';
 import { SocketModule } from './socket/socket.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
@@ -48,6 +50,8 @@ import workerConfig from './config/worker.config';
 import { HealthModule } from './modules/health/health.module';
 import { RequestContextModule } from './common/context/request-context.module';
 import { RequestContextInterceptor } from './common/interceptor/request-context.interceptor';
+import { TransformInterceptor } from './common/interceptor/transform.interceptor';
+import { HttpExceptionFilter } from './common/filters';
 
 @Module({
   imports: [
@@ -151,6 +155,27 @@ import { RequestContextInterceptor } from './common/interceptor/request-context.
   controllers: [AppController],
   providers: [
     AppService,
+    // === GLOBAL FILTERS ===
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
+
+    // === GLOBAL INTERCEPTORS ===
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestContextInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TransformInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ClassSerializerInterceptor,
+    },
+
+    // === GLOBAL GUARDS ===
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -158,10 +183,6 @@ import { RequestContextInterceptor } from './common/interceptor/request-context.
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: RequestContextInterceptor,
     },
   ],
 })

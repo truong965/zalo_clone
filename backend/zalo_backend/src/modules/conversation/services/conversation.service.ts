@@ -1,6 +1,8 @@
 // src/modules/conversation/services/conversation.service.ts
 
-import { Inject, Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Inject, Injectable, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
+import { InteractionAuthorizationService } from 'src/modules/authorization/services/interaction-authorization.service';
+import { PermissionAction } from 'src/common/constants/permission-actions.constant';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisPresenceService } from 'src/shared/redis/services/redis-presence.service';
@@ -77,6 +79,7 @@ export class ConversationService {
     private readonly privacyRead: IPrivacyReadPort,
     private readonly displayNameResolver: DisplayNameResolver,
     private readonly eventEmitter: EventEmitter2,
+    private readonly interactionAuth: InteractionAuthorizationService,
   ) { }
 
   private async getUserProfilesMap(
@@ -157,6 +160,15 @@ export class ConversationService {
   ): Promise<{ id: string; isNew: boolean }> {
     if (userId1 === userId2) {
       throw new BadRequestException('Cannot create conversation with yourself');
+    }
+
+    const authz = await this.interactionAuth.canInteract(
+      userId1,
+      userId2,
+      PermissionAction.MESSAGE,
+    );
+    if (!authz.allowed) {
+      throw new ForbiddenException(authz.reason ?? 'Cannot create conversation');
     }
 
     const [user1, user2] = [userId1, userId2].sort();

@@ -7,6 +7,7 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import {
@@ -32,6 +33,8 @@ import {
   ConversationUpdatedEvent,
 } from '../events';
 import { MAX_PINNED_MESSAGES } from '../constants/conversation.constants';
+import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
+import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 
 export interface GroupSettings {
   description?: string;
@@ -48,6 +51,8 @@ export class GroupService {
     private readonly prisma: PrismaService,
     private readonly eventPublisher: EventPublisher,
     private readonly displayNameResolver: DisplayNameResolver,
+    @Inject(BLOCK_CHECKER)
+    private readonly blockChecker: IBlockChecker,
   ) {}
 
   async createGroup(dto: CreateGroupDto, creatorId: string) {
@@ -68,6 +73,8 @@ export class GroupService {
     if (users.length !== uniqueMemberIds.length + 1) {
       throw new BadRequestException('Some users do not exist');
     }
+
+    await this.assertNotBlockedWithAny(creatorId, uniqueMemberIds);
 
     const group = await this.prisma.$transaction(async (tx) => {
       const conversation = await tx.conversation.create({
@@ -208,6 +215,8 @@ export class GroupService {
     if (newUserIds.length === 0) {
       throw new BadRequestException('All users are already members');
     }
+
+    await this.assertNotBlockedWithAny(requesterId, newUserIds);
 
     await this.prisma.$transaction(async (tx) => {
       // Count inside transaction to prevent race condition
@@ -513,6 +522,26 @@ export class GroupService {
   // ============================================================
   // HELPER METHODS
   // ============================================================
+
+  /**
+   * Throw ForbiddenException if the requester is blocked by or has blocked
+   * any of the target users.
+   */
+  private async assertNotBlockedWithAny(
+    requesterId: string,
+    targetIds: string[],
+  ): Promise<void> {
+    await Promise.all(
+      targetIds.map(async (targetId) => {
+        const blocked = await this.blockChecker.isBlocked(requesterId, targetId);
+        if (blocked) {
+          throw new ForbiddenException(
+            `Cannot add user: a block relationship exists between participants`,
+          );
+        }
+      }),
+    );
+  }
 
   private async getGroupOrThrow(conversationId: string) {
     const conversation = await this.prisma.conversation.findUnique({

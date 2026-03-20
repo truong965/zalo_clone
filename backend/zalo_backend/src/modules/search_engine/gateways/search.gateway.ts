@@ -9,10 +9,8 @@ import type { Server } from 'socket.io';
 import {
   Injectable,
   Logger,
-  UseGuards,
-  UseInterceptors,
-  UseFilters,
 } from '@nestjs/common';
+import { BaseGateway } from 'src/common/base/base.gateway';
 import { RealTimeSearchService } from '../services/real-time-search.service';
 import { OnEvent } from '@nestjs/event-emitter';
 import type {
@@ -26,9 +24,6 @@ import type {
 import { MessageType } from '@prisma/client';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
-import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
-import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
-import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { safeJSON } from 'src/common/utils/json.util';
 import { DisplayNameResolver } from '@shared/services';
 import { InternalEventNames } from '@common/contracts/events/event-names';
@@ -69,19 +64,18 @@ import { InternalEventNames } from '@common/contracts/events/event-names';
   cors: { origin: '*', credentials: true },
   namespace: '/socket.io', // Phase B (TD-07): Share namespace with SocketGateway (base)
 })
-@UseGuards(WsThrottleGuard)
-@UseInterceptors(WsTransformInterceptor)
-@UseFilters(WsExceptionFilter)
-export class SearchGateway {
+export class SearchGateway extends BaseGateway {
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(SearchGateway.name);
+  protected readonly logger = new Logger(SearchGateway.name);
 
   constructor(
     private readonly realTimeSearchService: RealTimeSearchService,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) { }
+  ) {
+    super();
+  }
 
   // ============================================================================
   // Lifecycle: Cleanup on disconnect (delegated from SocketGateway via event)

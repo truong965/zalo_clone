@@ -9,20 +9,14 @@ import {
 import { Server } from 'socket.io';
 import {
   Logger,
-  UseFilters,
   UseGuards,
-  UseInterceptors,
-  UsePipes,
-  ValidationPipe,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
-import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
 import { WsJwtGuard } from 'src/common/guards/ws-jwt.guard';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
-import { WsTransformInterceptor } from 'src/common/interceptor/ws-transform.interceptor';
-import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
+import { BaseGateway } from 'src/common/base/base.gateway';
 import { ConversationType } from '@prisma/client';
 
 import { MessageService } from './services/message.service';
@@ -41,15 +35,15 @@ import { TypingIndicatorDto } from './dto/typing-indicator.dto';
   cors: { origin: '*', credentials: true },
   namespace: '/socket.io',
 })
-@UseGuards(WsJwtGuard, WsThrottleGuard)
-@UsePipes(new ValidationPipe({ transform: true }))
-@UseInterceptors(WsTransformInterceptor)
-@UseFilters(WsExceptionFilter)
-export class MessageGateway implements OnGatewayInit {
+@UseGuards(WsJwtGuard)
+export class MessageGateway
+  extends BaseGateway
+  implements OnGatewayInit
+{
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(MessageGateway.name);
+  protected readonly logger = new Logger(MessageGateway.name);
   private socketSubscriptions = new Map<
     string,
     (() => void | Promise<void>)[]
@@ -72,7 +66,9 @@ export class MessageGateway implements OnGatewayInit {
     private readonly realtime: MessageRealtimeService,
     private readonly socketState: SocketStateService,
     private readonly prisma: PrismaService,
-  ) { }
+  ) {
+    super();
+  }
 
   afterInit() {
     this.logger.log('📨 Message Gateway initialized');

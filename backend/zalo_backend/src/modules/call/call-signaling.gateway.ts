@@ -59,19 +59,16 @@ import {
 import { Server } from 'socket.io';
 import {
       Logger,
-      UseFilters,
+      Inject,
       UseGuards,
-      UsePipes,
-      ValidationPipe,
       ConflictException,
 } from '@nestjs/common';
+import { BaseGateway } from 'src/common/base/base.gateway';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { SocketStateService } from 'src/socket/services/socket-state.service';
-import { WsThrottleGuard } from 'src/common/guards/ws-throttle.guard';
 import { WsJwtGuard } from 'src/common/guards/ws-jwt.guard';
-import { WsExceptionFilter } from 'src/common/filters/ws-exception.filter';
 import { CallHistoryService } from './call-history.service';
 import { CallEndReason } from './events/call.events';
 import {
@@ -117,14 +114,15 @@ type IceCandidateBatch = {
       cors: { origin: '*', credentials: true },
       namespace: '/socket.io',
 })
-@UseGuards(WsJwtGuard, WsThrottleGuard)
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-@UseFilters(WsExceptionFilter)
-export class CallSignalingGateway implements OnGatewayInit {
+@UseGuards(WsJwtGuard)
+export class CallSignalingGateway
+  extends BaseGateway
+  implements OnGatewayInit
+{
       @WebSocketServer()
       server: Server;
 
-      private readonly logger = new Logger(CallSignalingGateway.name);
+      protected readonly logger = new Logger(CallSignalingGateway.name);
 
       /**
        * Ringing timeouts: callId → NodeJS.Timeout
@@ -173,7 +171,9 @@ export class CallSignalingGateway implements OnGatewayInit {
             private readonly dailyCoService: DailyCoService,
             private readonly eventEmitter: EventEmitter2,
             private readonly prisma: PrismaService,
-      ) { }
+      ) {
+            super();
+      }
 
       afterInit() {
             this.logger.log('📞 Call Signaling Gateway initialized');
@@ -378,11 +378,17 @@ export class CallSignalingGateway implements OnGatewayInit {
             }
             const conversationName = privacyResult.conversationName;
 
+            // For group calls, use only receivers who aren't blocked
+            const effectiveReceiverIds =
+                  isGroupCall && privacyResult.filteredReceiverIds
+                        ? privacyResult.filteredReceiverIds
+                        : allReceiverIds;
+
             // Start call session
             const session = await this.startCallSession(
                   client,
                   callerId,
-                  allReceiverIds,
+                  effectiveReceiverIds,
                   callType,
                   isGroupCall,
                   conversationId,
@@ -411,7 +417,7 @@ export class CallSignalingGateway implements OnGatewayInit {
                         conversationId,
                         conversationName,
                         callerInfo,
-                        allReceiverIds,
+                        effectiveReceiverIds,
                   );
                   if (!result) return;
             } else {
@@ -426,10 +432,10 @@ export class CallSignalingGateway implements OnGatewayInit {
             }
 
             // Start ringing timeouts
-            this.startRingingTimeouts(callId, allReceiverIds, isGroupCall);
+            this.startRingingTimeouts(callId, effectiveReceiverIds, isGroupCall);
 
             this.logger.log(
-                  `Call ${callId}: ${callerId} → ${allReceiverIds.join(',')}` +
+                  `Call ${callId}: ${callerId} → ${effectiveReceiverIds.join(',')}` +
                   ` (${callType}${isGroupCall ? ', GROUP' : ''})`,
             );
 
@@ -448,10 +454,10 @@ export class CallSignalingGateway implements OnGatewayInit {
             allowed: boolean;
             reason?: string;
             conversationName: string | null;
+            filteredReceiverIds?: string[];
       }> {
             let conversationName: string | null = null;
 
-            // Group calls bypass individual privacy settings
             if (isGroupCall) {
                   if (conversationId) {
                         const conv = await this.prisma.conversation.findUnique({
@@ -460,7 +466,37 @@ export class CallSignalingGateway implements OnGatewayInit {
                         });
                         conversationName = conv?.name ?? null;
                   }
-                  return { allowed: true, conversationName };
+
+                  // Check block status for each receiver — skip blocked participants
+                  // rather than cancelling the entire group call.
+                  const checkResults = await Promise.all(
+                        allReceiverIds.map(async (receiverId) => {
+                              const result = await this.interactionAuth.canInteract(
+                                    callerId,
+                                    receiverId,
+                                    PermissionAction.CALL,
+                              );
+                              return { receiverId, allowed: result.allowed };
+                        }),
+                  );
+
+                  const allowedReceiverIds = checkResults
+                        .filter((r) => r.allowed)
+                        .map((r) => r.receiverId);
+
+                  if (allowedReceiverIds.length === 0) {
+                        return {
+                              allowed: false,
+                              reason: 'Call not allowed: blocked relationship with all receivers',
+                              conversationName,
+                        };
+                  }
+
+                  return {
+                        allowed: true,
+                        conversationName,
+                        filteredReceiverIds: allowedReceiverIds,
+                  };
             }
 
             // 1-1 Call: Check privacy settings for the receiver
