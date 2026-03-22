@@ -9,6 +9,7 @@ import { ConversationActionSheet } from './components/conversation-action-sheet'
 import { useConversationsList } from './hooks/use-conversations-list';
 import { useConversationActions } from './hooks/use-conversation-actions';
 import { useConversationRealtime } from './hooks/use-conversation-realtime';
+import { useMarkAsSeen } from './hooks/use-mark-as-seen';
 import { Conversation } from '@/types/conversation';
 
 export function ChatsScreen() {
@@ -17,6 +18,7 @@ export function ChatsScreen() {
   const insets = useSafeAreaInsets();
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [isActionSheetVisible, setIsActionSheetVisible] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const {
     data,
@@ -29,17 +31,29 @@ export function ChatsScreen() {
   } = useConversationsList();
 
   const { pinConversation, muteConversation } = useConversationActions();
+  const { markAsSeen } = useMarkAsSeen();
   useConversationRealtime();
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  }, [refetch]);
 
   const flattenedData = useMemo(() => {
     return data?.pages.flatMap((page) => page.data) ?? [];
   }, [data]);
 
   const handlePress = useCallback((id: string) => {
+    const conv = flattenedData.find((c) => c.id === id);
+    if (conv && conv.unreadCount > 0) {
+      markAsSeen(id, conv.lastMessage?.id);
+    }
+    
     router.push({
       pathname: `/chat/${id}` as any,
     });
-  }, [router]);
+  }, [router, flattenedData, markAsSeen]);
 
   const handleLongPress = useCallback((id: string) => {
     const conv = flattenedData.find(c => c.id === id);
@@ -66,7 +80,7 @@ export function ChatsScreen() {
   }
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingBottom: insets.bottom, paddingTop: 8 }}>
+    <View className="flex-1 bg-background" style={{ paddingBottom: insets.bottom }}>
       {flattenedData.length === 0 && !isLoading ? (
         <View className="flex-1 items-center justify-center">
           <Text className="text-muted-foreground text-lg">{t('chats.empty')}</Text>
@@ -92,7 +106,7 @@ export function ChatsScreen() {
               }}
               onEndReachedThreshold={0.5}
               refreshControl={
-                <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+                <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
               }
               ListFooterComponent={
                 isFetchingNextPage ? (

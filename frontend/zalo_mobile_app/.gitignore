@@ -43,3 +43,6 @@ app-example
 /android
 
 .agent
+
+google-services.json
+GoogleService-Info.plist

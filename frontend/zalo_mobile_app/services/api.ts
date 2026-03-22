@@ -7,6 +7,9 @@ import type {
       UserProfile,
 } from '@/types/auth';
 import type { Conversation, ConversationListResponse } from '@/types/conversation';
+import type { Message } from '@/types/message';
+import type { ReminderItem, CreateReminderParams, UpdateReminderParams } from '@/types/reminder';
+import type { CallHistoryItem, CursorPaginatedResult } from '@/types/call';
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
@@ -265,13 +268,13 @@ export const mobileApi = {
             const query = new URLSearchParams();
             if (params.cursor) query.append('cursor', params.cursor);
             if (params.limit) query.append('limit', params.limit.toString());
-            
+
             const queryString = query.toString();
             const path = `/api/v1/conversations${queryString ? `?${queryString}` : ''}`;
-            
+
             return apiRequest<ConversationListResponse>(path, { method: 'GET' }, accessToken);
       },
-      
+
       getConversation(id: string, accessToken: string) {
             return apiRequest<Conversation>(`/api/v1/conversations/${id}`, { method: 'GET' }, accessToken);
       },
@@ -289,8 +292,13 @@ export const mobileApi = {
             return apiRequest<unknown>('/api/v1/friendships', { method: 'GET' }, accessToken);
       },
 
-      getCallHistory(accessToken: string) {
-            return apiRequest<unknown>('/api/v1/calls/history', { method: 'GET' }, accessToken);
+      getCallHistory(accessToken: string, status?: string) {
+            const url = status ? `/api/v1/calls/history?status=${status}` : '/api/v1/calls/history';
+            return apiRequest<CursorPaginatedResult<CallHistoryItem>>(url, { method: 'GET' }, accessToken);
+      },
+
+      markMissedCallsAsViewed(accessToken: string) {
+            return apiRequest<void>('/api/v1/calls/missed/view-all', { method: 'POST' }, accessToken);
       },
 
       getSessions(accessToken: string) {
@@ -340,13 +348,22 @@ export const mobileApi = {
             );
       },
 
-      getMessages(conversationId: string, accessToken: string, cursor?: string, limit: number = 20) {
-            return apiRequest<{ data: any[]; nextCursor?: string; hasMore: boolean }>(
-                  `/api/v1/messages?conversationId=${conversationId}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
+      getMessages(conversationId: string, accessToken: string, cursor?: string, direction: 'older' | 'newer' = 'older', limit: number = 50) {
+            return apiRequest<{ data: Message[]; meta: { nextCursor?: string; hasNextPage: boolean } }>(
+                  `/api/v1/messages?conversationId=${conversationId}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}${direction ? `&direction=${direction}` : ''}`,
                   { method: 'GET' },
                   accessToken,
             );
       },
+
+      getMessageContext(conversationId: string, accessToken: string, messageId: string, before: number = 25, after: number = 25) {
+            return apiRequest<{ data: Message[]; hasOlderMessages: boolean; hasNewerMessages: boolean }>(
+                  `/api/v1/messages/context?conversationId=${conversationId}&messageId=${messageId}&before=${before}&after=${after}`,
+                  { method: 'GET' },
+                  accessToken,
+            );
+      },
+
 
       sendMessage(data: { conversationId: string; content?: string; type: string; clientMessageId: string; mediaIds?: string[] }, accessToken: string) {
             return apiRequest<any>(
@@ -396,4 +413,148 @@ export const mobileApi = {
                   accessToken,
             );
       },
+      getReceivedFriendRequests(accessToken: string) {
+            return apiRequest<any[]>('/api/v1/friend-requests/received', { method: 'GET' }, accessToken);
+      },
+
+      getSentFriendRequests(accessToken: string) {
+            return apiRequest<any[]>('/api/v1/friend-requests/sent', { method: 'GET' }, accessToken);
+      },
+
+      acceptFriendRequest(requestId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/friend-requests/${requestId}/accept`, { method: 'PUT' }, accessToken);
+      },
+
+      declineFriendRequest(requestId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/friend-requests/${requestId}/decline`, { method: 'PUT' }, accessToken);
+      },
+
+      cancelFriendRequest(requestId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/friend-requests/${requestId}`, { method: 'DELETE' }, accessToken);
+      },
+
+      getGroups(accessToken: string, params: { cursor?: string; limit?: number; search?: string } = {}) {
+            const query = new URLSearchParams();
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            if (params.search) query.append('search', params.search);
+
+            const queryString = query.toString();
+            return apiRequest<ConversationListResponse>(`/api/v1/conversations/groups${queryString ? `?${queryString}` : ''}`, { method: 'GET' }, accessToken);
+      },
+
+      initiateUpload(payload: { fileName: string; mimeType: string; fileSize: number }, accessToken: string) {
+            return apiRequest<{ uploadId: string; presignedUrl: string; expiresIn: number; s3Key: string }>(
+                  '/api/v1/media/upload/initiate',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                  },
+                  accessToken,
+            );
+      },
+
+      uploadToS3(presignedUrl: string, fileInfo: { uri: string; type: string; name: string }, onProgress?: (percent: number) => void): Promise<void> {
+            return new Promise((resolve, reject) => {
+                  const xhr = new XMLHttpRequest();
+                  xhr.upload.addEventListener('progress', (e) => {
+                        if (e.lengthComputable && onProgress) {
+                              onProgress(Math.round((e.loaded / e.total) * 100));
+                        }
+                  });
+                  xhr.addEventListener('load', () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                              resolve();
+                        } else {
+                              reject(new Error(`Upload failed with status ${xhr.status}`));
+                        }
+                  });
+                  xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+                  xhr.open('PUT', presignedUrl);
+                  xhr.setRequestHeader('Content-Type', fileInfo.type);
+                  // React Native specific way to send a file
+                  xhr.send(fileInfo as any);
+            });
+      },
+
+      confirmUpload(uploadId: string, accessToken: string) {
+            return apiRequest<any>(
+                  '/api/v1/media/upload/confirm',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ uploadId }),
+                   },
+                  accessToken,
+            );
+      },
+
+      getReminders(accessToken: string, includeCompleted = false) {
+            return apiRequest<ReminderItem[]>(
+                  `/api/v1/reminders${includeCompleted ? '?includeCompleted=true' : ''}`,
+                  { method: 'GET' },
+                  accessToken,
+            );
+      },
+
+      getConversationReminders(conversationId: string, accessToken: string) {
+            return apiRequest<ReminderItem[]>(
+                  `/api/v1/reminders/conversation/${conversationId}`,
+                  { method: 'GET' },
+                  accessToken,
+            );
+      },
+
+      createReminder(params: CreateReminderParams, accessToken: string) {
+            return apiRequest<ReminderItem>(
+                  '/api/v1/reminders',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify(params),
+                  },
+                  accessToken,
+            );
+      },
+
+      updateReminder(id: string, params: UpdateReminderParams, accessToken: string) {
+            return apiRequest<ReminderItem>(
+                  `/api/v1/reminders/${id}`,
+                  {
+                        method: 'PATCH',
+                        body: JSON.stringify(params),
+                  },
+                  accessToken,
+            );
+      },
+
+      deleteReminder(id: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/reminders/${id}`, { method: 'DELETE' }, accessToken);
+      },
+
+      getUndelivered(accessToken: string) {
+            return apiRequest<ReminderItem[]>('/api/v1/reminders/undelivered', { method: 'GET' }, accessToken);
+      },
+
+      getPinnedMessages(conversationId: string, accessToken: string) {
+            return apiRequest<Message[]>(`/api/v1/conversations/${conversationId}/pinned-messages`, { method: 'GET' }, accessToken);
+      },
+
+      pinMessage(conversationId: string, messageId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/conversations/${conversationId}/pin-message/${messageId}`, { method: 'POST' }, accessToken);
+      },
+
+      unpinMessage(conversationId: string, messageId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/conversations/${conversationId}/unpin-message/${messageId}`, { method: 'DELETE' }, accessToken);
+      },
+
+      registerDeviceToken(payload: { deviceId: string; fcmToken: string; platform: 'ANDROID' | 'IOS' | 'WEB' }, accessToken: string) {
+            return apiRequest<{ message: string }>('/api/v1/devices', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            }, accessToken);
+      },
+
+      removeDeviceToken(deviceId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/devices/${deviceId}`, { method: 'DELETE' }, accessToken);
+      },
 };
+

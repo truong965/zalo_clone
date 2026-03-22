@@ -1,133 +1,403 @@
 import { FlashList } from '@shopify/flash-list';
-import { useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { Stack, useLocalSearchParams, router } from 'expo-router';
+import { useTheme } from 'react-native-paper';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  View,
+  StyleSheet,
+  Pressable,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
 import { Message, MessageType } from '@/types/message';
-import { ChatHeader } from '../../features/chats/components/chat-header';
-import { ChatInput } from '../../features/chats/components/chat-input';
-import { MessageItem } from '../../features/chats/components/message-item';
-import { SystemMessage } from '../../features/chats/components/system-message';
-import { MessageSeparator } from '../../features/chats/components/message-separator';
-import { useChatRealtime, useMessagesList, useSendMessage } from '../../features/chats/hooks/use-chat-hooks';
+import { ChatHeader } from '@/features/chats/components/chat-header';
+import { ChatInput } from '@/features/chats/components/chat-input';
+import { MessageItem } from '@/features/chats/components/message-item/index';
+import { SystemMessage } from '@/features/chats/components/message-item/system-message';
+import { MessageSeparator } from '@/features/chats/components/message-item/message-separator';
+import {
+  useChatRealtime,
+  useMessagesList,
+  useSendMessage,
+} from '@/features/chats/hooks/use-chat-hooks';
+import { useJumpToMessage } from '@/features/chats/hooks/use-jump-to-message';
+import { usePinMessage } from '@/features/chats/hooks/use-pin-message';
+import { PinnedMessagesHeader } from '@/features/chats/components/pinned-messages-header';
+import { MessageActionSheet } from '@/features/chats/components/message-action-sheet';
+import { useChatStore } from '@/features/chats/stores/chat.store';
+import { useMarkAsSeen } from '@/features/chats/hooks/use-mark-as-seen';
+
+const uuidv4 = () =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+
+const MVCP_NORMAL = { startRenderingFromBottom: true } as const;
+const MVCP_JUMP = {} as const;
+
+const ChatMessage = React.memo(
+  ({
+    item, isMe, isDirect, isLatestMyMessage,
+    showAvatar, showSenderName, showTime, showSeparator,
+    onLongPress, onJumpToMessage, isHighlighted,
+  }: {
+    item: Message;
+    isMe: boolean;
+    isDirect: boolean;
+    isLatestMyMessage: boolean;
+    showAvatar: boolean;
+    showSenderName: boolean;
+    showTime: boolean;
+    showSeparator: boolean;
+    onLongPress?: (msg: Message) => void;
+    onJumpToMessage?: (msgId: string) => void;
+    isHighlighted?: boolean;
+  }) => {
+    if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
+    return (
+      <View style={{ flexDirection: 'column' }}>
+        {showSeparator && <MessageSeparator date={item.createdAt} />}
+        <MessageItem
+          message={item}
+          isMe={isMe}
+          isDirect={isDirect}
+          isLatestMyMessage={isLatestMyMessage}
+          showAvatar={showAvatar}
+          showSenderName={showSenderName}
+          showTime={showTime}
+          onLongPress={onLongPress}
+          onJumpToMessage={onJumpToMessage}
+          isHighlighted={isHighlighted}
+        />
+      </View>
+    );
+  },
+);
 
 export default function ChatDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
   const { user, accessToken } = useAuth();
-  const queryKey = ['messages', id];
+  const theme = useTheme();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  // Fetch conversation detail for the header
   const { data: conversation } = useQuery({
     queryKey: ['conversation', id],
     queryFn: () => mobileApi.getConversation(id, accessToken!),
     enabled: !!id && !!accessToken,
   });
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading
-  } = useMessagesList(id);
+  const flashListRef = useRef<any>(null);
+
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useMessagesList(id, 'older');
 
   const sendMessageMutation = useSendMessage();
-  useChatRealtime(id);
+
+  const {
+    jumpToMessage,
+    returnToLatest,
+    isJumpedAway,
+    highlightedId,
+    loadNewer,
+    isJumping,
+    flashListKey,
+    initialScrollIndex,
+    // FIX Bug 2: Nhận refs để truyền vào useChatRealtime
+    isJumpingRef,
+    jumpBufferRef,
+  } = useJumpToMessage({
+    conversationId: id,
+    // FIX Bug 1: Không còn truyền queryKey từ đây nữa.
+    // useJumpToMessage tự dùng messagesQueryKey(conversationId) nội bộ,
+    // đảm bảo luôn đúng key với useMessagesList và useChatRealtime.
+    flashListRef,
+    scrollToBottom: () => flashListRef.current?.scrollToEnd({ animated: true }),
+  });
+
+  // FIX Bug 2: Truyền jump guard refs vào useChatRealtime.
+  // useChatRealtime sẽ buffer messages nhận trong lúc jump thay vì upsert ngay,
+  // tránh race condition giữa socket update và contextual replace.
+  useChatRealtime(id, { isJumpingRef, jumpBufferRef });
+
+  const { pinnedMessages, pinMessage, unpinMessage } = usePinMessage(id);
+  const { setReplyTarget, jumpToMessageId, setJumpToMessageId } = useChatStore();
+  const { markAsSeen } = useMarkAsSeen();
+
+  const [selectedMsgForMenu, setSelectedMsgForMenu] = React.useState<Message | null>(null);
+  const fetchingRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevLastMessageIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+  }, []);
+
+  useEffect(() => {
+    if (jumpToMessageId && jumpToMessage) {
+      jumpToMessage(jumpToMessageId);
+      setJumpToMessageId(null);
+    }
+  }, [jumpToMessageId, jumpToMessage, setJumpToMessageId]);
 
   const messages = useMemo(() => {
-    return data?.pages.flatMap(page => page.data) || [];
-  }, [data]);
+    if (!data?.pages) return [];
+    const raw: Message[] = [];
+    for (const page of data.pages)
+      for (const msg of page.data) raw.push(msg);
+    raw.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return raw;
+  }, [data?.pages]);
 
-  const handleSend = useCallback((content: string) => {
-    sendMessageMutation.mutate({
-      conversationId: id,
-      content,
-      type: 'TEXT',
-      clientMessageId: Date.now().toString(),
-    });
-  }, [id, sendMessageMutation]);
-
-  const renderItem = useCallback(({ item, index }: { item: Message, index: number }) => {
-    // Handle system messages separately
-    if (item.type === MessageType.SYSTEM) {
-      return <SystemMessage message={item} />;
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    
+    // Mark as seen if it's from someone else
+    if (lastMsg.senderId !== user?.id) {
+      markAsSeen(id, lastMsg.id.toString());
     }
 
-    const isMe = item.senderId === user?.id;
-    const nextMessage = messages[index + 1]; // Since list is inverted, next is actually previous in time
-    const prevMessage = messages[index - 1]; // prev is actually next in time
+    const lastId = lastMsg.id.toString();
+    if (prevLastMessageIdRef.current !== null && prevLastMessageIdRef.current !== lastId) {
+      if (initialScrollIndex === undefined) {
+        flashListRef.current?.scrollToEnd({ animated: true });
+      }
+    }
+    prevLastMessageIdRef.current = lastId;
+  }, [messages, initialScrollIndex, id, user?.id, markAsSeen]);
 
-    // Logic for showing avatar and sender name (only in groups and for others)
-    const isGroup = conversation?.type === 'GROUP';
-    const showAvatar = !isMe && (index === 0 || messages[index - 1]?.senderId !== item.senderId);
-    const showSenderName = isGroup && !isMe && (index === messages.length - 1 || messages[index + 1]?.senderId !== item.senderId);
+  const isGroup = conversation?.type === 'GROUP';
+  const isDirect = !isGroup;
 
-    // Date separator logic
-    const showSeparator = index === messages.length - 1 ||
-      new Date(item.createdAt).toDateString() !== new Date(messages[index + 1]?.createdAt).toDateString();
+  const latestMyMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--)
+      if (messages[i].senderId === user?.id) return messages[i].id;
+    return null;
+  }, [messages, user?.id]);
 
-    // Show time only when:
-    // 1. Last message in list (most recent)
-    // 2. Sender changes (the last message from a sender before switching to another sender)
-    const isLastMessage = index === 0;
-    const isSenderChange = prevMessage && prevMessage.senderId !== item.senderId;
-    const showTime = isLastMessage || isSenderChange;
+  const handleStartReached = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage || fetchingRef.current) return;
+    if (messages.length === 0) return;
+    fetchingRef.current = true;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      fetchNextPage().finally(() => {
+        fetchingRef.current = false;
+        timeoutRef.current = null;
+      });
+    }, 0);
+  }, [hasNextPage, isFetchingNextPage, messages.length, fetchNextPage]);
 
-    return (
-      <View>
-        {showSeparator && <MessageSeparator date={item.createdAt} />}
-        <MessageItem
-          message={item}
+  const [isAtBottom, setIsAtBottom] = React.useState(true);
+  const isAtBottomRef = useRef(true);
+
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    if (messages.length === 0) return;
+    const lastItem = messages[messages.length - 1];
+    const isLastVisible = viewableItems.some((v: any) => v.item.id === lastItem.id);
+    if (isAtBottomRef.current !== isLastVisible) {
+      isAtBottomRef.current = isLastVisible;
+      setIsAtBottom(isLastVisible);
+    }
+  }, [messages]);
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 10,
+    minimumViewTime: 50,
+  }).current;
+
+  const getItemType = useCallback(
+    (item: Message) => item.type === MessageType.SYSTEM ? 'system' : 'message',
+    [],
+  );
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: Message; index: number }) => {
+      const olderMessage = messages[index - 1];
+      const newerMessage = messages[index + 1];
+      const isMe = item.senderId === user?.id;
+      const isFirstInGroup = !olderMessage || olderMessage.senderId !== item.senderId;
+      const isLastInGroup = !newerMessage || newerMessage.senderId !== item.senderId;
+      const showSeparator =
+        !olderMessage ||
+        new Date(item.createdAt).toDateString() !== new Date(olderMessage.createdAt).toDateString();
+
+      return (
+        <ChatMessage
+          item={item}
           isMe={isMe}
-          showAvatar={showAvatar}
-          showSenderName={showSenderName}
-          showTime={showTime}
+          isDirect={isDirect}
+          isLatestMyMessage={item.id === latestMyMessageId}
+          showAvatar={!isMe && isFirstInGroup}
+          showSenderName={isGroup && !isMe && isFirstInGroup}
+          showTime={isLastInGroup}
+          showSeparator={showSeparator}
+          onLongPress={setSelectedMsgForMenu}
+          onJumpToMessage={jumpToMessage}
+          isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
-      </View>
-    );
-  }, [user?.id, messages, conversation?.type]);
+      );
+    },
+    [user?.id, messages, isGroup, isDirect, latestMyMessageId,
+      setSelectedMsgForMenu, jumpToMessage, highlightedId],
+  );
+
+  const handleSend = useCallback(
+    (content: string, type: MessageType = MessageType.TEXT, mediaIds?: string[], replyTarget?: any, localAssets?: any[]) => {
+      sendMessageMutation.mutate({
+        conversationId: id,
+        content,
+        type,
+        clientMessageId: uuidv4(),
+        mediaIds,
+        replyTarget,
+        localAssets,
+      });
+    },
+    [id, sendMessageMutation],
+  );
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, backgroundColor: '#eef2f7' }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ChatHeader conversation={null} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
       </View>
     );
   }
 
+  const isJumpMode = initialScrollIndex !== undefined;
+
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-background"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
+    <View style={{ flex: 1, backgroundColor: '#eef2f7' }}>
+      <Stack.Screen options={{ headerShown: false }} />
+
       <ChatHeader conversation={conversation as any} />
 
-      <View className="flex-1">
-        {(() => {
-          const AnyFlashList = FlashList as any;
-          return (
-            <AnyFlashList
-              data={messages}
-              renderItem={renderItem}
-              keyExtractor={(item: Message) => item.id}
-              inverted
-              onEndReached={() => {
-                if (hasNextPage && !isFetchingNextPage) {
-                  fetchNextPage();
-                }
-              }}
-              onEndReachedThreshold={0.5}
-              estimatedItemSize={80}
-              ListFooterComponent={isFetchingNextPage ? <ActivityIndicator className="my-2" /> : null}
-            />
-          );
-        })()}
-      </View>
+      <PinnedMessagesHeader
+        pinnedMessages={pinnedMessages}
+        onViewAllPinned={() => router.push(`/chat/${id}/pinned`)}
+      />
 
-      <ChatInput onSend={handleSend} />
-    </KeyboardAvoidingView>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <View style={{ flex: 1 }}>
+          <FlashList
+            key={flashListKey}
+            ref={flashListRef}
+            maintainVisibleContentPosition={isJumpMode ? MVCP_JUMP : MVCP_NORMAL}
+            initialScrollIndex={initialScrollIndex}
+            data={messages}
+            renderItem={renderItem}
+            keyExtractor={(item: Message) => item.id.toString()}
+            getItemType={getItemType}
+            onStartReached={handleStartReached}
+            onStartReachedThreshold={0.3}
+            onEndReached={isJumpedAway ? loadNewer : undefined}
+            onEndReachedThreshold={0.2}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            contentContainerStyle={{
+              paddingHorizontal: 12,
+              paddingBottom: 10,
+              paddingTop: 10,
+            }}
+            ListHeaderComponent={
+              <View style={{ height: 40, justifyContent: 'center', alignItems: 'center' }}>
+                {isFetchingNextPage && <ActivityIndicator color={theme.colors.primary} />}
+              </View>
+            }
+            drawDistance={500}
+          />
+
+          <JumpToLatestFAB
+            show={(isJumpedAway || !isAtBottom) && messages.length > 0}
+            onPress={returnToLatest}
+          />
+
+          {isJumping && (
+            <View style={styles.jumpingOverlay}>
+              <ActivityIndicator color="#ffffff" size="small" />
+            </View>
+          )}
+        </View>
+
+        <ChatInput onSend={handleSend} conversationId={id} />
+      </KeyboardAvoidingView>
+
+      <MessageActionSheet
+        visible={!!selectedMsgForMenu}
+        message={selectedMsgForMenu}
+        isPinned={!!selectedMsgForMenu && pinnedMessages.some(m => m.id === selectedMsgForMenu.id)}
+        onDismiss={() => setSelectedMsgForMenu(null)}
+        onReply={(msg) => {
+          setReplyTarget({
+            messageId: msg.id,
+            senderName: msg.sender?.displayName || 'Người dùng',
+            content: msg.content,
+            type: msg.type,
+            mediaAttachments: msg.mediaAttachments?.map((a) => ({
+              mediaType: a.mediaType,
+              originalName: a.originalName,
+            })),
+          });
+        }}
+        onPin={(msg) => pinMessage(msg.id)}
+        onUnpin={(msg) => unpinMessage(msg.id)}
+      />
+    </View>
   );
 }
+
+function JumpToLatestFAB({ show, onPress }: { show: boolean; onPress: () => void }) {
+  if (!show) return null;
+  return (
+    <Pressable style={styles.fab} onPress={onPress}>
+      <Ionicons name="chevron-down" size={24} color="#0091ff" />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  jumpingOverlay: {
+    position: 'absolute',
+    top: 12,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    zIndex: 20,
+  },
+});

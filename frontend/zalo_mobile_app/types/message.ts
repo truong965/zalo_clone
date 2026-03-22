@@ -1,13 +1,15 @@
-export enum MessageType {
-  TEXT = 'TEXT',
-  IMAGE = 'IMAGE',
-  VIDEO = 'VIDEO',
-  AUDIO = 'AUDIO',
-  DOCUMENT = 'FILE',
-  STICKER = 'STICKER',
-  SYSTEM = 'SYSTEM',
-  VOICE = 'VOICE',
-}
+export const MessageType = {
+  TEXT: 'TEXT',
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO',
+  FILE: 'FILE',
+  STICKER: 'STICKER',
+  SYSTEM: 'SYSTEM',
+  AUDIO: 'AUDIO',
+  VOICE: 'VOICE'
+} as const;
+
+export type MessageType = typeof MessageType[keyof typeof MessageType];
 
 export interface Sender {
   id: string;
@@ -25,10 +27,18 @@ export interface Message {
   updatedAt: string;
   deletedAt?: string;
   sender: Sender;
-  attachments?: MessageAttachment[];
+  attachments?: MessageAttachment[]; // Deprecated, use mediaAttachments instead
+  mediaAttachments?: MessageMediaAttachmentItem[];
   replyTo?: Message;
+  parentMessage?: any;
   clientMessageId?: string;
   metadata?: Record<string, unknown>;
+  
+  // Receipts/Tracking
+  deliveredCount?: number;
+  seenCount?: number;
+  totalRecipients?: number;
+  directReceipts?: Record<string, { delivered: string | null; seen: string | null }> | null;
 }
 
 export interface MessageAttachment {
@@ -39,6 +49,22 @@ export interface MessageAttachment {
   size?: number;
   thumbnailUrl?: string;
   metadata?: any;
+}
+
+export interface MessageMediaAttachmentItem {
+  id: string;
+  mediaType: string;
+  mimeType?: string;
+  cdnUrl?: string;
+  thumbnailUrl?: string;
+  optimizedUrl?: string;
+  originalName: string;
+  size: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  processingStatus: string;
+  _localUrl?: string;
 }
 
 export interface MessageListResponse {

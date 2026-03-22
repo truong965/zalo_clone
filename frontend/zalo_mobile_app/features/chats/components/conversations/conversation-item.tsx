@@ -5,7 +5,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Badge, useTheme } from 'react-native-paper';
 import { Conversation } from '@/types/conversation';
-import { ConversationAvatar } from './conversation-avatar';
+import { ConversationAvatar } from '@/components/ui/conversation-avatar';
+import { getMessagePreviewText } from './message-item/message-item.utils';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -26,13 +27,27 @@ export const ConversationItem = React.memo(({ conversation, onPress, onLongPress
     (conversation.type === 'DIRECT' ? conversation.members?.[0]?.displayName : 'Hội thoại') ||
     'Hội thoại';
 
+  const isUnread = conversation.unreadCount > 0;
+  
   return (
     <TouchableOpacity
       onPress={() => onPress(conversation.id)}
       onLongPress={() => onLongPress(conversation.id)}
       activeOpacity={0.7}
-      className={`flex-row items-center p-4 bg-background ${conversation.isPinned ? 'bg-secondary/30' : ''}`}
+      className={`flex-row items-center p-4 relative ${
+        isUnread 
+          ? 'bg-blue-50/80 dark:bg-blue-900/20' 
+          : conversation.isPinned 
+            ? 'bg-secondary/20' 
+            : 'bg-background'
+      }`}
     >
+      {isUnread && (
+        <View 
+          className="absolute left-0 top-0 bottom-0 w-1 bg-primary" 
+          style={{ borderTopRightRadius: 4, borderBottomRightRadius: 4 }}
+        />
+      )}
       <View className="relative">
         <ConversationAvatar conversation={conversation} size={56} />
         {conversation.isMuted && (
@@ -67,7 +82,7 @@ export const ConversationItem = React.memo(({ conversation, onPress, onLongPress
                 size={20}
                 style={{ backgroundColor: theme.colors.error, marginLeft: 8 }}
               >
-                {conversation.unreadCount > 5 ? '5+' : conversation.unreadCount}
+                {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
               </Badge>
             )}
           </View>
@@ -78,7 +93,7 @@ export const ConversationItem = React.memo(({ conversation, onPress, onLongPress
             className={`flex-1 text-muted-foreground mr-2 ${conversation.unreadCount > 0 ? 'text-foreground font-medium' : ''}`}
             numberOfLines={1}
           >
-            {lastMessage?.content || 'Chưa có tin nhắn'}
+            {lastMessage ? getMessagePreviewText(lastMessage) : 'Chưa có tin nhắn'}
           </Text>
         </View>
       </View>

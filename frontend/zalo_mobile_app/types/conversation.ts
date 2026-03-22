@@ -27,7 +27,13 @@ export interface Conversation {
   isPinned: boolean;
   isMuted: boolean;
   members: ConversationMember[];
+  memberCount?: number;
   updatedAt: string;
+  // Presence fields
+  isOnline?: boolean;
+  lastSeenAt?: string | null;
+  otherUserId?: string | null;
+  isRecentlyUpdated?: boolean;
 }
 
 export interface ConversationListResponse {

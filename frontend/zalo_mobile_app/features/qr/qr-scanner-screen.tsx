@@ -4,7 +4,7 @@ import type { Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/providers/auth-provider';
 import { ApiRequestError, mobileApi } from '@/services/api';
@@ -56,21 +56,21 @@ export function QrScannerScreen() {
 
       if (!permission) {
             return (
-                  <SafeAreaView className="flex-1 items-center justify-center gap-3 px-4 py-3" edges={['top', 'bottom']}>
+                  <View className="flex-1 items-center justify-center gap-3 px-4 py-3">
                         <ActivityIndicator />
-                  </SafeAreaView>
+                  </View>
             );
       }
 
       if (!permission.granted) {
             return (
-                  <SafeAreaView className="flex-1 items-center justify-center gap-3 bg-background px-4 py-3" edges={['top', 'bottom']}>
+                  <View className="flex-1 items-center justify-center gap-3 bg-background px-4 py-3">
                         <Text className="text-center text-xl font-bold text-foreground">{t('qr.cameraPermissionTitle')}</Text>
                         <Text className="text-center text-muted">{t('qr.cameraPermissionSubtitle')}</Text>
                         <Pressable className="mt-1 rounded-xl bg-primary px-5 py-3" onPress={requestPermission}>
                               <Text className="font-bold text-primary-foreground">{t('qr.grantCameraPermission')}</Text>
                         </Pressable>
-                  </SafeAreaView>
+                  </View>
             );
       }
 
@@ -161,7 +161,7 @@ export function QrScannerScreen() {
       };
 
       return (
-            <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+            <View className="flex-1 bg-background">
                   <View className="mx-4 mb-1.5 mt-2.5 flex-1 overflow-hidden rounded-2xl border border-border">
                         <CameraView
                               style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
@@ -175,12 +175,9 @@ export function QrScannerScreen() {
                   <View
                         className="gap-2 px-4"
                         style={{
-                              paddingTop: Math.max(insets.top, 6),
+                              paddingTop: 6,
                               paddingBottom: Math.max(insets.bottom, 8) + 8,
                         }}>
-                        <Text className="text-xl font-bold text-foreground">{t('qr.scanTitle')}</Text>
-                        <Text className="text-muted">{t('qr.scanSubtitle')}</Text>
-
                         {scanResult?.requireConfirm ? (
                               <View className="mt-2 gap-1.5 rounded-xl border border-border bg-secondary p-3">
                                     <Text className="text-base font-bold text-foreground">{t('qr.confirmRequired')}</Text>
@@ -209,6 +206,6 @@ export function QrScannerScreen() {
                               <Text className="font-bold text-muted">{t('qr.scanAnother')}</Text>
                         </Pressable>
                   </View>
-            </SafeAreaView>
+            </View>
       );
 }

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, Tabs } from 'expo-router';
+import { Redirect, Tabs, useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ export default function TabLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const loginHref = '/login' as Href;
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -31,7 +32,7 @@ export default function TabLayout() {
           <>
             <Appbar.Action
               icon={({ size, color }) => <Ionicons name="qr-code-outline" size={size} color={color} />}
-              onPress={() => { }}
+              onPress={() => router.push('/qr-scanner')}
             />
             <Appbar.Action
               icon={({ size, color }) => <Ionicons name="add" size={size} color={color} />}
@@ -50,7 +51,7 @@ export default function TabLayout() {
         return (
           <Appbar.Action
             icon={({ size, color }) => <Ionicons name="settings-outline" size={size} color={color} />}
-            onPress={() => { }}
+            onPress={() => router.push('/profile/settings' as Href)}
           />
         );
       default:
@@ -66,12 +67,9 @@ export default function TabLayout() {
           header: () => (
             <Appbar.Header
               style={{
-                paddingTop: insets.top,
-                paddingBottom: 30,
                 paddingHorizontal: 12,
                 backgroundColor: '#1E88E5'
               }}
-              statusBarHeight={insets.top}
             >
               <View className="flex-1 flex-row items-center justify-between">
                 <View className="flex-1 mr-2">

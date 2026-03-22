@@ -1,0 +1,51 @@
+import React from 'react';
+import { View, StyleSheet, Image } from 'react-native';
+import { useTheme } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
+import { getFullUrl } from '@/utils/url-helpers';
+
+interface UserAvatarProps {
+  uri?: string | null;
+  size?: number;
+}
+
+export const UserAvatar = React.memo(({ uri, size = 40 }: UserAvatarProps) => {
+  const theme = useTheme();
+
+  const fullUri = getFullUrl(uri);
+
+  if (fullUri && typeof fullUri === 'string' && fullUri.trim() !== '') {
+    return (
+      <Image
+        source={{ uri: fullUri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        resizeMode="cover"
+      />
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.avatarContainer,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: theme.colors.surfaceVariant,
+        },
+      ]}
+    >
+      <Ionicons name="person" size={size * 0.6} color={theme.colors.onSurfaceVariant} />
+    </View>
+  );
+});
+
+UserAvatar.displayName = 'UserAvatar';
+
+const styles = StyleSheet.create({
+  avatarContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

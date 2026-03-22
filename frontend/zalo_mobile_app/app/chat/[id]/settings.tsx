@@ -4,20 +4,18 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
-import { ProfileHeader } from '../../../features/chats/components/settings/profile-header';
-import { SettingsListItem } from '../../../features/chats/components/settings/settings-list-item';
-import { MemberList } from '../../../features/chats/components/settings/member-list';
-import { useConversationSettings } from '../../../features/chats/hooks/use-conversation-settings';
-import { useConversationActions } from '../../../features/chats/hooks/use-conversation-actions';
+import { ProfileHeader } from '@/features/chats/components/settings/profile-header';
+import { SettingsListItem } from '@/features/chats/components/settings/settings-list-item';
+import { MemberList } from '@/features/chats/components/settings/member-list';
+import { useConversationSettings } from '@/features/chats/hooks/use-conversation-settings';
+import { useConversationActions } from '@/features/chats/hooks/use-conversation-actions';
 import { Modal, TextInput, Portal, Button, Text } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function SettingsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { accessToken, user } = useAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const { data: conversation, isLoading } = useQuery({
     queryKey: ['conversation', id],
@@ -85,7 +83,7 @@ export default function SettingsScreen() {
       {/* Custom Header */}
       <View
         className="flex-row items-center px-4 py-3 bg-primary"
-        style={{ paddingTop: insets.top + 12, paddingBottom: 12 }}
+        style={{ paddingTop: 12, paddingBottom: 12 }}
       >
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Ionicons name="arrow-back" size={24} color="white" />

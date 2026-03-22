@@ -2,17 +2,61 @@ import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvid
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme as useNativeWindColorScheme } from 'nativewind';
-import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native-paper';
 import 'react-native-reanimated';
 import '@/lib/i18n';
 import '../global.css';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 import { AuthProvider } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { SocketProvider } from '@/providers/socket-provider';
 
+// ── Notification handler ───────────────────────────────────────────
+if (!isExpoGo) {
+  try {
+    const Notifications = require('expo-notifications');
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
+    // Configure notification channel for Android
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+  } catch (e) {
+    // Silent – probably not linked or missing
+  }
+}
+
+// ── Firebase background handler (dev-build only) ──────────────────
+let messaging: any;
+try {
+  messaging = require('@react-native-firebase/messaging').default;
+  messaging().setBackgroundMessageHandler(async (_remoteMessage: any) => {
+    // Wakes the app silently — actual processing in useReminderNotifications
+  });
+} catch {
+  // Silent – Expo Go or not linked
+}
+
+// ── Themes ─────────────────────────────────────────────────────────
 const { LightTheme: AdaptedLightTheme, DarkTheme: AdaptedDarkTheme } = adaptNavigationTheme({
   reactNavigationLight: NavDefaultTheme,
   reactNavigationDark: NavDarkTheme,
@@ -64,23 +108,39 @@ export default function RootLayout() {
       <QueryProvider>
         <AuthProvider>
           <SocketProvider>
-            <PaperProvider theme={colorScheme === 'dark' ? PaperDarkTheme : PaperLightTheme}>
-              <ThemeProvider value={colorScheme === 'dark' ? NavThemeDark : NavThemeLight}>
-                <View className={`flex-1 ${colorScheme === 'dark' ? 'dark' : ''}`}>
-                  <Stack>
-                    <Stack.Screen name="index" options={{ headerShown: false }} />
-                    <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                    <Stack.Screen name="chat" options={{ headerShown: false }} />
-                    <Stack.Screen name="qr-scanner" options={{ title: 'QR Scanner', headerShown: true }} />
-                  </Stack>
-                  <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-                </View>
-              </ThemeProvider>
-            </PaperProvider>
+            <AppContent colorScheme={colorScheme} />
           </SocketProvider>
         </AuthProvider>
       </QueryProvider>
     </SafeAreaProvider>
+  );
+}
+
+import { useReminderNotifications } from '@/features/chats/hooks/use-reminder-notifications';
+import { ReminderAlertOverlay } from '@/features/chats/components/reminder-alert-overlay';
+
+function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {
+  const { alerts, dismissAlert, acknowledgeAlert } = useReminderNotifications();
+
+  return (
+    <PaperProvider theme={colorScheme === 'dark' ? PaperDarkTheme : PaperLightTheme}>
+      <ThemeProvider value={colorScheme === 'dark' ? NavThemeDark : NavThemeLight}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="chat" />
+          <Stack.Screen name="qr-scanner" />
+          <Stack.Screen name="profile" />
+        </Stack>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      </ThemeProvider>
+      <ReminderAlertOverlay
+        alerts={alerts}
+        onDismiss={dismissAlert}
+        onAcknowledge={acknowledgeAlert}
+      />
+      <Toast />
+    </PaperProvider>
   );
 }

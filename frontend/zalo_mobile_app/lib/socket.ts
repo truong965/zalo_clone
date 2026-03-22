@@ -14,14 +14,17 @@ class SocketManager {
       this.socket.disconnect();
     }
 
-    const socketUrl = this.baseUrl.replace('/api/v1', '') || 'http://localhost:8000';
-    
+    const baseUrl = this.baseUrl.replace('/api/v1', '') || 'http://localhost:8000';
+    const socketUrl = `${baseUrl}/socket.io`;
+
     this.socket = io(socketUrl, {
       path: '/socket.io',
       auth: { token },
       transports: ['websocket'],
       autoConnect: true,
       reconnection: true,
+      reconnectionDelay: 1000,        // Đợi 1s trước khi thử lại
+      reconnectionDelayMax: 5000,
     });
 
     this.socket.on(SocketEvents.CONNECT, () => {
@@ -44,6 +47,41 @@ class SocketManager {
 
   getSocket(): Socket | null {
     return this.socket;
+  }
+
+  async emitWithAck<T>(
+    event: string,
+    data: any,
+  ): Promise<T> {
+    if (!this.socket) {
+      throw new Error('Socket not connected');
+    }
+
+    return new Promise((resolve, reject) => {
+      // Setup timeout to avoid hanging promises (same behavior as web or reasonable UX)
+      this.socket?.timeout(5000).emit(event, data, (err: any, response: any) => {
+        if (err) {
+          reject(new Error('Socket emit timeout'));
+          return;
+        }
+
+        if (response && typeof response === 'object' && 'error' in response) {
+          reject(new Error(response.error || 'Unknown error'));
+          return;
+        }
+
+        if (
+          response &&
+          typeof response === 'object' &&
+          'success' in response &&
+          'data' in response
+        ) {
+          resolve(response.data as T);
+        } else {
+          resolve(response as T);
+        }
+      });
+    });
   }
 }
 

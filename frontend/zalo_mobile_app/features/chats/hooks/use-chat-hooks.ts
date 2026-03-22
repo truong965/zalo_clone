@@ -1,84 +1,359 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
-import { Message, MessageListResponse } from '@/types/message';
+import { Message } from '@/types/message';
 import { useCursorPagination } from '@/hooks/use-cursor-pagination';
 import { useEffect } from 'react';
 import { useSocket } from '@/providers/socket-provider';
+import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
+import {
+  applyConversationReadToCache,
+  applyReceiptUpdateToCache,
+  applySendFailedToCache,
+  applySentAckToCache,
+  upsertMessageToCache,
+  MessageSentAckPayload,
+  ReceiptUpdatePayload,
+  ConversationReadPayload,
+  SocketErrorPayload,
+} from '../utils/message-cache-helpers';
+import { ReplyTarget } from '../stores/chat.store';
+import { MobileAsset, useMobileMediaUpload } from './use-mobile-media-upload';
+import Toast from 'react-native-toast-message';
 
-export function useMessagesList(conversationId: string) {
-  const { accessToken } = useAuth();
-  
-  return useInfiniteQuery({
-    queryKey: ['messages', conversationId],
-    queryFn: ({ pageParam }) => 
-      mobileApi.getMessages(conversationId, accessToken!, pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage: MessageListResponse) => lastPage.nextCursor,
-    enabled: !!accessToken && !!conversationId,
-    // Invert the list for chat, so we fetch "older" messages as we scroll up
-    select: (data) => ({
-      pages: data.pages,
-      pageParams: data.pageParams,
-      // We don't need to reverse here if we use inverted FlashList, 
-      // but we need a flattened list of all messages across pages
-      allMessages: data.pages.flatMap(page => page.data).sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
-    }),
-  });
+function buildOptimisticParentMessage(target: ReplyTarget): any {
+  return {
+    id: target.messageId,
+    content: target.content ?? null,
+    senderId: null,
+    type: target.type,
+    deletedAt: null,
+    sender: { id: '', displayName: target.senderName, avatarUrl: null },
+    mediaAttachments: target.mediaAttachments?.map((a) => ({
+      id: '',
+      mediaType: a.mediaType,
+      originalName: a.originalName,
+      thumbnailUrl: null,
+    })) ?? [],
+  };
 }
 
-export function useSendMessage() {
+export const messagesQueryKey = (
+  conversationId: string,
+  direction: 'older' | 'newer' = 'older',
+) => ['messages', conversationId, direction] as const;
+
+// ─────────────────────────────────────────────────────────────
+// useMessagesList
+// ─────────────────────────────────────────────────────────────
+export function useMessagesList(
+  conversationId: string,
+  direction: 'older' | 'newer' = 'older',
+) {
   const { accessToken } = useAuth();
+
+  return useCursorPagination<Message>(
+    messagesQueryKey(conversationId, direction),
+    (cursor) =>
+      mobileApi.getMessages(conversationId, accessToken!, cursor, direction),
+    { enabled: !!accessToken && !!conversationId },
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// useSendMessage
+// ─────────────────────────────────────────────────────────────
+export function useSendMessage() {
+  const { accessToken, user } = useAuth();
+  const { socket, isConnected } = useSocket();
   const queryClient = useQueryClient();
+  const { uploadAsset } = useMobileMediaUpload();
 
   return useMutation({
-    mutationFn: (data: { conversationId: string; content?: string; type: string; clientMessageId: string; mediaIds?: string[] }) =>
-      mobileApi.sendMessage(data, accessToken!),
+    onMutate: async (variables: {
+      conversationId: string;
+      content?: string;
+      type: string;
+      clientMessageId: string;
+      mediaIds?: string[];
+      localAssets?: MobileAsset[];
+      replyTarget?: ReplyTarget;
+    }) => {
+      const queryKey = messagesQueryKey(variables.conversationId, 'older');
+      await queryClient.cancelQueries({ queryKey });
+
+      const previousMessages = queryClient.getQueryData(queryKey);
+
+      const optimisticMessage = {
+        id: `temp-${variables.clientMessageId}`,
+        conversationId: variables.conversationId,
+        content: variables.content,
+        type: variables.type,
+        clientMessageId: variables.clientMessageId,
+        senderId: user?.id,
+        createdAt: new Date().toISOString(),
+        metadata: { sendStatus: 'SENDING' },
+        parentMessage: variables.replyTarget ? buildOptimisticParentMessage(variables.replyTarget) : null,
+        mediaAttachments: variables.localAssets?.map((asset, idx) => ({
+          id: `temp-media-${idx}`,
+          mediaType: asset.type.toUpperCase(),
+          mimeType: asset.mimeType,
+          originalName: asset.fileName,
+          size: asset.fileSize,
+          processingStatus: 'UPLOADING',
+          _localUrl: asset.uri,
+        })) ?? [],
+      };
+
+      queryClient.setQueryData(queryKey, (oldData: any) => {
+        if (!oldData) return { pages: [{ data: [optimisticMessage], nextCursor: null }], pageParams: [] };
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any, index: number) =>
+            index === 0
+              ? { ...page, data: [optimisticMessage, ...page.data] }
+              : page,
+          ),
+        };
+      });
+
+      return { previousMessages, queryKey };
+    },
+    mutationFn: async (data: {
+      conversationId: string;
+      content?: string;
+      type: string;
+      clientMessageId: string;
+      mediaIds?: string[];
+      localAssets?: MobileAsset[];
+      replyToMessageId?: string;
+      replyTarget?: ReplyTarget;
+    }) => {
+      let finalMediaIds = data.mediaIds || [];
+
+      // If we have local assets, upload them first
+      if (data.localAssets && data.localAssets.length > 0) {
+        try {
+          const uploadPromises = data.localAssets.map(asset => uploadAsset(asset));
+          const uploadedIds = await Promise.all(uploadPromises);
+          finalMediaIds = [...finalMediaIds, ...uploadedIds];
+        } catch (error) {
+          console.error('Failed to upload some assets:', error);
+          throw new Error('Không thể tải lên tệp đính kèm. Vui lòng thử lại.');
+        }
+      }
+
+      const payload = {
+        conversationId: data.conversationId,
+        content: data.content,
+        type: data.type,
+        clientMessageId: data.clientMessageId,
+        mediaIds: finalMediaIds,
+        ...(data.replyTarget ? { replyTo: { messageId: data.replyTarget.messageId } } :
+          data.replyToMessageId ? { replyTo: { messageId: data.replyToMessageId } } : {}),
+      };
+
+      if (isConnected && socket) {
+        return socketManager.emitWithAck<any>(SocketEvents.MESSAGE_SEND, payload).then((res) => {
+          return {
+            id: res.messageId || `temp-${data.clientMessageId}`,
+            clientMessageId: data.clientMessageId,
+            conversationId: data.conversationId,
+            content: data.content,
+            type: data.type,
+            senderId: user?.id,
+            createdAt: new Date().toISOString(),
+          } as any;
+        });
+      }
+      return mobileApi.sendMessage(payload as any, accessToken!);
+    },
+    onError: (err, variables, context: any) => {
+      queryClient.setQueryData(context.queryKey, (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((m: any) =>
+              m.clientMessageId === variables.clientMessageId
+                ? { ...m, metadata: { ...m.metadata, sendStatus: 'FAILED' } }
+                : m,
+            ),
+          })),
+        };
+      });
+
+      Toast.show({
+        type: 'error',
+        text1: 'Lỗi gửi tin nhắn',
+        text2: err instanceof Error ? err.message : 'Đã có lỗi xảy ra',
+        position: 'top',
+      });
+    },
     onSuccess: (newMessage, variables) => {
-      // Optimistically update the message list or just invalidate
-      queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });
+      queryClient.setQueryData(
+        messagesQueryKey(variables.conversationId, 'older'),
+        (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              data: page.data.map((m: any) =>
+                m.clientMessageId === variables.clientMessageId
+                  ? {
+                    ...m,
+                    ...newMessage,
+                    metadata: { ...m.metadata, ...newMessage.metadata, sendStatus: 'SENT' }
+                  }
+                  : m,
+              ),
+            })),
+          };
+        },
+      );
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
 }
 
-export function useChatRealtime(conversationId: string) {
+// ─────────────────────────────────────────────────────────────
+// useChatRealtime
+// ─────────────────────────────────────────────────────────────
+export function useChatRealtime(
+  conversationId: string,
+  // FIX Bug 2: Nhận jump guard refs từ _id_.tsx.
+  // Khi isJumpingRef.current = true (đang fetch context):
+  //   - Không upsert message vào cache ngay (sẽ bị setQueryData của jump overwrite)
+  //   - Buffer vào jumpBufferRef để flush sau khi jump xong
+  //
+  // Tại sao optional? Để backward compatible nếu useChatRealtime được dùng ở
+  // màn hình khác không có jump feature.
+  jumpRefs?: {
+    isJumpingRef: React.MutableRefObject<boolean>;
+    jumpBufferRef: React.MutableRefObject<Message[]>;
+  },
+) {
+  const { user } = useAuth();
   const { socket } = useSocket();
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!socket || !conversationId) return;
 
-    const handleNewMessage = (payload: { message: Message; conversationId: string }) => {
-      if (payload.conversationId === conversationId) {
-        // Option 1: Invalidate to re-fetch (simple)
-        // Option 2: Manually update the infinite query cache (better performance)
-        queryClient.setQueryData(['messages', conversationId], (oldData: any) => {
-          if (!oldData) return oldData;
-          
-          return {
-            ...oldData,
-            pages: oldData.pages.map((page: any, index: number) => {
-              if (index === 0) {
-                return {
-                  ...page,
-                  data: [payload.message, ...page.data],
-                };
-              }
-              return page;
-            }),
-          };
+    const handleNewMessage = (payload: {
+      message: Message;
+      conversationId: string;
+    }) => {
+      if (payload.conversationId !== conversationId) return;
+
+      const senderId = payload.message.senderId ?? null;
+      const myId = user?.id;
+
+      if (socket && senderId && myId && senderId !== myId) {
+        socket.emit(SocketEvents.MESSAGE_DELIVERED_CLIENT_ACK, {
+          messageId: payload.message.id,
         });
       }
+
+      // FIX Bug 2: Socket guard — mirror pattern của web.
+      //
+      // Scenario xảy ra nếu không có guard:
+      //   t=0ms  : user tap reply quote → jumpToMessage() bắt đầu
+      //   t=0ms  : isJumpingRef = true, await getMessageContext()
+      //   t=150ms: socket nhận MESSAGE_NEW → upsertMessageToCache() → cache có message mới
+      //   t=300ms: getMessageContext() resolve → setQueryData(contextPage) → OVERWRITE cache
+      //   t=300ms: message mới ở t=150ms bị mất hoàn toàn
+      //
+      // Với guard:
+      //   t=150ms: isJumpingRef.current = true → push vào jumpBufferRef thay vì upsert
+      //   t=300ms: setQueryData(contextPage)
+      //   t=300ms: finally block → flush jumpBufferRef → upsert message mới vào contextPage
+      //   → Không mất message
+      if (jumpRefs?.isJumpingRef.current) {
+        jumpRefs.jumpBufferRef.current.push(payload.message);
+        return;
+      }
+
+      upsertMessageToCache(
+        queryClient,
+        messagesQueryKey(conversationId, 'older'),
+        payload.message,
+      );
+
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    };
+
+    const handleSentAck = (payload: MessageSentAckPayload) => {
+      applySentAckToCache(
+        queryClient,
+        messagesQueryKey(conversationId, 'older'),
+        payload,
+      );
+    };
+
+    const handleReceiptUpdate = (payload: ReceiptUpdatePayload) => {
+      if (payload.conversationId !== conversationId) return;
+      applyReceiptUpdateToCache(
+        queryClient,
+        messagesQueryKey(conversationId, 'older'),
+        payload,
+      );
+    };
+
+    const handleConversationRead = (payload: ConversationReadPayload) => {
+      if (payload.conversationId !== conversationId) return;
+      applyConversationReadToCache(
+        queryClient,
+        messagesQueryKey(conversationId, 'older'),
+        payload,
+      );
+    };
+
+    const handleError = (payload: SocketErrorPayload) => {
+      applySendFailedToCache(
+        queryClient,
+        messagesQueryKey(conversationId, 'older'),
+        payload,
+      );
+    };
+
+    const handleFriendOnline = (payload: { userId: string; timestamp: string }) => {
+      queryClient.setQueryData(['conversation', conversationId], (old: any) => {
+        if (!old || old.otherUserId !== payload.userId) return old;
+        return { ...old, isOnline: true, lastSeenAt: null };
+      });
+    };
+
+    const handleFriendOffline = (payload: { userId: string; timestamp: string }) => {
+      queryClient.setQueryData(['conversation', conversationId], (old: any) => {
+        if (!old || old.otherUserId !== payload.userId) return old;
+        return { ...old, isOnline: false, lastSeenAt: payload.timestamp };
+      });
     };
 
     socket.on(SocketEvents.MESSAGE_NEW, handleNewMessage);
+    socket.on(SocketEvents.MESSAGE_SENT_ACK, handleSentAck);
+    socket.on(SocketEvents.MESSAGE_RECEIPT_UPDATE, handleReceiptUpdate);
+    socket.on(SocketEvents.CONVERSATION_READ, handleConversationRead);
+    socket.on(SocketEvents.FRIEND_ONLINE, handleFriendOnline);
+    socket.on(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
+    socket.on(SocketEvents.ERROR, handleError);
 
     return () => {
       socket.off(SocketEvents.MESSAGE_NEW, handleNewMessage);
+      socket.off(SocketEvents.MESSAGE_SENT_ACK, handleSentAck);
+      socket.off(SocketEvents.MESSAGE_RECEIPT_UPDATE, handleReceiptUpdate);
+      socket.off(SocketEvents.CONVERSATION_READ, handleConversationRead);
+      socket.off(SocketEvents.FRIEND_ONLINE, handleFriendOnline);
+      socket.off(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
+      socket.off(SocketEvents.ERROR, handleError);
     };
-  }, [socket, conversationId, queryClient]);
+    // jumpRefs là object ref — stable reference, không cần trong deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, conversationId, queryClient, user?.id]);
 }
