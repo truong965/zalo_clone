@@ -32,7 +32,7 @@ export class UserPresenceListener {
     @Inject(PRIVACY_READ_PORT)
     private readonly privacyRead: IPrivacyReadPort,
     private readonly eventEmitter: EventEmitter2,
-  ) { }
+  ) {}
 
   @OnEvent(InternalEventNames.USER_SOCKET_CONNECTED, { async: true })
   async handleUserConnected(payload: {
@@ -61,7 +61,8 @@ export class UserPresenceListener {
       const settings = await this.privacyRead.getSettings(userId);
       if (!settings.showOnlineStatus) return;
 
-      const friendIds = await this.friendshipRead.getFriendIdsForPresence(userId);
+      const friendIds =
+        await this.friendshipRead.getFriendIdsForPresence(userId);
 
       if (!friendIds || friendIds.length === 0) return;
 

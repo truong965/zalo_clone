@@ -22,6 +22,7 @@ import {
 import { RedisService } from 'src/shared/redis/redis.service';
 import { MessageValidator } from '../helpers/message-validation.helper';
 import redisConfig from 'src/config/redis.config';
+import s3Config from 'src/config/s3.config';
 import type { ConfigType } from '@nestjs/config';
 import { safeJSON, safeStringify } from 'src/common/utils/json.util';
 import { EventPublisher } from '@shared/events';
@@ -85,7 +86,43 @@ export class MessageService {
     private readonly displayNameResolver: DisplayNameResolver,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
+    @Inject(s3Config.KEY)
+    private readonly s3Cfg: ConfigType<typeof s3Config>,
   ) {}
+
+  /**
+   * Rewrites a media URL so that its host matches the current S3_ENDPOINT.
+   * This fixes legacy records that have http://localhost:9000 baked into DB.
+   * Only rewrites if the current S3_ENDPOINT differs from what's already in the URL.
+   */
+  private rewriteMediaUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    const endpoint = this.s3Cfg.endpoint;
+    if (!endpoint) return url; // CloudFront / real AWS — no rewrite needed
+    try {
+      const parsed = new URL(url);
+      const target = new URL(endpoint);
+      // Only rewrite if the origin differs
+      if (parsed.origin !== target.origin) {
+        parsed.protocol = target.protocol;
+        parsed.hostname = target.hostname;
+        parsed.port = target.port;
+        return parsed.toString();
+      }
+      return url;
+    } catch {
+      return url;
+    }
+  }
+
+  private rewriteAttachment(ma: any): any {
+    return {
+      ...ma,
+      cdnUrl: this.rewriteMediaUrl(ma.cdnUrl),
+      thumbnailUrl: this.rewriteMediaUrl(ma.thumbnailUrl),
+      optimizedUrl: this.rewriteMediaUrl(ma.optimizedUrl),
+    };
+  }
 
   private async enrichMessagesWithMedia<
     T extends { id: bigint; parentMessage?: { id: bigint } | null },
@@ -118,13 +155,16 @@ export class MessageService {
 
     return messages.map((m) => {
       const enriched: any = { ...m };
-      enriched.mediaAttachments = mediaMap.get(m.id.toString()) || [];
+      enriched.mediaAttachments = (mediaMap.get(m.id.toString()) || []).map(
+        (ma) => this.rewriteAttachment(ma),
+      );
       if (enriched.parentMessage) {
         enriched.parentMessage = {
           ...enriched.parentMessage,
-          mediaAttachments:
+          mediaAttachments: (
             mediaMap.get(enriched.parentMessage.id.toString())?.slice(0, 1) ||
-            [],
+            []
+          ).map((ma: any) => this.rewriteAttachment(ma)),
         };
       }
       return enriched;
@@ -165,6 +205,7 @@ export class MessageService {
             FROM media_attachments ma
             WHERE ma.message_id = m.id
               AND ma.deleted_at IS NULL
+              AND ma.processing_status NOT IN ('FAILED', 'EXPIRED')
               AND ma.original_name ILIKE ${`%${normalizedKeyword}%`}
           )
         `
@@ -174,6 +215,7 @@ export class MessageService {
             FROM media_attachments ma
             WHERE ma.message_id = m.id
               AND ma.deleted_at IS NULL
+              AND ma.processing_status NOT IN ('FAILED', 'EXPIRED')
           )
         `;
 
@@ -987,6 +1029,7 @@ export class MessageService {
           cdnUrl: ma.cdnUrl ?? null,
           messageType: msg.type,
           createdAt: msg.createdAt,
+          processingStatus: ma.processingStatus,
         }));
       });
 

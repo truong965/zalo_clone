@@ -39,7 +39,7 @@ export class InteractionAuthorizationService {
     private readonly privacyRead: IPrivacyReadPort,
     @Inject(FRIENDSHIP_READ_PORT)
     private readonly friendshipRead: IFriendshipReadPort,
-  ) { }
+  ) {}
 
   /**
    * Check if requester can perform action on target.
@@ -75,9 +75,9 @@ export class InteractionAuthorizationService {
       return areFriends
         ? { allowed: true }
         : {
-          allowed: false,
-          reason: 'This action requires friendship',
-        };
+            allowed: false,
+            reason: 'This action requires friendship',
+          };
     }
 
     if (
@@ -86,7 +86,10 @@ export class InteractionAuthorizationService {
       resolvedAction === PermissionAction.PROFILE
     ) {
       const settings = await this.privacyRead.getSettings(targetId);
-      const privacyLevel = this.getPrivacyLevelForAction(resolvedAction, settings);
+      const privacyLevel = this.getPrivacyLevelForAction(
+        resolvedAction,
+        settings,
+      );
 
       if (privacyLevel === PrivacyLevel.EVERYONE) {
         return { allowed: true };
@@ -100,9 +103,9 @@ export class InteractionAuthorizationService {
         return areFriends
           ? { allowed: true }
           : {
-            allowed: false,
-            reason: 'User privacy settings require friendship',
-          };
+              allowed: false,
+              reason: 'User privacy settings require friendship',
+            };
       }
 
       return {

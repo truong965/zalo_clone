@@ -7,9 +7,36 @@ export const FILE_SIZE_LIMITS_MB = {
   DOCUMENT: 25,
 } as const;
 
-export const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'bmp', 'svg'];
-export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v'];
-export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'weba', 'amr', 'wma'];
+export const IMAGE_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'heic',
+  'bmp',
+  'svg',
+];
+export const VIDEO_EXTENSIONS = [
+  'mp4',
+  'mov',
+  'avi',
+  'mkv',
+  'webm',
+  'flv',
+  'wmv',
+  'm4v',
+];
+export const AUDIO_EXTENSIONS = [
+  'mp3',
+  'wav',
+  'ogg',
+  'm4a',
+  'aac',
+  'weba',
+  'amr',
+  'wma',
+];
 
 export const FileUtils = {
   /**

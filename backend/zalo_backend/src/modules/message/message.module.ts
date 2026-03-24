@@ -1,6 +1,7 @@
 // src/modules/message/message.module.ts
 
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from 'src/database/prisma.module';
 import { RedisModule } from '@shared/redis/redis.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -10,6 +11,7 @@ import { AuthorizationModule } from '@modules/authorization/authorization.module
 import { SocketModule } from 'src/socket/socket.module';
 import { ConversationModule } from '@modules/conversation/conversation.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
+import s3Config from 'src/config/s3.config';
 
 // Services
 import { MessageService } from './services/message.service';
@@ -45,12 +47,13 @@ import { MessageGateway } from './message.gateway';
  */
 @Module({
   imports: [
+    ConfigModule.forFeature(s3Config),
     DatabaseModule,
     RedisModule,
     EventEmitterModule,
     EventsModule,
     SharedModule,
-    AuthorizationModule, // Provides InteractionAuthorizationService for sendMessage() DIRECT permission check
+    AuthorizationModule,
     SocketModule,
     ConversationModule,
     IdempotencyModule,
@@ -79,4 +82,4 @@ import { MessageGateway } from './message.gateway';
     MessageBroadcasterService,
   ],
 })
-export class MessageModule { }
+export class MessageModule {}

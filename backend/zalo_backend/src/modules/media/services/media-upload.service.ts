@@ -48,7 +48,7 @@ export class MediaUploadService {
     private readonly eventEmitter: EventEmitter2,
     @Inject(uploadConfig.KEY)
     private readonly config: ConfigType<typeof uploadConfig>,
-  ) { }
+  ) {}
 
   async getMediaById(
     userId: string,
@@ -96,9 +96,7 @@ export class MediaUploadService {
         where: { id: mediaId },
       });
       if (!updated)
-        throw new NotFoundException(
-          'Internal error: media record disappeared',
-        );
+        throw new NotFoundException('Internal error: media record disappeared');
       return this.formatMediaResponse(updated);
     }
 

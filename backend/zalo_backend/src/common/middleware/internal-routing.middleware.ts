@@ -18,14 +18,14 @@ import type { Request, Response, NextFunction } from 'express';
  * Extracts /internal/*** routes and handles them with special routing.
  */
 export function setupInternalRouting(app: INestApplication): void {
-      // Middleware to intercept and mark internal routes
-      app.use((req: Request, _res: Response, next: NextFunction) => {
-            // Mark internal routes for special handling
-            if (req.path.startsWith('/internal/')) {
-                  (req as any).isInternal = true;
-            }
-            next();
-      });
+  // Middleware to intercept and mark internal routes
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    // Mark internal routes for special handling
+    if (req.path.startsWith('/internal/')) {
+      (req as any).isInternal = true;
+    }
+    next();
+  });
 }
 
 /**

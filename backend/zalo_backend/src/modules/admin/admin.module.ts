@@ -59,4 +59,4 @@ import { DailyStatsCron } from './cron/daily-stats.cron';
     DailyStatsCron,
   ],
 })
-export class AdminModule { }
+export class AdminModule {}

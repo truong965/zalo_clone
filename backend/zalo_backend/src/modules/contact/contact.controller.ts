@@ -25,7 +25,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @Controller('contacts')
 @UseGuards(JwtAuthGuard)
 export class ContactController {
-  constructor(private readonly contactService: ContactService) { }
+  constructor(private readonly contactService: ContactService) {}
 
   @Post('sync')
   @ApiOperation({ summary: 'Sync phone contacts from mobile device' })

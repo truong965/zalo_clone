@@ -11,7 +11,7 @@ import { InternalEventNames } from '@common/contracts/events';
 export class QrLoginSocketListener {
   private readonly logger = new Logger(QrLoginSocketListener.name);
 
-  constructor(private readonly eventEmitter: EventEmitter2) { }
+  constructor(private readonly eventEmitter: EventEmitter2) {}
 
   /**
    * Listen for internal events from QrLoginService to emit to a specific socket.

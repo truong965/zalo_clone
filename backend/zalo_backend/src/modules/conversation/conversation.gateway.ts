@@ -7,9 +7,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import {
-  Logger,
-} from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
@@ -28,6 +26,8 @@ import {
 import type {
   ConversationArchivedEvent,
   ConversationMutedEvent,
+  ConversationPinnedEvent,
+  ConversationUnpinnedEvent,
 } from './events';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -43,10 +43,7 @@ import { InternalEventNames } from '@common/contracts/events/event-names';
   cors: { origin: '*', credentials: true },
   namespace: '/socket.io',
 })
-export class ConversationGateway
-  extends BaseGateway
-  implements OnGatewayInit
-{
+export class ConversationGateway extends BaseGateway implements OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
@@ -408,6 +405,51 @@ export class ConversationGateway
     } catch (error) {
       this.logger.error(
         `[CONVERSATION_ARCHIVED] Failed to emit socket for user ${payload.userId}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  /**
+   * React to ConversationPinnedEvent → emit socket to user's devices.
+   */
+  @OnEvent('conversation.pinned')
+  async handleConversationPinned(
+    payload: ConversationPinnedEvent,
+  ): Promise<void> {
+    try {
+      await this.emitToUser(payload.userId, SocketEvents.CONVERSATION_PINNED, {
+        conversationId: payload.conversationId,
+        pinnedAt: payload.pinnedAt,
+      });
+      this.logger.debug(
+        `[CONVERSATION_PINNED] Emitted to user ${payload.userId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[CONVERSATION_PINNED] Failed to emit socket for user ${payload.userId}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  /**
+   * React to ConversationUnpinnedEvent → emit socket to user's devices.
+   */
+  @OnEvent('conversation.unpinned')
+  async handleConversationUnpinned(
+    payload: ConversationUnpinnedEvent,
+  ): Promise<void> {
+    try {
+      await this.emitToUser(payload.userId, SocketEvents.CONVERSATION_UNPINNED, {
+        conversationId: payload.conversationId,
+      });
+      this.logger.debug(
+        `[CONVERSATION_UNPINNED] Emitted to user ${payload.userId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[CONVERSATION_UNPINNED] Failed to emit socket for user ${payload.userId}`,
         (error as Error).stack,
       );
     }

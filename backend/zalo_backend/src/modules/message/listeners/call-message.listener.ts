@@ -28,7 +28,7 @@ export class CallMessageListener {
     @Inject(CONVERSATION_SYSTEM_MESSAGE_PORT)
     private readonly systemMessagePort: IConversationSystemMessagePort,
     private readonly idempotency: IdempotencyService,
-  ) { }
+  ) {}
 
   /**
    * Create a SYSTEM message to log the call in the conversation.

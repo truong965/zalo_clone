@@ -45,4 +45,4 @@ import { InteractionReadAdapter } from './internal-api/interaction-read.adapter'
     NotBlockedGuard,
   ],
 })
-export class AuthorizationModule { }
+export class AuthorizationModule {}

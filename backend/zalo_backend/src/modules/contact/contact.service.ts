@@ -31,9 +31,7 @@ import {
 } from './dto/contact.dto';
 import { SelfActionException, RateLimitException } from 'src/common/errors';
 import { FriendshipService } from '../friendship/service/friendship.service';
-import {
-  PRIVACY_READ_PORT,
-} from '@common/contracts/internal-api';
+import { PRIVACY_READ_PORT } from '@common/contracts/internal-api';
 import type { IPrivacyReadPort } from '@common/contracts/internal-api';
 import * as crypto from 'crypto';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
@@ -61,7 +59,7 @@ export class ContactService {
     private readonly privacyRead: IPrivacyReadPort,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
-  ) { }
+  ) {}
 
   /**
    * Sync contacts from phone

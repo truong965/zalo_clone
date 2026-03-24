@@ -69,9 +69,6 @@ import { PrivacyReadAdapter } from './internal-api/privacy-read.adapter';
     PrivacyBlockListener, // Handle block events → cache invalidation
     PrivacyUserRegisteredListener, // Create default PrivacySettings on registration
   ],
-  exports: [
-    PrivacyService,
-    PRIVACY_READ_PORT,
-  ], // Keep legacy export + new contract token
+  exports: [PrivacyService, PRIVACY_READ_PORT], // Keep legacy export + new contract token
 })
-export class PrivacyModule { }
+export class PrivacyModule {}

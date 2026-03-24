@@ -12,7 +12,7 @@ interface RoleLike {
 
 @Injectable()
 export class RequestContextService {
-  constructor(private readonly cls: ClsService<RequestContextStore>) { }
+  constructor(private readonly cls: ClsService<RequestContextStore>) {}
 
   setRequestId(requestId: string): void {
     try {

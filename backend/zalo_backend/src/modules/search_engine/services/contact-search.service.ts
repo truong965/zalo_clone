@@ -39,10 +39,11 @@ export class ContactSearchService {
       this.validationService.validateKeyword(request.keyword);
       await this.validationService.validateUserExists(userId);
 
-      // Cache key (include cursor for paginated requests)
+      // Cache key (include cursor and conversationId for paginated/scoped requests)
       const excludeStr = (request.excludeIds || []).sort().join(',');
       const cursorStr = request.cursor || 'initial';
-      const cacheKey = `search:contacts:${userId}:${request.keyword}:${request.limit || 50}:${request.hasAlias ? 'alias' : 'all'}:${excludeStr}:${cursorStr}`;
+      const convId = request.conversationId || 'global';
+      const cacheKey = `search:contacts:${userId}:${request.keyword}:${request.limit || 50}:${request.hasAlias ? 'alias' : 'all'}:${excludeStr}:${convId}:${cursorStr}`;
 
       // Check cache
       const cached =
@@ -61,6 +62,7 @@ export class ContactSearchService {
         request.keyword,
         requestedLimit,
         request.excludeIds,
+        request.conversationId,
         request.cursor,
       );
 

@@ -251,6 +251,16 @@ export class ConversationRealtimeService {
       }),
     );
 
+    // FIX: Push notification for the leaving user so their other connected devices can sync
+    notifications.push({
+      userId,
+      event: memberLeftEvent,
+      data: {
+        conversationId,
+        memberId: userId,
+      },
+    });
+
     return { notifications };
   }
 
@@ -375,8 +385,8 @@ export class ConversationRealtimeService {
         dto.conversationId,
       );
 
-      const admin = members.find((m) => m.role === MemberRole.ADMIN);
-      if (admin) {
+      const admins = members.filter((m) => m.role === MemberRole.ADMIN);
+      for (const admin of admins) {
         notifications.push({
           userId: admin.userId,
           event: joinRequestReceivedEvent,
@@ -424,10 +434,25 @@ export class ConversationRealtimeService {
       },
     ];
 
+    const members = await this.conversationService.getActiveMembers(
+      request.conversationId,
+    );
+
+    const admins = members.filter((m) => m.role === MemberRole.ADMIN);
+    for (const admin of admins) {
+      notifications.push({
+        userId: admin.userId,
+        event: joinReviewedEvent,
+        data: {
+          conversationId: request.conversationId,
+          requestId: dto.requestId,
+          approved: dto.approve,
+          reviewedBy: userId,
+        },
+      });
+    }
+
     if (dto.approve) {
-      const members = await this.conversationService.getActiveMembers(
-        request.conversationId,
-      );
 
       for (const member of members) {
         if (member.userId === request.userId) continue;
@@ -474,8 +499,8 @@ export class ConversationRealtimeService {
       const members = await this.conversationService.getActiveMembers(
         dto.conversationId,
       );
-      const admin = members.find((m) => m.role === MemberRole.ADMIN);
-      if (admin) {
+      const admins = members.filter((m) => m.role === MemberRole.ADMIN);
+      for (const admin of admins) {
         notifications.push({
           userId: admin.userId,
           event: joinRequestReceivedEvent,

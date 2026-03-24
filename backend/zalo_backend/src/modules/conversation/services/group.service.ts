@@ -533,7 +533,10 @@ export class GroupService {
   ): Promise<void> {
     await Promise.all(
       targetIds.map(async (targetId) => {
-        const blocked = await this.blockChecker.isBlocked(requesterId, targetId);
+        const blocked = await this.blockChecker.isBlocked(
+          requesterId,
+          targetId,
+        );
         if (blocked) {
           throw new ForbiddenException(
             `Cannot add user: a block relationship exists between participants`,

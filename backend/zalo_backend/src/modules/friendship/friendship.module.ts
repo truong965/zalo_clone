@@ -99,4 +99,4 @@ import { FriendshipReadAdapter } from './internal-api/friendship-read.adapter';
   ],
   exports: [FriendshipService, FRIENDSHIP_READ_PORT],
 })
-export class FriendshipModule { }
+export class FriendshipModule {}

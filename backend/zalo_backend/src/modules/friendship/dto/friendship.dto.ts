@@ -1,6 +1,7 @@
-import { IsOptional, IsEnum, IsString } from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsArray, IsUUID } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { FriendshipStatus } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import { CursorPaginationDto } from '@common/dto/cursor-pagination.dto';
 
 // --- QUERY DTOs ---
@@ -20,6 +21,24 @@ export class GetFriendsQueryDto extends CursorPaginationDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Danh sách ID người dùng cần loại trừ',
+    type: [String],
+  })
+  @IsOptional()
+  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  excludeIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'ID cuộc trò chuyện để lọc bạn bè tham gia',
+    type: String,
+  })
+  @IsOptional()
+  @IsUUID()
+  conversationId?: string;
 }
 
 // --- RESPONSE DTOs ---

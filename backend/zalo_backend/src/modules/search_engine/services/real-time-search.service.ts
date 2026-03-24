@@ -95,7 +95,7 @@ export class RealTimeSearchService implements OnModuleInit {
     private readonly eventEmitter: EventEmitter2,
     private readonly configService: ConfigService,
     @Optional() private readonly redis: RedisService,
-  ) { }
+  ) {}
 
   private getInitialLimits(): {
     messageLimit: number;

@@ -1,4 +1,10 @@
-import { UseFilters, UseInterceptors, Logger, UseGuards, UsePipes } from '@nestjs/common';
+import {
+  UseFilters,
+  UseInterceptors,
+  Logger,
+  UseGuards,
+  UsePipes,
+} from '@nestjs/common';
 import { WsExceptionFilter } from '../filters/ws-exception.filter';
 import { WsTransformInterceptor } from '../interceptor/ws-transform.interceptor';
 import { WsThrottleGuard } from '../guards/ws-throttle.guard';

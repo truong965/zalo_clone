@@ -66,4 +66,4 @@ import { AuthModule } from 'src/modules/auth/auth.module';
     WsThrottleGuard,
   ],
 })
-export class SocketModule { }
+export class SocketModule {}

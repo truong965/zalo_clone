@@ -90,4 +90,4 @@ import { CallEndedSocketListener } from './listeners/call-ended.listener';
   ],
   exports: [CallHistoryService],
 })
-export class CallModule { }
+export class CallModule {}

@@ -200,14 +200,14 @@ export class SearchEventListener extends IdempotentListener {
 
           const sender = message.senderId
             ? await this.prisma.user.findUnique({
-              where: { id: message.senderId },
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-                phoneNumber: true,
-              },
-            })
+                where: { id: message.senderId },
+                select: {
+                  id: true,
+                  displayName: true,
+                  avatarUrl: true,
+                  phoneNumber: true,
+                },
+              })
             : null;
 
           // [Phase 2.1 DECOUPLED]: Fetch media attachments manually
@@ -273,10 +273,13 @@ export class SearchEventListener extends IdempotentListener {
           );
 
           // Phase A (TD-05): Emit internal event for SearchGateway to push resultRemoved to active subscribers
-          this.eventEmitter.emit(InternalEventNames.SEARCH_INTERNAL_RESULT_REMOVED, {
-            messageId: event.messageId,
-            conversationId: event.conversationId,
-          });
+          this.eventEmitter.emit(
+            InternalEventNames.SEARCH_INTERNAL_RESULT_REMOVED,
+            {
+              messageId: event.messageId,
+              conversationId: event.conversationId,
+            },
+          );
 
           this.logger.debug(
             `[SearchEvent] Processed message.deleted for ${event.messageId}`,
@@ -766,7 +769,8 @@ export class SearchEventListener extends IdempotentListener {
         );
       } catch (error) {
         this.logger.error(
-          `[SearchEvent] Failed to process media.deleted: ${error instanceof Error ? error.message : 'Unknown error'
+          `[SearchEvent] Failed to process media.deleted: ${
+            error instanceof Error ? error.message : 'Unknown error'
           }`,
         );
       }

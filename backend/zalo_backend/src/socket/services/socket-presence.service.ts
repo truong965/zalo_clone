@@ -21,7 +21,8 @@ export class SocketPresenceService {
 
     await this.redisPubSub.subscribe(
       RedisKeyBuilder.channels.presenceOffline,
-      (channel, message) => void this.handleCrossServerOffline(channel, message),
+      (channel, message) =>
+        void this.handleCrossServerOffline(channel, message),
     );
     this.logger.log('✅ Subscribed to cross-server presence events');
   }
@@ -33,7 +34,10 @@ export class SocketPresenceService {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-       this.logger.error(`Failed to publish presence online for ${userId}`, error);
+      this.logger.error(
+        `Failed to publish presence online for ${userId}`,
+        error,
+      );
     }
   }
 
@@ -44,7 +48,10 @@ export class SocketPresenceService {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-       this.logger.error(`Failed to publish presence offline for ${userId}`, error);
+      this.logger.error(
+        `Failed to publish presence offline for ${userId}`,
+        error,
+      );
     }
   }
 

@@ -5,5 +5,4 @@ import type { MessageSentEvent } from '@modules/message/events';
 import type { ConversationCreatedEvent } from '@modules/conversation/events';
 
 @Injectable()
-export class SocketNotificationListener extends IdempotentListener {
-}
+export class SocketNotificationListener extends IdempotentListener {}

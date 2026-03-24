@@ -25,7 +25,7 @@ export class RequestContextInterceptor implements NestInterceptor {
   constructor(
     private readonly requestContext: RequestContextService,
     private readonly cls: ClsService,
-  ) { }
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') {

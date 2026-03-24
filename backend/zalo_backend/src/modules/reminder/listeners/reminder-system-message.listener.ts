@@ -27,7 +27,7 @@ export class ReminderSystemMessageListener {
     private readonly prisma: PrismaService,
     @Inject(CONVERSATION_SYSTEM_MESSAGE_PORT)
     private readonly systemMessagePort: IConversationSystemMessagePort,
-  ) { }
+  ) {}
 
   @OnEvent(InternalEventNames.REMINDER_CREATED)
   async onReminderCreated(event: ReminderCreatedEvent) {

@@ -7,12 +7,7 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import {
-  Logger,
-  Inject,
-  UseGuards,
-  UsePipes,
-} from '@nestjs/common';
+import { Logger, Inject, UseGuards, UsePipes } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { DisconnectReason } from 'src/common/interfaces/socket-client.interface';
@@ -232,14 +227,11 @@ export class SocketGateway
     client.deviceId = undefined;
   }
 
-
-
   /**
    * Handle new client connection
    */
   async handleConnection(@ConnectedSocket() client: AuthenticatedSocket) {
     try {
-
       // Reject connections during shutdown
       if (this.shuttingDown) {
         client.emit(SocketEvents.SERVER_MAINTENANCE, {
@@ -376,7 +368,6 @@ export class SocketGateway
         socketId: client.id,
         reason,
       });
-
     } catch (error) {
       this.logger.error('Error handling disconnect:', error);
     } finally {
@@ -385,8 +376,6 @@ export class SocketGateway
       this.logger.log(`❌ Socket disconnected: ${client.id}`);
     }
   }
-
-
 
   /**
    * Setup graceful shutdown handler

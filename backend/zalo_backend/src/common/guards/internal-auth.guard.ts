@@ -17,7 +17,7 @@ export class InternalAuthGuard implements CanActivate {
   constructor(
     @Inject(workerConfig.KEY)
     private readonly config: ConfigType<typeof workerConfig>,
-  ) { }
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();

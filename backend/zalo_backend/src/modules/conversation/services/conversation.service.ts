@@ -1,14 +1,18 @@
 // src/modules/conversation/services/conversation.service.ts
 
-import { Inject, Injectable, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  BadRequestException,
+  Logger,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InteractionAuthorizationService } from 'src/modules/authorization/services/interaction-authorization.service';
 import { PermissionAction } from 'src/common/constants/permission-actions.constant';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisPresenceService } from 'src/shared/redis/services/redis-presence.service';
-import {
-  PRIVACY_READ_PORT,
-} from '@common/contracts/internal-api';
+import { PRIVACY_READ_PORT } from '@common/contracts/internal-api';
 import type { IPrivacyReadPort } from '@common/contracts/internal-api';
 import { DisplayNameResolver } from '@shared/services';
 import {
@@ -22,7 +26,12 @@ import type { CursorPaginatedResult } from '@common/interfaces/paginated-result.
 import type { GroupListItemDto } from '../dto/group-list-item.dto';
 import { MAX_PINNED_CONVERSATIONS } from '../constants/conversation.constants';
 import type { GroupSettings } from './group.service';
-import { ConversationArchivedEvent, ConversationMutedEvent } from '../events';
+import {
+  ConversationArchivedEvent,
+  ConversationMutedEvent,
+  ConversationPinnedEvent,
+  ConversationUnpinnedEvent
+} from '../events';
 import { safeJSON } from 'src/common/utils/json.util';
 
 type UserProfile = {
@@ -168,7 +177,9 @@ export class ConversationService {
       PermissionAction.MESSAGE,
     );
     if (!authz.allowed) {
-      throw new ForbiddenException(authz.reason ?? 'Cannot create conversation');
+      throw new ForbiddenException(
+        authz.reason ?? 'Cannot create conversation',
+      );
     }
 
     const [user1, user2] = [userId1, userId2].sort();
@@ -376,6 +387,7 @@ export class ConversationService {
       where: {
         members: { some: { userId, status: MemberStatus.ACTIVE, isArchived } },
         deletedAt: null,
+        lastMessageAt: { not: null },
       },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -517,6 +529,7 @@ export class ConversationService {
       updatedAt: conversation.updatedAt,
       lastMessageAt: conversation.lastMessageAt,
 
+      memberCount: conversation.members.length,
       lastSeenAt: otherUserId
         ? (userProfileMap?.get(otherUserId)?.lastSeenAt ?? null)
         : null,
@@ -586,6 +599,11 @@ export class ConversationService {
       data: { isPinned: true, pinnedAt: now },
     });
 
+    this.eventEmitter.emit(
+      'conversation.pinned',
+      new ConversationPinnedEvent(conversationId, userId, now),
+    );
+
     return { isPinned: true, pinnedAt: now.toISOString() };
   }
 
@@ -612,6 +630,11 @@ export class ConversationService {
       where: { conversationId_userId: { conversationId, userId } },
       data: { isPinned: false, pinnedAt: null },
     });
+
+    this.eventEmitter.emit(
+      'conversation.unpinned',
+      new ConversationUnpinnedEvent(conversationId, userId),
+    );
 
     return { isPinned: false };
   }
@@ -762,6 +785,7 @@ export class ConversationService {
   async getConversationMembers(
     userId: string,
     conversationId: string,
+    limit?: number,
   ): Promise<
     {
       id: string;
@@ -778,6 +802,7 @@ export class ConversationService {
       include: {
         members: {
           where: { status: MemberStatus.ACTIVE },
+          take: limit,
           select: {
             userId: true,
             role: true,
@@ -830,7 +855,7 @@ export class ConversationService {
           : {}),
       },
       ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
-      orderBy: { lastMessageAt: 'desc' },
+      orderBy: { lastMessageAt: { sort: 'desc', nulls: 'last' } },
       include: {
         messages: {
           take: 1,

@@ -7,10 +7,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import {
-  Logger,
-  UseGuards,
-} from '@nestjs/common';
+import { Logger, UseGuards } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { WsJwtGuard } from 'src/common/guards/ws-jwt.guard';
@@ -36,10 +33,7 @@ import { TypingIndicatorDto } from './dto/typing-indicator.dto';
   namespace: '/socket.io',
 })
 @UseGuards(WsJwtGuard)
-export class MessageGateway
-  extends BaseGateway
-  implements OnGatewayInit
-{
+export class MessageGateway extends BaseGateway implements OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
@@ -117,11 +111,7 @@ export class MessageGateway
       const unsubReceipts = await this.realtime.subscribeToReceipts(
         userId,
         async (payload) =>
-          this.emitToUser(
-            userId,
-            SocketEvents.MESSAGE_RECEIPT_UPDATE,
-            payload,
-          ),
+          this.emitToUser(userId, SocketEvents.MESSAGE_RECEIPT_UPDATE, payload),
       );
 
       this.userReceiptSubscriptions.set(userId, {
@@ -182,8 +172,6 @@ export class MessageGateway
   ) {
     const senderId = client.userId;
 
-
-
     if (!senderId) {
       throw new Error('Unauthenticated');
     }
@@ -225,7 +213,6 @@ export class MessageGateway
   ) {
     const userId = client.userId;
 
-
     if (!userId) {
       throw new Error('Unauthenticated');
     }
@@ -266,7 +253,6 @@ export class MessageGateway
   ) {
     const userId = client.userId;
 
-
     if (!userId) {
       throw new Error('Unauthenticated');
     }
@@ -284,7 +270,6 @@ export class MessageGateway
     @MessageBody() dto: TypingIndicatorDto,
   ) {
     const userId = client.userId;
-
 
     if (!userId) {
       throw new Error('Unauthenticated');

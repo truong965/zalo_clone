@@ -342,7 +342,6 @@
 //   // --- D. Execute Reply Updates (Parallel) ---
 //   await Promise.all(updates);
 
-
 //   // --- E. Unread Logic (receipts removed in hybrid approach) ---
 //   for (const participant of participants) {
 //     const isUpToDate = faker.datatype.boolean(0.8);

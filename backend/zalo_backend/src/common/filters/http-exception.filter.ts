@@ -35,7 +35,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const errorResponse = {
       statusCode: status,
       message: message,
-      error: (exceptionResponse as any).error || (status === 500 ? 'Internal Server Error' : undefined),
+      error:
+        (exceptionResponse as any).error ||
+        (status === 500 ? 'Internal Server Error' : undefined),
       timestamp: new Date().toISOString(),
       path: request.url,
     };
@@ -46,8 +48,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
         exception instanceof Error ? exception.stack : undefined,
       );
     } else {
-      const logMessage = typeof message === 'string' ? message : JSON.stringify(message);
-      this.logger.warn(`${request.method} ${request.url} ${status} - ${logMessage}`);
+      const logMessage =
+        typeof message === 'string' ? message : JSON.stringify(message);
+      this.logger.warn(
+        `${request.method} ${request.url} ${status} - ${logMessage}`,
+      );
     }
 
     response.status(status).json(errorResponse);

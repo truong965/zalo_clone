@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Query,
-  Param,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Query, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CallHistoryService } from './call-history.service';
 
@@ -16,7 +9,7 @@ import { GetCallHistoryQueryDto } from './dto/call-history.dto';
 @ApiTags('Calls')
 @Controller('calls')
 export class CallHistoryController {
-  constructor(private readonly callService: CallHistoryService) { }
+  constructor(private readonly callService: CallHistoryService) {}
 
   @Get('history')
   @ApiOperation({ summary: 'Get call history with pagination' })

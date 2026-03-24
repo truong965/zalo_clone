@@ -29,6 +29,9 @@ import type { User } from '@prisma/client';
 
 import { BlockUserDto, GetBlockedListQueryDto } from './dto/block.dto';
 import { BlockAuthorizationHelper } from './services/block-authorization.helper';
+import { Inject } from '@nestjs/common';
+import { BLOCK_CHECKER } from './services/block-checker.interface';
+import type { IBlockChecker } from './services/block-checker.interface';
 
 @ApiTags('Block Management')
 @ApiBearerAuth() // All endpoints require JWT authentication
@@ -37,6 +40,8 @@ export class BlockController {
   constructor(
     private readonly blockService: BlockService,
     private readonly authHelper: BlockAuthorizationHelper,
+    @Inject(BLOCK_CHECKER)
+    private readonly blockChecker: IBlockChecker,
   ) {}
 
   // ==============================
@@ -295,5 +300,44 @@ export class BlockController {
   })
   async getBlockedByUsers(@CurrentUser() user: User) {
     return await this.blockService.getBlockedByUsers(user.id);
+  }
+
+  /**
+   * Check block status with a user (bidirectional)
+   *
+   * Logic: Returns true if either user has blocked the other.
+   * This is used by the mobile app to quickly check if interaction is restricted.
+   *
+   * @param user - Current authenticated user
+   * @param targetId - UUID of the user to check
+   * @returns { isBlocked: boolean }
+   */
+  @Get('check/:targetId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check block status with a user',
+    description:
+      'Check if there is a block between current user and target user (bidirectional)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Block status between users',
+    schema: {
+      example: { isBlocked: true },
+    },
+  })
+  @ApiParam({
+    name: 'targetId',
+    type: 'string',
+    format: 'uuid',
+    description: 'UUID of the user to check',
+  })
+  async checkBlockStatus(
+    @CurrentUser() user: User,
+    @Param('targetId', ParseUUIDPipe) targetId: string,
+  ) {
+    return {
+      isBlocked: await this.blockChecker.isBlocked(user.id, targetId),
+    };
   }
 }

@@ -59,7 +59,9 @@ export class MediaInternalController {
     const { userId, event, payload: eventPayload } = payload;
 
     if (!userId || !event) {
-      throw new BadRequestException('Missing userId or event in broadcast payload');
+      throw new BadRequestException(
+        'Missing userId or event in broadcast payload',
+      );
     }
 
     try {

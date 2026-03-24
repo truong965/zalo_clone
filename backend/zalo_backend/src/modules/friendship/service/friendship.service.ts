@@ -92,7 +92,7 @@ export class FriendshipService {
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) { }
+  ) {}
 
   /**
    * Send a friend request
@@ -702,12 +702,13 @@ export class FriendshipService {
     userId: string,
     query: GetFriendsQueryDto,
   ): Promise<CursorPaginatedResult<FriendWithUserDto>> {
-    // [Return Type Chuẩn]
     const {
       cursor,
       limit = 20,
       status = FriendshipStatus.ACCEPTED,
       search,
+      excludeIds,
+      conversationId,
     } = query;
 
     // 1. Build search filter by target IDs (logical relation composition)
@@ -764,12 +765,37 @@ export class FriendshipService {
       };
     }
 
-    // 2. Tổng hợp Where Clause
-    // Logic: (Liên quan đến tôi) AND (Đúng Status) AND (Search khớp nếu có) AND (Chưa xóa)
+    // 2. Combined where
+    const whereConditions: Prisma.FriendshipWhereInput[] = [ownerFilter];
+
+    if (excludeIds && excludeIds.length > 0) {
+      const cleanExcludeIds = excludeIds.filter(id => Boolean(id) && id !== userId);
+      if (cleanExcludeIds.length > 0) {
+        whereConditions.push({ user1Id: { notIn: cleanExcludeIds } });
+        whereConditions.push({ user2Id: { notIn: cleanExcludeIds } });
+      }
+    }
+
+    if (conversationId) {
+      // Fetch members of the specified conversation to exclude
+      const members = await this.prisma.conversationMember.findMany({
+        where: { conversationId, status: 'ACTIVE' },
+        select: { userId: true },
+      });
+      // CRITICAL START: exclude current userId from memberIds, because friendship involves the current user as well,
+      // and we only want to exclude the *other* person if they are in the group.
+      const memberIds = members.map((m) => m.userId).filter(id => id !== userId);
+      // CRITICAL END
+      if (memberIds.length > 0) {
+        whereConditions.push({ user1Id: { notIn: memberIds } });
+        whereConditions.push({ user2Id: { notIn: memberIds } });
+      }
+    }
+
     const where: Prisma.FriendshipWhereInput = {
       status,
       deletedAt: null,
-      AND: [ownerFilter],
+      AND: whereConditions,
     };
 
     // 3. Thực thi Query Prisma
@@ -789,7 +815,7 @@ export class FriendshipService {
       },
     });
 
-    // P1-A: Batch-resolve aliases via direct Prisma query (Option C — no ContactService dependency)
+    // P1-A: Batch-resolve aliases via direct Prisma query
     const displayFriendships = friendships.slice(0, limit);
     const friendUserIds = displayFriendships.map((f) =>
       f.user1Id === userId ? f.user2Id : f.user1Id,
@@ -798,33 +824,33 @@ export class FriendshipService {
     const friendUsers =
       friendUserIds.length > 0
         ? await this.prisma.user.findMany({
-          where: { id: { in: friendUserIds } },
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            phoneNumber: true,
-          },
-        })
+            where: { id: { in: friendUserIds } },
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+              phoneNumber: true,
+            },
+          })
         : [];
     const friendUserMap = new Map(friendUsers.map((u) => [u.id, u]));
 
     const contactEntries =
       friendUserIds.length > 0
         ? await this.prisma.userContact.findMany({
-          where: { ownerId: userId, contactUserId: { in: friendUserIds } },
-          select: {
-            contactUserId: true,
-            aliasName: true,
-            phoneBookName: true,
-          },
-        })
+            where: { ownerId: userId, contactUserId: { in: friendUserIds } },
+            select: {
+              contactUserId: true,
+              aliasName: true,
+              phoneBookName: true,
+            },
+          })
         : [];
 
     const contactMap = new Map(contactEntries.map((c) => [c.contactUserId, c]));
 
     return CursorPaginationHelper.buildResult({
-      items: friendships,
+      items: displayFriendships,
       limit,
       getCursor: (f) => f.id,
       mapToDto: (friendship) => {

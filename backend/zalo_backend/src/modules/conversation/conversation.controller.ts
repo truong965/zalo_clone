@@ -93,10 +93,12 @@ export class ConversationController {
   async getConversationMembers(
     @CurrentUser() user,
     @Param('id') conversationId: string,
+    @Query('limit') limit?: number,
   ) {
     return this.conversationService.getConversationMembers(
       user.id,
       conversationId,
+      limit ? +limit : undefined,
     );
   }
 

@@ -65,7 +65,7 @@ export class BlockService {
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) { }
+  ) {}
 
   /**
    * Block a user (Idempotent)
@@ -108,7 +108,9 @@ export class BlockService {
     );
 
     if (existingBlock) {
-      this.logger.log(`⚠️ Already blocked (idempotent - pre-check): ${blockerId} → ${targetUserId}`);
+      this.logger.log(
+        `⚠️ Already blocked (idempotent - pre-check): ${blockerId} → ${targetUserId}`,
+      );
       // Trả về luôn, không tạo mới, KHÔNG bắn event
       return this.mapToResponseDto(existingBlock);
     }
@@ -155,10 +157,15 @@ export class BlockService {
       // ==========================================
       // STEP 3: FALLBACK (Dự phòng cho Race Condition)
       // ==========================================
-      // Nếu 2 request đến cùng một phần nghìn giây và đều vượt qua STEP 1, 
+      // Nếu 2 request đến cùng một phần nghìn giây và đều vượt qua STEP 1,
       // request thứ 2 sẽ rơi vào lỗi P2002 ở đây. Lúc này ta không cần soi chuỗi error phức tạp nữa.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        this.logger.log(`⚠️ Already blocked (idempotent - race fallback): ${blockerId} → ${targetUserId}`);
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        this.logger.log(
+          `⚠️ Already blocked (idempotent - race fallback): ${blockerId} → ${targetUserId}`,
+        );
 
         const raceConditionBlock = await this.blockRepository.findByPair(
           blockerId,
@@ -435,9 +442,9 @@ export class BlockService {
     const blockedUsers =
       blockedIds.length > 0
         ? await this.prisma.user.findMany({
-          where: { id: { in: blockedIds } },
-          select: { id: true, displayName: true, avatarUrl: true },
-        })
+            where: { id: { in: blockedIds } },
+            select: { id: true, displayName: true, avatarUrl: true },
+          })
         : [];
     const blockedUserMap = new Map(blockedUsers.map((u) => [u.id, u]));
 

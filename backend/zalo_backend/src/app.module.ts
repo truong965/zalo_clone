@@ -11,9 +11,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import {
-  ClassSerializerInterceptor,
-} from '@nestjs/common';
+import { ClassSerializerInterceptor } from '@nestjs/common';
 import { RedisModule } from '@shared/redis/redis.module';
 import { SocketModule } from './socket/socket.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
@@ -186,4 +184,4 @@ import { HttpExceptionFilter } from './common/filters';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

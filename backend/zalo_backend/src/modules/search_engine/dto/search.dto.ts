@@ -5,8 +5,11 @@ import {
   IsEnum,
   IsArray,
   IsUUID,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { MessageType, MediaType } from '@prisma/client';
 import { CursorPaginationDto } from '@common/dto/cursor-pagination.dto';
 
@@ -82,13 +85,18 @@ export class ContactSearchRequestDto extends CursorPaginationDto {
   override limit?: number = 50;
 
   @IsOptional()
+  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
   @IsArray()
   @IsUUID('all', { each: true })
   excludeIds?: string[]; // Exclude user IDs from results
 
   @IsOptional()
+  @Type(() => Boolean)
   hasAlias?: boolean; // Filter: only contacts with alias
-  // override cursor?: string;
+
+  @IsOptional()
+  @IsUUID()
+  conversationId?: string; // Exclude members of this group
 }
 
 export class GlobalSearchRequestDto {

@@ -33,9 +33,25 @@ export class ContactSearchRepository {
     keyword: string,
     limit = 50,
     excludeIds: string[] = [],
+    conversationId?: string,
     cursor?: string,
   ): Promise<RawContactSearchResult[]> {
     const normalizedLimit = PaginationUtil.normalizeLimit(limit, 200);
+
+    // Params:
+    // $1: searcherId
+    // $2: keyword
+    // $3: limit
+    // $4: excludeIds
+    // $5: conversationId
+    // $6+: cursorParams
+    const params: Array<string | number | string[] | null> = [
+      searcherId,
+      keyword,
+      normalizedLimit + 1,
+      excludeIds,
+      conversationId || null,
+    ];
 
     // Decode cursor for pagination: { relevanceScore, sortName, id }
     let cursorClause = '';
@@ -48,8 +64,7 @@ export class ContactSearchRepository {
           sortName: string;
           lastId: string;
         };
-        // Parameter indices depend on excludeIds presence
-        const baseIdx = excludeIds.length > 0 ? 5 : 4;
+        const baseIdx = 6;
         cursorClause = `
           AND (
             (CASE
@@ -85,24 +100,12 @@ export class ContactSearchRepository {
         cursorParams.push(
           payload.relevanceScore,
           payload.sortName,
-          payload.lastId as unknown as string,
+          payload.lastId,
         );
       }
     }
 
-    // Build exclude clause using parameterized array
-    const excludeClause =
-      excludeIds.length > 0 ? `AND u.id != ALL($4::uuid[])` : '';
-
-    const params: Array<string | number | string[]> = [
-      searcherId,
-      keyword,
-      normalizedLimit + 1, // Fetch limit+1 to detect hasNextPage
-    ];
-    if (excludeIds.length > 0) {
-      params.push(excludeIds);
-    }
-    // Add cursor params
+    // Add cursor params to main params list
     params.push(...cursorParams);
 
     const query = `
@@ -169,7 +172,9 @@ export class ContactSearchRepository {
         -- Target user is active
         AND u.status = 'ACTIVE'
         -- Exclude specified IDs
-        ${excludeClause}
+        AND u.id != ALL($4::uuid[])
+        -- Exclude group members
+        AND ($5::uuid IS NULL OR u.id NOT IN (SELECT user_id FROM conversation_members WHERE conversation_id = $5::uuid AND status = 'ACTIVE'))
         -- Cursor pagination
         ${cursorClause}
         -- Block check: exclude if either blocks the other
@@ -236,8 +241,8 @@ export class ContactSearchRepository {
           )
         )
       ORDER BY 
-        relevance_score ASC,          -- Alias first, then friends, then requests, then none
-        sort_name ASC                  -- Alphabetical (uses SELECT alias for DISTINCT compatibility)
+        relevance_score ASC,
+        sort_name ASC
       LIMIT $3::int
     `;
 

@@ -188,6 +188,10 @@ export class MessageRealtimeService {
     };
 
     await Promise.all([
+      emitToUser(senderId, SocketEvents.MESSAGE_NEW, {
+        message: safeMsg,
+        conversationId: dto.conversationId,
+      }),
       emitToUser(senderId, SocketEvents.CONVERSATION_LIST_ITEM_UPDATED, {
         ...listItemPayloadBase,
         unreadCountDelta: 0,

@@ -9,3 +9,7 @@ export {
   ConversationMutedEvent,
   ConversationUpdatedEvent,
 } from './conversation.events';
+export {
+  ConversationPinnedEvent,
+  ConversationUnpinnedEvent,
+} from './conversation-pinned.event';

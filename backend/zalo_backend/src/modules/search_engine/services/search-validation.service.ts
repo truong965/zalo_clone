@@ -44,7 +44,7 @@ export class SearchValidationService {
     @Inject(BLOCK_CHECKER) private readonly blockChecker: IBlockChecker,
     @Inject(PRIVACY_READ_PORT)
     private readonly privacyRead: IPrivacyReadPort,
-  ) { }
+  ) {}
 
   /**
    * Validate user has ACTIVE membership in conversation

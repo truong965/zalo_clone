@@ -29,7 +29,7 @@ export class ReminderSocketListener {
   constructor(
     private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService,
-  ) { }
+  ) {}
 
   @OnEvent(InternalEventNames.REMINDER_TRIGGERED)
   async onReminderTriggered(event: ReminderTriggeredEvent) {

@@ -89,4 +89,4 @@ import { ConversationGateway } from './conversation.gateway';
     CONVERSATION_SYSTEM_MESSAGE_PORT,
   ],
 })
-export class ConversationModule { }
+export class ConversationModule {}

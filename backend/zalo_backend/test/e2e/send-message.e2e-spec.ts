@@ -796,7 +796,7 @@
 //       // Mark media as FAILED
 //       await prisma.mediaAttachment.update({
 //         where: { id: uploadedImage2.id },
-//         data: { 
+//         data: {
 //           processingStatus: MediaProcessingStatus.FAILED,
 //           processingError: 'Test failure',
 //         },
@@ -818,7 +818,7 @@
 //       // Restore for other tests
 //       await prisma.mediaAttachment.update({
 //         where: { id: uploadedImage2.id },
-//         data: { 
+//         data: {
 //           processingStatus: MediaProcessingStatus.READY,
 //           processingError: null,
 //         },

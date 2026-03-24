@@ -34,7 +34,7 @@ export class GroupJoinService {
     private readonly displayNameResolver: DisplayNameResolver,
     @Inject(BLOCK_CHECKER)
     private readonly blockChecker: IBlockChecker,
-  ) { }
+  ) {}
 
   async requestJoin(dto: CreateJoinRequestDto, userId: string) {
     const group = await this.prisma.conversation.findUnique({
@@ -361,7 +361,10 @@ export class GroupJoinService {
 
     // Check block status: inviter cannot invite users they have a block relationship with
     for (const targetUserId of targetUserIds) {
-      const blocked = await this.blockChecker.isBlocked(inviterId, targetUserId);
+      const blocked = await this.blockChecker.isBlocked(
+        inviterId,
+        targetUserId,
+      );
       if (blocked) {
         throw new ForbiddenException(
           `Cannot invite user: a block relationship exists between you and the target`,

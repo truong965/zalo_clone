@@ -6,10 +6,7 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import type { Server } from 'socket.io';
-import {
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BaseGateway } from 'src/common/base/base.gateway';
 import { RealTimeSearchService } from '../services/real-time-search.service';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -150,10 +147,9 @@ export class SearchGateway extends BaseGateway {
    * Event: search:unsubscribe
    */
   @SubscribeMessage(SocketEvents.SEARCH_UNSUBSCRIBE)
-  handleSearchUnsubscribe(
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ): { status: string } {
-
+  handleSearchUnsubscribe(@ConnectedSocket() client: AuthenticatedSocket): {
+    status: string;
+  } {
     const userId = client.userId;
 
     if (!userId) {
@@ -183,7 +179,6 @@ export class SearchGateway extends BaseGateway {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: SearchUpdateQueryPayload,
   ): Promise<{ status: string }> {
-
     const userId = client.userId;
 
     if (!userId) {
@@ -226,7 +221,6 @@ export class SearchGateway extends BaseGateway {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: SearchLoadMorePayload,
   ): Promise<{ status: string }> {
-
     const userId = client.userId;
 
     if (!userId) {
@@ -286,7 +280,6 @@ export class SearchGateway extends BaseGateway {
       userId?: string;
     }>;
   }): Promise<void> {
-
     const { message, subscriptions } = event;
 
     for (const subscription of subscriptions) {
@@ -344,7 +337,6 @@ export class SearchGateway extends BaseGateway {
     messageId: string;
     conversationId: string;
   }): void {
-
     // A2: Only notify subscribers whose search scope includes this conversation
     const affectedSubscriptions =
       this.realTimeSearchService.getSubscriptionsForConversation(
