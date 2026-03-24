@@ -17,7 +17,7 @@ import dayjs from 'dayjs';
 import { groupBy } from 'lodash-es';
 import { useMediaBrowser } from '@/features/chat/hooks/use-media-browser';
 import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
-import { RecentFileItem } from '@/features/chat/components/recent-file-item';
+import { FileDocumentItem } from './file-document-item';
 import type { RecentMediaItem, MessageType } from '@/types/api';
 import { useTranslation } from 'react-i18next';
 
@@ -90,7 +90,7 @@ function FileList({ items }: { items: RecentMediaItem[] }) {
       return (
             <div className="flex flex-col">
                   {items.map((item) => (
-                        <RecentFileItem
+                        <FileDocumentItem
                               key={item.mediaId}
                               originalName={item.originalName}
                               sizeBytes={item.size}
@@ -113,6 +113,21 @@ export function MediaBrowserPanel({
       const { t } = useTranslation();
       const [activeTab, setActiveTab] = useState<MediaTab>(initialTab);
       const [fileKeyword, setFileKeyword] = useState('');
+      const [debouncedFileKeyword, setDebouncedFileKeyword] = useState('');
+
+      // ── Debounce search logic ───────────────────────────────────────────────────
+      useEffect(() => {
+            const timer = setTimeout(() => {
+                  const trimmed = fileKeyword.trim();
+                  // Chỉ gọi query khi có 3 ký tự trở lên HOẶC khi xóa trắng
+                  if (trimmed.length >= 3 || trimmed.length === 0) {
+                        setDebouncedFileKeyword(trimmed);
+                  }
+            }, 300);
+
+            return () => clearTimeout(timer);
+      }, [fileKeyword]);
+
       const scrollContainerRef = useRef<HTMLDivElement>(null);
 
       // Media Preview State
@@ -126,7 +141,7 @@ export function MediaBrowserPanel({
       const fileQuery = useMediaBrowser(
             activeTab === 'files' ? conversationId : undefined,
             FILE_TYPES,
-            fileKeyword.trim() || undefined,
+            debouncedFileKeyword || undefined,
       );
 
       const activeQuery = activeTab === 'photos' ? photoQuery : fileQuery;

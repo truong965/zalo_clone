@@ -105,7 +105,7 @@ const FileTypeIcon = memo(function FileTypeIcon({
 });
 
 // ─── Main Component ────────────────────────────────────────────────────────────
-export const RecentFileItem = memo(function RecentFileItem({
+export const FileDocumentItem = memo(function FileDocumentItem({
       originalName,
       sizeBytes,
       createdAt,

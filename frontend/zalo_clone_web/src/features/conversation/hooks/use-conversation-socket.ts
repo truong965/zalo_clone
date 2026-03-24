@@ -20,6 +20,7 @@ type GroupYouWereRemovedPayload = { conversationId: string; removedBy: string };
 type GroupMemberJoinedPayload = { conversationId: string; userId: string };
 type GroupAdminTransferredPayload = { conversationId: string; oldAdminId: string; newAdminId: string };
 type GroupJoinRequestReceivedPayload = { conversationId: string; requestId: string; userId: string };
+type GroupJoinRequestReviewedPayload = { conversationId: string; requestId: string; approved: boolean; reviewedBy: string };
 
 interface ConversationSocketHandlers {
       onConversationCreated?: (conversation: Conversation) => void;
@@ -34,6 +35,10 @@ interface ConversationSocketHandlers {
       onGroupMemberJoined?: (data: GroupMemberJoinedPayload) => void;
       onGroupAdminTransferred?: (data: GroupAdminTransferredPayload) => void;
       onGroupJoinRequestReceived?: (data: GroupJoinRequestReceivedPayload) => void;
+      onGroupJoinRequestReviewed?: (data: GroupJoinRequestReviewedPayload) => void;
+      onConversationPinned?: (data: { conversationId: string }) => void;
+      onConversationUnpinned?: (data: { conversationId: string }) => void;
+      onConversationMuted?: (data: { conversationId: string; muted: boolean }) => void;
 }
 
 export function useConversationSocket(handlers: ConversationSocketHandlers) {
@@ -130,6 +135,14 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
                   }
             };
 
+            const onGroupJoinRequestReviewed = (data: GroupJoinRequestReviewedPayload) => {
+                  try {
+                        handlersRef.current.onGroupJoinRequestReviewed?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
+            };
+
             // Register all listeners
             socket.on(SocketEvents.GROUP_CREATED, onGroupCreated);
             socket.on(SocketEvents.GROUP_UPDATED, onGroupUpdated);
@@ -141,6 +154,26 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
             socket.on(SocketEvents.GROUP_MEMBER_JOINED, onGroupMemberJoined);
             socket.on(SocketEvents.GROUP_ADMIN_TRANSFERRED, onGroupAdminTransferred);
             socket.on(SocketEvents.GROUP_JOIN_REQUEST_RECEIVED, onGroupJoinRequestReceived);
+            socket.on(SocketEvents.GROUP_JOIN_REQUEST_REVIEWED, onGroupJoinRequestReviewed);
+
+            const onConversationPinned = (data: { conversationId: string }) => {
+                  handlersRef.current.onConversationPinned?.(data);
+            };
+            const onConversationUnpinned = (data: { conversationId: string }) => {
+                  handlersRef.current.onConversationUnpinned?.(data);
+            };
+            const onConversationMuted = (data: { conversationId: string; muted: boolean }) => {
+                  handlersRef.current.onConversationMuted?.(data);
+            };
+
+            socket.on(SocketEvents.CONVERSATION_PINNED, onConversationPinned);
+            socket.on(SocketEvents.CONVERSATION_UNPINNED, onConversationUnpinned);
+            socket.on(SocketEvents.CONVERSATION_MUTED, onConversationMuted);
+
+            const onConversationUpdated = (data: { conversationId: string }) => {
+                  handlersRef.current.onConversationUpdated?.(data as any);
+            };
+            socket.on(SocketEvents.CONVERSATION_UPDATED, onConversationUpdated);
 
             // Cleanup
             return () => {
@@ -154,6 +187,12 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
                   socket.off(SocketEvents.GROUP_MEMBER_JOINED, onGroupMemberJoined);
                   socket.off(SocketEvents.GROUP_ADMIN_TRANSFERRED, onGroupAdminTransferred);
                   socket.off(SocketEvents.GROUP_JOIN_REQUEST_RECEIVED, onGroupJoinRequestReceived);
+                  socket.off(SocketEvents.GROUP_JOIN_REQUEST_REVIEWED, onGroupJoinRequestReviewed);
+
+                  socket.off(SocketEvents.CONVERSATION_PINNED, onConversationPinned);
+                  socket.off(SocketEvents.CONVERSATION_UNPINNED, onConversationUnpinned);
+                  socket.off(SocketEvents.CONVERSATION_MUTED, onConversationMuted);
+                  socket.off(SocketEvents.CONVERSATION_UPDATED, onConversationUpdated);
             };
       }, [socket, isConnected]);
 

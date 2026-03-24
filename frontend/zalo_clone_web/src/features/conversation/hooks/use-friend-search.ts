@@ -18,7 +18,7 @@ import { useContactSearch } from './use-conversation-queries';
 import { useCreateGroupStore } from '../stores/create-group.store';
 
 // Phone number patterns: 0xx or +84xx (Vietnamese format)
-const PHONE_REGEX = /^(0\d{2,9}|\+84\d{2,9})$/;
+const PHONE_REGEX = /^(0|\+84)\d{9}$/;
 
 export interface MemberSearchItem {
       id: string;
@@ -38,6 +38,8 @@ export interface FriendSearchParams {
       tab?: SearchTab;
       /** User IDs to exclude from results */
       excludeIds?: string[];
+      /** Current conversation context for member exclusion */
+      conversationId?: string;
 }
 
 export function useFriendSearch(params?: FriendSearchParams) {
@@ -48,13 +50,15 @@ export function useFriendSearch(params?: FriendSearchParams) {
       const searchKeyword = params?.keyword ?? storeKeyword;
       const searchTab = params?.tab ?? storeTab;
       const excludeIds = params?.excludeIds ?? [];
+      const conversationId = params?.conversationId;
 
       // ================================================================
       // Tab "Bạn bè" — default (no search) → friends list
       // ================================================================
-      const friendsQuery = useFriendsList(
-            searchKeyword ? { search: searchKeyword } : undefined,
-      );
+      const friendsQuery = useFriendsList({
+            search: searchKeyword || undefined,
+            conversationId,
+      });
 
       // ================================================================
       // Tab "Tìm người lạ" — contact search (phone number only)
@@ -65,8 +69,9 @@ export function useFriendSearch(params?: FriendSearchParams) {
       const strangerSearchQuery = useContactSearch({
             keyword: searchKeyword,
             limit: 20,
+            excludeIds,
+            conversationId,
             // Only enable when tab is strangers and input looks like phone number
-            // useContactSearch internally checks keyword.length >= 2
       });
 
       // ================================================================

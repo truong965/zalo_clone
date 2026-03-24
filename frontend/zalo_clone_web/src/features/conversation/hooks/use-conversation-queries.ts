@@ -29,7 +29,7 @@ export const conversationKeys = {
             [...conversationKeys.all, 'detail', id] as const,
       members: (conversationId: string) =>
             [...conversationKeys.all, 'members', conversationId] as const,
-      contactSearch: (params: { keyword: string; excludeIds?: string[] }) =>
+      contactSearch: (params: { keyword: string; excludeIds?: string[]; conversationId?: string }) =>
             ['search', 'contacts', params] as const,
 } as const;
 
@@ -134,11 +134,12 @@ export function useContactSearch(params: {
       keyword: string;
       limit?: number;
       excludeIds?: string[];
+      conversationId?: string;
 }) {
-      const { keyword, limit = 20, excludeIds } = params;
+      const { keyword, limit = 20, excludeIds, conversationId } = params;
 
       return useInfiniteQuery({
-            queryKey: conversationKeys.contactSearch({ keyword, excludeIds }),
+            queryKey: conversationKeys.contactSearch({ keyword, excludeIds, conversationId }),
             initialPageParam: undefined as string | undefined,
             queryFn: ({ pageParam }) =>
                   conversationApi.searchContacts({
@@ -146,6 +147,7 @@ export function useContactSearch(params: {
                         cursor: pageParam,
                         limit,
                         excludeIds,
+                        conversationId,
                   }),
             getNextPageParam: (lastPage) =>
                   lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,

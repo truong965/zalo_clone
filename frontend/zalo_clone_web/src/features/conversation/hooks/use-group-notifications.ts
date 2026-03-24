@@ -185,6 +185,20 @@ export function useGroupNotifications() {
             [invalidateGroups, invalidateAll, navigate, removeFromCache],
       );
 
+      const onGroupJoinRequestReviewed = useCallback(
+            (data: { conversationId: string; approved: boolean }) => {
+                  notification.success({
+                        message: 'Phê duyệt yêu cầu',
+                        description: data.approved ? 'Yêu cầu tham gia đã được chấp thuận' : 'Yêu cầu tham gia đã bị từ chối',
+                        placement: 'topRight',
+                        duration: 3,
+                  });
+
+                  void invalidateMembers(data.conversationId);
+            },
+            [invalidateMembers],
+      );
+
       const onGroupMemberJoined = useCallback(
             (data: { conversationId: string }) => {
                   notification.success({
@@ -245,5 +259,6 @@ export function useGroupNotifications() {
             onGroupMemberJoined,
             onGroupAdminTransferred,
             onGroupJoinRequestReceived,
+            onGroupJoinRequestReviewed,
       });
 }

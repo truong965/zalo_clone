@@ -43,7 +43,7 @@ import { useReminders, ReminderList, CreateReminderModal } from '@/features/remi
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
 import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
 import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
-import { RecentFileItem } from '@/features/chat/components/recent-file-item';
+import { FileDocumentItem } from '../file-document-item';
 import type { MediaBrowserTab } from '@/features/chat/stores/chat.store';
 import { useTranslation } from 'react-i18next';
 
@@ -75,7 +75,6 @@ export function GroupInfoContent({
       const { t } = useTranslation();
       const [showAddMembers, setShowAddMembers] = useState(false);
       const [showTransferAdmin, setShowTransferAdmin] = useState(false);
-      const [joinRequestRefreshTrigger, setJoinRequestRefreshTrigger] = useState(0);
 
       const { connectionNonce } = useSocket();
       const { invalidateMembers, invalidateDetail, invalidateAll } =
@@ -127,18 +126,20 @@ export function GroupInfoContent({
                         if (data.conversationId === conversationId) {
                               onCloseSidebar();
                               onLeaveGroup?.();
+                              void invalidateAll();
                         }
                   },
-                  [conversationId, onCloseSidebar, onLeaveGroup],
+                  [conversationId, invalidateAll, onCloseSidebar, onLeaveGroup],
             ),
             onGroupDissolved: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               onCloseSidebar();
                               onLeaveGroup?.();
+                              void invalidateAll();
                         }
                   },
-                  [conversationId, onCloseSidebar, onLeaveGroup],
+                  [conversationId, invalidateAll, onCloseSidebar, onLeaveGroup],
             ),
             // Realtime member updates → invalidate queries
             onGroupMembersAdded: useCallback(
@@ -158,14 +159,28 @@ export function GroupInfoContent({
                   [conversationId, invalidateMembers],
             ),
             onGroupMemberLeft: useCallback(
-                  (data: { conversationId: string }) => {
+                  (data: { conversationId: string; memberId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateMembers(conversationId);
+                              if (data.memberId === currentUserId) {
+                                    onCloseSidebar();
+                                    onLeaveGroup?.();
+                                    void invalidateAll();
+                              } else {
+                                    invalidateMembers(conversationId);
+                              }
                         }
                   },
-                  [conversationId, invalidateMembers],
+                  [conversationId, currentUserId, invalidateAll, invalidateMembers, onCloseSidebar, onLeaveGroup],
             ),
             onGroupUpdated: useCallback(
+                  (data: { conversationId: string }) => {
+                        if (data.conversationId === conversationId) {
+                              invalidateDetail(conversationId);
+                        }
+                  },
+                  [conversationId, invalidateDetail],
+            ),
+            onConversationPinned: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
                               invalidateDetail(conversationId);
@@ -181,24 +196,30 @@ export function GroupInfoContent({
                   },
                   [conversationId, invalidateMembers],
             ),
-            // D.1: Admin transferred → refresh roles
-            onGroupAdminTransferred: useCallback(
+            onConversationUnpinned: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              invalidateMembers(conversationId);
                               invalidateDetail(conversationId);
                         }
                   },
-                  [conversationId, invalidateMembers, invalidateDetail],
+                  [conversationId, invalidateDetail],
             ),
-            // D.1: New join request arrived → bump refresh trigger
-            onGroupJoinRequestReceived: useCallback(
+            onConversationMuted: useCallback(
                   (data: { conversationId: string }) => {
                         if (data.conversationId === conversationId) {
-                              setJoinRequestRefreshTrigger((n) => n + 1);
+                              invalidateDetail(conversationId);
                         }
                   },
-                  [conversationId],
+                  [conversationId, invalidateDetail],
+            ),
+            onConversationUpdated: useCallback(
+                  (data: any) => {
+                        const cid = data.conversationId || data.id;
+                        if (cid === conversationId) {
+                              invalidateDetail(conversationId);
+                        }
+                  },
+                  [conversationId, invalidateDetail],
             ),
       });
 
@@ -358,7 +379,7 @@ export function GroupInfoContent({
                                     <>
                                           <div className="flex flex-col">
                                                 {recentFiles.map((item) => (
-                                                      <RecentFileItem
+                                                      <FileDocumentItem
                                                             key={item.mediaId}
                                                             originalName={item.originalName}
                                                             sizeBytes={item.size}
@@ -488,7 +509,6 @@ export function GroupInfoContent({
                               requireApproval={conversation.requireApproval ?? false}
                               getPendingRequests={getPendingRequests}
                               reviewJoinRequest={reviewJoinRequest}
-                              refreshTrigger={joinRequestRefreshTrigger}
                         />
 
                         {/* Admin Settings (only visible to admin) */}

@@ -1,17 +1,8 @@
-/**
- * MediaResult — Search result card for media attachments
- *
- * Hiển thị:
- * - Grid cho images/videos (thumbnail)
- * - List cho documents (file icon + info)
- * - File name, size, uploader, date
- */
-
 import { Typography } from 'antd';
 import { PlaySquareOutlined } from '@ant-design/icons';
 import type { MediaSearchResult } from '../types';
 import { isVisualMedia } from '../utils/search.util';
-import { RecentFileItem } from '@/features/chat/components/recent-file-item';
+import { FileDocumentItem } from '@/features/chat/components/file-document-item';
 
 const { Text } = Typography;
 
@@ -52,7 +43,7 @@ export function MediaResult({ data, onClick }: MediaResultProps) {
 
       // Non-visual media — file row
       return (
-            <RecentFileItem
+            <FileDocumentItem
                   originalName={data.originalName}
                   sizeBytes={Number(data.size)}
                   createdAt={data.createdAt}
@@ -91,7 +82,16 @@ export function MediaResultGrid({ items, onItemClick }: MediaResultGridProps) {
                   {fileItems.length > 0 && (
                         <div className="flex flex-col">
                               {fileItems.map((item) => (
-                                    <MediaResult key={item.id} data={item} onClick={onItemClick} />
+                                    <FileDocumentItem
+                                          key={item.id}
+                                          originalName={item.originalName}
+                                          sizeBytes={Number(item.size)}
+                                          createdAt={item.createdAt}
+                                          cdnUrl={item.cdnUrl}
+                                          mimeType={item.mimeType}
+                                          extraLine1={item.uploadedByName}
+                                          extraLine2={item.conversationName}
+                                    />
                               ))}
                         </div>
                   )}

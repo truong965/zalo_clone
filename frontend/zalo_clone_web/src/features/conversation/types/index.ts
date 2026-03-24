@@ -57,5 +57,6 @@ export interface ContactSearchParams {
       cursor?: string;
       limit?: number;
       excludeIds?: string[];
+      conversationId?: string;
       hasAlias?: boolean;
 }

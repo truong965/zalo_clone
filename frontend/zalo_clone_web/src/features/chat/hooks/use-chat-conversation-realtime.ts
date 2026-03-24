@@ -18,6 +18,7 @@ interface Params {
       removeConversation: (id: string) => void;
       selectedId: string | null;
       setSelectedId: (id: string | null) => void;
+      currentUserId: string | null;
 }
 
 export function useChatConversationRealtime({
@@ -26,6 +27,7 @@ export function useChatConversationRealtime({
       removeConversation,
       selectedId,
       setSelectedId,
+      currentUserId,
 }: Params) {
       const { invalidateAll } = useInvalidateConversations();
 
@@ -46,8 +48,14 @@ export function useChatConversationRealtime({
                   void invalidateAll();
             },
 
-            onGroupMemberLeft: () => {
+            onGroupMemberLeft: (data) => {
                   void invalidateAll();
+                  if (currentUserId && data.memberId === currentUserId) {
+                        removeConversation(data.conversationId);
+                        if (selectedId === data.conversationId) {
+                              setSelectedId(null);
+                        }
+                  }
             },
 
             onGroupYouWereRemoved: (data) => {

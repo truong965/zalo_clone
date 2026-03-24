@@ -29,7 +29,7 @@ import { contactKeys } from '../hooks/use-contact-check';
 
 export const friendshipKeys = {
       all: ['friendship'] as const,
-      friendsList: (params?: { search?: string }) =>
+      friendsList: (params?: { search?: string; conversationId?: string }) =>
             [...friendshipKeys.all, 'list', params] as const,
       receivedRequests: () => [...friendshipKeys.all, 'received'] as const,
       sentRequests: () => [...friendshipKeys.all, 'sent'] as const,
@@ -48,6 +48,7 @@ async function getFriendsList(params?: {
       cursor?: string;
       limit?: number;
       search?: string;
+      conversationId?: string;
 }): Promise<CursorPaginatedResponse<FriendWithUserDto>> {
       const { data: response } = await apiClient.get(API_ENDPOINTS.FRIENDS.GET_ALL, {
             params,
@@ -123,14 +124,22 @@ async function getFriendCount(): Promise<{ count: number }> {
 /**
  * Infinite query for friends list with cursor pagination.
  */
-export function useFriendsList(params?: { search?: string; limit?: number }) {
+export function useFriendsList(params?: { search?: string; limit?: number; conversationId?: string }) {
       const limit = params?.limit ?? 20;
 
       return useInfiniteQuery({
-            queryKey: friendshipKeys.friendsList({ search: params?.search }),
+            queryKey: friendshipKeys.friendsList({ 
+                  search: params?.search,
+                  conversationId: params?.conversationId,
+            }),
             initialPageParam: undefined as string | undefined,
             queryFn: ({ pageParam }) =>
-                  getFriendsList({ cursor: pageParam, limit, search: params?.search }),
+                  getFriendsList({ 
+                        cursor: pageParam, 
+                        limit, 
+                        search: params?.search,
+                        conversationId: params?.conversationId,
+                  }),
             getNextPageParam: (lastPage) =>
                   lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
             staleTime: 30_000,

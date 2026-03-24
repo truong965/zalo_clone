@@ -150,6 +150,7 @@ export function ChatFeature() {
             removeConversation,
             selectedId,
             setSelectedId,
+            currentUserId,
       });
 
       // ── Hook: pin conversation ───────────────────────────────────────────

@@ -25,7 +25,7 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useConversationRecentMedia } from '@/features/chat/hooks/use-conversation-recent-media';
 import { MediaThumbnail } from '@/features/chat/components/media-thumbnail';
 import { MediaPreviewModal } from '@/features/chat/components/media-preview-modal';
-import { RecentFileItem } from '@/features/chat/components/recent-file-item';
+import { FileDocumentItem } from '../file-document-item';
 import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
@@ -160,7 +160,7 @@ export function DirectInfoContent({
                                     <>
                                           <div className="flex flex-col">
                                                 {recentFiles.map((item) => (
-                                                      <RecentFileItem
+                                                      <FileDocumentItem
                                                             key={item.mediaId}
                                                             originalName={item.originalName}
                                                             sizeBytes={item.size}

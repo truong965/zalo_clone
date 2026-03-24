@@ -12,7 +12,7 @@ import { useFriendSearch, type SearchTab } from '../hooks/use-friend-search';
 
 const { Text } = Typography;
 const DEBOUNCE_MS = 300;
-const PHONE_REGEX = /^(0\d{2,9}|\+84\d{2,9})$/;
+const PHONE_REGEX = /^(0|\+84)\d{9}$/;
 
 interface AddMembersModalProps {
       open: boolean;
@@ -39,7 +39,12 @@ export function AddMembersModal({
 
       // Use useFriendSearch with params for tab-aware searching
       const { items, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, showPhoneHint } =
-            useFriendSearch({ keyword, tab: searchTab, excludeIds: existingMemberIds });
+            useFriendSearch({ 
+                  keyword, 
+                  tab: searchTab, 
+                  excludeIds: existingMemberIds,
+                  conversationId: _conversationId
+            });
 
       const handleSearchChange = useCallback((value: string) => {
             setLocalValue(value);

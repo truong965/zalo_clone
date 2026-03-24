@@ -13,6 +13,8 @@ import {
       TeamOutlined,
       UserOutlined,
 } from '@ant-design/icons';
+import { useSocket } from '@/hooks/use-socket';
+import { SocketEvents } from '@/constants/socket-events';
 
 interface JoinRequestItem {
       id: string;
@@ -34,8 +36,6 @@ interface GroupJoinRequestsProps {
       requireApproval: boolean;
       getPendingRequests: (conversationId: string) => Promise<unknown[]> | undefined;
       reviewJoinRequest: (requestId: string, approve: boolean) => Promise<{ success: boolean; status?: string; alreadyMember?: boolean; message?: string }> | undefined;
-      /** Called externally when a new join request arrives to trigger refetch */
-      refreshTrigger?: number;
 }
 
 export function GroupJoinRequests({
@@ -44,8 +44,8 @@ export function GroupJoinRequests({
       requireApproval,
       getPendingRequests,
       reviewJoinRequest,
-      refreshTrigger,
 }: GroupJoinRequestsProps) {
+      const { socket, isConnected } = useSocket();
       const { t } = useTranslation();
       const [requests, setRequests] = useState<JoinRequestItem[]>([]);
       const [isLoading, setIsLoading] = useState(false);
@@ -64,10 +64,31 @@ export function GroupJoinRequests({
             }
       }, [isAdmin, requireApproval, conversationId, getPendingRequests]);
 
-      // Fetch on mount and when refreshTrigger changes
+      // 1. Initial fetch and on isConnected change
       useEffect(() => {
             fetchRequests();
-      }, [fetchRequests, refreshTrigger]);
+      }, [fetchRequests, isConnected]);
+
+      // 2. Real-time sync via socket
+      useEffect(() => {
+            if (!socket || !isConnected || !isAdmin || !requireApproval) return;
+
+            const handleUpdate = (data: { conversationId: string }) => {
+                  if (data.conversationId === conversationId) {
+                        fetchRequests();
+                  }
+            };
+
+            socket.on(SocketEvents.GROUP_JOIN_REQUEST_RECEIVED, handleUpdate);
+            socket.on(SocketEvents.GROUP_JOIN_REQUEST_REVIEWED, handleUpdate);
+            socket.on(SocketEvents.GROUP_MEMBER_JOINED, handleUpdate);
+
+            return () => {
+                  socket.off(SocketEvents.GROUP_JOIN_REQUEST_RECEIVED, handleUpdate);
+                  socket.off(SocketEvents.GROUP_JOIN_REQUEST_REVIEWED, handleUpdate);
+                  socket.off(SocketEvents.GROUP_MEMBER_JOINED, handleUpdate);
+            };
+      }, [socket, isConnected, isAdmin, requireApproval, conversationId, fetchRequests]);
 
       const handleReview = async (requestId: string, approve: boolean) => {
             setReviewingIds((prev) => new Set(prev).add(requestId));
