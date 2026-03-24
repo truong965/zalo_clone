@@ -7,17 +7,24 @@ import { getFullUrl } from '@/utils/url-helpers';
 interface UserAvatarProps {
   uri?: string | null;
   size?: number;
+  updatedAt?: string;
 }
 
-export const UserAvatar = React.memo(({ uri, size = 40 }: UserAvatarProps) => {
+export const UserAvatar = React.memo(({ uri, size = 40, updatedAt }: UserAvatarProps) => {
   const theme = useTheme();
 
-  const fullUri = getFullUrl(uri);
+  let fullUri = getFullUrl(uri);
 
   if (fullUri && typeof fullUri === 'string' && fullUri.trim() !== '') {
+    // Force image refresh if updatedAt is provided
+    const finalUri = updatedAt 
+      ? `${fullUri}${fullUri.includes('?') ? '&' : '?'}t=${new Date(updatedAt).getTime()}`
+      : fullUri;
+
     return (
       <Image
-        source={{ uri: fullUri }}
+        key={finalUri} // Use URI as key to force component remount for standard Image
+        source={{ uri: finalUri }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
         resizeMode="cover"
       />

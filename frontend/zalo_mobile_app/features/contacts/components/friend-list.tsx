@@ -18,14 +18,14 @@ export const FriendList = React.memo(({ friends, onCall, onPress, isRefreshing, 
   const theme = useTheme();
 
   const renderItem = ({ item }: { item: Friend }) => {
-    const displayName = item.displayName || item.user?.displayName || 'Người dùng';
+    const displayName = item.resolvedDisplayName || item.displayName || 'Người dùng';
     return (
       <TouchableOpacity
         onPress={() => onPress(item)}
         activeOpacity={0.7}
         className="flex-row items-center p-4 bg-background border-b border-border/50"
       >
-        <UserAvatar uri={item.avatarUrl || item.user?.avatarUrl} size={48} />
+        <UserAvatar uri={item.avatarUrl} size={48} />
         <View className="flex-1 ml-4 justify-center">
           <Text className="text-foreground font-bold text-base" numberOfLines={1}>
             {displayName}
@@ -47,7 +47,7 @@ export const FriendList = React.memo(({ friends, onCall, onPress, isRefreshing, 
       data={friends}
       renderItem={renderItem}
       estimatedItemSize={80}
-      keyExtractor={(item: Friend) => item.id}
+      keyExtractor={(item: Friend) => item.friendshipId}
       refreshing={isRefreshing}
       onRefresh={onRefresh}
       ListEmptyComponent={

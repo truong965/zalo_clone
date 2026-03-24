@@ -9,7 +9,7 @@ interface ConversationActionSheetProps {
   conversation: Conversation | null;
   onDismiss: () => void;
   onPin: (id: string, isPinned: boolean) => void;
-  onMute: (id: string) => void;
+  onMute: (id: string, isMuted: boolean) => void;
 }
 
 export function ConversationActionSheet({ visible, conversation, onDismiss, onPin, onMute }: ConversationActionSheetProps) {
@@ -51,7 +51,7 @@ export function ConversationActionSheet({ visible, conversation, onDismiss, onPi
             title={conversation.isMuted ? t('chats.unmute') : t('chats.mute')}
             left={(props) => <List.Icon {...props} icon={conversation.isMuted ? "bell" : "bell-off"} />}
             onPress={() => {
-              onMute(conversation.id);
+              onMute(conversation.id, !conversation.isMuted);
               onDismiss();
             }}
             titleStyle={{ color: theme.colors.onSurface }}

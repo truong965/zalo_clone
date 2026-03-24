@@ -9,35 +9,44 @@ interface SettingsListItemProps {
   onPress: () => void;
   right?: React.ReactNode;
   destructive?: boolean;
+  hideChevron?: boolean;
+  disabled?: boolean;
 }
 
-export function SettingsListItem({ icon, label, onPress, right, destructive }: SettingsListItemProps) {
+export function SettingsListItem({ icon, label, onPress, right, destructive, hideChevron, disabled }: SettingsListItemProps) {
   const theme = useTheme();
 
   return (
     <TouchableOpacity
-      className="flex-row items-center p-4 bg-card border-b border-border"
+      className={`flex-row items-center p-4 bg-card border-b border-border ${disabled ? 'opacity-50' : ''}`}
       onPress={onPress}
       activeOpacity={0.7}
+      disabled={disabled}
     >
       <View className="w-10 items-center">
-        <Ionicons 
-            name={icon as any} 
-            size={24} 
-            color={destructive ? theme.colors.error : theme.colors.onSurfaceVariant} 
+        <Ionicons
+          name={icon as any}
+          size={24}
+          color={destructive ? theme.colors.error : theme.colors.onSurfaceVariant}
         />
       </View>
-      
-      <Text 
+
+      <Text
         className={`flex-1 ml-2 text-base ${destructive ? 'text-error font-medium' : 'text-foreground'}`}
       >
         {label}
       </Text>
 
       {right ? (
+        typeof right === 'string' ? (
+          <Ionicons name={right as any} size={20} color={theme.colors.onSurfaceVariant} />
+        ) : (
           right
+        )
+      ) : hideChevron ? (
+        null
       ) : (
-          <Ionicons name="chevron-forward" size={20} color={theme.colors.outline} />
+        <Ionicons name="chevron-forward" size={20} color={theme.colors.outline} />
       )}
     </TouchableOpacity>
   );

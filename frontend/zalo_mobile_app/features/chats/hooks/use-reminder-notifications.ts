@@ -7,7 +7,7 @@ import { mobileApi } from '@/services/api';
 import { REMINDERS_BASE_KEY } from './use-reminders';
 import { useSocket } from '@/providers/socket-provider';
 import { useAuth } from '@/providers/auth-provider';
-import type { ReminderAlert } from '../components/reminder-alert-overlay';
+import type { ReminderAlert } from '../components/reminder/reminder-alert-overlay';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;

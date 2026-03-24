@@ -28,7 +28,7 @@ export default function PinnedMessagesScreen() {
   };
 
   const renderItem = ({ item }: { item: Message }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.pinnedItem}
       activeOpacity={0.7}
       onPress={() => handleJump(item.id)}
@@ -42,7 +42,7 @@ export default function PinnedMessagesScreen() {
             <Ionicons name="time-outline" size={12} color="#9ca3af" style={styles.timeIcon} />
             <Text style={styles.timeText}>
               {new Date(item.createdAt).toLocaleString('vi-VN', {
-                hour: '2-digit', minute: '2-digit', 
+                hour: '2-digit', minute: '2-digit',
                 day: '2-digit', month: '2-digit', year: 'numeric'
               })}
             </Text>
@@ -53,11 +53,11 @@ export default function PinnedMessagesScreen() {
         </Text>
       </View>
       <View style={styles.actions}>
-        <IconButton 
-          icon="close" 
-          size={20} 
+        <IconButton
+          icon="close"
+          size={20}
           iconColor={theme.colors.error}
-          onPress={() => unpinMessage(item.id)} 
+          onPress={() => unpinMessage(item.id)}
         />
       </View>
     </TouchableOpacity>
@@ -65,14 +65,14 @@ export default function PinnedMessagesScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           headerTitle: 'Tin nhắn ghim',
           headerBackTitle: 'Quay lại',
           headerShown: true,
           headerStyle: { backgroundColor: 'hsl(217.2, 91.2%, 59.8%)' },
           headerTintColor: '#fff',
-        }} 
+        }}
       />
       {pinnedMessages.length === 0 ? (
         <View style={styles.emptyContainer}>

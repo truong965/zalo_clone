@@ -322,6 +322,20 @@ export function useChatRealtime(
       );
     };
 
+    const handleConversationUpdated = (payload: { conversationId: string }) => {
+      if (payload.conversationId === conversationId) {
+        queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      }
+    };
+
+    const handleGroupUpdated = (payload: { conversationId: string }) => {
+      if (payload.conversationId === conversationId) {
+        queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      }
+    };
+
     const handleFriendOnline = (payload: { userId: string; timestamp: string }) => {
       queryClient.setQueryData(['conversation', conversationId], (old: any) => {
         if (!old || old.otherUserId !== payload.userId) return old;
@@ -342,6 +356,8 @@ export function useChatRealtime(
     socket.on(SocketEvents.CONVERSATION_READ, handleConversationRead);
     socket.on(SocketEvents.FRIEND_ONLINE, handleFriendOnline);
     socket.on(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
+    socket.on(SocketEvents.CONVERSATION_UPDATED, handleConversationUpdated);
+    socket.on(SocketEvents.GROUP_UPDATED, handleGroupUpdated);
     socket.on(SocketEvents.ERROR, handleError);
 
     return () => {
@@ -351,6 +367,8 @@ export function useChatRealtime(
       socket.off(SocketEvents.CONVERSATION_READ, handleConversationRead);
       socket.off(SocketEvents.FRIEND_ONLINE, handleFriendOnline);
       socket.off(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
+      socket.off(SocketEvents.CONVERSATION_UPDATED, handleConversationUpdated);
+      socket.off(SocketEvents.GROUP_UPDATED, handleGroupUpdated);
       socket.off(SocketEvents.ERROR, handleError);
     };
     // jumpRefs là object ref — stable reference, không cần trong deps.

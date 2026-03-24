@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, RefreshControl, View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ConversationItem } from './components/conversation-item';
-import { ConversationActionSheet } from './components/conversation-action-sheet';
+import { ConversationItem } from './components/conversations/conversation-item';
+import { ConversationActionSheet } from './components/conversations/conversation-action-sheet';
 import { useConversationsList } from './hooks/use-conversations-list';
 import { useConversationActions } from './hooks/use-conversation-actions';
 import { useConversationRealtime } from './hooks/use-conversation-realtime';
@@ -32,7 +32,6 @@ export function ChatsScreen() {
 
   const { pinConversation, muteConversation } = useConversationActions();
   const { markAsSeen } = useMarkAsSeen();
-  useConversationRealtime();
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -49,7 +48,7 @@ export function ChatsScreen() {
     if (conv && conv.unreadCount > 0) {
       markAsSeen(id, conv.lastMessage?.id);
     }
-    
+
     router.push({
       pathname: `/chat/${id}` as any,
     });
@@ -64,11 +63,11 @@ export function ChatsScreen() {
   }, [flattenedData]);
 
   const handlePin = useCallback((id: string, isPinned: boolean) => {
-    pinConversation({ id, isPinned });
+    pinConversation(id, isPinned);
   }, [pinConversation]);
 
-  const handleMute = useCallback((id: string) => {
-    muteConversation(id);
+  const handleMute = useCallback((id: string, isMuted: boolean) => {
+    muteConversation(id, isMuted);
   }, [muteConversation]);
 
   if (isLoading) {

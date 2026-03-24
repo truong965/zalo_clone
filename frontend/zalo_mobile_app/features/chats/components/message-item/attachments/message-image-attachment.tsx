@@ -1,8 +1,13 @@
 import React from 'react';
 import { View, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 import { MessageMediaAttachmentItem } from '@/types/message';
 import { getFullUrl } from '../message-item.utils';
 import { styles } from '../message-item.styles';
+
+import { useMediaResource } from '../../../hooks/use-media-resource';
+import { MediaProcessingOverlay } from './media-processing-overlay';
 
 interface Props {
   attachment: MessageMediaAttachmentItem;
@@ -10,24 +15,31 @@ interface Props {
 }
 
 export function MessageImageAttachment({ attachment, isSingle }: Props) {
-  const rawSrc = attachment.thumbnailUrl || attachment.optimizedUrl || attachment.cdnUrl || attachment._localUrl;
-  const isProcessing = attachment.processingStatus !== 'READY' && attachment.processingStatus !== 'FAILED';
-  const src = getFullUrl(rawSrc);
+  const { isProcessing, isError, src, setResourceError } = useMediaResource(attachment);
+
+  if (isError) {
+    return (
+      <View style={[styles.errorWrapper, isSingle ? { width: 220 } : { width: '49%', aspectRatio: 1 }]}>
+        <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />
+        <Text style={styles.errorText}>File không tồn tại</Text>
+      </View>
+    );
+  }
 
   if (!src) return null;
 
   return (
-    <View style={[styles.imageWrapper, isSingle ? undefined : { width: '49%', aspectRatio: 1, marginBottom: 4 }]}>
+    <View 
+      style={[styles.imageWrapper, isSingle ? undefined : { width: '49%', aspectRatio: 1, marginBottom: 4 }]}
+      pointerEvents="none"
+    >
       <Image
         source={{ uri: src }}
-        style={[isSingle ? styles.image : { width: '100%', height: '100%' }, isProcessing && { opacity: 0.6 }]}
+        style={[isSingle ? styles.image : { width: '100%', height: '100%' }]}
         resizeMode="cover"
+        onError={() => setResourceError(true)}
       />
-      {isProcessing && (
-        <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)' }]}>
-          <ActivityIndicator color="white" />
-        </View>
-      )}
+      {isProcessing && <MediaProcessingOverlay />}
     </View>
   );
 }

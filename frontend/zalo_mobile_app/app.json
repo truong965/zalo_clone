@@ -23,7 +23,12 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.truong.ZaloClone",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "output": "static",
@@ -49,7 +54,17 @@
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Cho phép $(PRODUCT_NAME) truy cập ảnh của bạn.",
+          "savePhotosPermission": "Cho phép $(PRODUCT_NAME) lưu ảnh.",
+          "isAccessMediaLocationEnabled": true,
+          "isAndroidStorageAdaptive": true,
+          "granularPermissions": ["photo", "video"]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -14,10 +14,11 @@ interface Props {
   isMe: boolean;
   theme: any;
   onJumpToMessage?: (messageId: string) => void;
+  onMediaPress?: (mediaId: string) => void;
   isHighlighted?: boolean;
 }
 
-export function MessageContent({ message, isMe, theme, onJumpToMessage, isHighlighted }: Props) {
+export function MessageContent({ message, isMe, theme, onJumpToMessage, onMediaPress, isHighlighted }: Props) {
   const attachments = message.mediaAttachments || [];
 
   if (attachments.length === 0 && !message.parentMessage && !message.replyTo) {
@@ -81,10 +82,16 @@ export function MessageContent({ message, isMe, theme, onJumpToMessage, isHighli
       {/* Images */}
       {images.length > 0 && (
         images.length === 1 ? (
-          <MessageImageAttachment attachment={images[0]} isSingle />
+          <TouchableOpacity onPress={() => onMediaPress?.(images[0].id.toString())} activeOpacity={0.9}>
+            <MessageImageAttachment attachment={images[0]} isSingle />
+          </TouchableOpacity>
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: 220 }}>
-            {images.map(img => <MessageImageAttachment key={img.id} attachment={img} isSingle={false} />)}
+            {images.map(img => (
+              <TouchableOpacity key={img.id} onPress={() => onMediaPress?.(img.id.toString())} activeOpacity={0.9} style={{ width: '49%' }}>
+                <MessageImageAttachment attachment={img} isSingle={false} />
+              </TouchableOpacity>
+            ))}
           </View>
         )
       )}
@@ -92,7 +99,11 @@ export function MessageContent({ message, isMe, theme, onJumpToMessage, isHighli
       {/* Videos */}
       {videos.length > 0 && (
         <View style={{ gap: 4 }}>
-          {videos.map(vid => <MessageVideoAttachment key={vid.id} attachment={vid} />)}
+          {videos.map(vid => (
+            <TouchableOpacity key={vid.id} onPress={() => onMediaPress?.(vid.id.toString())} activeOpacity={0.9}>
+              <MessageVideoAttachment attachment={vid} />
+            </TouchableOpacity>
+          ))}
         </View>
       )}
 

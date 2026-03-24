@@ -18,6 +18,7 @@ export interface MessageItemProps {
   showTime?: boolean;
   onLongPress?: (message: Message) => void;
   onJumpToMessage?: (messageId: string) => void;
+  onMediaPress?: (mediaId: string) => void;
   isHighlighted?: boolean;
 }
 
@@ -30,6 +31,7 @@ export function MessageItem({
   showTime = false,
   onLongPress,
   onJumpToMessage,
+  onMediaPress,
   isHighlighted,
 }: MessageItemProps) {
   const theme = useTheme();
@@ -71,6 +73,7 @@ export function MessageItem({
             isMe={isMe} 
             theme={theme} 
             onJumpToMessage={onJumpToMessage}
+            onMediaPress={onMediaPress}
             isHighlighted={isHighlighted}
           />
         </TouchableOpacity>

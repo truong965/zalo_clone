@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { Conversation } from '@/types/conversation';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -5,23 +6,15 @@ import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import { ConversationAvatar } from '@/components/ui/conversation-avatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/providers/auth-provider';
 
 interface ChatHeaderProps {
   conversation: Conversation | null;
 }
 
 export function ChatHeader({ conversation }: ChatHeaderProps) {
+  const { user } = useAuth();
   const router = useRouter();
-
-  // FIX: Không return null khi conversation chưa load.
-  //
-  // Trước đây: return null → View wrapper height = 0 → sau khi
-  // conversation load → height nhảy từ 0 lên 56px → layout shift
-  // → FlashList container onLayout fires → startRenderingFromBottom
-  // re-applies → snap về bottom.
-  //
-  // Bây giờ: luôn render skeleton 56px. Back button luôn hoạt động.
-  // Khi conversation chưa có, chỉ ẩn nội dung dynamic (tên, avatar).
 
   const hasData =
     conversation &&
@@ -29,7 +22,16 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
     !!conversation?.id;
 
   const isGroup = conversation?.type === 'GROUP';
-  const displayName = conversation?.name?.trim() || 'Người dùng';
+  
+  const displayName = useMemo(() => {
+    if (!hasData) return '...';
+    if (conversation.name) return conversation.name;
+    if (conversation.type === 'DIRECT') {
+      const otherMember = conversation.members?.find(m => m.userId !== user?.id);
+      return otherMember?.displayName || 'Người dùng';
+    }
+    return 'Hội thoại';
+  }, [conversation, hasData, user?.id]);
 
   const getPresenceInfo = (isOnline?: boolean, lastSeenAt?: string | null) => {
     if (isGroup) return null;
@@ -53,6 +55,13 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
     if (!conversation?.id) return;
     router.push({
       pathname: `/chat/${conversation.id}/settings` as any,
+    });
+  };
+
+  const handleGoToSearch = () => {
+    if (!conversation?.id) return;
+    router.push({
+      pathname: `/chat/${conversation.id}/search` as any,
     });
   };
 
@@ -97,6 +106,9 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionBtn}>
           <Ionicons name="call-outline" size={22} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleGoToSearch} style={styles.actionBtn}>
+          <Ionicons name="search-outline" size={22} color="white" />
         </TouchableOpacity>
         <TouchableOpacity onPress={handleGoToSettings} style={styles.actionBtn}>
           <Ionicons name="list-outline" size={24} color="white" />

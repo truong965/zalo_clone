@@ -117,10 +117,12 @@ export default function RootLayout() {
 }
 
 import { useReminderNotifications } from '@/features/chats/hooks/use-reminder-notifications';
-import { ReminderAlertOverlay } from '@/features/chats/components/reminder-alert-overlay';
+import { ReminderAlertOverlay } from '@/features/chats/components/reminder/reminder-alert-overlay';
+import { useConversationRealtime } from '@/features/chats/hooks/use-conversation-realtime';
 
 function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {
   const { alerts, dismissAlert, acknowledgeAlert } = useReminderNotifications();
+  useConversationRealtime();
 
   return (
     <PaperProvider theme={colorScheme === 'dark' ? PaperDarkTheme : PaperLightTheme}>

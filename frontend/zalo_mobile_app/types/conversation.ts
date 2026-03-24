@@ -9,10 +9,16 @@ export interface MessagePreview {
 }
 
 export interface ConversationMember {
+  id?: string;
   userId: string;
   displayName: string;
   avatarUrl?: string;
   role: 'ADMIN' | 'MEMBER';
+  user?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  };
 }
 
 export interface Conversation {
@@ -29,6 +35,8 @@ export interface Conversation {
   members: ConversationMember[];
   memberCount?: number;
   updatedAt: string;
+  requireApproval?: boolean;
+  myRole?: string;
   // Presence fields
   isOnline?: boolean;
   lastSeenAt?: string | null;

@@ -54,7 +54,7 @@ export const ConversationAvatar = React.memo(({ conversation, size = 56 }: Conve
       }
 
       // For direct or group with valid avatar, pass the processed URL to UserAvatar
-      return <UserAvatar uri={fullAvatarUrl} size={size} />;
+      return <UserAvatar uri={fullAvatarUrl} size={size} updatedAt={conversation.updatedAt} />;
 });
 
 ConversationAvatar.displayName = 'ConversationAvatar';

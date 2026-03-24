@@ -67,6 +67,20 @@ export interface MessageMediaAttachmentItem {
   _localUrl?: string;
 }
 
+export interface RecentMediaItemDto {
+  messageId: string;
+  mediaId: string;
+  originalName: string;
+  mimeType: string;
+  mediaType: string;
+  size: number;
+  thumbnailUrl: string | null;
+  cdnUrl: string | null;
+  messageType: string;
+  createdAt: string;
+  processingStatus: string;
+}
+
 export interface MessageListResponse {
   data: Message[];
   nextCursor?: string;

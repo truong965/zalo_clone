@@ -9,11 +9,13 @@ import {
   View,
   StyleSheet,
   Pressable,
+  Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
+import Toast from 'react-native-toast-message';
 import { Message, MessageType } from '@/types/message';
 import { ChatHeader } from '@/features/chats/components/chat-header';
 import { ChatInput } from '@/features/chats/components/chat-input';
@@ -31,6 +33,7 @@ import { PinnedMessagesHeader } from '@/features/chats/components/pinned-message
 import { MessageActionSheet } from '@/features/chats/components/message-action-sheet';
 import { useChatStore } from '@/features/chats/stores/chat.store';
 import { useMarkAsSeen } from '@/features/chats/hooks/use-mark-as-seen';
+import { MediaViewerModal } from '@/features/chats/components/media-viewer-modal';
 
 const uuidv4 = () =>
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -46,7 +49,7 @@ const ChatMessage = React.memo(
   ({
     item, isMe, isDirect, isLatestMyMessage,
     showAvatar, showSenderName, showTime, showSeparator,
-    onLongPress, onJumpToMessage, isHighlighted,
+    onLongPress, onJumpToMessage, onMediaPress, isHighlighted,
   }: {
     item: Message;
     isMe: boolean;
@@ -58,6 +61,7 @@ const ChatMessage = React.memo(
     showSeparator: boolean;
     onLongPress?: (msg: Message) => void;
     onJumpToMessage?: (msgId: string) => void;
+    onMediaPress?: (mediaId: string) => void;
     isHighlighted?: boolean;
   }) => {
     if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
@@ -74,6 +78,7 @@ const ChatMessage = React.memo(
           showTime={showTime}
           onLongPress={onLongPress}
           onJumpToMessage={onJumpToMessage}
+          onMediaPress={onMediaPress}
           isHighlighted={isHighlighted}
         />
       </View>
@@ -86,11 +91,41 @@ export default function ChatDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const { data: conversation } = useQuery({
+  const queryClient = useQueryClient();
+  const { data: conversation, error: convError } = useQuery({
     queryKey: ['conversation', id],
     queryFn: () => mobileApi.getConversation(id, accessToken!),
     enabled: !!id && !!accessToken,
+    retry: false,
   });
+
+  useEffect(() => {
+    if (convError) {
+      const status = (convError as any)?.status || (convError as any)?.response?.status;
+      if (status === 400 || status === 404) {
+        Toast.show({
+          type: 'error',
+          text1: 'Lỗi',
+          text2: 'Cuộc trò chuyện không tồn tại hoặc bạn không còn là thành viên',
+        });
+        
+        // Prune from list cache
+        queryClient.setQueriesData({ queryKey: ['conversations'] }, (oldData: any) => {
+          if (!oldData || !oldData.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              data: page.data.filter((c: any) => c.id !== id),
+            })),
+          };
+        });
+
+        router.dismissAll();
+        router.replace('/(tabs)');
+      }
+    }
+  }, [convError, id, queryClient, router]);
 
   const flashListRef = useRef<any>(null);
 
@@ -130,6 +165,7 @@ export default function ChatDetailScreen() {
   const { markAsSeen } = useMarkAsSeen();
 
   const [selectedMsgForMenu, setSelectedMsgForMenu] = React.useState<Message | null>(null);
+  const [viewerState, setViewerState] = React.useState({ isVisible: false, initialIndex: 0 });
   const fetchingRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevLastMessageIdRef = useRef<string | null>(null);
@@ -153,6 +189,31 @@ export default function ChatDetailScreen() {
     raw.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     return raw;
   }, [data?.pages]);
+
+  const allMediaItems = useMemo(() => {
+    const media: any[] = [];
+    messages.forEach(msg => {
+      if (msg.mediaAttachments) {
+        msg.mediaAttachments.forEach(att => {
+          if (['IMAGE', 'VIDEO', 'VOICE', 'AUDIO'].includes(att.mediaType)) {
+            media.push({
+              ...att,
+              id: att.id || `${msg.id}-${att.originalName}`,
+              messageId: msg.id
+            });
+          }
+        });
+      }
+    });
+    return media;
+  }, [messages]);
+
+  const handleMediaPress = useCallback((mediaId: string) => {
+    const idx = allMediaItems.findIndex(m => m.id === mediaId || m.mediaId === mediaId);
+    if (idx !== -1) {
+      setViewerState({ isVisible: true, initialIndex: idx });
+    }
+  }, [allMediaItems]);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -240,12 +301,13 @@ export default function ChatDetailScreen() {
           showSeparator={showSeparator}
           onLongPress={setSelectedMsgForMenu}
           onJumpToMessage={jumpToMessage}
+          onMediaPress={handleMediaPress}
           isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
       );
     },
     [user?.id, messages, isGroup, isDirect, latestMyMessageId,
-      setSelectedMsgForMenu, jumpToMessage, highlightedId],
+      setSelectedMsgForMenu, jumpToMessage, handleMediaPress, highlightedId],
   );
 
   const handleSend = useCallback(
@@ -319,6 +381,13 @@ export default function ChatDetailScreen() {
                 {isFetchingNextPage && <ActivityIndicator color={theme.colors.primary} />}
               </View>
             }
+            ListEmptyComponent={
+              !isLoading && messages.length === 0 ? (
+                <View style={{ flex: 1, paddingVertical: 100, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: '#666', fontSize: 16 }}>Không có tin nhắn</Text>
+                </View>
+              ) : null
+            }
             drawDistance={500}
           />
 
@@ -356,6 +425,13 @@ export default function ChatDetailScreen() {
         }}
         onPin={(msg) => pinMessage(msg.id)}
         onUnpin={(msg) => unpinMessage(msg.id)}
+      />
+
+      <MediaViewerModal
+        isVisible={viewerState.isVisible}
+        onClose={() => setViewerState({ ...viewerState, isVisible: false })}
+        items={allMediaItems}
+        initialIndex={viewerState.initialIndex}
       />
     </View>
   );

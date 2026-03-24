@@ -156,4 +156,22 @@ export const styles = StyleSheet.create({
   },
   replySender:  { fontSize: 12, fontWeight: 'bold', color: '#374151' },
   replyContent: { fontSize: 12, color: '#6b7280' },
+
+  // ─── Error State ───────────────────────────────────────────────────────────
+  errorWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+    fontWeight: '500',
+  },
 });

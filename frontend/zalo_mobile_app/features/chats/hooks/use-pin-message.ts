@@ -23,6 +23,7 @@ export function usePinMessage(conversationId: string | null) {
     queryFn: () => mobileApi.getPinnedMessages(conversationId!, accessToken!),
     enabled: !!conversationId && !!accessToken,
     staleTime: 60_000,
+    retry: false,
   });
 
   const pinMutation = useMutation({

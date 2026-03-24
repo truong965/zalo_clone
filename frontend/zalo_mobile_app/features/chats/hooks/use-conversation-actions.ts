@@ -10,45 +10,48 @@ export function useConversationActions() {
   const pinMutation = useMutation({
     mutationFn: ({ id, isPinned }: { id: string; isPinned: boolean }) => 
       mobileApi.togglePin(id, accessToken!, isPinned),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', variables.id] });
       Toast.show({
         type: 'success',
         text1: 'Thành công',
-        text2: 'Đã cập nhật trạng thái ghim',
+        text2: variables.isPinned ? 'Đã ghim hội thoại' : 'Đã bỏ ghim hội thoại',
       });
     },
-    onError: () => {
+    onError: (_, variables) => {
       Toast.show({
         type: 'error',
         text1: 'Lỗi',
-        text2: 'Không thể ghim hội thoại',
+        text2: variables.isPinned ? 'Không thể ghim hội thoại' : 'Không thể bỏ ghim hội thoại',
       });
     }
   });
 
   const muteMutation = useMutation({
-    mutationFn: (id: string) => mobileApi.toggleMute(id, accessToken!),
-    onSuccess: () => {
+    mutationFn: ({ id, isMuted }: { id: string; isMuted: boolean }) => 
+      mobileApi.toggleMute(id, accessToken!, !isMuted),
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', variables.id] });
       Toast.show({
         type: 'success',
         text1: 'Thành công',
-        text2: 'Đã cập nhật trạng thái thông báo',
+        text2: !variables.isMuted ? 'Đã tắt thông báo' : 'Đã bật thông báo',
       });
     },
-    onError: () => {
+    onError: (_, variables) => {
       Toast.show({
         type: 'error',
         text1: 'Lỗi',
-        text2: 'Không thể tắt thông báo',
+        text2: !variables.isMuted ? 'Không thể tắt thông báo' : 'Không thể bật thông báo',
       });
     }
   });
 
   return {
-    pinConversation: pinMutation.mutate,
-    muteConversation: muteMutation.mutate,
+    pinConversation: (id: string, isPinned: boolean) => pinMutation.mutate({ id, isPinned }),
+    muteConversation: (id: string, isMuted: boolean) => muteMutation.mutate({ id, isMuted }),
     isPinning: pinMutation.isPending,
     isMuting: muteMutation.isPending,
   };

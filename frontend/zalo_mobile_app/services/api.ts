@@ -6,10 +6,11 @@ import type {
       RegisterPayload,
       UserProfile,
 } from '@/types/auth';
-import type { Conversation, ConversationListResponse } from '@/types/conversation';
-import type { Message } from '@/types/message';
+import type { Conversation, ConversationListResponse, ConversationMember } from '@/types/conversation';
+import type { Message, RecentMediaItemDto } from '@/types/message';
 import type { ReminderItem, CreateReminderParams, UpdateReminderParams } from '@/types/reminder';
 import type { CallHistoryItem, CursorPaginatedResult } from '@/types/call';
+import type { ConversationSearchMember } from '@/features/chats/search.types';
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
@@ -279,17 +280,39 @@ export const mobileApi = {
             return apiRequest<Conversation>(`/api/v1/conversations/${id}`, { method: 'GET' }, accessToken);
       },
 
+      getConversationMembers(id: string, accessToken: string, limit?: number) {
+            const query = limit ? `?limit=${limit}` : '';
+            return apiRequest<ConversationSearchMember[]>(`/api/v1/conversations/${id}/members${query}`, { method: 'GET' }, accessToken);
+      },
+
       togglePin(conversationId: string, accessToken: string, isPinned: boolean) {
             const method = isPinned ? 'POST' : 'DELETE';
             return apiRequest<void>(`/api/v1/conversations/${conversationId}/pin`, { method }, accessToken);
       },
 
-      toggleMute(conversationId: string, accessToken: string) {
-            return apiRequest<void>(`/api/v1/conversations/${conversationId}/mute`, { method: 'PATCH' }, accessToken);
+      toggleMute(conversationId: string, accessToken: string, isMuted: boolean) {
+            return apiRequest<void>(`/api/v1/conversations/${conversationId}/mute`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ muted: isMuted }),
+            }, accessToken);
       },
 
-      getFriends(accessToken: string) {
-            return apiRequest<unknown>('/api/v1/friendships', { method: 'GET' }, accessToken);
+      getFriends(accessToken: string, params: { search?: string; cursor?: string; limit?: number; excludeIds?: string[]; conversationId?: string } = {}) {
+            const query = new URLSearchParams();
+            if (params.search) query.append('search', params.search);
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            if (params.conversationId) query.append('conversationId', params.conversationId);
+            if (params.excludeIds && params.excludeIds.length > 0) {
+                  params.excludeIds.filter(Boolean).forEach(id => query.append('excludeIds', id));
+            }
+
+            const queryString = query.toString();
+            return apiRequest<{ data: any[]; meta: { hasNextPage: boolean; nextCursor?: string } }>(
+                  `/api/v1/friendships${queryString ? `?${queryString}` : ''}`,
+                  { method: 'GET' },
+                  accessToken,
+            );
       },
 
       getCallHistory(accessToken: string, status?: string) {
@@ -376,7 +399,7 @@ export const mobileApi = {
             );
       },
 
-      updateConversation(id: string, accessToken: string, data: { name?: string; avatarUrl?: string }) {
+      updateConversation(id: string, accessToken: string, data: { name?: string; avatarUrl?: string; requireApproval?: boolean }) {
             return apiRequest<Conversation>(
                   `/api/v1/conversations/${id}`,
                   {
@@ -384,6 +407,18 @@ export const mobileApi = {
                         body: JSON.stringify(data),
                   },
                   accessToken,
+            );
+      },
+
+      getBlockedList(accessToken: string, params: { cursor?: string; limit?: number } = {}) {
+            const query = new URLSearchParams();
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            const queryString = query.toString();
+            return apiRequest<{ data: any[]; meta: { hasNextPage: boolean; nextCursor?: string } }>(
+                  `/api/v1/block/blocked${queryString ? `?${queryString}` : ''}`,
+                  { method: 'GET' },
+                  accessToken
             );
       },
 
@@ -454,6 +489,17 @@ export const mobileApi = {
             );
       },
 
+      initiateAvatarUpload(payload: { fileName: string; mimeType: string; fileSize: number }, accessToken: string) {
+            return apiRequest<{ presignedUrl: string; fileUrl: string }>(
+                  '/api/v1/media/upload/avatar',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                  },
+                  accessToken,
+            );
+      },
+
       uploadToS3(presignedUrl: string, fileInfo: { uri: string; type: string; name: string }, onProgress?: (percent: number) => void): Promise<void> {
             return new Promise((resolve, reject) => {
                   const xhr = new XMLHttpRequest();
@@ -483,7 +529,7 @@ export const mobileApi = {
                   {
                         method: 'POST',
                         body: JSON.stringify({ uploadId }),
-                   },
+                  },
                   accessToken,
             );
       },
@@ -555,6 +601,63 @@ export const mobileApi = {
 
       removeDeviceToken(deviceId: string, accessToken: string) {
             return apiRequest<void>(`/api/v1/devices/${deviceId}`, { method: 'DELETE' }, accessToken);
+      },
+
+      getRecentMedia(conversationId: string, accessToken: string, params: { types?: string; limit?: number; cursor?: string; keyword?: string } = {}) {
+            const query = new URLSearchParams();
+            if (params.types) query.append('types', params.types);
+            if (params.limit) query.append('limit', params.limit.toString());
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.keyword) query.append('keyword', params.keyword);
+
+            const queryString = query.toString();
+            const path = `/api/v1/messages/conversations/${conversationId}/media/recent${queryString ? `?${queryString}` : ''}`;
+
+            return apiRequest<{ items: RecentMediaItemDto[]; meta: { nextCursor?: string; hasNextPage: boolean } }>(path, { method: 'GET' }, accessToken);
+      },
+
+      blockUser(targetUserId: string, accessToken: string, reason?: string) {
+            return apiRequest<any>('/api/v1/block', {
+                  method: 'POST',
+                  body: JSON.stringify({ targetUserId, reason }),
+            }, accessToken);
+      },
+
+      unblockUser(targetUserId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/block/${targetUserId}`, { method: 'DELETE' }, accessToken);
+      },
+
+      checkBlockStatus(targetUserId: string, accessToken: string) {
+            return apiRequest<{ isBlocked: boolean }>(`/api/v1/block/check/${targetUserId}`, { method: 'GET' }, accessToken);
+      },
+
+      searchContacts(accessToken: string, params: { keyword: string; cursor?: string; limit?: number; excludeIds?: string[]; conversationId?: string }) {
+            const query = new URLSearchParams();
+            query.append('keyword', params.keyword);
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            if (params.conversationId) query.append('conversationId', params.conversationId);
+            if (params.excludeIds && params.excludeIds.length > 0) {
+                  params.excludeIds.filter(Boolean).forEach(id => query.append('excludeIds', id));
+            }
+
+            const queryString = query.toString();
+            return apiRequest<{ data: any[]; meta: { hasNextPage: boolean; nextCursor?: string } }>(
+                  `/api/v1/search/contacts${queryString ? `?${queryString}` : ''}`,
+                  { method: 'GET' },
+                  accessToken
+            );
+      },
+
+      updateAlias(accessToken: string, contactUserId: string, data: { aliasName: string | null }) {
+            return apiRequest<void>(
+                  `/api/v1/contacts/${contactUserId}/alias`,
+                  {
+                        method: 'PATCH',
+                        body: JSON.stringify(data),
+                  },
+                  accessToken
+            );
       },
 };
 

@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, ScrollView, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { mobileApi } from '@/services/api';
@@ -11,6 +13,15 @@ import { useConversationSettings } from '@/features/chats/hooks/use-conversation
 import { useConversationActions } from '@/features/chats/hooks/use-conversation-actions';
 import { Modal, TextInput, Portal, Button, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+
+import { DirectSettings } from '@/features/chats/components/settings/direct-settings';
+import { GroupSettings } from '@/features/chats/components/settings/group-settings';
+import { AvatarOptionsModal } from '@/features/chats/components/modals/avatar-options-modal';
+import { AvatarConfirmModal } from '@/features/chats/components/modals/avatar-confirm-modal';
+import { useUpdateAlias } from '@/features/chats/hooks/use-update-alias';
+import { useConversationMembers } from '@/features/chats/hooks/use-members';
+import Toast from 'react-native-toast-message';
 
 export default function SettingsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,49 +34,168 @@ export default function SettingsScreen() {
     enabled: !!id && !!accessToken,
   });
 
-  const { updateMutation, leaveMutation, dissolveMutation } = useConversationSettings(id);
-  const { pinConversation, muteConversation } = useConversationActions();
+  const { updateMutation } = useConversationSettings(id);
+  const { mutate: updateAlias } = useUpdateAlias();
 
   const [editNameVisible, setEditNameVisible] = useState(false);
+  const [avatarOptionsVisible, setAvatarOptionsVisible] = useState(false);
+  const [avatarConfirmVisible, setAvatarConfirmVisible] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
   const [newName, setNewName] = useState('');
+  const [pickedImage, setPickedImage] = useState<{ uri: string, type: string, name: string, fileSize?: number } | null>(null);
 
-  const currentUserMember = useMemo(() =>
-    conversation?.members?.find((m: any) => m.userId === user?.id),
-    [conversation, user?.id]
+  const { data: conversationMembers = [] } = useConversationMembers(
+    id,
+    20,
+    !!conversation && conversation.type === 'GROUP'
   );
 
-  const isAdmin = useMemo(() =>
-    conversation?.type === 'DIRECT' || currentUserMember?.role === 'ADMIN',
-    [conversation, currentUserMember]
-  );
+  const currentUserMember = useMemo(() => {
+    if (!conversation) return null;
+    // Try finding in conversation.members first (direct or small group)
+    let member: any = conversation.members?.find((m: any) =>
+      (m.userId === user?.id) || (m.id === user?.id)
+    );
+
+    // If not found, try finding in conversationMembers from hook
+    if (!member) {
+      member = conversationMembers.find((m: any) =>
+        (m.id === user?.id) || (m.userId === user?.id)
+      );
+    }
+
+    return member;
+  }, [conversation, conversationMembers, user?.id]);
+
+  const isAdmin = useMemo(() => {
+    if (conversation?.type === 'DIRECT') return true;
+    if (conversation?.myRole) {
+      return conversation.myRole.toUpperCase() === 'ADMIN';
+    }
+    const role = currentUserMember?.role?.toUpperCase();
+    return role === 'ADMIN';
+  }, [conversation, currentUserMember]);
+
+  const targetUserId = useMemo(() => {
+    if (!conversation) return null;
+    if (conversation.type === 'DIRECT') {
+      const otherMember = conversation.members?.find((m: any) =>
+        (m.userId !== user?.id) && (m.id !== user?.id)
+      );
+      return otherMember?.userId || otherMember?.id || conversation.otherUserId;
+    }
+    return null;
+  }, [conversation, user?.id]);
 
   const handleUpdateName = () => {
-    if (newName.trim()) {
-      updateMutation.mutate({ name: newName.trim() });
-      setEditNameVisible(false);
+    if (!newName.trim()) return;
+
+    if (conversation?.type === 'DIRECT' && targetUserId) {
+      updateAlias({
+        contactUserId: targetUserId,
+        aliasName: newName.trim(),
+        conversationId: id
+      }, {
+        onSuccess: () => {
+          setEditNameVisible(false);
+          // Conversations list will be invalidated by hook
+        }
+      });
+    } else {
+      updateMutation.mutate({ name: newName.trim() }, {
+        onSuccess: () => setEditNameVisible(false),
+        onError: (error: any) => {
+          Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể cập nhật tên' });
+        }
+      });
     }
   };
 
-  const handleLeaveGroup = () => {
-    Alert.alert(
-      'Rời nhóm',
-      'Bạn có chắc chắn muốn rời nhóm này không?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Rời nhóm', style: 'destructive', onPress: () => leaveMutation.mutate() },
-      ]
-    );
+  const handlePickImage = async (source: 'camera' | 'library') => {
+    try {
+      const permissionResult = source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (permissionResult.status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Lỗi',
+          text2: `Cần quyền truy cập ${source === 'camera' ? 'camera' : 'thư viện ảnh'}`
+        });
+        return;
+      }
+
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      };
+
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        
+        // Get actual file size
+        const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+        const fileSize = fileInfo.exists ? fileInfo.size : asset.fileSize;
+
+        setPickedImage({
+          uri: asset.uri,
+          type: asset.mimeType || 'image/jpeg',
+          name: asset.fileName || `avatar_${Date.now()}.jpg`,
+          fileSize: fileSize || 1, // Ensure at least 1 to avoid 400 error
+        });
+        setAvatarConfirmVisible(true);
+      }
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể chọn ảnh' });
+    }
   };
 
-  const handleDissolveGroup = () => {
-    Alert.alert(
-      'Giải tán nhóm',
-      'Tất cả tin nhắn và thành viên sẽ bị xóa. Hành động này không thể hoàn tác.',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Giải tán', style: 'destructive', onPress: () => dissolveMutation.mutate() },
-      ]
-    );
+  const handleConfirmUpload = async () => {
+    if (!pickedImage || !accessToken) return;
+
+    setIsUploading(true);
+    try {
+      // 1. Initiate upload
+      const { presignedUrl, fileUrl } = await mobileApi.initiateAvatarUpload(
+        {
+          fileName: pickedImage.name,
+          mimeType: pickedImage.type,
+          fileSize: pickedImage.fileSize || 1,
+        },
+        accessToken
+      );
+
+      // 2. Upload to S3
+      await mobileApi.uploadToS3(presignedUrl, {
+        uri: pickedImage.uri,
+        type: pickedImage.type,
+        name: pickedImage.name,
+      });
+
+      // 3. Update conversation
+      updateMutation.mutate({ avatarUrl: fileUrl }, {
+        onSuccess: () => {
+          setAvatarConfirmVisible(false);
+          setPickedImage(null);
+          Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã cập nhật ảnh đại diện' });
+        },
+        onError: (error: any) => {
+          Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể cập nhật ảnh đại diện' });
+        },
+        onSettled: () => setIsUploading(false),
+      });
+    } catch (error: any) {
+      setIsUploading(false);
+      Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể tải ảnh lên' });
+    }
   };
 
   if (isLoading) {
@@ -81,103 +211,42 @@ export default function SettingsScreen() {
   return (
     <View className="flex-1 bg-background">
       {/* Custom Header */}
-      <View
-        className="flex-row items-center px-4 py-3 bg-primary"
-        style={{ paddingTop: 12, paddingBottom: 12 }}
-      >
-        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white font-bold text-lg ml-2" numberOfLines={1}>
-          Chi tiết nhóm
-        </Text>
-      </View>
+      <SafeAreaView className="bg-primary" edges={['top']}>
+        <View
+          className="flex-row items-center px-4 py-3"
+        >
+          <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text className="text-white font-bold text-lg ml-2" numberOfLines={1}>
+            {conversation.type === 'DIRECT' ? 'Thông tin' : 'Tùy chọn'}
+          </Text>
+        </View>
+      </SafeAreaView>
 
-      <ScrollView>
-        <ProfileHeader
-          conversation={conversation as any}
+      {conversation.type === 'DIRECT' ? (
+        <DirectSettings
+          conversation={conversation}
+          members={conversation.members || []}
+          onEditName={() => {
+            setNewName(conversation.name || '');
+            setEditNameVisible(true);
+          }}
+        />
+      ) : (
+        <GroupSettings
+          conversation={conversation}
+          members={conversationMembers}
           isAdmin={isAdmin}
           onEditName={() => {
             setNewName(conversation.name || '');
             setEditNameVisible(true);
           }}
-          onTogglePin={() => pinConversation({ id: conversation.id, isPinned: !conversation.isPinned })}
-          onToggleMute={() => muteConversation(conversation.id)}
+          onEditAvatar={() => setAvatarOptionsVisible(true)}
         />
+      )}
 
-        <View className="mt-2" />
-
-        <SettingsListItem
-          icon="time-outline"
-          label="Danh sách nhắc hẹn"
-          onPress={() => console.log('Reminders')}
-        />
-        <SettingsListItem
-          icon="image-outline"
-          label="Ảnh/File"
-          onPress={() => console.log('Media/File')}
-        />
-
-        {conversation.type === 'GROUP' && (
-          <>
-            <View className="mt-2" />
-            <MemberList
-              members={conversation.members || []}
-              isAdmin={isAdmin}
-              onAddMember={() => console.log('Add member')}
-              onMemberPress={(uid) => console.log('Member press', uid)}
-            />
-
-            <View className="mt-2" />
-            <SettingsListItem
-              icon="notifications-outline"
-              label="Yêu cầu tham gia"
-              onPress={() => console.log('Join requests')}
-            />
-            {isAdmin && (
-              <SettingsListItem
-                icon="settings-outline"
-                label="Thiết lập nhóm"
-                onPress={() => console.log('Group settings')}
-              />
-            )}
-
-            <View className="mt-2" />
-            <SettingsListItem
-              icon="exit-outline"
-              label="Rời nhóm"
-              onPress={handleLeaveGroup}
-              destructive
-            />
-            {isAdmin && (
-              <SettingsListItem
-                icon="trash-outline"
-                label="Giải tán nhóm"
-                onPress={handleDissolveGroup}
-                destructive
-              />
-            )}
-          </>
-        )}
-
-        {conversation.type === 'DIRECT' && (
-          <>
-            <View className="mt-2" />
-            <SettingsListItem
-              icon="eye-off-outline"
-              label="Ẩn trò chuyện"
-              onPress={() => console.log('Hide chat')}
-            />
-            <SettingsListItem
-              icon="trash-outline"
-              label="Xóa lịch sử trò chuyện"
-              onPress={() => console.log('Delete history')}
-              destructive
-            />
-          </>
-        )}
-      </ScrollView>
-
+      {/* Common Modals */}
       <Portal>
         <Modal
           visible={editNameVisible}
@@ -197,6 +266,23 @@ export default function SettingsScreen() {
             <Button onPress={handleUpdateName}>Lưu</Button>
           </View>
         </Modal>
+
+        <AvatarOptionsModal
+          visible={avatarOptionsVisible}
+          onDismiss={() => setAvatarOptionsVisible(false)}
+          onSelectOption={handlePickImage}
+        />
+
+        <AvatarConfirmModal
+          visible={avatarConfirmVisible}
+          onDismiss={() => {
+            setAvatarConfirmVisible(false);
+            setPickedImage(null);
+          }}
+          onConfirm={handleConfirmUpload}
+          imageUri={pickedImage?.uri || null}
+          isLoading={isUploading}
+        />
       </Portal>
     </View>
   );

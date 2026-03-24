@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, TouchableOpacity, Platform } from 'react-native';
 import { Text } from 'react-native-paper';
-import * as Linking from 'expo-linking';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import Toast from 'react-native-toast-message';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { MessageMediaAttachmentItem } from '@/types/message';
-import { getFullUrl, getFileIcon, formatFileSize } from '../message-item.utils';
+import { getFileIcon, formatFileSize } from '../message-item.utils';
+import { handleOpenFile, handleDownloadFile } from '../../../utils/file-utils';
 import { styles } from '../message-item.styles';
+
+import { useMediaResource } from '../../../hooks/use-media-resource';
+import { MediaProcessingOverlay } from './media-processing-overlay';
 
 interface Props {
   attachment: MessageMediaAttachmentItem;
@@ -17,75 +17,27 @@ interface Props {
 }
 
 export function MessageDocumentAttachment({ attachment, isMe, theme }: Props) {
+  const { isProcessing, isError, src, checkResource } = useMediaResource(attachment);
   const fileIcon = getFileIcon(attachment.originalName || '');
   const sizeDisplay = formatFileSize(attachment.size);
 
-  const handleOpen = async () => {
-    const url = getFullUrl(attachment.cdnUrl || attachment.optimizedUrl || attachment._localUrl);
-    if (!url) return;
-
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) {
-      Linking.openURL(url);
-    } else {
-      const localUri = FileSystem.documentDirectory + (attachment.originalName || `file_${Date.now()}`);
-      await FileSystem.downloadAsync(url, localUri);
-      await Sharing.shareAsync(localUri);
+  React.useEffect(() => {
+    if (!isError && !isProcessing) {
+      checkResource();
     }
-  };
+  }, [src, isError, isProcessing]);
 
-  const handleDownload = async () => {
-    const url = getFullUrl(
-      attachment.cdnUrl || attachment.optimizedUrl || attachment.thumbnailUrl || attachment._localUrl,
+  const handleOpen = () => handleOpenFile(src, attachment.originalName || 'file');
+  const handleDownload = () => handleDownloadFile(src, attachment.originalName || 'file', attachment.mimeType);
+
+  if (isError) {
+    return (
+      <View style={styles.errorWrapper}>
+        <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />
+        <Text style={styles.errorText}>File không tồn tại</Text>
+      </View>
     );
-
-    if (!url) {
-      Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không có liên kết tải về' });
-      return;
-    }
-
-    try {
-      const fileName = attachment.originalName || `file_${Date.now()}`;
-      const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '-');
-
-      Toast.show({ type: 'info', text1: 'Bắt đầu tải...', text2: safeFileName, position: 'bottom' });
-
-      // 1. Tải về vùng nhớ an toàn của app
-      const localUri = FileSystem.documentDirectory + safeFileName;
-      const downloadRes = await FileSystem.downloadAsync(url, localUri);
-
-      if (downloadRes.status !== 200) throw new Error('Lỗi từ server khi tải file');
-
-      // 2. Lưu ra ngoài hoặc chia sẻ
-      if (Platform.OS === 'android') {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions.granted) {
-          const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-            permissions.directoryUri,
-            safeFileName,
-            'application/octet-stream',
-          );
-          const fileData = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
-          await FileSystem.writeAsStringAsync(newFileUri, fileData, { encoding: FileSystem.EncodingType.Base64 });
-          Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã lưu file vào máy', position: 'top' });
-        } else {
-          Toast.show({ type: 'info', text1: 'Đã hủy', text2: 'Bạn chưa cấp quyền lưu file', position: 'top' });
-        }
-      } else {
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
-          await Sharing.shareAsync(localUri, { UTI: 'public.item', dialogTitle: 'Lưu tệp đính kèm' });
-          Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã xử lý tệp', position: 'top' });
-        }
-      }
-
-      // 3. Dọn dẹp
-      await FileSystem.deleteAsync(localUri, { idempotent: true });
-    } catch (error) {
-      console.error('Download error:', error);
-      Toast.show({ type: 'error', text1: 'Lỗi tải xuống', text2: 'Không thể tải tệp vào lúc này', position: 'top' });
-    }
-  };
+  }
 
   return (
     <View style={styles.docWrapper}>
@@ -97,7 +49,6 @@ export function MessageDocumentAttachment({ attachment, isMe, theme }: Props) {
           <Text style={styles.docName} numberOfLines={1}>
             {attachment.originalName || 'Document'}
           </Text>
-          {/* Chỉ render khi backend thực sự có dữ liệu size — tránh hiện số sai */}
           {sizeDisplay != null && (
             <Text style={styles.docSize}>{sizeDisplay}</Text>
           )}
@@ -107,6 +58,7 @@ export function MessageDocumentAttachment({ attachment, isMe, theme }: Props) {
       <TouchableOpacity style={styles.docDownload} onPress={handleDownload}>
         <Ionicons name="download-outline" size={24} color={theme.colors.onSurfaceVariant} />
       </TouchableOpacity>
+      {isProcessing && <MediaProcessingOverlay style={{ borderRadius: 12 }} />}
     </View>
   );
 }

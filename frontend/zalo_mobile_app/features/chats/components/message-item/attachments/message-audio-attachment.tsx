@@ -8,49 +8,10 @@ import { MessageMediaAttachmentItem } from '@/types/message';
 import { getFullUrl, formatAudioDuration } from '../message-item.utils';
 import { styles } from '../message-item.styles';
 
-// ─── AudioBar ────────────────────────────────────────────────────────────────
+import { AudioWaveform } from './audio-waveform';
 
-interface AudioBarProps {
-  targetHeight: number;
-  isPlaying: boolean;
-  isMe: boolean;
-  theme: any;
-}
-
-function AudioBar({ targetHeight, isPlaying, isMe, theme }: AudioBarProps) {
-  const height = useSharedValue(isPlaying ? targetHeight : 4);
-
-  React.useEffect(() => {
-    if (isPlaying) {
-      height.value = withRepeat(
-        withSequence(
-          withTiming(targetHeight * 0.4, { duration: 300 + Math.random() * 200 }),
-          withTiming(targetHeight,       { duration: 300 + Math.random() * 200 }),
-        ),
-        -1,
-        true,
-      );
-    } else {
-      height.value = withTiming(4);
-    }
-  }, [isPlaying]);
-
-  const animatedStyle = useAnimatedStyle(() => ({ height: height.value }));
-
-  return (
-    <Animated.View
-      style={[
-        styles.audioBar,
-        { backgroundColor: isMe ? '#0091ff' : theme.colors.primary, opacity: isPlaying ? 1 : 0.6 },
-        animatedStyle,
-      ]}
-    />
-  );
-}
-
-// ─── MessageAudioAttachment ──────────────────────────────────────────────────
-
-const AUDIO_BAR_HEIGHTS = [1.2, 2.5, 1.8, 3.2, 2.1, 4.0, 3.5, 2.7, 1.9, 2.3, 1.5];
+import { useMediaResource } from '../../../hooks/use-media-resource';
+import { MediaProcessingOverlay } from './media-processing-overlay';
 
 interface Props {
   attachment: MessageMediaAttachmentItem;
@@ -59,19 +20,19 @@ interface Props {
 }
 
 export function MessageAudioAttachment({ attachment, isMe, theme }: Props) {
-  const src = getFullUrl(attachment.cdnUrl || attachment._localUrl);
+  const { isProcessing, isError, src, checkResource } = useMediaResource(attachment, { useFullRes: true });
   const player = useAudioPlayer(src || '');
 
-  // useAudioPlayerStatus là hook reactive thực sự — subscribe vào event stream của player.
-  // Dùng player.duration trực tiếp trong useEffect/useState KHÔNG work vì nó là plain JS
-  // property, React không theo dõi được → duration mãi là 0 sau khi player load xong.
-  const status = useAudioPlayerStatus(player);
+  React.useEffect(() => {
+    if (!isError && !isProcessing) {
+      checkResource();
+    }
+  }, [src, isError, isProcessing]);
 
+  const status = useAudioPlayerStatus(player);
   const backendDuration = attachment.duration != null && attachment.duration > 0 ? attachment.duration : null;
   const playerDuration  = status.duration != null  && status.duration  > 0 ? Math.round(status.duration) : null;
   const actualDuration  = backendDuration ?? playerDuration ?? 0;
-
-  // Lấy isPlaying từ status thực tế — tránh bug icon không reset khi audio phát xong tự động.
   const isPlaying = status.playing ?? false;
 
   const handlePlayPause = () => {
@@ -80,6 +41,15 @@ export function MessageAudioAttachment({ attachment, isMe, theme }: Props) {
 
   const accentColor = isMe ? '#0091ff' : theme.colors.primary;
 
+  if (isError) {
+    return (
+      <View style={styles.errorWrapper}>
+        <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />
+        <Text style={styles.errorText}>File không tồn tại</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.audioWrapper}>
       <TouchableOpacity style={[styles.audioPlayBtn, { backgroundColor: accentColor }]} onPress={handlePlayPause}>
@@ -87,16 +57,13 @@ export function MessageAudioAttachment({ attachment, isMe, theme }: Props) {
       </TouchableOpacity>
 
       <View style={styles.audioWaveWrapper}>
-        <View style={styles.audioWave}>
-          {AUDIO_BAR_HEIGHTS.map((h, i) => (
-            <AudioBar key={i} targetHeight={h * 4} isPlaying={isPlaying} isMe={isMe} theme={theme} />
-          ))}
-        </View>
+        <AudioWaveform isPlaying={isPlaying} isMe={isMe} theme={theme} />
       </View>
 
       <Text style={[styles.audioDuration, { color: accentColor }]}>
         {actualDuration > 0 ? formatAudioDuration(actualDuration) : '0:00'}
       </Text>
+      {isProcessing && <MediaProcessingOverlay style={{ borderRadius: 12 }} />}
     </View>
   );
 }

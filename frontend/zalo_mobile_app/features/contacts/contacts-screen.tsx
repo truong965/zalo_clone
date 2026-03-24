@@ -11,7 +11,6 @@ import { InvitationList } from './components/invitation-list';
 import { GroupList } from './components/group-list';
 import { Friend, FriendRequest } from '@/types/friendship';
 import { Conversation } from '@/types/conversation';
-import { normalizeList } from '@/lib/api/normalize-list';
 
 type MainTab = 'friends' | 'invitations' | 'groups';
 type InvitationSubTab = 'received' | 'sent';
@@ -38,7 +37,7 @@ export function ContactsScreen() {
     try {
       if (activeTab === 'friends') {
         const response = await mobileApi.getFriends(accessToken);
-        setFriends(normalizeList<Friend>(response));
+        setFriends(response.data as Friend[]);
       } else if (activeTab === 'invitations') {
         if (invitationTab === 'received') {
           const response = await mobileApi.getReceivedFriendRequests(accessToken);
@@ -89,7 +88,7 @@ export function ContactsScreen() {
   const handlePressFriend = (friend: Friend) => {
     router.push({
       pathname: '/chat/new' as any,
-      params: { userId: friend.user.id }
+      params: { userId: friend.userId }
     });
   };
 
@@ -100,7 +99,7 @@ export function ContactsScreen() {
   };
 
   const handleCall = (friend: Friend) => {
-    console.log('Calling', friend.user.displayName);
+    console.log('Calling', friend.resolvedDisplayName || friend.displayName);
     // Placeholder for call functionality
   };
 
@@ -154,7 +153,7 @@ export function ContactsScreen() {
   return (
     <View className="flex-1 bg-[#f4f5f7]">
       {renderTabHeader()}
-      
+
       {activeTab === 'invitations' && renderInvitationSubHeader()}
 
       <View className="flex-1">
@@ -165,16 +164,16 @@ export function ContactsScreen() {
         ) : (
           <>
             {activeTab === 'friends' && (
-              <FriendList 
-                friends={friends} 
-                onCall={handleCall} 
-                onPress={handlePressFriend} 
+              <FriendList
+                friends={friends}
+                onCall={handleCall}
+                onPress={handlePressFriend}
                 isRefreshing={isRefreshing}
                 onRefresh={onRefresh}
               />
             )}
             {activeTab === 'invitations' && (
-              <InvitationList 
+              <InvitationList
                 requests={invitationTab === 'received' ? receivedRequests : sentRequests}
                 mode={invitationTab === 'received' ? 'RECEIVED' : 'SENT'}
                 onAccept={handleAccept}
@@ -185,9 +184,9 @@ export function ContactsScreen() {
               />
             )}
             {activeTab === 'groups' && (
-              <GroupList 
-                groups={groups} 
-                onPress={handlePressGroup} 
+              <GroupList
+                groups={groups}
+                onPress={handlePressGroup}
                 isRefreshing={isRefreshing}
                 onRefresh={onRefresh}
               />
