@@ -1,5 +1,4 @@
 // conversation-sidebar.tsx
-import { useState } from 'react';
 import { Input, Button, Spin } from 'antd';
 import {
       SearchOutlined, UserAddOutlined, UsergroupAddOutlined,
@@ -16,6 +15,8 @@ interface ConversationSidebarProps {
       loadMoreRef: (node?: Element | null) => void;
       hasMore?: boolean;
       isLoading?: boolean;
+      activeTab: ConversationFilterTab;
+      onTabChange: (tab: ConversationFilterTab) => void;
       /** Open global search panel (Option A) */
       onSearchClick?: () => void;
       /** Open friendship search modal */
@@ -42,6 +43,8 @@ export function ConversationSidebar({
       loadMoreRef,
       hasMore = false,
       isLoading = false,
+      activeTab,
+      onTabChange,
       onSearchClick,
       onFriendSearchClick,
       onCreateGroupClick,
@@ -54,17 +57,10 @@ export function ConversationSidebar({
       onToggleArchive,
 }: ConversationSidebarProps) {
       const { t } = useTranslation();
-      const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
 
       const filteredConversations = activeTab === 'archived'
             ? archivedConversations
-            : conversations.filter(c => {
-                  if (activeTab === 'unread') {
-                        const unreadCount = c.unreadCount ?? c.unread ?? 0;
-                        return unreadCount > 0;
-                  }
-                  return true;
-            });
+            : conversations;
 
       // const globalMenuItems: MenuProps['items'] = [
       //       {
@@ -109,7 +105,7 @@ export function ConversationSidebar({
                                           ? 'text-blue-600 border-b-2 border-blue-600'
                                           : 'text-gray-500 hover:text-blue-600'
                                           }`}
-                                    onClick={() => setActiveTab('all')}
+                                    onClick={() => onTabChange('all')}
                               >
                                     {t('chat.sidebar.tabAll')}
                               </span>
@@ -118,7 +114,7 @@ export function ConversationSidebar({
                                           ? 'text-blue-600 border-b-2 border-blue-600'
                                           : 'text-gray-500 hover:text-blue-600'
                                           }`}
-                                    onClick={() => setActiveTab('unread')}
+                                    onClick={() => onTabChange('unread')}
                               >
                                     {t('chat.sidebar.tabUnread')}
                               </span>
@@ -127,7 +123,7 @@ export function ConversationSidebar({
                                           ? 'text-blue-600 border-b-2 border-blue-600'
                                           : 'text-gray-500 hover:text-blue-600'
                                           }`}
-                                    onClick={() => setActiveTab('archived')}
+                                    onClick={() => onTabChange('archived')}
                               >
                                     {t('chat.sidebar.tabArchived')}
                               </span>

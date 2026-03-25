@@ -158,6 +158,9 @@ export const SocketEvents = {
       REMINDER_TRIGGERED: 'reminder:triggered',
       /** Server → Client: Reminder list changed */
       REMINDER_UPDATED: 'reminder:updated',
+
+      // === BLOCK EVENTS ===
+      USER_BLOCKED: 'user:blocked',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

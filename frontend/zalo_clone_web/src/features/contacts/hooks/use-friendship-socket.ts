@@ -64,13 +64,15 @@ export function useFriendshipSocket() {
 
       useEffect(() => {
             if (receivedData) {
-                  setPendingReceivedCount(receivedData.length);
+                  const total = receivedData.pages.reduce((acc, page) => acc + page.data.length, 0);
+                  setPendingReceivedCount(total);
             }
       }, [receivedData, setPendingReceivedCount]);
 
       useEffect(() => {
             if (sentData) {
-                  setPendingSentCount(sentData.length);
+                  const total = sentData.pages.reduce((acc, page) => acc + page.data.length, 0);
+                  setPendingSentCount(total);
             }
       }, [sentData, setPendingSentCount]);
 

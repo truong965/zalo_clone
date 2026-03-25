@@ -107,6 +107,7 @@ async function getConversations(params?: {
       cursor?: string;
       limit?: number;
       archived?: boolean;
+      unread?: boolean;
 }): Promise<CursorPaginatedResponse<ConversationUI>> {
       const response = await apiClient.get<ApiResponse<CursorPaginatedResponse<ConversationListItem>>>(
             API_ENDPOINTS.CONVERSATIONS.GET_ALL,

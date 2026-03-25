@@ -57,13 +57,23 @@ async function getFriendsList(params?: {
       return response.data;
 }
 
-async function getReceivedRequests(): Promise<FriendRequestWithUserDto[]> {
-      const { data: response } = await apiClient.get(API_ENDPOINTS.FRIENDS.GET_RECEIVED);
+async function getReceivedRequests(params?: {
+      cursor?: string;
+      limit?: number;
+}): Promise<CursorPaginatedResponse<FriendRequestWithUserDto>> {
+      const { data: response } = await apiClient.get(API_ENDPOINTS.FRIENDS.GET_RECEIVED, {
+            params,
+      });
       return response.data;
 }
 
-async function getSentRequests(): Promise<FriendRequestWithUserDto[]> {
-      const { data: response } = await apiClient.get(API_ENDPOINTS.FRIENDS.GET_SENT);
+async function getSentRequests(params?: {
+      cursor?: string;
+      limit?: number;
+}): Promise<CursorPaginatedResponse<FriendRequestWithUserDto>> {
+      const { data: response } = await apiClient.get(API_ENDPOINTS.FRIENDS.GET_SENT, {
+            params,
+      });
       return response.data;
 }
 
@@ -147,30 +157,34 @@ export function useFriendsList(params?: { search?: string; limit?: number; conve
 }
 
 /**
- * Query for received friend requests.
+ * Infinite query for received friend requests.
  */
-export function useReceivedRequests(
-      options?: Partial<UseQueryOptions<FriendRequestWithUserDto[]>>,
-) {
-      return useQuery({
-            queryKey: friendshipKeys.receivedRequests(),
-            queryFn: getReceivedRequests,
+export function useReceivedRequests(params?: { limit?: number }) {
+      const limit = params?.limit ?? 20;
+
+      return useInfiniteQuery({
+            queryKey: [...friendshipKeys.receivedRequests(), { limit }],
+            initialPageParam: undefined as string | undefined,
+            queryFn: ({ pageParam }) => getReceivedRequests({ cursor: pageParam, limit }),
+            getNextPageParam: (lastPage) =>
+                  lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
             staleTime: 10_000,
-            ...options,
       });
 }
 
 /**
- * Query for sent friend requests.
+ * Infinite query for sent friend requests.
  */
-export function useSentRequests(
-      options?: Partial<UseQueryOptions<FriendRequestWithUserDto[]>>,
-) {
-      return useQuery({
-            queryKey: friendshipKeys.sentRequests(),
-            queryFn: getSentRequests,
+export function useSentRequests(params?: { limit?: number }) {
+      const limit = params?.limit ?? 20;
+
+      return useInfiniteQuery({
+            queryKey: [...friendshipKeys.sentRequests(), { limit }],
+            initialPageParam: undefined as string | undefined,
+            queryFn: ({ pageParam }) => getSentRequests({ cursor: pageParam, limit }),
+            getNextPageParam: (lastPage) =>
+                  lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
             staleTime: 10_000,
-            ...options,
       });
 }
 

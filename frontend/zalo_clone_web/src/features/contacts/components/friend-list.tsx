@@ -100,7 +100,8 @@ export function FriendList({
 
       useEffect(() => {
             if (lastVirtualItem == null) return;
-            if (lastVirtualItem.index >= friends.length && hasNextPage && !isFetchingNextPage) {
+            // Trigger fetch when we are 5 items away from the end of loaded list
+            if (lastVirtualItem.index >= friends.length - 5 && hasNextPage && !isFetchingNextPage) {
                   void fetchNextPage();
             }
       }, [lastVirtualItem?.index, friends.length, hasNextPage, isFetchingNextPage, fetchNextPage]);

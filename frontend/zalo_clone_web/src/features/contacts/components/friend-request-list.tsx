@@ -22,6 +22,7 @@ import { useFriendshipStore, type FriendRequestTab } from '../stores/friendship.
 import { FriendCard } from './friend-card';
 import type { FriendRequestWithUserDto } from '../types';
 import { useTranslation } from 'react-i18next';
+import { useInView } from 'react-intersection-observer';
 
 const { Text } = Typography;
 
@@ -77,12 +78,12 @@ function SentRequestItem({ request }: { request: FriendRequestWithUserDto }) {
                   subtitle={formatTimeAgo(request.createdAt, t)}
                   actions={
                         <Button
-                              size="small"
-                              icon={<UndoOutlined />}
-                              loading={cancel.isPending}
-                              onClick={() => cancel.mutate(request.id)}
+                               size="small"
+                               icon={<UndoOutlined />}
+                               loading={cancel.isPending}
+                               onClick={() => cancel.mutate(request.id)}
                         >
-                              {t('contacts.friendRequest.recall')}
+                               {t('contacts.friendRequest.recall')}
                         </Button>
                   }
             />
@@ -103,11 +104,11 @@ export function FriendRequestList() {
       const sent = useSentRequests();
 
       return (
-            <div className="p-3 h-full flex flex-col">
+            <div className="p-3 h-full flex flex-col overflow-hidden">
                   <Tabs
                         activeKey={activeTab}
                         onChange={(key) => setActiveTab(key as FriendRequestTab)}
-                        className="px-4"
+                        className="px-4 h-full flex flex-col"
                         items={[
                               {
                                     key: 'received',
@@ -120,6 +121,9 @@ export function FriendRequestList() {
                                           <RequestTabContent
                                                 data={received.data}
                                                 isLoading={received.isLoading}
+                                                isFetchingNextPage={received.isFetchingNextPage}
+                                                hasNextPage={!!received.hasNextPage}
+                                                fetchNextPage={received.fetchNextPage}
                                                 emptyText={t('contacts.friendRequest.emptyReceived')}
                                                 renderItem={(r) => <ReceivedRequestItem key={r.id} request={r} />}
                                           />
@@ -132,6 +136,9 @@ export function FriendRequestList() {
                                           <RequestTabContent
                                                 data={sent.data}
                                                 isLoading={sent.isLoading}
+                                                isFetchingNextPage={sent.isFetchingNextPage}
+                                                hasNextPage={!!sent.hasNextPage}
+                                                fetchNextPage={sent.fetchNextPage}
                                                 emptyText={t('contacts.friendRequest.emptySent')}
                                                 renderItem={(r) => <SentRequestItem key={r.id} request={r} />}
                                           />
@@ -150,14 +157,30 @@ export function FriendRequestList() {
 function RequestTabContent({
       data,
       isLoading,
+      isFetchingNextPage,
+      hasNextPage,
+      fetchNextPage,
       emptyText,
       renderItem,
 }: {
-      data: FriendRequestWithUserDto[] | undefined;
+      data: any;
       isLoading: boolean;
+      isFetchingNextPage: boolean;
+      hasNextPage: boolean;
+      fetchNextPage: () => void;
       emptyText: string;
       renderItem: (request: FriendRequestWithUserDto) => React.ReactNode;
 }) {
+      const { ref: loadMoreRef } = useInView({
+            threshold: 0.1,
+            rootMargin: '200px',
+            onChange: (inView) => {
+                  if (inView && hasNextPage && !isFetchingNextPage) {
+                        void fetchNextPage();
+                  }
+            },
+      });
+
       if (isLoading) {
             return (
                   <div className="flex items-center justify-center py-12">
@@ -166,11 +189,24 @@ function RequestTabContent({
             );
       }
 
-      if (!data || data.length === 0) {
+      const requests = data?.pages.flatMap((p: any) => p.data) ?? [];
+
+      if (requests.length === 0) {
             return <Empty description={<Text type="secondary">{emptyText}</Text>} className="py-12" />;
       }
 
-      return <div className="divide-y divide-gray-100">{data.map(renderItem)}</div>;
+      return (
+            <div className="h-full overflow-y-auto pb-8">
+                  <div className="divide-y divide-gray-100">
+                        {requests.map(renderItem)}
+                  </div>
+                  {hasNextPage && (
+                        <div ref={loadMoreRef} className="py-4 flex justify-center">
+                              {isFetchingNextPage && <Spin size="small" />}
+                        </div>
+                  )}
+            </div>
+      );
 }
 
 // ---------------------------------------------------------------------------

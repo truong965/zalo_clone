@@ -46,7 +46,7 @@ import { useConversationLoader } from './hooks/use-conversation-loader';
 // ── Store ────────────────────────────────────────────────────────────────
 import { useChatStore } from './stores/chat.store';
 import type { MediaBrowserTab } from './stores/chat.store';
-import type { ChatMessage } from './types';
+import type { ChatMessage, ConversationFilterTab } from './types';
 
 interface ReminderTarget {
       conversationId: string;
@@ -121,6 +121,9 @@ export function ChatFeature() {
       // ── Hook: selection / URL sync ───────────────────────────────────────
       const { selectedId, setSelectedId, handleSelectConversation } = useChatSelection();
 
+      // ── Tab state for conversation list ──────────────────────────────────
+      const [activeTab, setActiveTab] = useState<ConversationFilterTab>('all');
+
       // ── Clear reply target when switching conversations ──────────────────
       useEffect(() => {
             setReplyTarget(null);
@@ -136,7 +139,7 @@ export function ChatFeature() {
             prependConversation,
             updateConversation,
             removeConversation,
-      } = useConversationListMutations();
+      } = useConversationListMutations(activeTab === 'unread');
 
       // ── Realtime: conversation list ──────────────────────────────────────
       useConversationListRealtime({
@@ -394,6 +397,8 @@ export function ChatFeature() {
                                     loadMoreRef={convLoadMoreRef}
                                     hasMore={convHasMore}
                                     isLoading={isLoadingConv}
+                                    activeTab={activeTab}
+                                    onTabChange={setActiveTab}
                                     onSearchClick={() => {
                                           setIsGlobalSearchOpen(true);
                                           setRightSidebar('none');

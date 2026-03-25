@@ -21,6 +21,7 @@ type GroupMemberJoinedPayload = { conversationId: string; userId: string };
 type GroupAdminTransferredPayload = { conversationId: string; oldAdminId: string; newAdminId: string };
 type GroupJoinRequestReceivedPayload = { conversationId: string; requestId: string; userId: string };
 type GroupJoinRequestReviewedPayload = { conversationId: string; requestId: string; approved: boolean; reviewedBy: string };
+type UserBlockedPayload = { conversationId: string };
 
 interface ConversationSocketHandlers {
       onConversationCreated?: (conversation: Conversation) => void;
@@ -39,6 +40,7 @@ interface ConversationSocketHandlers {
       onConversationPinned?: (data: { conversationId: string }) => void;
       onConversationUnpinned?: (data: { conversationId: string }) => void;
       onConversationMuted?: (data: { conversationId: string; muted: boolean }) => void;
+      onUserBlocked?: (data: UserBlockedPayload) => void;
 }
 
 export function useConversationSocket(handlers: ConversationSocketHandlers) {
@@ -143,6 +145,14 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
                   }
             };
 
+            const onUserBlocked = (data: UserBlockedPayload) => {
+                  try {
+                        handlersRef.current.onUserBlocked?.(data);
+                  } catch {
+                        // ignore handler errors
+                  }
+            };
+
             // Register all listeners
             socket.on(SocketEvents.GROUP_CREATED, onGroupCreated);
             socket.on(SocketEvents.GROUP_UPDATED, onGroupUpdated);
@@ -155,6 +165,7 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
             socket.on(SocketEvents.GROUP_ADMIN_TRANSFERRED, onGroupAdminTransferred);
             socket.on(SocketEvents.GROUP_JOIN_REQUEST_RECEIVED, onGroupJoinRequestReceived);
             socket.on(SocketEvents.GROUP_JOIN_REQUEST_REVIEWED, onGroupJoinRequestReviewed);
+            socket.on(SocketEvents.USER_BLOCKED, onUserBlocked);
 
             const onConversationPinned = (data: { conversationId: string }) => {
                   handlersRef.current.onConversationPinned?.(data);
@@ -188,6 +199,7 @@ export function useConversationSocket(handlers: ConversationSocketHandlers) {
                   socket.off(SocketEvents.GROUP_ADMIN_TRANSFERRED, onGroupAdminTransferred);
                   socket.off(SocketEvents.GROUP_JOIN_REQUEST_RECEIVED, onGroupJoinRequestReceived);
                   socket.off(SocketEvents.GROUP_JOIN_REQUEST_REVIEWED, onGroupJoinRequestReviewed);
+                  socket.off(SocketEvents.USER_BLOCKED, onUserBlocked);
 
                   socket.off(SocketEvents.CONVERSATION_PINNED, onConversationPinned);
                   socket.off(SocketEvents.CONVERSATION_UNPINNED, onConversationUnpinned);

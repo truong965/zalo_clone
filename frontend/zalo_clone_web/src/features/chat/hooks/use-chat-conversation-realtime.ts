@@ -75,5 +75,14 @@ export function useChatConversationRealtime({
                         setSelectedId(null);
                   }
             },
+
+            onUserBlocked: (data) => {
+                  // Reuse logic from onGroupMemberLeft: clear conversation on block
+                  removeConversation(data.conversationId);
+                  if (selectedId === data.conversationId) {
+                        setSelectedId(null);
+                  }
+                  void invalidateAll();
+            },
       });
 }

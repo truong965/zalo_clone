@@ -17,15 +17,15 @@ import type { ConversationUI } from '../types';
 
 type ConversationsPage = Awaited<ReturnType<typeof conversationService.getConversations>>;
 
-export function useConversationListMutations() {
+export function useConversationListMutations(unread?: boolean) {
       const queryClient = useQueryClient();
       const conversationsLimit = 20;
-
+ 
       const conversationsQueryKey = useMemo(
-            () => ['conversations', { limit: conversationsLimit }] as const,
-            [conversationsLimit],
+            () => ['conversations', { limit: conversationsLimit, unread }] as const,
+            [conversationsLimit, unread],
       );
-
+ 
       const conversationsQuery = useInfiniteQuery({
             queryKey: conversationsQueryKey,
             initialPageParam: undefined as string | undefined,
@@ -33,6 +33,7 @@ export function useConversationListMutations() {
                   return conversationService.getConversations({
                         cursor: pageParam,
                         limit: conversationsLimit,
+                        unread,
                   });
             },
             getNextPageParam: (lastPage) => {

@@ -80,11 +80,10 @@ export function FriendshipSearchModal({
 
 
 
-      useEffect(() => {
-            if (!showFriendRequestModal && contact && normalizedInput) {
-                  triggerSearch(normalizedInput);
-            }
-      }, [showFriendRequestModal, contact, normalizedInput, triggerSearch]);
+      // NOTE: Removed useEffect that re-triggered search when showFriendRequestModal closes.
+      // It caused an infinite loop: triggerSearch → subscribe → results → contact updates
+      // → useEffect re-fires → triggerSearch again. Action handlers already call
+      // triggerSearch on success, so this was redundant.
 
       const handleSearch = useCallback(() => {
             if (!normalizedInput) {

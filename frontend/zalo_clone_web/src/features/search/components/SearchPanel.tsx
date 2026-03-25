@@ -18,7 +18,6 @@ import { SearchResults } from './SearchResults';
 import { SearchEmpty } from './SearchEmpty';
 import { FriendRequestModal, useAcceptRequest, useCancelRequest } from '@/features/contacts';
 import { conversationService } from '@/features/conversation';
-import { searchService } from '../api/search.service';
 import { handleInteractionError } from '@/utils/interaction-error';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -112,10 +111,7 @@ export function SearchPanel({
                   if (isContactActionLoading) return;
 
                   // Track click for search history (fire and forget)
-                  const trimmedKw = keyword.trim();
-                  if (trimmedKw) {
-                        searchService.trackResultClick(trimmedKw, result.id).catch(() => { });
-                  }
+                  handleResultClick(result.id);
 
                   // If the user is already friend, open conversation directly
                   if (effectiveStatus === 'FRIEND') {

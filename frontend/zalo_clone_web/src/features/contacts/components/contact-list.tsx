@@ -94,8 +94,9 @@ export function ContactList({
 
       useEffect(() => {
             if (lastVirtualItem == null) return;
+            // Trigger fetch when we are 5 items away from the end of loaded list
             if (
-                  lastVirtualItem.index >= contacts.length &&
+                  lastVirtualItem.index >= contacts.length - 5 &&
                   hasNextPage &&
                   !isFetchingNextPage
             ) {
