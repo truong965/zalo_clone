@@ -174,4 +174,18 @@ export const styles = StyleSheet.create({
     color: '#ef4444',
     fontWeight: '500',
   },
+  retryBtn: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  retryText: {
+    fontSize: 11,
+    color: '#ef4444',
+    fontWeight: '700',
+  },
 });

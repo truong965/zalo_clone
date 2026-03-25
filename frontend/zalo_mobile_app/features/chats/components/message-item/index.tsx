@@ -19,6 +19,7 @@ export interface MessageItemProps {
   onLongPress?: (message: Message) => void;
   onJumpToMessage?: (messageId: string) => void;
   onMediaPress?: (mediaId: string) => void;
+  onRetry?: (message: Message) => void;
   isHighlighted?: boolean;
 }
 
@@ -32,6 +33,7 @@ export function MessageItem({
   onLongPress,
   onJumpToMessage,
   onMediaPress,
+  onRetry,
   isHighlighted,
 }: MessageItemProps) {
   const theme = useTheme();
@@ -83,7 +85,7 @@ export function MessageItem({
           <View style={[styles.timeRow, isMe ? styles.timeRowMe : styles.timeRowOther]}>
             <Text style={styles.timeText}>{time}</Text>
             {isMe && isLatestMyMessage && (
-              <SendStatusLabel message={message} isDirect={isDirect} />
+              <SendStatusLabel message={message} isDirect={isDirect} onRetry={onRetry} />
             )}
           </View>
         )}
@@ -94,10 +96,31 @@ export function MessageItem({
 
 // ─── SendStatusLabel (private, only used above) ──────────────────────────────
 
-function SendStatusLabel({ message, isDirect }: { message: Message; isDirect: boolean }) {
+function SendStatusLabel({ 
+  message, 
+  isDirect, 
+  onRetry 
+}: { 
+  message: Message; 
+  isDirect: boolean;
+  onRetry?: (message: Message) => void;
+}) {
   const sendStatus = getSendStatus(message.metadata);
   if (sendStatus === 'SENDING') return <Text style={styles.statusText}>Đang gửi...</Text>;
-  if (sendStatus === 'FAILED')  return <Text style={styles.statusError}>Lỗi mạng</Text>;
+  
+  if (sendStatus === 'FAILED') {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={styles.statusError}>Lỗi mạng</Text>
+        <TouchableOpacity 
+          style={styles.retryBtn} 
+          onPress={() => onRetry?.(message)}
+        >
+          <Text style={styles.retryText}>Thử lại</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const state = getReceiptDisplayState(message, isDirect);
   if (state === 'none')      return null;

@@ -16,7 +16,7 @@ export function useMediaResource(
   const [isResourceError, setIsResourceError] = useState(false);
 
   const processingStatus = attachment.processingStatus;
-  const isProcessing = ['PENDING', 'UPLOADED', 'CONFIRMED', 'PROCESSING'].includes(processingStatus);
+  const isProcessing = ['PENDING', 'UPLOADING', 'UPLOADED', 'CONFIRMED', 'PROCESSING'].includes(processingStatus);
   const isFailedInDB = processingStatus === 'FAILED' || processingStatus === 'EXPIRED' || !!attachment.deletedAt;
   
   const useFullRes = options?.useFullRes ?? false;
@@ -27,7 +27,7 @@ export function useMediaResource(
     
   const src = getFullUrl(rawSrc);
 
-  const isError = isFailedInDB || isResourceError;
+  const isError = (isFailedInDB || isResourceError) && !isProcessing;
   const errorType: MediaErrorType = isFailedInDB ? 'FAILED' : isResourceError ? 'RESOURCE_ERROR' : 'NONE';
 
   // For Type 2 error detection (403/404)

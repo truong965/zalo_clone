@@ -6,7 +6,7 @@ import { mobileApi } from '@/services/api';
 
 export function getFullUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://') || url.startsWith('content://') || url.startsWith('data:')) return url;
   return `${mobileApi.baseUrl}${url}`;
 }
 

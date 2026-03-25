@@ -50,6 +50,7 @@ const ChatMessage = React.memo(
     item, isMe, isDirect, isLatestMyMessage,
     showAvatar, showSenderName, showTime, showSeparator,
     onLongPress, onJumpToMessage, onMediaPress, isHighlighted,
+    onRetry,
   }: {
     item: Message;
     isMe: boolean;
@@ -63,6 +64,7 @@ const ChatMessage = React.memo(
     onJumpToMessage?: (msgId: string) => void;
     onMediaPress?: (mediaId: string) => void;
     isHighlighted?: boolean;
+    onRetry?: (msg: Message) => void;
   }) => {
     if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
     return (
@@ -79,6 +81,7 @@ const ChatMessage = React.memo(
           onLongPress={onLongPress}
           onJumpToMessage={onJumpToMessage}
           onMediaPress={onMediaPress}
+          onRetry={onRetry}
           isHighlighted={isHighlighted}
         />
       </View>
@@ -175,11 +178,11 @@ export default function ChatDetailScreen() {
   }, []);
 
   useEffect(() => {
-    if (jumpToMessageId && jumpToMessage) {
+    if (jumpToMessageId && jumpToMessage && accessToken) {
       jumpToMessage(jumpToMessageId);
       setJumpToMessageId(null);
     }
-  }, [jumpToMessageId, jumpToMessage, setJumpToMessageId]);
+  }, [jumpToMessageId, jumpToMessage, setJumpToMessageId, accessToken]);
 
   const messages = useMemo(() => {
     if (!data?.pages) return [];
@@ -278,6 +281,49 @@ export default function ChatDetailScreen() {
     [],
   );
 
+  const handleRetry = useCallback(
+    (message: Message) => {
+      // Reconstruct local assets from media attachments
+      const localAssets = message.mediaAttachments
+        ?.filter(a => !!a._localUrl)
+        .map(a => ({
+          uri: a._localUrl!,
+          fileName: a.originalName,
+          mimeType: a.mimeType || 'application/octet-stream',
+          fileSize: a.size || 0,
+          type: (a.mediaType.toLowerCase() === 'image' || a.mediaType.toLowerCase() === 'video' || a.mediaType.toLowerCase() === 'document') 
+            ? a.mediaType.toLowerCase() as any 
+            : 'document',
+        }));
+
+      // Reconstruct reply target from parentMessage
+      let replyTarget = undefined;
+      if (message.parentMessage) {
+        replyTarget = {
+          messageId: message.parentMessage.id,
+          senderName: message.parentMessage.sender?.displayName || 'Người dùng',
+          content: message.parentMessage.content,
+          type: message.parentMessage.type,
+          mediaAttachments: message.parentMessage.mediaAttachments?.map((a: any) => ({
+            mediaType: a.mediaType,
+            originalName: a.originalName,
+          })),
+        };
+      }
+
+      sendMessageMutation.mutate({
+        conversationId: id,
+        content: message.content,
+        type: message.type,
+        clientMessageId: message.clientMessageId || uuidv4(),
+        mediaIds: message.mediaAttachments?.filter(a => !a._localUrl).map(a => a.id),
+        replyTarget,
+        localAssets,
+      });
+    },
+    [id, sendMessageMutation]
+  );
+
   const renderItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
       const olderMessage = messages[index - 1];
@@ -302,12 +348,13 @@ export default function ChatDetailScreen() {
           onLongPress={setSelectedMsgForMenu}
           onJumpToMessage={jumpToMessage}
           onMediaPress={handleMediaPress}
+          onRetry={handleRetry}
           isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
       );
     },
     [user?.id, messages, isGroup, isDirect, latestMyMessageId,
-      setSelectedMsgForMenu, jumpToMessage, handleMediaPress, highlightedId],
+      setSelectedMsgForMenu, jumpToMessage, handleMediaPress, handleRetry, highlightedId],
   );
 
   const handleSend = useCallback(

@@ -40,3 +40,6 @@ yarn-error.log*
 /.agents/
 
 /firebase-messaging-sw.js
+
+start-dev.bat
+stop-dev.bat

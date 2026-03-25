@@ -17,7 +17,7 @@ interface Props {
 export function MessageImageAttachment({ attachment, isSingle }: Props) {
   const { isProcessing, isError, src, setResourceError } = useMediaResource(attachment);
 
-  if (isError) {
+  if (isError && !isProcessing) {
     return (
       <View style={[styles.errorWrapper, isSingle ? { width: 220 } : { width: '49%', aspectRatio: 1 }]}>
         <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />

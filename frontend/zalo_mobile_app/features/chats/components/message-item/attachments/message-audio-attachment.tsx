@@ -41,7 +41,7 @@ export function MessageAudioAttachment({ attachment, isMe, theme }: Props) {
 
   const accentColor = isMe ? '#0091ff' : theme.colors.primary;
 
-  if (isError) {
+  if (isError && !isProcessing) {
     return (
       <View style={styles.errorWrapper}>
         <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />

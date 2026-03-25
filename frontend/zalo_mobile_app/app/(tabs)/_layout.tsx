@@ -3,11 +3,13 @@ import { Redirect, Tabs, useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Appbar, Searchbar } from 'react-native-paper';
+import { Appbar, Searchbar, Menu, Divider } from 'react-native-paper';
 import { HapticTab } from '@/components/haptic-tab';
 import { useAuth } from '@/providers/auth-provider';
+import { FriendshipSearchModal } from '@/features/contacts/components/friendship-search-modal';
+import { CreateGroupModal } from '@/features/chats/components/modals/create-group-modal';
 
 export default function TabLayout() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -16,6 +18,12 @@ export default function TabLayout() {
   const router = useRouter();
   const loginHref = '/login' as Href;
   const [searchQuery, setSearchQuery] = useState('');
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [isFriendSearchOpen, setIsFriendSearchOpen] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+
+  const openMenu = () => setMenuVisible(true);
+  const closeMenu = () => setMenuVisible(false);
 
   if (isLoading) {
     return null;
@@ -34,10 +42,35 @@ export default function TabLayout() {
               icon={({ size, color }) => <Ionicons name="qr-code-outline" size={size} color={color} />}
               onPress={() => router.push('/qr-scanner')}
             />
-            <Appbar.Action
-              icon={({ size, color }) => <Ionicons name="add" size={size} color={color} />}
-              onPress={() => { }}
-            />
+            <Menu
+              visible={menuVisible}
+              onDismiss={closeMenu}
+              anchor={
+                <Appbar.Action
+                  icon={({ size, color }) => <Ionicons name="add" size={size} color={color} />}
+                  onPress={openMenu}
+                />
+              }
+              contentStyle={{ backgroundColor: 'white' }}
+            >
+              <Menu.Item
+                onPress={() => {
+                  closeMenu();
+                  setIsFriendSearchOpen(true);
+                }}
+                leadingIcon={({ size, color }) => <Ionicons name="person-add-outline" size={size} color={color} />}
+                title="Thêm bạn"
+              />
+              <Divider />
+              <Menu.Item
+                onPress={() => {
+                  closeMenu();
+                  setIsCreateGroupOpen(true);
+                }}
+                leadingIcon={({ size, color }) => <Ionicons name="people-outline" size={size} color={color} />}
+                title="Tạo nhóm"
+              />
+            </Menu>
           </>
         );
       case 'contacts':
@@ -73,15 +106,19 @@ export default function TabLayout() {
             >
               <View className="flex-1 flex-row items-center justify-between">
                 <View className="flex-1 mr-2">
-                  <Searchbar
-                    placeholder={t('chats.searchPlaceholder')}
-                    onChangeText={setSearchQuery}
-                    value={searchQuery}
-                    style={{ backgroundColor: 'rgba(255,255,255,0.2)', height: 40 }}
-                    inputStyle={{ minHeight: 0, fontSize: 14, color: '#fff' }}
-                    placeholderTextColor="rgba(255,255,255,0.6)"
-                    iconColor="rgba(255,255,255,0.7)"
-                  />
+                  <Pressable onPress={() => router.push('/search' as Href)}>
+                    <View pointerEvents="none">
+                      <Searchbar
+                        placeholder={t('chats.searchPlaceholder')}
+                        value=""
+                        editable={false}
+                        style={{ backgroundColor: 'rgba(255,255,255,0.2)', height: 40 }}
+                        inputStyle={{ minHeight: 0, fontSize: 14, color: '#fff' }}
+                        placeholderTextColor="rgba(255,255,255,0.6)"
+                        iconColor="rgba(255,255,255,0.7)"
+                      />
+                    </View>
+                  </Pressable>
                 </View>
                 <View className="flex-row items-center">
                   {renderHeaderActions(route.name)}
@@ -129,6 +166,8 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
+      <FriendshipSearchModal visible={isFriendSearchOpen} onClose={() => setIsFriendSearchOpen(false)} />
+      <CreateGroupModal visible={isCreateGroupOpen} onDismiss={() => setIsCreateGroupOpen(false)} />
     </View>
   );
 }

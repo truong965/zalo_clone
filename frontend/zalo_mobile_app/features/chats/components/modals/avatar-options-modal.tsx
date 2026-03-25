@@ -33,7 +33,7 @@ export const AvatarOptionsModal = ({
     >
       <View className="items-center mb-4">
         <View className="w-10 h-1 bg-gray-300 rounded-full mb-4" />
-        <Text className="text-lg font-bold">Thay đổi ảnh đại diện</Text>
+        <Text className="text-lg font-bold">Chọn ảnh đại diện</Text>
       </View>
 
       <List.Item
@@ -56,9 +56,9 @@ export const AvatarOptionsModal = ({
         className="py-2"
       />
 
-      <Button 
-        mode="text" 
-        onPress={onDismiss} 
+      <Button
+        mode="text"
+        onPress={onDismiss}
         className="mt-2"
         textColor={theme.colors.primary}
       >

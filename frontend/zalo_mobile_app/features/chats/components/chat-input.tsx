@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
+import EmojiPicker from 'rn-emoji-keyboard';
 import { useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useMobileMediaUpload } from '../hooks/use-mobile-media-upload';
@@ -23,6 +24,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const [content, setContent] = useState('');
     const [showExtraOptions, setShowExtraOptions] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const { pickMedia, pickDocuments, isUploading } = useMobileMediaUpload();
@@ -100,6 +102,10 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
         }
     };
 
+    const handlePickEmoji = (emojiObject: any) => {
+        setContent(prev => prev + emojiObject.emoji);
+    };
+
     if (isRecording || isUploadingAudio) {
         return (
             <VoiceRecordingUI
@@ -134,7 +140,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                 </View>
             )}
             <View className="flex-row items-center p-2 min-h-[56px]">
-                <TouchableOpacity className="p-2" disabled={isUploading}>
+                <TouchableOpacity className="p-2" disabled={isUploading} onPress={() => setShowEmojiPicker(true)}>
                     <Ionicons name="happy-outline" size={24} color={theme.colors.onSurfaceVariant} />
                 </TouchableOpacity>
 
@@ -201,6 +207,12 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                 onDismiss={() => setShowReminderModal(false)}
                 onSubmit={handleCreateReminder}
                 conversationId={conversationId}
+            />
+
+            <EmojiPicker
+                onEmojiSelected={handlePickEmoji}
+                open={showEmojiPicker}
+                onClose={() => setShowEmojiPicker(false)}
             />
         </View>
     );

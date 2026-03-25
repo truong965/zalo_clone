@@ -21,6 +21,7 @@ import { AvatarOptionsModal } from '@/features/chats/components/modals/avatar-op
 import { AvatarConfirmModal } from '@/features/chats/components/modals/avatar-confirm-modal';
 import { useUpdateAlias } from '@/features/chats/hooks/use-update-alias';
 import { useConversationMembers } from '@/features/chats/hooks/use-members';
+import { useAvatarPicker } from '@/features/chats/hooks/use-avatar-picker';
 import Toast from 'react-native-toast-message';
 
 export default function SettingsScreen() {
@@ -40,10 +41,9 @@ export default function SettingsScreen() {
   const [editNameVisible, setEditNameVisible] = useState(false);
   const [avatarOptionsVisible, setAvatarOptionsVisible] = useState(false);
   const [avatarConfirmVisible, setAvatarConfirmVisible] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-
+  const { pickImage, uploadAvatar, isUploading } = useAvatarPicker();
   const [newName, setNewName] = useState('');
-  const [pickedImage, setPickedImage] = useState<{ uri: string, type: string, name: string, fileSize?: number } | null>(null);
+  const [pickedImage, setPickedImage] = useState<any | null>(null);
 
   const { data: conversationMembers = [] } = useConversationMembers(
     id,
@@ -113,74 +113,20 @@ export default function SettingsScreen() {
   };
 
   const handlePickImage = async (source: 'camera' | 'library') => {
-    try {
-      const permissionResult = source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (permissionResult.status !== 'granted') {
-        Toast.show({
-          type: 'error',
-          text1: 'Lỗi',
-          text2: `Cần quyền truy cập ${source === 'camera' ? 'camera' : 'thư viện ảnh'}`
-        });
-        return;
-      }
-
-      const options: ImagePicker.ImagePickerOptions = {
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      };
-
-      const result = source === 'camera'
-        ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        
-        // Get actual file size
-        const fileInfo = await FileSystem.getInfoAsync(asset.uri);
-        const fileSize = fileInfo.exists ? fileInfo.size : asset.fileSize;
-
-        setPickedImage({
-          uri: asset.uri,
-          type: asset.mimeType || 'image/jpeg',
-          name: asset.fileName || `avatar_${Date.now()}.jpg`,
-          fileSize: fileSize || 1, // Ensure at least 1 to avoid 400 error
-        });
-        setAvatarConfirmVisible(true);
-      }
-    } catch (error: any) {
-      Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể chọn ảnh' });
+    const picked = await pickImage(source);
+    if (picked) {
+      setPickedImage(picked);
+      setAvatarConfirmVisible(true);
     }
   };
 
   const handleConfirmUpload = async () => {
-    if (!pickedImage || !accessToken) return;
+    if (!pickedImage) return;
 
-    setIsUploading(true);
     try {
-      // 1. Initiate upload
-      const { presignedUrl, fileUrl } = await mobileApi.initiateAvatarUpload(
-        {
-          fileName: pickedImage.name,
-          mimeType: pickedImage.type,
-          fileSize: pickedImage.fileSize || 1,
-        },
-        accessToken
-      );
+      const fileUrl = await uploadAvatar(pickedImage);
 
-      // 2. Upload to S3
-      await mobileApi.uploadToS3(presignedUrl, {
-        uri: pickedImage.uri,
-        type: pickedImage.type,
-        name: pickedImage.name,
-      });
-
-      // 3. Update conversation
+      // Update conversation
       updateMutation.mutate({ avatarUrl: fileUrl }, {
         onSuccess: () => {
           setAvatarConfirmVisible(false);
@@ -190,10 +136,8 @@ export default function SettingsScreen() {
         onError: (error: any) => {
           Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể cập nhật ảnh đại diện' });
         },
-        onSettled: () => setIsUploading(false),
       });
     } catch (error: any) {
-      setIsUploading(false);
       Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể tải ảnh lên' });
     }
   };

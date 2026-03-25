@@ -30,7 +30,7 @@ export function MessageDocumentAttachment({ attachment, isMe, theme }: Props) {
   const handleOpen = () => handleOpenFile(src, attachment.originalName || 'file');
   const handleDownload = () => handleDownloadFile(src, attachment.originalName || 'file', attachment.mimeType);
 
-  if (isError) {
+  if (isError && !isProcessing) {
     return (
       <View style={styles.errorWrapper}>
         <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />

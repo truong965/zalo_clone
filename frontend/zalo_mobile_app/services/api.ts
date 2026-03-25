@@ -11,6 +11,7 @@ import type { Message, RecentMediaItemDto } from '@/types/message';
 import type { ReminderItem, CreateReminderParams, UpdateReminderParams } from '@/types/reminder';
 import type { CallHistoryItem, CursorPaginatedResult } from '@/types/call';
 import type { ConversationSearchMember } from '@/features/chats/search.types';
+import type { SearchHistoryItem, SearchSuggestion, TrendingKeyword } from '@/features/search/types';
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
@@ -285,6 +286,17 @@ export const mobileApi = {
             return apiRequest<ConversationSearchMember[]>(`/api/v1/conversations/${id}/members${query}`, { method: 'GET' }, accessToken);
       },
 
+      createDirectConversation(targetUserId: string, accessToken: string) {
+            return apiRequest<Conversation>(
+                  '/api/v1/conversations/direct',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ targetUserId }),
+                  },
+                  accessToken,
+            );
+      },
+
       togglePin(conversationId: string, accessToken: string, isPinned: boolean) {
             const method = isPinned ? 'POST' : 'DELETE';
             return apiRequest<void>(`/api/v1/conversations/${conversationId}/pin`, { method }, accessToken);
@@ -454,6 +466,17 @@ export const mobileApi = {
 
       getSentFriendRequests(accessToken: string) {
             return apiRequest<any[]>('/api/v1/friend-requests/sent', { method: 'GET' }, accessToken);
+      },
+
+      sendFriendRequest(targetUserId: string, accessToken: string) {
+            return apiRequest<{ id: string }>(
+                  '/api/v1/friend-requests',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ targetUserId }),
+                  },
+                  accessToken,
+            );
       },
 
       acceptFriendRequest(requestId: string, accessToken: string) {
@@ -631,6 +654,10 @@ export const mobileApi = {
             return apiRequest<{ isBlocked: boolean }>(`/api/v1/block/check/${targetUserId}`, { method: 'GET' }, accessToken);
       },
 
+      checkFriendshipStatus(targetUserId: string, accessToken: string) {
+            return apiRequest<{ status: string | null }>(`/api/v1/friendships/check/${targetUserId}`, { method: 'GET' }, accessToken);
+      },
+
       searchContacts(accessToken: string, params: { keyword: string; cursor?: string; limit?: number; excludeIds?: string[]; conversationId?: string }) {
             const query = new URLSearchParams();
             query.append('keyword', params.keyword);
@@ -658,6 +685,38 @@ export const mobileApi = {
                   },
                   accessToken
             );
+      },
+
+      // --- Search Analytics ---
+      getSearchHistory(accessToken: string, limit = 50) {
+            return apiRequest<SearchHistoryItem[]>(`/api/v1/search/analytics/history?limit=${limit}`, { method: 'GET' }, accessToken);
+      },
+
+      getSuggestions(accessToken: string, prefix: string, limit = 10) {
+            return apiRequest<SearchSuggestion[]>(`/api/v1/search/analytics/suggestions?prefix=${prefix}&limit=${limit}`, { method: 'GET' }, accessToken);
+      },
+
+      getTrendingKeywords(accessToken: string, limit = 50) {
+            return apiRequest<TrendingKeyword[]>(`/api/v1/search/analytics/trending?limit=${limit}`, { method: 'GET' }, accessToken);
+      },
+
+      trackResultClick(accessToken: string, keyword: string, resultId: string) {
+            return apiRequest<void>(
+                  '/api/v1/search/analytics/track-click',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ keyword, resultId }),
+                  },
+                  accessToken,
+            );
+      },
+
+      deleteSearchHistory(accessToken: string, historyId: string) {
+            return apiRequest<void>(`/api/v1/search/analytics/history/${historyId}`, { method: 'DELETE' }, accessToken);
+      },
+
+      clearSearchHistory(accessToken: string) {
+            return apiRequest<void>('/api/v1/search/analytics/history', { method: 'DELETE' }, accessToken);
       },
 };
 

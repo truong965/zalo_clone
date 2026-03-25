@@ -60,9 +60,10 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
 
   const handleGoToSearch = () => {
     if (!conversation?.id) return;
-    router.push({
-      pathname: `/chat/${conversation.id}/search` as any,
-    });
+    router.navigate({
+      pathname: `/chat/[id]/search`,
+      params: { id: conversation.id, fromDetail: 'true' }
+    } as any);
   };
 
   const insets = useSafeAreaInsets();

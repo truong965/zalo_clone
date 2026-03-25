@@ -24,7 +24,7 @@ export function MessageVideoAttachment({ attachment }: Props) {
     }
   }, [src, isError, isProcessing]);
 
-  if (isError) {
+  if (isError && !isProcessing) {
     return (
       <View style={[styles.errorWrapper, { width: 224, height: 224, justifyContent: 'center' }]}>
         <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />

@@ -44,9 +44,13 @@ export const SocketEvents = {
   // Search
   SEARCH_SUBSCRIBE: 'search:subscribe',
   SEARCH_UNSUBSCRIBE: 'search:unsubscribe',
+  SEARCH_UPDATE_QUERY: 'search:updateQuery',
   SEARCH_RESULTS: 'search:results',
+  SEARCH_MORE_RESULTS: 'search:moreResults',
   SEARCH_NEW_MATCH: 'search:newMatch',
   SEARCH_RESULT_REMOVED: 'search:resultRemoved',
+  SEARCH_SUGGESTIONS: 'search:suggestions',
+  SEARCH_LOAD_MORE: 'search:loadMore',
   SEARCH_ERROR: 'search:error',
 
   // Group
@@ -69,4 +73,5 @@ export const SocketEvents = {
   GROUP_JOIN_REQUEST_REVIEWED: 'group:joinRequestReviewed',
   GROUP_MEMBER_JOINED: 'group:memberJoined',
   GROUP_YOU_WERE_REMOVED: 'group:youWereRemoved',
+  USER_BLOCKED: 'user:blocked',
 } as const;

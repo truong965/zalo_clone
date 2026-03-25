@@ -9,7 +9,7 @@ import { mobileApi } from '@/services/api';
 export function getFullUrl(url?: string | null): string | undefined {
       if (!url) return undefined;
       // Nếu đã là URL hoàn chỉnh (ví dụ từ Google/Facebook avatar) thì giữ nguyên
-      if (url.startsWith('http://') || url.startsWith('https://')) return url;
+      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://') || url.startsWith('content://') || url.startsWith('data:')) return url;
       // Nếu là đường dẫn tương đối (ví dụ từ MinIO), ghép với baseUrl
       return `${mobileApi.baseUrl}${url}`;
 }

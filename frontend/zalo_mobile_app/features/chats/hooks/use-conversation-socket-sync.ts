@@ -89,6 +89,15 @@ export function useConversationSocketSync(id: string, currentUserId?: string) {
       }
     };
 
+    const handleUserBlocked = (data: { conversationId: string }) => {
+      if (data.conversationId === id) {
+        // Reuse logic from handleMemberLeft: clear conversation on block
+        removeConversationFromList(id);
+        router.dismissAll();
+        router.replace('/(tabs)');
+      }
+    };
+
     socket.on(SocketEvents.GROUP_ADMIN_TRANSFERRED, handleAdminTransferred);
     socket.on(SocketEvents.GROUP_DISSOLVED, handleGroupDissolved);
     socket.on(SocketEvents.GROUP_MEMBER_REMOVED, handleMemberRemoved);
@@ -97,6 +106,7 @@ export function useConversationSocketSync(id: string, currentUserId?: string) {
     socket.on(SocketEvents.GROUP_MEMBERS_ADDED, handleRefreshMembers);
     socket.on(SocketEvents.GROUP_MEMBER_LEFT, handleMemberLeft);
     socket.on(SocketEvents.GROUP_MEMBER_JOINED, handleRefreshMembers);
+    socket.on(SocketEvents.USER_BLOCKED, handleUserBlocked);
 
     // Sync pinned/muted status and other conversation updates
     socket.on(SocketEvents.CONVERSATION_PINNED, handleConversationSync);
@@ -113,6 +123,7 @@ export function useConversationSocketSync(id: string, currentUserId?: string) {
       socket.off(SocketEvents.GROUP_MEMBERS_ADDED, handleRefreshMembers);
       socket.off(SocketEvents.GROUP_MEMBER_LEFT, handleMemberLeft);
       socket.off(SocketEvents.GROUP_MEMBER_JOINED, handleRefreshMembers);
+      socket.off(SocketEvents.USER_BLOCKED, handleUserBlocked);
 
       socket.off(SocketEvents.CONVERSATION_PINNED, handleConversationSync);
       socket.off(SocketEvents.CONVERSATION_UNPINNED, handleConversationSync);

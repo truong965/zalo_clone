@@ -189,7 +189,7 @@ function DatePickerRow({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ChatSearchScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, keyword: initialKeyword, fromDetail } = useLocalSearchParams<{ id: string; keyword: string; fromDetail?: string }>();
   const router = useRouter();
   const theme = useTheme();
   const { accessToken } = useAuth();
@@ -209,11 +209,16 @@ export default function ChatSearchScreen() {
   const inputRef = useRef<TextInput>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Focus input on mount
+  // Focus input on mount & Handle initial keyword
   useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.focus(), 150);
+    const t = setTimeout(() => {
+      inputRef.current?.focus();
+      if (initialKeyword && !keyword) {
+        handleKeywordChange(initialKeyword);
+      }
+    }, 150);
     return () => clearTimeout(t);
-  }, []);
+  }, [initialKeyword, handleKeywordChange, keyword]);
 
   // ── Fetch members for sender filter ─────────────────────────────────────
   const { data: members = [] } = useQuery({
@@ -241,9 +246,15 @@ export default function ChatSearchScreen() {
   const handleResultPress = useCallback(
     (msg: MessageSearchResult) => {
       setJumpToMessageId(msg.id);
-      router.back();
+      if (fromDetail === 'true') {
+        // If opened from chat detail, just pop back to avoid stack growth
+        router.back();
+      } else {
+        // If opened from global search, navigate to the chat detail screen
+        router.navigate({ pathname: '/chat/[id]', params: { id } } as any);
+      }
     },
-    [setJumpToMessageId, router],
+    [setJumpToMessageId, router, id, fromDetail],
   );
 
   const handleStartDateChange = useCallback(
@@ -419,7 +430,7 @@ export default function ChatSearchScreen() {
                     }}
                     numberOfLines={1}
                   >
-                    {m.displayName || 'Unknown'}
+                    {m.displayName || 'System'}
                   </Text>
                 </TouchableOpacity>
               );
