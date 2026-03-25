@@ -286,12 +286,12 @@ export const mobileApi = {
             return apiRequest<ConversationSearchMember[]>(`/api/v1/conversations/${id}/members${query}`, { method: 'GET' }, accessToken);
       },
 
-      createDirectConversation(targetUserId: string, accessToken: string) {
+      getOrCreateDirectConversation(recipientId: string, accessToken: string) {
             return apiRequest<Conversation>(
                   '/api/v1/conversations/direct',
                   {
                         method: 'POST',
-                        body: JSON.stringify({ targetUserId }),
+                        body: JSON.stringify({ recipientId }),
                   },
                   accessToken,
             );
@@ -460,12 +460,28 @@ export const mobileApi = {
                   accessToken,
             );
       },
-      getReceivedFriendRequests(accessToken: string) {
-            return apiRequest<any[]>('/api/v1/friend-requests/received', { method: 'GET' }, accessToken);
+      getReceivedFriendRequests(accessToken: string, params: { cursor?: string; limit?: number } = {}) {
+            const query = new URLSearchParams();
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            const queryString = query.toString();
+            return apiRequest<{ data: any[]; meta: { hasNextPage: boolean; nextCursor?: string } }>(
+                  `/api/v1/friend-requests/received${queryString ? `?${queryString}` : ''}`,
+                  { method: 'GET' },
+                  accessToken
+            );
       },
 
-      getSentFriendRequests(accessToken: string) {
-            return apiRequest<any[]>('/api/v1/friend-requests/sent', { method: 'GET' }, accessToken);
+      getSentFriendRequests(accessToken: string, params: { cursor?: string; limit?: number } = {}) {
+            const query = new URLSearchParams();
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            const queryString = query.toString();
+            return apiRequest<{ data: any[]; meta: { hasNextPage: boolean; nextCursor?: string } }>(
+                  `/api/v1/friend-requests/sent${queryString ? `?${queryString}` : ''}`,
+                  { method: 'GET' },
+                  accessToken
+            );
       },
 
       sendFriendRequest(targetUserId: string, accessToken: string) {

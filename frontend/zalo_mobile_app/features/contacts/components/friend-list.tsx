@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Text, IconButton, useTheme } from 'react-native-paper';
 import { FlashList } from '@shopify/flash-list';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -12,9 +12,21 @@ interface FriendListProps {
   onPress: (friend: Friend) => void;
   isRefreshing: boolean;
   onRefresh: () => void;
+  onEndReached?: () => void;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
 }
 
-export const FriendList = React.memo(({ friends, onCall, onPress, isRefreshing, onRefresh }: FriendListProps) => {
+export const FriendList = React.memo(({ 
+  friends, 
+  onCall, 
+  onPress, 
+  isRefreshing, 
+  onRefresh,
+  onEndReached,
+  hasNextPage,
+  isFetchingNextPage
+}: FriendListProps) => {
   const theme = useTheme();
 
   const renderItem = ({ item }: { item: Friend }) => {
@@ -50,6 +62,19 @@ export const FriendList = React.memo(({ friends, onCall, onPress, isRefreshing, 
       keyExtractor={(item: Friend) => item.friendshipId}
       refreshing={isRefreshing}
       onRefresh={onRefresh}
+      onEndReached={() => {
+        if (hasNextPage && !isFetchingNextPage) {
+          onEndReached?.();
+        }
+      }}
+      onEndReachedThreshold={0.3}
+      ListFooterComponent={
+        isFetchingNextPage ? (
+          <View className="py-4">
+            <ActivityIndicator color={theme.colors.primary} />
+          </View>
+        ) : null
+      }
       ListEmptyComponent={
         <View className="flex-1 items-center justify-center pt-20">
           <Text className="text-muted-foreground">Danh sách bạn bè trống</Text>

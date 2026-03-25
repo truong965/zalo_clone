@@ -12,26 +12,16 @@ interface UserAvatarProps {
 
 export const UserAvatar = React.memo(({ uri, size = 40, updatedAt }: UserAvatarProps) => {
   const theme = useTheme();
+  const [hasError, setHasError] = React.useState(false);
+
+  // Reset error state if uri changes
+  React.useEffect(() => {
+    setHasError(false);
+  }, [uri]);
 
   let fullUri = getFullUrl(uri);
 
-  if (fullUri && typeof fullUri === 'string' && fullUri.trim() !== '') {
-    // Force image refresh if updatedAt is provided
-    const finalUri = updatedAt 
-      ? `${fullUri}${fullUri.includes('?') ? '&' : '?'}t=${new Date(updatedAt).getTime()}`
-      : fullUri;
-
-    return (
-      <Image
-        key={finalUri} // Use URI as key to force component remount for standard Image
-        source={{ uri: finalUri }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        resizeMode="cover"
-      />
-    );
-  }
-
-  return (
+  const renderFallback = () => (
     <View
       style={[
         styles.avatarContainer,
@@ -43,9 +33,28 @@ export const UserAvatar = React.memo(({ uri, size = 40, updatedAt }: UserAvatarP
         },
       ]}
     >
-      <Ionicons name="person" size={size * 0.6} color={theme.colors.onSurfaceVariant} />
+      <Ionicons name="person" size={size * 0.6} color={theme.colors.backdrop} />
     </View>
   );
+
+  if (fullUri && typeof fullUri === 'string' && fullUri.trim() !== '' && !hasError) {
+    // Force image refresh if updatedAt is provided
+    const finalUri = updatedAt
+      ? `${fullUri}${fullUri.includes('?') ? '&' : '?'}t=${new Date(updatedAt).getTime()}`
+      : fullUri;
+
+    return (
+      <Image
+        key={finalUri} // Use URI as key to force component remount for standard Image
+        source={{ uri: finalUri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        resizeMode="cover"
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  return renderFallback();
 });
 
 UserAvatar.displayName = 'UserAvatar';

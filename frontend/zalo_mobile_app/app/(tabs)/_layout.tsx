@@ -5,7 +5,9 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Appbar, Searchbar, Menu, Divider } from 'react-native-paper';
+import { Appbar, Searchbar, Menu, Divider, Badge } from 'react-native-paper';
+import { useReceivedRequests } from '@/features/friendship/api/friendship.api';
+import { useFriendshipUIStore } from '@/features/friendship/stores/friendship-ui.store';
 import { HapticTab } from '@/components/haptic-tab';
 import { useAuth } from '@/providers/auth-provider';
 import { FriendshipSearchModal } from '@/features/contacts/components/friendship-search-modal';
@@ -21,6 +23,13 @@ export default function TabLayout() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [isFriendSearchOpen, setIsFriendSearchOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  
+  const { lastSeenInvitationCount, isBadgeDismissed } = useFriendshipUIStore();
+  const { data: receivedRequestsData } = useReceivedRequests({ limit: 1 });
+  
+  const receivedRequests = receivedRequestsData?.pages.flatMap(page => page.data) || [];
+  const totalReceived = (receivedRequestsData?.pages[0]?.meta as any)?.totalCount ?? receivedRequests.length;
+  const showBadge = !isBadgeDismissed && totalReceived > lastSeenInvitationCount;
 
   const openMenu = () => setMenuVisible(true);
   const closeMenu = () => setMenuVisible(false);
@@ -77,7 +86,7 @@ export default function TabLayout() {
         return (
           <Appbar.Action
             icon={({ size, color }) => <Ionicons name="person-add-outline" size={size} color={color} />}
-            onPress={() => { }}
+            onPress={() => setIsFriendSearchOpen(true)}
           />
         );
       case 'profile':
@@ -148,7 +157,25 @@ export default function TabLayout() {
           name="contacts"
           options={{
             title: t('tabs.contacts'),
-            tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+            headerShown: false,
+            tabBarIcon: ({ color, size }) => (
+              <View>
+                <Ionicons name="people" size={size} color={color} />
+                {showBadge && (
+                  <Badge
+                    size={16}
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -8,
+                      backgroundColor: '#FF5252',
+                    }}
+                  >
+                    {totalReceived}
+                  </Badge>
+                )}
+              </View>
+            ),
           }}
         />
         <Tabs.Screen

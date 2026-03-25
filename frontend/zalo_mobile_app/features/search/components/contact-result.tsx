@@ -21,6 +21,7 @@ interface ContactResultProps {
 }
 
 import { useFriendRequestStatus } from '../../friendship/hooks/use-friend-request-status';
+import { UserRelationshipButtons } from '../../friendship/components/user-relationship-buttons';
 
 export function ContactResult({
       data,
@@ -113,27 +114,19 @@ export function ContactResult({
                         ) : null}
                   </View>
 
-                  <View className="flex-row items-center gap-3 ml-2">
-                        {data.canMessage !== false && (
-                              <TouchableOpacity disabled={isLoading} onPress={() => onSendMessage?.(data.id)}>
-                                    <Ionicons name="chatbubble-outline" size={20} color="#1E88E5" />
-                              </TouchableOpacity>
-                        )}
-                        {effectiveStatus === 'NONE' && (
-                              <TouchableOpacity disabled={isLoading} onPress={() => onAddFriend?.(data.id)}>
-                                    <Ionicons name="person-add-outline" size={20} color="#1E88E5" />
-                              </TouchableOpacity>
-                        )}
-                        {effectiveStatus === 'REQUEST' && effectiveDirection === 'OUTGOING' && effectivePendingId && (
-                              <TouchableOpacity disabled={isLoading} onPress={() => onCancelRequest?.(effectivePendingId, data.id)}>
-                                    <Ionicons name="close-circle-outline" size={22} color="#F59E0B" />
-                              </TouchableOpacity>
-                        )}
-                        {effectiveStatus === 'REQUEST' && effectiveDirection === 'INCOMING' && effectivePendingId && (
-                              <TouchableOpacity disabled={isLoading} onPress={() => onAcceptRequest?.(effectivePendingId, data.id)}>
-                                    <Ionicons name="checkmark-circle-outline" size={22} color="#10B981" />
-                              </TouchableOpacity>
-                        )}
+                  <View className="ml-2">
+                        <UserRelationshipButtons
+                              userId={data.id}
+                              status={effectiveStatus as any}
+                              direction={effectiveDirection as any}
+                              pendingId={effectivePendingId}
+                              canMessage={data.canMessage !== false}
+                              isLoading={isLoading}
+                              onSendMessage={onSendMessage}
+                              onAddFriend={onAddFriend}
+                              onAcceptRequest={onAcceptRequest}
+                              onCancelRequest={onCancelRequest}
+                        />
                   </View>
             </TouchableOpacity>
       );

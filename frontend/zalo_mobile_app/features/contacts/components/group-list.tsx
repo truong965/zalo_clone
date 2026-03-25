@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { FlashList } from '@shopify/flash-list';
 import { ConversationAvatar } from '@/components/ui/conversation-avatar';
@@ -11,9 +11,20 @@ interface GroupListProps {
   onPress: (id: string) => void;
   isRefreshing: boolean;
   onRefresh: () => void;
+  onEndReached?: () => void;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
 }
 
-export const GroupList = React.memo(({ groups, onPress, isRefreshing, onRefresh }: GroupListProps) => {
+export const GroupList = React.memo(({ 
+  groups, 
+  onPress, 
+  isRefreshing, 
+  onRefresh,
+  onEndReached,
+  hasNextPage,
+  isFetchingNextPage
+}: GroupListProps) => {
   const theme = useTheme();
 
   const renderItem = ({ item }: { item: Conversation }) => {
@@ -48,6 +59,19 @@ export const GroupList = React.memo(({ groups, onPress, isRefreshing, onRefresh 
       keyExtractor={(item: Conversation) => item.id}
       refreshing={isRefreshing}
       onRefresh={onRefresh}
+      onEndReached={() => {
+        if (hasNextPage && !isFetchingNextPage) {
+          onEndReached?.();
+        }
+      }}
+      onEndReachedThreshold={0.3}
+      ListFooterComponent={
+        isFetchingNextPage ? (
+          <View className="py-4">
+            <ActivityIndicator color={theme.colors.primary} />
+          </View>
+        ) : null
+      }
       ListEmptyComponent={
         <View className="flex-1 items-center justify-center pt-20">
           <Text className="text-muted-foreground">Không có nhóm nào</Text>

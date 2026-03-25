@@ -2,13 +2,23 @@ import { UserProfile } from './auth';
 
 export interface FriendRequest {
   id: string;
-  senderId: string;
-  targetUserId: string;
+  requesterId: string;
+  user1Id: string;
+  user2Id: string;
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED';
   createdAt: string;
   updatedAt: string;
-  sender?: UserProfile;
-  target?: UserProfile;
+  expiresAt?: string;
+  requester?: {
+    userId: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  target?: {
+    userId: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
 }
 
 export interface Friend {
