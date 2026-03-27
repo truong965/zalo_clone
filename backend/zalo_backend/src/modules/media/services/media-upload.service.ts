@@ -35,6 +35,8 @@ import type {
 } from '../events/media.events';
 import { AwsError } from './s3.service';
 import { FileUtils } from '../../../common/utils/file.utils';
+import { InternalEventNames } from '../../../common/contracts/events/event-names';
+import type { MediaAvatarUploadInitiatedPayload } from '../../../common/contracts/events/event-contracts';
 
 @Injectable()
 export class MediaUploadService {
@@ -258,6 +260,18 @@ export class MediaUploadService {
     const fileUrl = this.s3Service.getCloudFrontUrl(s3Key);
 
     this.logger.debug('Avatar upload initiated', { userId, s3Key });
+
+    if (dto.targetId && dto.targetType) {
+      this.eventEmitter.emit(InternalEventNames.MEDIA_AVATAR_UPLOAD_INITIATED, {
+        targetId: dto.targetId,
+        targetType: dto.targetType,
+        avatarUrl: fileUrl,
+      } satisfies MediaAvatarUploadInitiatedPayload);
+      this.logger.debug('Emitted MEDIA_AVATAR_UPLOAD_INITIATED', {
+        targetId: dto.targetId,
+        targetType: dto.targetType,
+      });
+    }
 
     return {
       presignedUrl,

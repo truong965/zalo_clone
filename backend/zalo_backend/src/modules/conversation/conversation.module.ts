@@ -25,6 +25,7 @@ import { CONVERSATION_SYSTEM_MESSAGE_PORT } from '@common/contracts/internal-api
 import { ConversationEventHandler } from './listeners/conversation-event.handler';
 import { CallConversationListener } from './listeners/call-conversation.listener';
 import { FriendshipConversationListener } from './listeners/friendship-conversation.listener';
+import { BlockConversationListener } from './listeners/block-conversation.listener';
 
 // Controller & Gateway
 import { ConversationController } from './conversation.controller';
@@ -77,6 +78,7 @@ import { ConversationGateway } from './conversation.gateway';
     ConversationEventHandler,
     CallConversationListener, // CALL PHASE 1: Update conversation on call.ended
     FriendshipConversationListener, // Auto-create conversation on friendship.accepted
+    BlockConversationListener, // Sync block action to blocker's other devices
 
     // Gateway
     ConversationGateway,

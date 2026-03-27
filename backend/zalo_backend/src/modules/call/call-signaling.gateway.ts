@@ -78,14 +78,21 @@ import {
   CallIceCandidateDto,
   SwitchToDailyDto,
 } from './dto/call-signaling.dto';
+import { CallMediaStateDto } from './dto/call-media-state.dto';
 import type { ActiveCallSession } from './dto/call-history.dto';
 import { CallProvider, CallStatus, CallType } from '@prisma/client';
 import { IceConfigService } from './services/ice-config.service';
 import { DailyCoService } from './services/daily-co.service';
 import { PrismaService } from 'src/database/prisma.service';
+import { RedisService } from 'src/shared/redis/redis.service';
 import { InteractionAuthorizationService } from '../authorization/services/interaction-authorization.service';
 import { PermissionAction } from 'src/common/constants/permission-actions.constant';
 import { InternalEventNames } from '@common/contracts/events';
+import type {
+  UnfriendedPayload,
+  UserBlockedEventPayload,
+  PrivacySettingsUpdatedPayload,
+} from '@common/contracts/events';
 
 /** 30s timeout for ringing before auto NO_ANSWER */
 const RINGING_TIMEOUT_MS = 30_000;
@@ -152,6 +159,15 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
    */
   private readonly iceBatchBuffers = new Map<string, IceCandidateBatch>();
 
+  /**
+   * Lone participant timers: callId → NodeJS.Timeout
+   * For group calls only: if only 1 participant remains, end call after 3 minutes.
+   */
+  private readonly loneParticipantTimers = new Map<string, NodeJS.Timeout>();
+
+  /** 3-minute lone participant timeout (requested by user) */
+  private readonly LONE_PARTICIPANT_TIMEOUT_MS = 180_000;
+
   constructor(
     private readonly callHistoryService: CallHistoryService,
     private readonly socketState: SocketStateService,
@@ -160,6 +176,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     private readonly dailyCoService: DailyCoService,
     private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
   ) {
     super();
   }
@@ -188,39 +205,75 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     const session = await this.callHistoryService.getActiveCall(userId);
     if (!session) return;
 
+    // Fix M3: Device-aware grace period
+    const graceMs = session.mobileDevices?.[userId] ? 30000 : 3000;
+
     const callId = session.callId;
     const callRoom = this.getCallRoom(callId);
     // If still RINGING (caller disconnected before callee accepted)
     if (session.status === 'RINGING') {
-      // Notify callee that caller disconnected
-      this.server
-        .to(callRoom)
-        .emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
+      // For 1-1 calls, caller disconnecting during RINGING ends the call
+      if (!session.isGroupCall) {
+        this.server.to(callRoom).emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
 
-      // End call after short grace period
-      const timer = setTimeout(() => {
-        this.disconnectTimers.delete(callId);
-        void this.endCallInternal(session, CallEndReason.NETWORK_DROP);
-      }, DISCONNECT_GRACE_MS);
-      this.disconnectTimers.set(callId, timer);
+        const timer = setTimeout(() => {
+          this.disconnectTimers.delete(callId);
+          void this.endCallInternal(session, CallEndReason.NETWORK_DROP);
+        }, graceMs);
+        this.disconnectTimers.set(callId, timer);
+      } else {
+        // For group calls, initiator disconnecting before anyone joins ends it.
+        // Other participants' disconnects are handled by ringing timeouts.
+        if (session.initiatorId === userId) {
+          this.server.to(callRoom).emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
+          const timer = setTimeout(() => {
+            this.disconnectTimers.delete(callId);
+            void this.endCallInternal(session, CallEndReason.NETWORK_DROP);
+          }, graceMs);
+          this.disconnectTimers.set(callId, timer);
+        }
+      }
       return;
     }
 
-    // If ACTIVE — start reconnection grace period
+    // If ACTIVE — check room size before ending group calls
     if (session.status === 'ACTIVE') {
       const currentState = sessionStatusToCallState(session.status);
       if (canTransition(currentState, 'DISCONNECT')) {
-        await this.callHistoryService.updateCallStatus(callId, 'RECONNECTING');
+        // We only transition global state to RECONNECTING for 1-1 calls.
+        // For group calls, the call remains ACTIVE as long as others are there.
+        if (!session.isGroupCall) {
+          await this.callHistoryService.updateCallStatus(callId, 'RECONNECTING');
+        }
       }
 
-      this.server
-        .to(callRoom)
-        .emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId });
+      // Notify others in the room
+      this.server.to(callRoom).emit(SocketEvents.CALL_CALLER_DISCONNECTED, { callId, userId });
 
-      const timer = setTimeout(() => {
+      const timer = setTimeout(async () => {
         this.disconnectTimers.delete(callId);
-        void this.endCallInternal(session, CallEndReason.NETWORK_DROP);
-      }, DISCONNECT_GRACE_MS);
+
+        // Re-validate session
+        const currentSession = await this.callHistoryService.getSessionByCallId(callId);
+        if (!currentSession) return;
+
+        if (currentSession.isGroupCall) {
+          // Robust room size check using fetchSockets
+          const sockets = await this.server.in(callRoom).fetchSockets();
+          if (sockets.length === 0) {
+            void this.endCallInternal(currentSession, CallEndReason.NETWORK_DROP);
+            this.logger.log(`Call ${callId}: ended because all participants disconnected`);
+          } else if (sockets.length === 1) {
+            this.logger.log(`Call ${callId}: participant ${userId} dropped, only 1 remains. Starting lone timer.`);
+            this.startLoneParticipantTimer(callId, currentSession);
+          } else {
+            this.logger.log(`Call ${callId}: participant ${userId} dropped, but ${sockets.length} others remain`);
+          }
+        } else {
+          // 1-1 call: end after grace period if not reconnected
+          void this.endCallInternal(currentSession, CallEndReason.NETWORK_DROP);
+        }
+      }, graceMs);
       this.disconnectTimers.set(callId, timer);
     }
   }
@@ -259,6 +312,27 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       );
     }
 
+    // Phase 6: Sync status on reconnection
+    // If the call was ACTIVE or RECONNECTING, ensure it's ACTIVE to resume duration tracking.
+    // CRITICAL: We MUST NOT move a RINGING call to ACTIVE here, as that prevents rejection.
+    if (session.status === 'ACTIVE' || session.status === 'RECONNECTING') {
+      await this.callHistoryService.updateCallStatus(callId, 'ACTIVE');
+    }
+
+    // Cancellation of lone participant timer on reconnection
+    this.clearLoneParticipantTimer(callId);
+
+    // M5: Only join the call room if this socket/device is the one active in the call
+    // This prevents signaling conflicts on multi-device setups.
+    const activeDeviceId = session.activeDevices?.[userId];
+    const currentDeviceId = socket.deviceId || socket.id;
+    if (activeDeviceId && activeDeviceId !== currentDeviceId) {
+      this.logger.debug(
+        `Call ${callId}: user ${userId} connected on secondary device ${currentDeviceId}, skipping room join (active: ${activeDeviceId})`,
+      );
+      return;
+    }
+
     // Re-join the call room
     await socket.join(callRoom);
 
@@ -270,17 +344,17 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       );
 
       const callerDisplayName = await this.getParticipantDisplayName(
-        session.callerId,
+        session.initiatorId,
       );
       const calleeIceConfig = await this.iceConfigService.getIceConfig(userId);
-      const callerAvatarUrl = await this.lookupUserAvatar(session.callerId);
+      const callerAvatarUrl = await this.lookupUserAvatar(session.initiatorId);
 
       socket.emit(SocketEvents.CALL_INCOMING, {
         callId,
         callType: session.callType,
         conversationId: session.conversationId,
         callerInfo: {
-          id: session.callerId,
+          id: session.initiatorId,
           displayName: callerDisplayName,
           avatarUrl: callerAvatarUrl,
         },
@@ -289,10 +363,90 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       });
       return;
     }
+  }
 
-    // If was RECONNECTING, move back to ACTIVE
-    if (session.status === 'RECONNECTING') {
-      await this.callHistoryService.updateCallStatus(callId, 'ACTIVE');
+  /**
+   * Listen for unfriend events to end active 1v1 calls if privacy restricted.
+   */
+  @OnEvent(InternalEventNames.FRIENDSHIP_UNFRIENDED)
+  async handleUnfriended(payload: UnfriendedPayload) {
+    const { user1Id, user2Id } = payload;
+    this.logger.debug(
+      `Privacy Enforcement: handling unfriend between ${user1Id} and ${user2Id}`,
+    );
+
+    // Check both directions as either user's privacy settings might now restrict the call
+    await this.enforcePrivacyForUser(user1Id);
+    await this.enforcePrivacyForUser(user2Id);
+  }
+
+  /**
+   * Listen for block events to end active 1v1 calls immediately.
+   */
+  @OnEvent(InternalEventNames.USER_BLOCKED)
+  async handleUserBlocked(payload: UserBlockedEventPayload) {
+    const { blockerId, blockedId } = payload;
+    this.logger.debug(
+      `Privacy Enforcement: handling block ${blockerId} -> ${blockedId}`,
+    );
+
+    // If there's an active call between them, it must end
+    await this.enforcePrivacyForUser(blockedId);
+    await this.enforcePrivacyForUser(blockerId);
+  }
+
+  /**
+   * Listen for privacy setting updates.
+   * If whoCanCallMe changed, re-evaluate active calls.
+   */
+  @OnEvent(InternalEventNames.PRIVACY_UPDATED)
+  async handlePrivacyUpdated(payload: PrivacySettingsUpdatedPayload) {
+    const { userId, settings } = payload;
+
+    // Only reagere if whoCanCallMe was changed
+    if ('whoCanCallMe' in settings) {
+      this.logger.debug(
+        `Privacy Enforcement: handling privacy update for user ${userId}`,
+      );
+      await this.enforcePrivacyForUser(userId);
+    }
+  }
+
+  /**
+   * Helper to find an active 1v1 call for a user and end it if no longer authorized.
+   */
+  private async enforcePrivacyForUser(userId: string) {
+    const session = await this.callHistoryService.getActiveCall(userId);
+    if (!session || session.isGroupCall) return;
+
+    const callId = session.callId;
+    const initiatorId = session.initiatorId;
+    const calleeId = session.calleeId;
+
+    // Identify the "other" participant
+    const peerId = userId === initiatorId ? calleeId : initiatorId;
+
+    // Re-verify call authorization (this checks both blocks and privacy settings)
+    const result = await this.interactionAuth.canInteract(
+      peerId,
+      userId,
+      PermissionAction.CALL,
+    );
+
+    if (!result.allowed) {
+      this.logger.log(
+        `Privacy Enforcement: Ending call ${callId} (${initiatorId} <-> ${calleeId}) ` +
+          `because ${peerId} is no longer allowed to call ${userId}. Reason: ${result.reason}`,
+      );
+
+      // Notify the room before ending
+      const callRoom = this.getCallRoom(callId);
+      this.server.to(callRoom).emit(SocketEvents.ERROR, {
+        code: 'PRIVACY_RESTRICTED',
+        message: result.reason || 'Call restricted by privacy settings',
+      });
+
+      await this.endCallInternal(session, CallEndReason.PRIVACY_RESTRICTED);
     }
   }
 
@@ -328,111 +482,180 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() dto: InitiateCallDto,
   ) {
-    const callerId = client.userId;
-    if (!callerId) return this.emitError(client, 'Unauthenticated');
+    const initiatorId = client.userId;
+    if (!initiatorId) return this.emitError(client, 'Unauthenticated');
 
     const { calleeId, callType, conversationId, receiverIds } = dto;
 
-    // Build complete receiver list: merge calleeId + receiverIds, dedupe, exclude caller
-    const allReceiverIds = [
+    // Build initial receiver list
+    let allReceiverIds = [
       ...new Set([calleeId, ...(receiverIds ?? [])]),
-    ].filter((id) => id !== callerId);
+    ].filter((id) => id !== initiatorId);
 
-    if (allReceiverIds.length === 0) {
+    if (allReceiverIds.length === 0 && !conversationId) {
       return this.emitError(client, 'Cannot call yourself');
     }
 
-    const isGroupCall = allReceiverIds.length > 1;
+    let isGroupCall = allReceiverIds.length > 1;
+    let conversationName: string | null = null;
 
-    // Group calls require Daily.co
-    if (isGroupCall && !this.dailyCoService.available) {
-      return this.emitError(
-        client,
-        'Group calls require Daily.co configuration',
+    // Phase 4.5: Robust group call detection via conversationId
+    let groupLockKey: string | null = null;
+    if (conversationId) {
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { type: true, name: true },
+      });
+
+      if (conversation?.type === 'GROUP') {
+        isGroupCall = true;
+        conversationName = conversation.name;
+
+        // --- 🔒 RE-JOIN: PREVENT DOUBLE CALL RACE CONDITION ---
+        const existingCallId = await this.callHistoryService.getActiveCallIdByConversation(conversationId);
+        if (existingCallId) {
+          return this.emitError(client, 'A call is already in progress for this group. Please join instead.');
+        }
+
+        groupLockKey = `lock:call_init:${conversationId}`;
+        const locked = await this.redisService.getClient().set(groupLockKey, '1', 'EX', 5, 'NX');
+        if (!locked) {
+          return this.emitError(client, 'A call is currently being initiated for this group. Please wait and join.');
+        }
+        // ------------------------------------------------------
+
+        // If client only sent groupId as calleeId, fetch all members
+        if (allReceiverIds.length <= 1) {
+          const members = await this.prisma.conversationMember.findMany({
+            where: {
+              conversationId,
+              status: 'ACTIVE',
+              userId: { not: initiatorId },
+            },
+            select: { userId: true },
+          });
+          allReceiverIds = members.map((m) => m.userId);
+        }
+      }
+    }
+
+    try {
+      if (allReceiverIds.length === 0) {
+        return this.emitError(client, 'No receivers found for this call');
+      }
+
+      // Group calls require Daily.co
+      if (isGroupCall && !this.dailyCoService.available) {
+        return this.emitError(
+          client,
+          'Group calls require Daily.co configuration',
+        );
+      }
+
+      // Privacy & block check
+      const privacyResult = await this.validateCallPrivacy(
+        initiatorId,
+        allReceiverIds,
+        isGroupCall,
+        conversationId,
       );
-    }
+      if (!privacyResult.allowed) {
+        return this.emitError(client, privacyResult.reason!);
+      }
 
-    // Privacy & block check
-    const privacyResult = await this.validateCallPrivacy(
-      callerId,
-      allReceiverIds,
-      isGroupCall,
-      conversationId,
-    );
-    if (!privacyResult.allowed) {
-      return this.emitError(client, privacyResult.reason!);
-    }
-    const conversationName = privacyResult.conversationName;
+      // Use names from privacyResult if available (for group calls, conversationName is already resolved)
+      if (privacyResult.conversationName) {
+        conversationName = privacyResult.conversationName;
+      }
 
-    // For group calls, use only receivers who aren't blocked
-    const effectiveReceiverIds =
-      isGroupCall && privacyResult.filteredReceiverIds
-        ? privacyResult.filteredReceiverIds
-        : allReceiverIds;
+      // For group calls, use only receivers who aren't blocked
+      const effectiveReceiverIds =
+        isGroupCall && privacyResult.filteredReceiverIds
+          ? privacyResult.filteredReceiverIds
+          : allReceiverIds;
 
-    // Start call session
-    const session = await this.startCallSession(
-      client,
-      callerId,
-      effectiveReceiverIds,
-      callType,
-      isGroupCall,
-      conversationId,
-    );
-    if (!session) return;
+      // Start call session
+      const session = await this.startCallSession(
+        client,
+        initiatorId,
+        effectiveReceiverIds,
+        callType,
+        isGroupCall,
+        conversationId,
+      );
+      if (!session) return;
 
-    const callId = session.callId;
-    const callRoom = this.getCallRoom(callId);
-    await client.join(callRoom);
+      // Fix M5: Track the initiator's device as active
+      await this.callHistoryService.updateActiveDevice(
+        session.callId,
+        initiatorId,
+        client.deviceId || client.id,
+        this.isMobileDevice(client),
+      );
 
-    const callerInfo = client.user
-      ? {
-          id: callerId,
+      // Use filtered receiver IDs from the session (busy users are excluded)
+      const finalReceiverIds = session.participantIds ?? effectiveReceiverIds;
+
+      const callId = session.callId;
+      const callRoom = this.getCallRoom(callId);
+      await client.join(callRoom);
+
+      const callerInfo = client.user
+        ? {
+          id: initiatorId,
           displayName: client.user.displayName,
           avatarUrl: client.user.avatarUrl,
         }
-      : { id: callerId, displayName: 'Unknown', avatarUrl: null };
+        : { id: initiatorId, displayName: 'Unknown', avatarUrl: null };
 
-    // Dispatch to group or 1-1 flow
-    if (isGroupCall) {
-      const result = await this.initiateGroupCall(
-        client,
-        callId,
-        callRoom,
-        callType,
-        conversationId,
-        conversationName,
-        callerInfo,
-        effectiveReceiverIds,
-      );
-      if (!result) return;
-    } else {
-      this.initiate1v1Call(
-        callId,
-        callRoom,
-        callType,
-        conversationId,
-        callerInfo,
-        calleeId,
-      );
-    }
+      // Dispatch to group or 1-1 flow
+      if (isGroupCall) {
+        // Allocate Daily room for everyone theoretically possible, not just the active ringers
+        const maxParticipants = effectiveReceiverIds.length + 1;
+        const result = await this.initiateGroupCall(
+          client,
+          callId,
+          callRoom,
+          callType,
+          conversationId,
+          conversationName,
+          callerInfo,
+          finalReceiverIds,
+          maxParticipants,
+        );
+        if (!result) return;
+      } else {
+        this.initiate1v1Call(
+          callId,
+          callRoom,
+          callType,
+          conversationId,
+          callerInfo,
+          calleeId,
+        );
+      }
 
-    // Start ringing timeouts
-    this.startRingingTimeouts(callId, effectiveReceiverIds, isGroupCall);
+      // Start ringing timeouts
+      this.startRingingTimeouts(callId, finalReceiverIds, isGroupCall);
 
-    this.logger.log(
-      `Call ${callId}: ${callerId} → ${effectiveReceiverIds.join(',')}` +
+      this.logger.log(
+        `Call ${callId}: ${initiatorId} → ${finalReceiverIds.join(',')}` +
         ` (${callType}${isGroupCall ? ', GROUP' : ''})`,
-    );
+      );
 
-    return { callId };
+      return { callId };
+    } finally {
+      if (groupLockKey) {
+        await this.redisService.getClient().del(groupLockKey);
+      }
+    }
   }
 
   /**
    * Validate privacy/block settings for all receivers.
    */
   private async validateCallPrivacy(
-    callerId: string,
+    initiatorId: string,
     allReceiverIds: string[],
     isGroupCall: boolean,
     conversationId?: string,
@@ -445,7 +668,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     let conversationName: string | null = null;
 
     if (isGroupCall) {
-      if (conversationId) {
+      if (conversationId && !conversationName) {
         const conv = await this.prisma.conversation.findUnique({
           where: { id: conversationId },
           select: { type: true, name: true },
@@ -453,42 +676,19 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
         conversationName = conv?.name ?? null;
       }
 
-      // Check block status for each receiver — skip blocked participants
-      // rather than cancelling the entire group call.
-      const checkResults = await Promise.all(
-        allReceiverIds.map(async (receiverId) => {
-          const result = await this.interactionAuth.canInteract(
-            callerId,
-            receiverId,
-            PermissionAction.CALL,
-          );
-          return { receiverId, allowed: result.allowed };
-        }),
-      );
-
-      const allowedReceiverIds = checkResults
-        .filter((r) => r.allowed)
-        .map((r) => r.receiverId);
-
-      if (allowedReceiverIds.length === 0) {
-        return {
-          allowed: false,
-          reason: 'Call not allowed: blocked relationship with all receivers',
-          conversationName,
-        };
-      }
-
+      // Phase 4.5: Per user requirement, skip individual privacy checks for group calls
+      // Everyone in the group is allowed to participate in group calls.
       return {
         allowed: true,
         conversationName,
-        filteredReceiverIds: allowedReceiverIds,
+        filteredReceiverIds: allReceiverIds,
       };
     }
 
     // 1-1 Call: Check privacy settings for the receiver
     const receiverId = allReceiverIds[0];
     const result = await this.interactionAuth.canInteract(
-      callerId,
+      initiatorId,
       receiverId,
       PermissionAction.CALL,
     );
@@ -510,7 +710,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
    */
   private async startCallSession(
     client: AuthenticatedSocket,
-    callerId: string,
+    initiatorId: string,
     allReceiverIds: string[],
     callType: CallType,
     isGroupCall: boolean,
@@ -521,7 +721,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
 
     try {
       return await this.callHistoryService.startCall(
-        callerId,
+        initiatorId,
         allReceiverIds[0],
         callType,
         isGroupCall ? CallProvider.DAILY_CO : CallProvider.WEBRTC_P2P,
@@ -552,11 +752,12 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     conversationId: string | undefined,
     conversationName: string | null,
     callerInfo: { id: string; displayName: string; avatarUrl: string | null },
-    allReceiverIds: string[],
+    finalReceiverIds: string[],
+    maxParticipants: number,
   ): Promise<boolean> {
     try {
       const room = await this.dailyCoService.createRoom(callId, {
-        maxParticipants: allReceiverIds.length + 1,
+        maxParticipants,
         expireSeconds: 3600,
       });
 
@@ -567,7 +768,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       );
       const roomUrl = this.dailyCoService.getRoomUrl(room.name);
 
-      const allParticipantIds = [callerInfo.id, ...allReceiverIds];
+      const allParticipantIds = [callerInfo.id, ...finalReceiverIds];
       const tokenEntries = await Promise.all(
         allParticipantIds.map(async (userId) => {
           const displayName =
@@ -578,7 +779,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
             room.name,
             userId,
             displayName,
-            userId === callerInfo.id,
+            false, // Disable owner status to prevent host from ending the room for all
           );
           return [userId, token] as const;
         }),
@@ -591,7 +792,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
         {},
       );
 
-      for (const receiverId of allReceiverIds) {
+      for (const receiverId of finalReceiverIds) {
         const receiverSocketIds =
           await this.socketState.getUserSockets(receiverId);
 
@@ -630,6 +831,20 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       }
 
       client.emit(SocketEvents.CALL_DAILY_ROOM, { callId, roomUrl, tokens });
+
+      // Broadcast GROUP_CALL_STARTED to the conversation room so other members see the banner
+      if (conversationId) {
+        this.server.to(`conversation:${conversationId}`).emit(SocketEvents.GROUP_CALL_STARTED, {
+          callId,
+          conversationId,
+          callType,
+          callerInfo,
+          participantCount: allParticipantIds.length,
+          startedAt: new Date().toISOString(),
+          dailyRoomUrl: roomUrl, // Phase 4: L4
+        });
+      }
+
       return true;
     } catch (error: unknown) {
       this.logger.error(
@@ -757,16 +972,45 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     if (!userId) return this.emitError(client, 'Unauthenticated');
 
     const session = await this.getValidatedSession(dto.callId, userId);
-    if (!session)
-      return this.emitError(client, 'Call not found or not authorized');
+    if (!session) {
+      // Fix W2: Race condition where caller hangs up just as callee accepts.
+      // Inform the callee that the call has already ended.
+      client.emit(SocketEvents.CALL_ENDED, {
+        callId: dto.callId,
+        reason: 'caller_cancelled',
+        status: CallStatus.CANCELLED,
+      });
+      return;
+    }
 
     // Validate state transition: RINGING → ACTIVE
     const currentState = sessionStatusToCallState(session.status);
     if (!canTransition(currentState, 'ACCEPT')) {
-      return this.emitError(
-        client,
-        `Cannot accept call in ${session.status} state`,
-      );
+      const isReceiver =
+        session.calleeId === userId ||
+        (session.participantIds?.includes(userId) ?? false);
+
+      // Group calls (Daily.co): allow another device of the same user to
+      // join even after the call has already moved to ACTIVE.
+      if (session.status === 'ACTIVE' && isReceiver && session.isGroupCall) {
+        // Fall through — let this device join the Daily.co room as well.
+        this.logger.log(
+          `Call ${dto.callId}: allowing group call re-join for ${userId} from another device`,
+        );
+      } else if (session.status === 'ACTIVE' && isReceiver) {
+        // 1-1 call: only one device can participate
+        client.emit(SocketEvents.CALL_ENDED, {
+          callId: dto.callId,
+          reason: 'answered_elsewhere',
+          status: CallStatus.COMPLETED,
+        });
+        return { error: 'answered_elsewhere' };
+      } else {
+        return this.emitError(
+          client,
+          `Cannot accept call in ${session.status} state`,
+        );
+      }
     }
 
     // Must be a receiver (callee or group participant)
@@ -782,6 +1026,13 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     // 1-1 calls: clear the single global timer.
     if (session.isGroupCall) {
       this.clearParticipantRingingTimeout(dto.callId, userId);
+      
+      // Phase 2: G8/G11 - Daily.co Pre-Join Capacity Check (max 10)
+      const activeParticipantCount = Object.keys(session.activeDevices || {}).length;
+      const MAX_DAILY_PARTICIPANTS = 10;
+      if (activeParticipantCount >= MAX_DAILY_PARTICIPANTS) {
+        return this.emitError(client, 'Group call is full (maximum 10 participants)');
+      }
     } else {
       this.clearRingingTimeout(dto.callId);
     }
@@ -789,7 +1040,43 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     // Transition to ACTIVE
     await this.callHistoryService.updateCallStatus(dto.callId, 'ACTIVE');
 
+    // Fix M5: Track this device as the active one for this user
+    await this.callHistoryService.updateActiveDevice(
+      dto.callId,
+      userId,
+      client.deviceId || client.id,
+      this.isMobileDevice(client),
+    );
+
     const callRoom = this.getCallRoom(dto.callId);
+    await client.join(callRoom);
+
+    // Phase 3: G4/D1 - Record participant join
+    await this.callHistoryService.recordParticipantJoin(dto.callId, userId);
+
+    // Phase 3: G12/B6 - Cancel push notifications on other devices
+    this.eventEmitter.emit(InternalEventNames.CALL_PUSH_NOTIFICATION_CANCELLED, {
+      callId: dto.callId,
+      userId,
+    });
+
+    // Notify other devices of the same user that the call was answered elsewhere.
+    // IMPORTANT: Only for 1-1 calls. Group calls (Daily.co) allow multi-device
+    // participation — each device joins the same Daily.co room independently.
+    if (!session.isGroupCall) {
+      const targetUserSockets = await this.socketState.getUserSockets(userId);
+      const otherSocketIds = targetUserSockets.filter((id) => id !== client.id);
+      if (otherSocketIds.length > 0) {
+        this.server.to(otherSocketIds).emit(SocketEvents.CALL_ENDED, {
+          callId: dto.callId,
+          reason: 'answered_elsewhere',
+          status: CallStatus.COMPLETED,
+        });
+      }
+    }
+
+    // Cancel any lone participant timer (if someone joins, they are no longer alone)
+    this.clearLoneParticipantTimer(dto.callId);
 
     if (session.isGroupCall) {
       // Group call: emit participant-joined to the room
@@ -798,6 +1085,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
         callId: dto.callId,
         userId,
         displayName,
+        mediaState: session.mediaState, // Phase 4: L5
       });
 
       this.logger.log(
@@ -806,20 +1094,23 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     } else {
       // 1-1 P2P call: emit call:accepted with ICE config
       const callerIceConfig = await this.iceConfigService.getIceConfig(
-        session.callerId,
+        session.initiatorId,
       );
 
       // Emit call:accepted only to the CALLER (not the whole room)
       // to prevent callee from triggering startCallAsCaller.
       const callerSocketIds = await this.socketState.getUserSockets(
-        session.callerId,
+        session.initiatorId,
       );
       if (callerSocketIds.length > 0) {
-        this.server.to(callerSocketIds).emit(SocketEvents.CALL_ACCEPTED, {
-          callId: dto.callId,
-          iceServers: callerIceConfig.iceServers,
-          iceTransportPolicy: callerIceConfig.iceTransportPolicy,
-        });
+        // Phase 4: W4 - Delay relaying CALL_ACCEPTED by 400ms to allow callee to initialize RTCPeerConnection
+        setTimeout(() => {
+          this.server.to(callerSocketIds).emit(SocketEvents.CALL_ACCEPTED, {
+            callId: dto.callId,
+            iceServers: callerIceConfig.iceServers,
+            iceTransportPolicy: callerIceConfig.iceTransportPolicy,
+          });
+        }, 400);
       }
 
       this.logger.log(`Call ${dto.callId}: accepted by ${userId}`);
@@ -858,6 +1149,12 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       return this.emitError(client, 'Only a receiver can reject');
     }
 
+    // Phase 3: G12/B6 - Cancel push notifications
+    this.eventEmitter.emit(InternalEventNames.CALL_PUSH_NOTIFICATION_CANCELLED, {
+      callId: dto.callId,
+      userId,
+    });
+
     if (session.isGroupCall) {
       // Group call: this participant leaves, call continues for others
       const callRoom = this.getCallRoom(dto.callId);
@@ -865,6 +1162,9 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
 
       // Clear this participant's individual ringing timer
       this.clearParticipantRingingTimeout(dto.callId, userId);
+
+      // Phase 3: G4/D1 - Record participant leave
+      await this.callHistoryService.recordParticipantLeave(dto.callId, userId);
 
       // Remove user from Redis index so they're no longer "in a call"
       await this.callHistoryService.removeUserFromCall(userId);
@@ -881,11 +1181,55 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       this.logger.log(
         `Call ${dto.callId}: participant ${userId} rejected (group call continues)`,
       );
+
+      // Edge Case: If the host had already left and this was the last person ringing,
+      // the room is now empty. We must end the call if it hasn't been ended yet.
+      // Robust room size check using fetchSockets
+      const sockets = await this.server.in(callRoom).fetchSockets();
+      const roomSize = sockets.length;
+
+      if (roomSize === 0) {
+        // Double check session still exists since checkAllParticipantsResponded might have ended it
+        const currentSession = await this.callHistoryService.getSessionByCallId(dto.callId);
+        if (currentSession) {
+          this.clearRingingTimeout(dto.callId);
+          await this.endCallInternal(currentSession, CallEndReason.REJECTED);
+          this.logger.log(`Call ${dto.callId}: ended because last ringing participant rejected`);
+        }
+      } else if (roomSize === 1) {
+        // Start lone participant timer if only 1 person left in group
+        this.startLoneParticipantTimer(dto.callId, session);
+      }
     } else {
       // 1-1: end the entire call
       this.clearRingingTimeout(dto.callId);
+
+      // Notify caller explicitly (better real-time sync than just room broadcast)
+      const callerSocketIds = await this.socketState.getUserSockets(
+        session.initiatorId,
+      );
+      if (callerSocketIds.length > 0) {
+        this.server.to(callerSocketIds).emit(SocketEvents.CALL_REJECTED, {
+          callId: dto.callId,
+          reason: CallEndReason.REJECTED,
+          status: CallStatus.REJECTED,
+        });
+      }
+
       await this.endCallInternal(session, CallEndReason.REJECTED);
       this.logger.log(`Call ${dto.callId}: rejected by ${userId}`);
+    }
+
+    // Fix M1: Notify other sockets of the same user that the call was rejected elsewhere
+    const otherSocketIds = (await this.socketState.getUserSockets(userId)).filter(
+      (id) => id !== client.id,
+    );
+    if (otherSocketIds.length > 0) {
+      this.server.to(otherSocketIds).emit(SocketEvents.CALL_ENDED, {
+        callId: dto.callId,
+        reason: 'rejected_elsewhere',
+        status: CallStatus.REJECTED,
+      });
     }
   }
 
@@ -909,12 +1253,25 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       return this.emitError(client, 'Call not found or not authorized');
 
     const currentState = sessionStatusToCallState(session.status);
-    const isHost = session.callerId === userId;
+    const isHost = session.initiatorId === userId;
 
-    // Group call: participant (non-host) hangs up → just leave
-    if (session.isGroupCall && !isHost) {
+    // Caller hanging up during RINGING = CANCEL
+    // This applies to both P2P and Group calls before anyone joins
+    if (currentState === 'RINGING' && isHost) {
+      this.clearRingingTimeout(dto.callId);
+      await this.endCallInternal(session, CallEndReason.USER_HANGUP);
+      this.logger.log(`Call ${dto.callId}: cancelled by caller ${userId}`);
+      return;
+    }
+
+    // Group call: participant (or host in ACTIVE state) hangs up → just leave
+    if (session.isGroupCall) {
       const callRoom = this.getCallRoom(dto.callId);
       await client.leave(callRoom);
+      
+      // Phase 3: G4/D1 - Record participant leave
+      await this.callHistoryService.recordParticipantLeave(dto.callId, userId);
+      
       await this.callHistoryService.removeUserFromCall(userId);
 
       this.server.to(callRoom).emit(SocketEvents.CALL_PARTICIPANT_LEFT, {
@@ -923,14 +1280,21 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       });
 
       this.logger.log(`Call ${dto.callId}: participant ${userId} left (group)`);
-      return;
-    }
 
-    // Caller hanging up during RINGING = CANCEL
-    if (currentState === 'RINGING' && isHost) {
-      this.clearRingingTimeout(dto.callId);
-      await this.endCallInternal(session, CallEndReason.USER_HANGUP);
-      this.logger.log(`Call ${dto.callId}: cancelled by caller ${userId}`);
+      // If everyone has left the group call room (roomSize is 0), end the call officially
+      // to save the CallHistory and delete the active session.
+      // Robust room size check using fetchSockets
+      const sockets = await this.server.in(callRoom).fetchSockets();
+      const roomSize = sockets.length;
+
+      if (roomSize === 0) {
+        this.clearRingingTimeout(dto.callId);
+        await this.endCallInternal(session, CallEndReason.USER_HANGUP);
+        this.logger.log(`Call ${dto.callId}: ended because last participant left`);
+      } else if (roomSize === 1) {
+        // Start lone participant timer if only 1 person left in group
+        this.startLoneParticipantTimer(dto.callId, session);
+      }
       return;
     }
 
@@ -947,6 +1311,25 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
   // ─────────────────────────────────────────────────────────
   // Client → Server: WebRTC Signaling Relay
   // ─────────────────────────────────────────────────────────
+
+  /**
+   * Client sends heartbeat to keep the call session alive (prevent 5-min TTL expire).
+   * Crucial for Daily.co group calls without ICE restarts.
+   */
+  @SubscribeMessage(SocketEvents.CALL_HEARTBEAT)
+  async handleCallHeartbeat(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: CallIdDto,
+  ) {
+    const userId = client.userId;
+    if (!userId) return;
+
+    const session = await this.getValidatedSession(dto.callId, userId);
+    if (!session) return;
+
+    await this.callHistoryService.heartbeat(dto.callId);
+    this.logger.debug(`Call ${dto.callId}: heartbeat from ${userId}`);
+  }
 
   /**
    * Relay SDP offer from caller to callee.
@@ -989,6 +1372,37 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     client.to(callRoom).emit(SocketEvents.CALL_ANSWER, {
       callId: dto.callId,
       sdp: dto.sdp,
+      fromUserId: userId,
+    });
+  }
+
+  /**
+   * Relay media state (camera on/off, mute on/off) between peers.
+   * Solves cross-platform unreliability of WebRTC track mute/unmute events.
+   */
+  @SubscribeMessage(SocketEvents.CALL_MEDIA_STATE)
+  async handleMediaState(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: CallMediaStateDto,
+  ) {
+    const userId = client.userId;
+    if (!userId) return;
+
+    const session = await this.getValidatedSession(dto.callId, userId);
+    if (!session) return;
+
+    const callRoom = this.getCallRoom(dto.callId);
+
+    // Phase 4: L5 - Persist media state in session
+    await this.callHistoryService.updateMediaState(dto.callId, userId, {
+      audioEnabled: !dto.muted,
+      videoEnabled: !dto.cameraOff,
+    });
+
+    client.to(callRoom).emit(SocketEvents.CALL_MEDIA_STATE, {
+      callId: dto.callId,
+      cameraOff: dto.cameraOff,
+      muted: dto.muted,
       fromUserId: userId,
     });
   }
@@ -1087,11 +1501,18 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       iceTransportPolicy: freshIceConfig.iceTransportPolicy,
     });
 
-    // Notify the other peer that an ICE restart is happening
+    // Notify the other peer that an ICE restart is happening with fresh credentials
     const callRoom = this.getCallRoom(dto.callId);
+    
+    // Phase 4: W5 - Provide fresh credentials to the other peer too
+    const otherUserId = session.initiatorId === userId ? session.calleeId : session.initiatorId;
+    const otherIceConfig = await this.iceConfigService.getIceConfig(otherUserId);
+
     client.to(callRoom).emit(SocketEvents.CALL_ICE_RESTART, {
       callId: dto.callId,
       fromUserId: userId,
+      iceServers: otherIceConfig.iceServers,
+      iceTransportPolicy: otherIceConfig.iceTransportPolicy,
     });
 
     this.logger.debug(`Call ${dto.callId}: ICE restart requested by ${userId}`);
@@ -1166,8 +1587,8 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     try {
       // Create Daily.co room
       const allParticipantIds = session.participantIds
-        ? [session.callerId, ...session.participantIds]
-        : [session.callerId, session.calleeId];
+        ? [session.initiatorId, ...session.participantIds]
+        : [session.initiatorId, session.calleeId];
       const room = await this.dailyCoService.createRoom(dto.callId, {
         maxParticipants: allParticipantIds.length,
         expireSeconds: 3600,
@@ -1181,7 +1602,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
             room.name,
             uid,
             displayName,
-            uid === session.callerId, // caller is owner
+            uid === session.initiatorId, // caller is owner
           );
           return [uid, token] as const;
         }),
@@ -1253,7 +1674,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
 
     // Check: caller, callee, or any group participant
     if (
-      session.callerId === userId ||
+      session.initiatorId === userId ||
       session.calleeId === userId ||
       (session.participantIds?.includes(userId) ?? false)
     ) {
@@ -1295,7 +1716,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
         });
     }
 
-    const status = this.resolveCallStatus(reason, session.status);
+    const status = this.callHistoryService.resolveCallStatus(reason, session.status);
 
     // Calculate duration
     const startedAt = new Date(session.startedAt);
@@ -1306,18 +1727,53 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     );
 
     // Emit call:ended to all participants in the room
-    this.server.to(callRoom).emit(SocketEvents.CALL_ENDED, {
+    // Final broadcast to the room
+    const emissionData = {
       callId,
       reason,
       duration: durationSeconds,
       status,
-    });
+    };
+    this.server.to(callRoom).emit(SocketEvents.CALL_ENDED, emissionData);
+
+    // Reliability: For 1-1 calls, also notify all sockets of BOTH participants directly.
+    // This handles cases where some sessions may not be in the room (tab refresh, multi-device).
+    if (!session.isGroupCall) {
+      const allUserIds = [session.initiatorId, session.calleeId];
+      for (const uid of allUserIds) {
+        const sids = await this.socketState.getUserSockets(uid);
+        if (sids.length > 0) {
+          this.server.to(sids).emit(SocketEvents.CALL_ENDED, emissionData);
+        }
+      }
+    }
+
     this.server.in(callRoom).socketsLeave(callRoom);
+
+    // Broadcast GROUP_CALL_ENDED to the conversation room so banners are cleared
+    if (session.isGroupCall && session.conversationId) {
+      this.server.to(`conversation:${session.conversationId}`).emit(SocketEvents.GROUP_CALL_ENDED, {
+        callId,
+        conversationId: session.conversationId,
+        reason,
+        duration: durationSeconds,
+      });
+    }
+
+    // Phase 3: G12/B6 - Cancel all push notifications
+    const activeReceiverIds = session.participantIds ?? [session.calleeId];
+    for (const uid of activeReceiverIds) {
+      this.eventEmitter.emit(InternalEventNames.CALL_PUSH_NOTIFICATION_CANCELLED, {
+        callId: session.callId,
+        userId: uid,
+      });
+    }
 
     // End call via service (writes to DB, emits domain event, cleans up Redis)
     try {
       await this.callHistoryService.endCall({
-        callerId: session.callerId,
+        callId,
+        initiatorId: session.initiatorId,
         calleeId: session.calleeId,
         status,
         startedAt: startedAt.toISOString(),
@@ -1329,7 +1785,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       });
     } catch (error) {
       this.logger.error(`Failed to end call ${callId} via service:`, error);
-      const allUserIds = new Set<string>([session.callerId, session.calleeId]);
+      const allUserIds = new Set<string>([session.initiatorId, session.calleeId]);
       if (session.participantIds) {
         for (const id of session.participantIds) allUserIds.add(id);
       }
@@ -1343,6 +1799,108 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     this.clearAllParticipantRingingTimeouts(callId);
     this.clearRingingAckTimeout(callId);
     this.clearDisconnectTimer(callId);
+    this.clearLoneParticipantTimer(callId);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Re-join existing group call
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Handle joining an existing group call.
+   * Verifies group membership, gets Daily.co token, and adds user to call room.
+   */
+  @SubscribeMessage(SocketEvents.CALL_JOIN_EXISTING)
+  async handleJoinExistingCall(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { conversationId: string },
+  ) {
+    const userId = client.user?.id;
+    if (!userId) return this.emitError(client, 'User not authenticated');
+
+    const { conversationId } = data;
+    if (!conversationId) return this.emitError(client, 'conversationId is required');
+
+    // 1. Verify the user is a member of the conversation
+    const membership = await this.prisma.conversationMember.findFirst({
+      where: { conversationId, userId, status: 'ACTIVE' },
+    });
+    if (!membership) {
+      return this.emitError(client, 'You are not a member of this group');
+    }
+
+    // 2. Check if there is an active call for this conversation
+    const session = await this.callHistoryService.joinExistingGroupCall(userId, conversationId);
+    if (!session) {
+      const message = 'No active group call found for this conversation';
+      this.emitError(client, message);
+      return { error: message };
+    }
+
+    // 3. Create a new Daily.co meeting token for this user
+    if (!session.dailyRoomName) {
+      const message = 'Group call room not available';
+      this.emitError(client, message);
+      return { error: message };
+    }
+
+    // Phase 2: G8/G11 - Daily.co Pre-Join Capacity Check (max 10)
+    const activeParticipantCount = Object.keys(session.activeDevices || {}).length;
+    const MAX_DAILY_PARTICIPANTS = 10;
+    if (activeParticipantCount >= MAX_DAILY_PARTICIPANTS) {
+      const message = 'Group call is full (maximum 10 participants)';
+      this.emitError(client, message);
+      return { error: message };
+    }
+
+    const displayName = client.user?.displayName ?? 'Unknown';
+    const token = await this.dailyCoService.createMeetingToken(
+      session.dailyRoomName,
+      userId,
+      displayName,
+      false, // not owner
+    );
+
+    const roomUrl = this.dailyCoService.getRoomUrl(session.dailyRoomName);
+
+    // 4. Join the socket call room
+    const callRoom = this.getCallRoom(session.callId);
+    await client.join(callRoom);
+
+    // Fix M5: Track this device as the active one for this user
+    await this.callHistoryService.updateActiveDevice(
+      session.callId,
+      userId,
+      client.deviceId || client.id,
+      this.isMobileDevice(client),
+    );
+
+    // 4.1 Cancel any lone participant timer (roomSize is > 1 now)
+    this.clearLoneParticipantTimer(session.callId);
+
+    // Phase 3: G4/D1 - Record participant join
+    await this.callHistoryService.recordParticipantJoin(session.callId, userId);
+
+    // 5. Notify others in the call room that a new participant joined
+    this.server.to(callRoom).emit(SocketEvents.CALL_PARTICIPANT_JOINED, {
+      callId: session.callId,
+      userId,
+      displayName,
+      mediaState: session.mediaState, // Phase 4: L5
+    });
+
+    // 6. Send the room URL and token back to the joining user
+    client.emit(SocketEvents.CALL_DAILY_ROOM, {
+      callId: session.callId,
+      roomUrl,
+      tokens: { [userId]: token },
+    });
+
+    this.logger.log(
+      `Call ${session.callId}: user ${userId} re-joined group call via CALL_JOIN_EXISTING`,
+    );
+
+    return { callId: session.callId };
   }
 
   /**
@@ -1400,6 +1958,16 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
         }
       }
     }
+    // Phase 4: L1 - Database fallback for offline user name
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
+      if (user?.displayName) return user.displayName;
+    } catch {
+      // Ignore
+    }
     return 'User';
   }
 
@@ -1417,34 +1985,20 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
         }
       }
     }
+    // Phase 4: L1 - Database fallback for offline user avatar
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { avatarUrl: true },
+      });
+      if (user?.avatarUrl) return user.avatarUrl;
+    } catch {
+      // Ignore
+    }
     return null;
   }
 
-  /**
-   * Resolve CallStatus from end reason and session status.
-   */
-  private resolveCallStatus(reason: string, sessionStatus: string): CallStatus {
-    switch (reason) {
-      case CallEndReason.REJECTED:
-        return CallStatus.REJECTED;
-      case CallEndReason.NO_ANSWER:
-      case CallEndReason.TIMEOUT:
-        return sessionStatus === 'RINGING'
-          ? CallStatus.NO_ANSWER
-          : CallStatus.CANCELLED;
-      case CallEndReason.BLOCKED:
-        return CallStatus.CANCELLED;
-      case CallEndReason.NETWORK_DROP:
-        return sessionStatus === 'ACTIVE'
-          ? CallStatus.COMPLETED
-          : CallStatus.MISSED;
-      case CallEndReason.USER_HANGUP:
-      default:
-        return sessionStatus === 'ACTIVE'
-          ? CallStatus.COMPLETED
-          : CallStatus.CANCELLED;
-    }
-  }
+
 
   private clearRingingTimeout(callId: string): void {
     const timer = this.ringingTimeouts.get(callId);
@@ -1568,7 +2122,57 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
     }
   }
 
+  /**
+   * For group calls: start a timer to end the call if only 1 participant remains.
+   */
+  private startLoneParticipantTimer(callId: string, session: any): void {
+    // Safety check - only for group calls
+    if (!session.isGroupCall) return;
+
+    // Reset existing timer if any
+    this.clearLoneParticipantTimer(callId);
+
+    const timer = setTimeout(async () => {
+      this.loneParticipantTimers.delete(callId);
+
+      const sockets = await this.server.in(this.getCallRoom(callId)).fetchSockets();
+      if (sockets.length <= 1) {
+        this.logger.log(`Call ${callId}: auto-ending because user remained alone for 180s`);
+
+        // Fix G9: Re-fetch session to avoid using stale data from 180s ago
+        const latestSession = await this.callHistoryService.getSessionByCallId(callId);
+        if (!latestSession) {
+          this.logger.log(`Call ${callId}: already ended, skipping auto-end`);
+          return;
+        }
+        await this.endCallInternal(latestSession, CallEndReason.TIMEOUT);
+      }
+    }, this.LONE_PARTICIPANT_TIMEOUT_MS);
+
+    this.loneParticipantTimers.set(callId, timer);
+    this.logger.debug(`Call ${callId}: started 180s lone participant timer`);
+  }
+
+  private clearLoneParticipantTimer(callId: string): void {
+    const timer = this.loneParticipantTimers.get(callId);
+    if (timer) {
+      clearTimeout(timer);
+      this.loneParticipantTimers.delete(callId);
+      this.logger.debug(`Call ${callId}: lone participant timer cancelled`);
+    }
+  }
+
   private emitError(client: AuthenticatedSocket, message: string) {
     client.emit(SocketEvents.ERROR, { code: 'CALL_ERROR', message });
+  }
+
+  /**
+   * Helper to check if client is using a mobile device for longer M3 timeout
+   */
+  private isMobileDevice(client: AuthenticatedSocket): boolean {
+    return !!(
+      client.deviceId ||
+      /mobile|android|iphone|ipad/i.test(client.handshake.headers['user-agent'] || '')
+    );
   }
 }

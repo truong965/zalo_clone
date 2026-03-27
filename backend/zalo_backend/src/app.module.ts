@@ -45,6 +45,7 @@ import uploadConfig from './config/upload.config';
 import queueConfig from './config/queue.config';
 import socialConfig from './config/social.config';
 import workerConfig from './config/worker.config';
+import mailConfig from './config/mail.config';
 import { HealthModule } from './modules/health/health.module';
 import { RequestContextModule } from './common/context/request-context.module';
 import { RequestContextInterceptor } from './common/interceptor/request-context.interceptor';
@@ -67,6 +68,7 @@ import { HttpExceptionFilter } from './common/filters';
         uploadConfig,
         socialConfig, // [CHECKED] Đã load config social
         workerConfig,
+        mailConfig,
       ],
       envFilePath: '.env.development.local',
     }),

@@ -152,6 +152,33 @@ export class PushNotificationService {
   }
 
   // ─────────────────────────────────────────────────────────────────────
+  // Cancel incoming call push (data-only → client dismisses UI)
+  // ─────────────────────────────────────────────────────────────────────
+
+  async cancelCallNotification(callId: string, userId: string): Promise<void> {
+    const tokens = await this.deviceTokens.getTokensByUserId(userId);
+    if (tokens.length === 0) return;
+
+    // Data-only message: instructs client app/SW to dismiss the ringing UI
+    const data: Record<string, string> = {
+      type: 'CANCEL_CALL',
+      callId,
+      timestamp: new Date().toISOString(),
+    };
+
+    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+      priority: 'high',
+      ttlSeconds: 30, // Also short TTL since it's just a dismissal
+    });
+
+    await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+
+    this.logger.log(
+      `📱 Cancel call push sent: ${callId} → user ${userId.slice(0, 8)}… (${tokens.length} device(s))`,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
   // Missed call (NORMAL priority, notification payload)
   // ─────────────────────────────────────────────────────────────────────
 

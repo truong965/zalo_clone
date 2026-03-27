@@ -1,4 +1,5 @@
 import {
+  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -16,6 +17,15 @@ export class CreateUserDto {
   @IsNotEmpty({ message: 'Tên không được để trống' })
   @IsString()
   displayName: string;
+
+  @ApiProperty({
+    example: 'user@example.com',
+    description: 'Email',
+    required: false,
+  })
+  @IsOptional()
+  @IsEmail({}, { message: 'Email không hợp lệ' })
+  email?: string;
 
   @ApiProperty({ example: '0987654321', description: 'Số điện thoại (VN)' })
   @IsNotEmpty()

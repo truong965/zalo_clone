@@ -58,6 +58,20 @@ export class CallEndedSocketListener {
       };
 
       this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
+
+      // Emit GROUP_CALL_ENDED to clear banner for group calls
+      if (payload.conversationId) {
+        this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+          event: SocketEvents.GROUP_CALL_ENDED as any,
+          data: {
+            callId,
+            conversationId: payload.conversationId,
+            reason,
+            duration: durationSeconds,
+          },
+          room: `conversation:${payload.conversationId}`,
+        });
+      }
     } catch (error) {
       this.logger.error(
         `[CALL_ENDED_SOCKET] Failed to emit call:ended socket event`,

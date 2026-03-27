@@ -43,17 +43,15 @@ export class UsersService extends BaseService<User> {
   async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { phoneNumber },
-      // include: {
-      //   role: {
-      //     include: {
-      //       rolePermissions: {
-      //         include: {
-      //           permission: true,
-      //         },
-      //       },
-      //     },
-      //   },
-      // },
+    });
+  }
+
+  /**
+   * Find user by email
+   */
+  async findByEmail(email: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: { email },
     });
   }
 
@@ -127,8 +125,19 @@ export class UsersService extends BaseService<User> {
     });
     if (exist) throw new BadRequestException('Số điện thoại đã tồn tại');
   }
+
+  private async checkExistEmail(email: string) {
+    const exist = await this.prisma.extended.user.findFirst({
+      where: { email },
+    });
+    if (exist) throw new BadRequestException('Email đã tồn tại');
+  }
+
   async register(dto: CreateUserDto): Promise<UserEntity> {
     await this.checkExistPhone(dto.phoneNumber);
+    if (dto.email) {
+      await this.checkExistEmail(dto.email);
+    }
 
     // Tìm Role mặc định là 'USER'
     const userRole = await this.prisma.extended.role.findUnique({
@@ -204,8 +213,17 @@ export class UsersService extends BaseService<User> {
     return new UserEntity(user);
   }
   async update(id: string, dto: UpdateUserDto) {
+    // Nếu đổi email -> Check trùng (trừ chính nó)
+    const currentUser = await this.prisma.extended.user.findUnique({
+      where: { id },
+    });
+    if (!currentUser) throw new NotFoundException('Người dùng không tồn tại');
+
+    if (dto.email && dto.email !== currentUser.email) {
+      await this.checkExistEmail(dto.email);
+    }
+
     // BaseService update sẽ gọi prisma update
-    // DTO đã chặn password/phoneNumber nên an toàn
     const updatedUser = await super.update(id, dto);
 
     // Invalidate JWT profile cache
@@ -215,6 +233,7 @@ export class UsersService extends BaseService<User> {
       .publish(
         new UserProfileUpdatedEvent(id, {
           displayName: dto.displayName,
+          email: dto.email,
           avatarUrl: dto.avatarUrl,
           bio: dto.bio,
           gender: dto.gender,
@@ -250,6 +269,15 @@ export class UsersService extends BaseService<User> {
         throw new BadRequestException(
           'Số điện thoại mới đã tồn tại trên hệ thống',
         );
+    }
+
+    // A2. Nếu đổi email -> Check trùng (trừ chính nó)
+    if (dto.email && dto.email !== (currentUser as any).email) {
+      const duplicate = await this.prisma.extended.user.findFirst({
+        where: { email: dto.email },
+      });
+      if (duplicate)
+        throw new BadRequestException('Email mới đã tồn tại trên hệ thống');
     }
 
     // B. Nếu đổi Role -> Check Role tồn tại

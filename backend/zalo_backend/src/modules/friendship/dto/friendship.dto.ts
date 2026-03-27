@@ -41,6 +41,8 @@ export class GetFriendsQueryDto extends CursorPaginationDto {
   conversationId?: string;
 }
 
+export class GetFriendRequestsQueryDto extends CursorPaginationDto {}
+
 // --- RESPONSE DTOs ---
 
 export class FriendshipResponseDto {

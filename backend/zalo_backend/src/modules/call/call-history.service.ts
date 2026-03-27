@@ -99,7 +99,7 @@ export class CallHistoryService {
     private readonly redis: RedisService,
     private readonly eventPublisher: EventPublisher,
     private readonly displayNameResolver: DisplayNameResolver,
-  ) {}
+  ) { }
 
   /**
    * Start tracking an active call (Redis only)
@@ -127,27 +127,47 @@ export class CallHistoryService {
     }
 
     // Check all receivers for busy status
+    const availableReceiverIds: string[] = [];
     for (const receiverId of uniqueReceiverIds) {
       const existingReceiverCall = await this.getActiveCall(receiverId);
       if (existingReceiverCall) {
-        throw new ConflictException(
-          `User ${receiverId} is currently in another call`,
+        if (!isGroupCall) {
+          throw new ConflictException(
+            `User ${receiverId} is currently in another call`,
+          );
+        }
+        this.logger.log(
+          `Call: User ${receiverId} is busy, skipping for group call`,
         );
+      } else {
+        availableReceiverIds.push(receiverId);
       }
     }
+
+    if (availableReceiverIds.length === 0 && !isGroupCall) {
+      throw new ConflictException('Callee is currently in another call');
+    }
+
+    const firstCallee =
+      availableReceiverIds.length > 0 ? availableReceiverIds[0] : calleeId;
 
     const callId = uuidv4();
     const session: ActiveCallSession = {
       callId,
-      callerId,
-      calleeId,
+      initiatorId: callerId,
+      calleeId: firstCallee,
       callType,
       provider: isGroupCall ? CallProvider.DAILY_CO : provider,
       conversationId,
       startedAt: new Date(),
       status: 'RINGING',
-      participantIds: uniqueReceiverIds,
+      participantIds: availableReceiverIds,
       isGroupCall,
+      accumulatedDurationS: 0,
+      lastStatusChangedAt: new Date().toISOString(),
+      participantTimeline: {
+        [callerId]: [{ joinedAt: new Date().toISOString() }],
+      },
     };
 
     // Store in Redis with TTL
@@ -155,11 +175,17 @@ export class CallHistoryService {
     await this.redis.setex(key, this.ACTIVE_CALL_TTL, JSON.stringify(session));
 
     // Index by user IDs: 1 active call per user (String, not Set)
-    await this.indexCallByUsers(callId, callerId, uniqueReceiverIds);
+    await this.indexCallByUsers(callId, callerId, availableReceiverIds);
+    if (isGroupCall && conversationId) {
+      await this.indexCallByConversation(callId, conversationId);
+    }
+
+    // Phase 2: R5 - Track all active sessions in a single set for easy auditing
+    await this.redis.getClient().sadd('call:active_sessions', callId);
 
     this.logger.log(
-      `Active call started: ${callId} (${callerId} → ${uniqueReceiverIds.join(',')}` +
-        `, ${callType}, ${session.provider}${isGroupCall ? ', GROUP' : ''})`,
+      `Active call started: ${callId} (${callerId} → ${availableReceiverIds.join(',')}` +
+      `, ${callType}, ${session.provider}${isGroupCall ? ', GROUP' : ''})`,
     );
 
     return session;
@@ -183,10 +209,30 @@ export class CallHistoryService {
     const session: ActiveCallSession = JSON.parse(
       sessionJson,
     ) as ActiveCallSession;
-    session.status = status;
+
+    // D2: Accumulate duration if transitioning AWAY from ACTIVE
+    const now = new Date();
+    if (session.status === 'ACTIVE' && status !== 'ACTIVE') {
+      const lastChanged = session.lastStatusChangedAt
+        ? new Date(session.lastStatusChangedAt)
+        : new Date(session.startedAt);
+      const diffS = Math.max(0, (now.getTime() - lastChanged.getTime()) / 1000);
+      session.accumulatedDurationS = (session.accumulatedDurationS || 0) + diffS;
+    }
+
+    // D2: Update lastStatusChangedAt if transitioning TO ACTIVE or status changed
+    if (session.status !== status) {
+      session.status = status;
+      session.lastStatusChangedAt = now.toISOString();
+    }
 
     // Refresh TTL
     await this.redis.setex(key, this.ACTIVE_CALL_TTL, JSON.stringify(session));
+
+    // Phase 9: Also refresh conversation index TTL if this is a group call
+    if (session.isGroupCall && session.conversationId) {
+      await this.indexCallByConversation(session.callId, session.conversationId);
+    }
   }
 
   /**
@@ -235,7 +281,52 @@ export class CallHistoryService {
     if (exists) {
       // Refresh TTL
       await this.redis.expire(key, this.ACTIVE_CALL_TTL);
+
+      // Phase 9: Also refresh conversation index TTL for group calls
+      const session: ActiveCallSession = JSON.parse(exists) as ActiveCallSession;
+      if (session.isGroupCall && session.conversationId) {
+        await this.indexCallByConversation(callId, session.conversationId);
+      }
     }
+  }
+
+  /**
+   * Phase 4.4: Join an existing active group call
+   */
+  async joinExistingGroupCall(
+    userId: string,
+    conversationId: string,
+  ): Promise<ActiveCallSession | null> {
+    const callId = await this.getActiveCallIdByConversation(conversationId);
+    if (!callId) return null;
+
+    const session = await this.getSessionByCallId(callId);
+    if (!session || !session.isGroupCall || session.provider !== CallProvider.DAILY_CO) {
+      return null;
+    }
+
+    if (session.status !== 'ACTIVE' && session.status !== 'RINGING' && session.status !== 'RECONNECTING') {
+      return null;
+    }
+
+    // Add user to participantList if not already there
+    if (!session.participantIds) session.participantIds = [];
+
+    if (!session.participantIds.includes(userId)) {
+      session.participantIds.push(userId);
+
+      // Update session in redis
+      const key = this.getActiveCallKey(callId);
+      await this.redis.setex(key, this.ACTIVE_CALL_TTL, JSON.stringify(session));
+
+      // Index this user to block them from creating other calls
+      await this.redis.setex(this.getUserCallsKey(userId), this.ACTIVE_CALL_TTL, callId);
+    }
+
+    // Refresh conversation TTL since someone just joined
+    await this.indexCallByConversation(callId, conversationId);
+
+    return session;
   }
 
   /**
@@ -247,22 +338,29 @@ export class CallHistoryService {
    * End call with distributed lock (prevents race condition)
    */
   async endCall(dto: EndCallInput): Promise<CallHistoryResponseDto> {
-    const { callerId, calleeId } = dto;
+    const { initiatorId, calleeId } = dto;
 
     // Validation
-    if (callerId === calleeId) {
+    if (initiatorId === calleeId) {
       throw new SelfActionException('Cannot log call to self');
     }
 
     // Get active session to determine call ID
-    let activeSession = await this.getActiveCall(callerId);
+    let activeSession: ActiveCallSession | null = null;
+    if (dto.callId) {
+      activeSession = await this.getSessionByCallId(dto.callId);
+    }
+
     if (!activeSession) {
-      activeSession = await this.getActiveCall(calleeId);
+      activeSession = await this.getActiveCall(initiatorId);
+      if (!activeSession) {
+        activeSession = await this.getActiveCall(calleeId);
+      }
     }
 
     if (!activeSession) {
       this.logger.warn(
-        `No active session found for call: ${callerId} -> ${calleeId}`,
+        `No active session found for call: ${dto.callId ?? `${initiatorId} -> ${calleeId}`}`,
       );
       // Fallback: create new ID for orphaned calls
       return this.endCallWithoutSession(dto);
@@ -286,7 +384,7 @@ export class CallHistoryService {
     if (!locked) {
       // Another request is processing - wait for result
       this.logger.debug(`Call ${callId} already being processed, waiting...`);
-      return this.waitForCallEnd(callId, 3000); // Wait max 3s
+      return this.waitForCallEnd(callId, 3000, dto); // Wait max 3s
     }
 
     try {
@@ -299,8 +397,15 @@ export class CallHistoryService {
         10, // 10s TTL
         JSON.stringify(result),
       );
+      
+      // Phase 2: R3 - Publish success event to waiting requests
+      await this.redis.getClient().publish(`call:end_notify:${callId}`, JSON.stringify(result));
 
       return result;
+    } catch (error) {
+      // Phase 2: R3 - Publish error event to waiting requests so they can retry
+      await this.redis.getClient().publish(`call:end_notify:${callId}`, 'ERROR');
+      throw error;
     } finally {
       // 🔓 RELEASE LOCK (verify ownership before deleting)
       const currentValue = await this.redis.get(lockKey);
@@ -311,28 +416,48 @@ export class CallHistoryService {
   }
 
   /**
-   * Wait for another request to finish processing the call
+   * Phase 2: R3 - Wait for another request to finish processing the call via Redis Pub/Sub
    */
   private async waitForCallEnd(
     callId: string,
     maxWaitMs: number,
+    dto: EndCallInput,
   ): Promise<CallHistoryResponseDto> {
     const resultKey = `call:result:${callId}`;
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < maxWaitMs) {
-      const cached = await this.redis.get(resultKey);
-      if (cached) {
-        this.logger.debug(`Retrieved cached result for call ${callId}`);
-        return JSON.parse(cached);
-      }
-
-      // Wait 100ms before retry
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    
+    // Check if result is already cached
+    const cached = await this.redis.get(resultKey);
+    if (cached) {
+      this.logger.debug(`Retrieved cached result for call ${callId}`);
+      return JSON.parse(cached);
     }
 
-    // Timeout - return error
-    throw new BadRequestException('Call processing timeout');
+    // Wait via Pub/Sub
+    return new Promise((resolve, reject) => {
+      const subClient = this.redis.getClient().duplicate();
+      const channel = `call:end_notify:${callId}`;
+      
+      const timeout = setTimeout(() => {
+        subClient.quit();
+        reject(new BadRequestException('Call processing timeout'));
+      }, maxWaitMs);
+
+      subClient.on('message', (ch, message) => {
+        if (ch === channel) {
+          clearTimeout(timeout);
+          subClient.quit();
+          if (message === 'ERROR') {
+            this.logger.warn(`Call ${callId} primary processor failed, retrying...`);
+            // The first request failed (e.g. Daily.co API error), so we retry execution
+            resolve(this.endCall(dto));
+          } else {
+            resolve(JSON.parse(message));
+          }
+        }
+      });
+      
+      subClient.subscribe(channel);
+    });
   }
 
   /**
@@ -344,14 +469,26 @@ export class CallHistoryService {
   ): Promise<CallHistoryResponseDto> {
     const { status } = dto;
 
-    // Calculate server-side duration
-    const serverStart = new Date(activeSession.startedAt);
-    const serverEnd = new Date();
-    const durationMs = serverEnd.getTime() - serverStart.getTime();
+    // D2: Calculate server-side duration using accumulated value
+    const now = new Date();
+    let totalS = activeSession.accumulatedDurationS || 0;
+
+    // If still ACTIVE, add the final chunk of time
+    if (activeSession.status === 'ACTIVE') {
+      const lastChanged = activeSession.lastStatusChangedAt
+        ? new Date(activeSession.lastStatusChangedAt)
+        : new Date(activeSession.startedAt);
+      totalS += Math.max(0, (now.getTime() - lastChanged.getTime()) / 1000);
+    }
+
     const finalDuration = Math.min(
-      Math.max(0, Math.round(durationMs / 1000)),
+      Math.max(0, Math.round(totalS)),
       this.MAX_CALL_DURATION,
     );
+    const startedAt = new Date(activeSession.startedAt);
+    const endedAt = now;
+    const serverStart = startedAt;
+    const serverEnd = endedAt;
 
     // All participants: initiator + receivers
     const allReceiverIds = activeSession.participantIds ?? [
@@ -363,11 +500,48 @@ export class CallHistoryService {
     const receiverParticipantStatus =
       this.resolveReceiverParticipantStatus(status);
 
+    const getTimelineStats = (uid: string, fallbackStatus: CallParticipantStatus) => {
+      const timeline = activeSession.participantTimeline?.[uid] || [];
+      if (timeline.length === 0) {
+        return {
+          status: fallbackStatus,
+          joinedAt: fallbackStatus === CallParticipantStatus.JOINED ? serverStart : null,
+          leftAt: fallbackStatus === CallParticipantStatus.JOINED ? serverEnd : null,
+          duration: fallbackStatus === CallParticipantStatus.JOINED ? finalDuration : null,
+        };
+      }
+      
+      let totalS = 0;
+      const firstJoin = timeline[0].joinedAt;
+      const lastLeave = timeline[timeline.length - 1].leftAt || serverEnd.toISOString();
+      
+      for (const entry of timeline) {
+        if (entry.durationS !== undefined) {
+          totalS += entry.durationS;
+        } else {
+          // Open segment
+          const joinT = new Date(entry.joinedAt).getTime();
+          const leaveT = serverEnd.getTime();
+          totalS += Math.max(0, Math.round((leaveT - joinT) / 1000));
+        }
+      }
+      return {
+        status: CallParticipantStatus.JOINED,
+        joinedAt: new Date(firstJoin),
+        leftAt: new Date(lastLeave),
+        duration: Math.min(Math.max(0, totalS), this.MAX_CALL_DURATION),
+      };
+    };
+
+    const initiatorStats = getTimelineStats(activeSession.initiatorId, 
+      status === CallStatus.CANCELLED ? CallParticipantStatus.LEFT : CallParticipantStatus.JOINED);
+
     // Save to database atomically
     const callHistory = await this.prisma.$transaction(async (tx) => {
       const created = await tx.callHistory.create({
         data: {
-          initiatorId: activeSession.callerId,
+          id: activeSession.callId,
+          initiatorId: activeSession.initiatorId,
           participantCount,
           callType: activeSession.callType,
           provider: activeSession.provider,
@@ -384,34 +558,25 @@ export class CallHistoryService {
         data: [
           {
             callId: created.id,
-            userId: activeSession.callerId,
+            userId: activeSession.initiatorId,
             role: CallParticipantRole.HOST,
-            status:
-              status === CallStatus.CANCELLED
-                ? CallParticipantStatus.LEFT
-                : CallParticipantStatus.JOINED,
-            joinedAt: serverStart,
-            leftAt: serverEnd,
-            duration: finalDuration,
+            status: initiatorStats.status,
+            joinedAt: initiatorStats.joinedAt,
+            leftAt: initiatorStats.leftAt,
+            duration: initiatorStats.duration,
           },
-          ...allReceiverIds.map((receiverId) => ({
-            callId: created.id,
-            userId: receiverId,
-            role: CallParticipantRole.MEMBER,
-            status: receiverParticipantStatus,
-            joinedAt:
-              receiverParticipantStatus === CallParticipantStatus.JOINED
-                ? serverStart
-                : null,
-            leftAt:
-              receiverParticipantStatus === CallParticipantStatus.JOINED
-                ? serverEnd
-                : null,
-            duration:
-              receiverParticipantStatus === CallParticipantStatus.JOINED
-                ? finalDuration
-                : null,
-          })),
+          ...allReceiverIds.map((receiverId) => {
+            const stats = getTimelineStats(receiverId, receiverParticipantStatus);
+            return {
+              callId: created.id,
+              userId: receiverId,
+              role: CallParticipantRole.MEMBER,
+              status: stats.status,
+              joinedAt: stats.joinedAt,
+              leftAt: stats.leftAt,
+              duration: stats.duration,
+            };
+          }),
         ],
         skipDuplicates: true,
       });
@@ -441,7 +606,7 @@ export class CallHistoryService {
       new CallEndedEvent(
         callHistory.id,
         activeSession.callType,
-        activeSession.callerId,
+        activeSession.initiatorId,
         activeSession.participantIds ?? [activeSession.calleeId],
         activeSession.conversationId,
         status,
@@ -468,7 +633,7 @@ export class CallHistoryService {
   private async endCallWithoutSession(
     dto: EndCallInput,
   ): Promise<CallHistoryResponseDto> {
-    const { callerId, calleeId, status, startedAt } = dto;
+    const { initiatorId, calleeId, status, startedAt } = dto;
 
     const clientStart = new Date(startedAt);
     const now = new Date();
@@ -484,7 +649,8 @@ export class CallHistoryService {
     const callHistory = await this.prisma.$transaction(async (tx) => {
       const created = await tx.callHistory.create({
         data: {
-          initiatorId: callerId,
+          id: dto.callId || undefined,
+          initiatorId: initiatorId,
           participantCount: calleeId ? 2 : 1,
           callType: dto.callType ?? CallType.VOICE,
           provider: dto.provider ?? CallProvider.WEBRTC_P2P,
@@ -498,7 +664,7 @@ export class CallHistoryService {
       const participantData: Prisma.CallParticipantCreateManyInput[] = [
         {
           callId: created.id,
-          userId: callerId,
+          userId: initiatorId,
           role: CallParticipantRole.HOST,
           status:
             status === CallStatus.CANCELLED
@@ -587,7 +753,7 @@ export class CallHistoryService {
       where,
       take: limit + 1, // Lấy dư 1 item để check hasNextPage
       cursor: cursor ? { id: cursor } : undefined,
-      // skip: cursor ? 1 : 0, // Bỏ qua item làm cursor
+      skip: cursor ? 1 : 0, // Bỏ qua item làm cursor
       orderBy: { startedAt: 'desc' }, // Mới nhất lên đầu
       ...callHistoryWithParticipants,
     });
@@ -865,6 +1031,37 @@ export class CallHistoryService {
   }
 
   /**
+   * Get Redis key for a conversation's active call
+   */
+  private getActiveConversationCallKey(conversationId: string): string {
+    return `call:conversation:${conversationId}:current`;
+  }
+
+  /**
+   * Index call by conversation ID
+   */
+  private async indexCallByConversation(callId: string, conversationId: string): Promise<void> {
+    const key = this.getActiveConversationCallKey(conversationId);
+    await this.redis.setex(key, this.ACTIVE_CALL_TTL, callId);
+  }
+
+  /**
+   * Get active call ID for a conversation
+   */
+  async getActiveCallIdByConversation(conversationId: string): Promise<string | null> {
+    const key = this.getActiveConversationCallKey(conversationId);
+    return this.redis.get(key);
+  }
+
+  /**
+   * Remove active call mapping for a conversation
+   */
+  private async removeActiveConversationCall(conversationId: string): Promise<void> {
+    const key = this.getActiveConversationCallKey(conversationId);
+    await this.redis.del(key);
+  }
+
+  /**
    * Get Redis key for user's current active call (1 call per user)
    */
   private getUserCallsKey(userId: string): string {
@@ -962,7 +1159,7 @@ export class CallHistoryService {
       ) as ActiveCallSession;
 
       // Collect all user IDs: caller + all participants
-      const allUserIds = new Set<string>([session.callerId, session.calleeId]);
+      const allUserIds = new Set<string>([session.initiatorId, session.calleeId]);
       if (session.participantIds) {
         for (const id of session.participantIds) {
           allUserIds.add(id);
@@ -975,10 +1172,24 @@ export class CallHistoryService {
           this.redis.del(this.getUserCallsKey(userId)),
         ),
       );
+
+      if (session.conversationId && session.isGroupCall) {
+        await this.removeActiveConversationCall(session.conversationId);
+      }
     }
 
     // Remove session
     await this.redis.del(key);
+    
+    // Phase 2: R5 - Remove from active sessions set
+    await this.redis.getClient().srem('call:active_sessions', callId);
+  }
+
+  /**
+   * Phase 2: R5 - Get all active call IDs uniformly
+   */
+  async getAllActiveCallIds(): Promise<string[]> {
+    return await this.redis.getClient().smembers('call:active_sessions');
   }
 
   /**
@@ -1005,8 +1216,18 @@ export class CallHistoryService {
       `Terminating ${callIds.length} call(s) between ${user1Id} and ${user2Id}`,
     );
 
+    let terminatedCount = 0;
     for (const callId of callIds) {
-      await this.removeActiveCallById(callId);
+      const session = await this.getSessionByCallId(callId);
+      // Phase 3: B2-B4 - Do not terminate group calls mid-call due to blocking
+      if (session && session.isGroupCall) {
+        this.logger.log(`[CallBlock] Skipping termination for group call ${callId}`);
+        continue;
+      }
+
+      // D6: Use endCallGracefully to ensure history is written to DB
+      await this.endCallGracefully(callId, CallEndReason.BLOCKED);
+
       // Publish unified call.ended event (persisted for audit trail)
       await this.eventPublisher.publish(
         new CallEndedEvent(
@@ -1021,9 +1242,10 @@ export class CallHistoryService {
           0,
         ),
       );
+      terminatedCount++;
     }
 
-    return callIds.length;
+    return terminatedCount;
   }
 
   /**
@@ -1096,10 +1318,10 @@ export class CallHistoryService {
       duration: p.duration ?? undefined,
       user: userProfileMap.get(p.userId)
         ? {
-            id: p.userId,
-            displayName: resolveName(p.userId),
-            avatarUrl: userProfileMap.get(p.userId)?.avatarUrl ?? null,
-          }
+          id: p.userId,
+          displayName: resolveName(p.userId),
+          avatarUrl: userProfileMap.get(p.userId)?.avatarUrl ?? null,
+        }
         : undefined,
     }));
 
@@ -1115,14 +1337,14 @@ export class CallHistoryService {
       endedAt: call.endedAt ?? undefined,
       endReason: call.endReason ?? undefined,
       conversationId: call.conversationId ?? undefined,
-      isViewed: viewedAt ? call.startedAt <= viewedAt : false,
+      isViewed: viewedAt ? call.startedAt < viewedAt : false,
       participants,
       initiator: userProfileMap.get(call.initiatorId)
         ? {
-            id: call.initiatorId,
-            displayName: resolveName(call.initiatorId),
-            avatarUrl: userProfileMap.get(call.initiatorId)?.avatarUrl ?? null,
-          }
+          id: call.initiatorId,
+          displayName: resolveName(call.initiatorId),
+          avatarUrl: userProfileMap.get(call.initiatorId)?.avatarUrl ?? null,
+        }
         : undefined,
     };
   }
@@ -1134,6 +1356,12 @@ export class CallHistoryService {
     });
     if (!call) {
       throw new NotFoundException("can't found call");
+    }
+
+    // D5: Prevent deleting call log if the call is still active
+    const activeCall = await this.getActiveCall(userId);
+    if (activeCall && activeCall.callId === callId) {
+      throw new ConflictException('Cannot delete a call log while the call is still active');
     }
 
     // Validate ownership — initiator OR participant
@@ -1165,14 +1393,33 @@ export class CallHistoryService {
   }
 
   /**
-   * Remove a single user's call index key.
+   * Remove a single user's call index key, and remove them from the session's participantIds.
    * Used in group calls when a participant rejects/leaves but call continues.
-   * Does NOT end the call session — only frees the user so they can join other calls.
+   * By removing them from participantIds, we ensure they aren't incorrectly mapped in endCall.
    */
   async removeUserFromCall(userId: string): Promise<void> {
+    const callIds = await this.getActiveCallIdsByUser(userId);
+    if (callIds.length > 0) {
+      const callId = callIds[0];
+      const session = await this.getSessionByCallId(callId);
+      if (session && session.participantIds) {
+        session.participantIds = session.participantIds.filter(
+          (id: string) => id !== userId,
+        );
+        const sessionKey = this.getActiveCallKey(callId);
+        // Fallback to getClient().ttl() if redis.ttl is missing on the Redis wrapper
+        const ttl = await ('ttl' in this.redis
+          ? (this.redis as any).ttl(sessionKey)
+          : this.redis.getClient().ttl(sessionKey));
+        if (ttl > 0) {
+          await this.redis.getClient().setex(sessionKey, ttl, JSON.stringify(session));
+        }
+      }
+    }
+
     const key = this.getUserCallsKey(userId);
     await this.redis.del(key);
-    this.logger.debug(`Removed user ${userId} from active call index`);
+    this.logger.debug(`Removed user ${userId} from active call index and session participantIds`);
   }
 
   /**
@@ -1197,13 +1444,149 @@ export class CallHistoryService {
   }
 
   /**
+   * M5: Update the active device for a specific user in a call.
+   * This ensures only one device per user receives WebRTC signaling.
+   */
+  async updateActiveDevice(callId: string, userId: string, deviceId: string, isMobile: boolean = false): Promise<void> {
+    const sessionKey = this.getActiveCallKey(callId);
+    const sessionJson = await this.redis.get(sessionKey);
+    if (!sessionJson) return;
+
+    const session = JSON.parse(sessionJson) as ActiveCallSession;
+    if (!session.activeDevices) {
+      session.activeDevices = {};
+    }
+    session.activeDevices[userId] = deviceId;
+
+    if (!session.mobileDevices) {
+      session.mobileDevices = {};
+    }
+    session.mobileDevices[userId] = isMobile;
+
+    const ttl = await ('ttl' in this.redis
+      ? (this.redis as any).ttl(sessionKey)
+      : this.redis.getClient().ttl(sessionKey));
+
+    if (ttl > 0) {
+      await this.redis.getClient().setex(sessionKey, ttl, JSON.stringify(session));
+      
+      // Phase 9: Refresh conversation index as well
+      if (session.isGroupCall && session.conversationId) {
+        await this.indexCallByConversation(session.callId, session.conversationId);
+      }
+    } else {
+      // Small fallback if ttl is somehow invalid but key exists
+      await this.redis.getClient().set(sessionKey, JSON.stringify(session), 'KEEPTTL');
+    }
+  }
+
+  /**
+   * Phase 3: G4/D1 - Record participant join event
+   */
+  async recordParticipantJoin(callId: string, userId: string): Promise<void> {
+    const key = this.getActiveCallKey(callId);
+    const sessionJson = await this.redis.get(key);
+    if (!sessionJson) return;
+
+    const session: ActiveCallSession = JSON.parse(sessionJson) as ActiveCallSession;
+    if (!session.participantTimeline) session.participantTimeline = {};
+    if (!session.participantTimeline[userId]) session.participantTimeline[userId] = [];
+
+    // Only add a new join if the last one was closed
+    const timeline = session.participantTimeline[userId];
+    if (timeline.length === 0 || timeline[timeline.length - 1].leftAt) {
+      timeline.push({ joinedAt: new Date().toISOString() });
+      
+      const ttl = await this.redis.getClient().ttl(key);
+      if (ttl > 0) await this.redis.getClient().setex(key, ttl, JSON.stringify(session));
+    }
+  }
+
+  /**
+   * Phase 3: G4/D1 - Record participant leave event
+   */
+  async recordParticipantLeave(callId: string, userId: string): Promise<void> {
+    const key = this.getActiveCallKey(callId);
+    const sessionJson = await this.redis.get(key);
+    if (!sessionJson) return;
+
+    const session: ActiveCallSession = JSON.parse(sessionJson) as ActiveCallSession;
+    if (!session.participantTimeline || !session.participantTimeline[userId]) return;
+
+    const timeline = session.participantTimeline[userId];
+    const lastEntry = timeline[timeline.length - 1];
+    
+    if (lastEntry && !lastEntry.leftAt) {
+      const now = new Date();
+      lastEntry.leftAt = now.toISOString();
+      const joinTime = new Date(lastEntry.joinedAt);
+      lastEntry.durationS = Math.max(0, Math.round((now.getTime() - joinTime.getTime()) / 1000));
+      
+      const ttl = await this.redis.getClient().ttl(key);
+      if (ttl > 0) await this.redis.getClient().setex(key, ttl, JSON.stringify(session));
+    }
+  }
+
+  /**
+   * Phase 4: L5 - Update media state persistence
+   */
+  async updateMediaState(
+    callId: string,
+    userId: string,
+    state: { audioEnabled?: boolean; videoEnabled?: boolean },
+  ): Promise<void> {
+    const key = this.getActiveCallKey(callId);
+    const sessionJson = await this.redis.get(key);
+    if (!sessionJson) return;
+
+    const session: ActiveCallSession = JSON.parse(
+      sessionJson,
+    ) as ActiveCallSession;
+
+    if (!session.mediaState) session.mediaState = {};
+    session.mediaState[userId] = {
+      ...session.mediaState[userId],
+      ...state,
+    };
+
+    const ttl = await this.redis.getClient().ttl(key);
+    if (ttl > 0) {
+      await this.redis.getClient().setex(key, ttl, JSON.stringify(session));
+    }
+  }
+
+  /**
+   * Resolve CallStatus from end reason and session status.
+   * Centralized logic used by both Gateway and Service.
+   */
+  resolveCallStatus(reason: string, sessionStatus: string): CallStatus {
+    switch (reason) {
+      case CallEndReason.REJECTED:
+        return CallStatus.REJECTED;
+      case CallEndReason.NO_ANSWER:
+      case CallEndReason.TIMEOUT:
+        return sessionStatus === 'RINGING'
+          ? CallStatus.NO_ANSWER
+          : CallStatus.CANCELLED;
+      case CallEndReason.BLOCKED:
+        return CallStatus.CANCELLED;
+      case CallEndReason.NETWORK_DROP:
+      case 'user_disconnected':
+        return sessionStatus === 'ACTIVE'
+          ? CallStatus.COMPLETED
+          : CallStatus.MISSED;
+      case CallEndReason.USER_HANGUP:
+      default:
+        return sessionStatus === 'ACTIVE'
+          ? CallStatus.COMPLETED
+          : CallStatus.CANCELLED;
+    }
+  }
+
+  /**
    * End call gracefully with reason.
    * Can be called with just a callId — reads session from Redis.
-   *
-   * Status logic:
-   * - If session was ACTIVE and had meaningful duration → COMPLETED
-   * - If session was RINGING (never answered) → MISSED / NO_ANSWER
-   * - Otherwise → CANCELLED
+   * Uses standardized resolveCallStatus for consistency.
    */
   async endCallGracefully(callId: string, reason: string): Promise<void> {
     // Get session
@@ -1218,25 +1601,28 @@ export class CallHistoryService {
       sessionJson,
     ) as ActiveCallSession;
 
-    // Calculate duration
+    // D2: Calculate duration from accumulated seconds
+    const now = new Date();
+    let totalS = session.accumulatedDurationS || 0;
+
+    // If still ACTIVE, add the final chunk of time
+    if (session.status === 'ACTIVE') {
+      const lastChanged = session.lastStatusChangedAt
+        ? new Date(session.lastStatusChangedAt)
+        : new Date(session.startedAt);
+      totalS += Math.max(0, (now.getTime() - lastChanged.getTime()) / 1000);
+    }
+
     const startedAt = new Date(session.startedAt);
-    const endedAt = new Date();
-    const durationMs = endedAt.getTime() - startedAt.getTime();
+    const endedAt = now;
+
     const duration = Math.min(
-      Math.max(0, Math.round(durationMs / 1000)),
+      Math.max(0, Math.round(totalS)),
       this.MAX_CALL_DURATION,
     );
 
-    // Determine correct status based on session state
-    let status: CallStatus;
-    if (session.status === 'ACTIVE' && duration > 0) {
-      status = CallStatus.COMPLETED;
-    } else if (session.status === 'RINGING') {
-      // Ringing but never answered: NO_ANSWER if timeout, MISSED if disconnect
-      status = reason === 'TIMEOUT' ? CallStatus.NO_ANSWER : CallStatus.MISSED;
-    } else {
-      status = CallStatus.CANCELLED;
-    }
+    // Determine correct status based on centralized mapping
+    const status = this.resolveCallStatus(reason, session.status);
 
     // Log to DB
     try {
@@ -1244,10 +1630,45 @@ export class CallHistoryService {
       const participantCount = 1 + allReceiverIds.length;
       const receiverStatus = this.resolveReceiverParticipantStatus(status);
 
+      const getTimelineStats = (uid: string, fallbackStatus: CallParticipantStatus) => {
+        const timeline = session.participantTimeline?.[uid] || [];
+        if (timeline.length === 0) {
+          return {
+            status: fallbackStatus,
+            joinedAt: fallbackStatus === CallParticipantStatus.JOINED ? startedAt : null,
+            leftAt: fallbackStatus === CallParticipantStatus.JOINED ? endedAt : null,
+            duration: fallbackStatus === CallParticipantStatus.JOINED ? duration : null,
+          };
+        }
+        
+        let totalS = 0;
+        const firstJoin = timeline[0].joinedAt;
+        const lastLeave = timeline[timeline.length - 1].leftAt || endedAt.toISOString();
+        
+        for (const entry of timeline) {
+          if (entry.durationS !== undefined) {
+            totalS += entry.durationS;
+          } else {
+            const joinT = new Date(entry.joinedAt).getTime();
+            const leaveT = endedAt.getTime();
+            totalS += Math.max(0, Math.round((leaveT - joinT) / 1000));
+          }
+        }
+        return {
+          status: CallParticipantStatus.JOINED,
+          joinedAt: new Date(firstJoin),
+          leftAt: new Date(lastLeave),
+          duration: Math.min(Math.max(0, totalS), this.MAX_CALL_DURATION),
+        };
+      };
+
+      const initiatorStats = getTimelineStats(session.initiatorId, 
+        status === CallStatus.CANCELLED ? CallParticipantStatus.LEFT : CallParticipantStatus.JOINED);
+
       await this.prisma.$transaction(async (tx) => {
         const created = await tx.callHistory.create({
           data: {
-            initiatorId: session.callerId,
+            initiatorId: session.initiatorId,
             participantCount,
             callType: session.callType ?? CallType.VOICE,
             provider: session.provider ?? CallProvider.WEBRTC_P2P,
@@ -1264,34 +1685,25 @@ export class CallHistoryService {
           data: [
             {
               callId: created.id,
-              userId: session.callerId,
+              userId: session.initiatorId,
               role: CallParticipantRole.HOST,
-              status:
-                status === CallStatus.CANCELLED
-                  ? CallParticipantStatus.LEFT
-                  : CallParticipantStatus.JOINED,
-              joinedAt: startedAt,
-              leftAt: endedAt,
-              duration,
+              status: initiatorStats.status,
+              joinedAt: initiatorStats.joinedAt,
+              leftAt: initiatorStats.leftAt,
+              duration: initiatorStats.duration,
             },
-            ...allReceiverIds.map((receiverId) => ({
-              callId: created.id,
-              userId: receiverId,
-              role: CallParticipantRole.MEMBER,
-              status: receiverStatus,
-              joinedAt:
-                receiverStatus === CallParticipantStatus.JOINED
-                  ? startedAt
-                  : null,
-              leftAt:
-                receiverStatus === CallParticipantStatus.JOINED
-                  ? endedAt
-                  : null,
-              duration:
-                receiverStatus === CallParticipantStatus.JOINED
-                  ? duration
-                  : null,
-            })),
+            ...allReceiverIds.map((receiverId) => {
+              const stats = getTimelineStats(receiverId, receiverStatus);
+              return {
+                callId: created.id,
+                userId: receiverId,
+                role: CallParticipantRole.MEMBER,
+                status: stats.status,
+                joinedAt: stats.joinedAt,
+                leftAt: stats.leftAt,
+                duration: stats.duration,
+              };
+            }),
           ],
           skipDuplicates: true,
         });

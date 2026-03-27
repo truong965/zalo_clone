@@ -63,6 +63,17 @@ export class SearchValidationService {
       },
       select: {
         status: true,
+        conversation: {
+          select: {
+            type: true,
+            deletedAt: true,
+            members: {
+              where: { userId: { not: userId } },
+              select: { userId: true },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -76,6 +87,26 @@ export class SearchValidationService {
       throw new ForbiddenException(
         `User ${userId} is not an active member of conversation ${conversationId}`,
       );
+    }
+
+    if (membership.conversation.deletedAt) {
+      throw new ForbiddenException(
+        `Conversation ${conversationId} has been deleted`,
+      );
+    }
+
+    // Block check for DIRECT conversations
+    if (
+      membership.conversation.type === 'DIRECT' &&
+      membership.conversation.members.length > 0
+    ) {
+      const otherId = membership.conversation.members[0].userId;
+      const isBlocked = await this.blockChecker.isBlocked(userId, otherId);
+      if (isBlocked) {
+        throw new ForbiddenException(
+          `Cannot access conversation with blocked user ${otherId}`,
+        );
+      }
     }
 
     return true;
@@ -200,13 +231,60 @@ export class SearchValidationService {
       where: {
         userId,
         status: 'ACTIVE',
-        isArchived: false, // Optional: exclude archived
+        isArchived: false,
+        conversation: {
+          deletedAt: null,
+        },
       },
-      select: { conversationId: true },
-      take: 10000, // Safety limit
+      select: {
+        conversationId: true,
+        conversation: {
+          select: {
+            type: true,
+            members: {
+              where: {
+                userId: { not: userId },
+                status: 'ACTIVE',
+              },
+              select: { userId: true },
+              take: 1,
+            },
+          },
+        },
+      },
+      take: 10000,
     });
 
-    return memberships.map((m) => m.conversationId);
+    // 1. Identify DIRECT conversations and their other participant
+    const directOtherIds = memberships
+      .filter(
+        (m) =>
+          m.conversation.type === 'DIRECT' && m.conversation.members.length > 0,
+      )
+      .map((m) => m.conversation.members[0].userId);
+
+    // 2. Parallel block check (Redis cached)
+    const blockResults = await Promise.all(
+      directOtherIds.map((otherId) => this.blockChecker.isBlocked(userId, otherId)),
+    );
+
+    const blockedSet = new Set<string>();
+    directOtherIds.forEach((id, index) => {
+      if (blockResults[index]) blockedSet.add(id);
+    });
+
+    // 3. Final filter
+    return memberships
+      .filter((m) => {
+        if (
+          m.conversation.type === 'DIRECT' &&
+          m.conversation.members.length > 0
+        ) {
+          return !blockedSet.has(m.conversation.members[0].userId);
+        }
+        return true;
+      })
+      .map((m) => m.conversationId);
   }
 
   /**

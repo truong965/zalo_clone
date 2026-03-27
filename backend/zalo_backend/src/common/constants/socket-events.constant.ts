@@ -148,7 +148,10 @@ export const SocketEvents = {
   CALL_ICE_CANDIDATE: 'call:ice-candidate',
   CALL_ICE_RESTART: 'call:ice-restart',
   CALL_RINGING_ACK: 'call:ringing-ack',
+  CALL_MEDIA_STATE: 'call:media-state',
   CALL_SWITCH_TO_DAILY: 'call:switch-to-daily',
+  CALL_JOIN_EXISTING: 'call:join-existing',
+  CALL_HEARTBEAT: 'call:heartbeat',
 
   // Server → Client
   CALL_INCOMING: 'call:incoming',
@@ -164,6 +167,8 @@ export const SocketEvents = {
   CALL_QUALITY_CHANGE: 'call:quality-change',
   CALL_PARTICIPANT_JOINED: 'call:participant-joined',
   CALL_PARTICIPANT_LEFT: 'call:participant-left',
+  GROUP_CALL_STARTED: 'group:call-started',
+  GROUP_CALL_ENDED: 'group:call-ended',
 
   // === REMINDER EVENTS ===
   /** Server → Client: Reminder time has arrived */
@@ -176,6 +181,9 @@ export const SocketEvents = {
   CONVERSATION_ARCHIVED: 'conversation:archived',
   /** User muted/unmuted a conversation (cross-device sync) */
   CONVERSATION_MUTED: 'conversation:muted',
+
+  // === BLOCK EVENTS ===
+  USER_BLOCKED: 'user:blocked',
 } as const;
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];

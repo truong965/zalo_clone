@@ -10,6 +10,7 @@ export class UserEntity implements User {
   // 1. Identity & Contact Info
   // ==============================
   id: string;
+  email: string | null;
 
   phoneNumber: string;
 

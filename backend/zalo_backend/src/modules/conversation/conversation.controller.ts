@@ -51,12 +51,14 @@ export class ConversationController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: number,
     @Query('archived') archived?: string,
+    @Query('unread') unread?: string,
   ) {
     return this.conversationService.getUserConversations(
       user.id,
       cursor,
       limit ? +limit : 20,
       archived === 'true',
+      unread === 'true',
     );
   }
 

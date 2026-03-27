@@ -286,6 +286,7 @@ enum LoginMethod {
 model User {
   id                    String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   phoneNumber           String  @unique @map("phone_number") @db.VarChar(20)
+  email                 String? @map("email") @db.VarChar(255)
   phoneCode             String  @default("+84") @map("phone_country_code") @db.VarChar(5)
   // Secure contact sync matching
   phoneNumberHash       String? @map("phone_number_hash") @db.VarChar(64)

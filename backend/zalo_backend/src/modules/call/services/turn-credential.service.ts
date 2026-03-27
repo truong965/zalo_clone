@@ -75,6 +75,7 @@ export class TurnCredentialService {
 
     return {
       urls: [
+        'stun:stun.l.google.com:19302', // Phase 4: W6 - Fallback STUN
         turnUrl, // turn:host:3478 (UDP)
         turnUrl.replace('turn:', 'turn:') + '?transport=tcp', // TCP fallback
         // PRODUCTION: add TURNS URL when TLS is configured:

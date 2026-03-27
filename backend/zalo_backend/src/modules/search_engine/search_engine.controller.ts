@@ -7,6 +7,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Param,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { IsString, IsNotEmpty } from 'class-validator';
@@ -73,6 +74,19 @@ export class SearchEngineController {
     @Query() query: ContactSearchRequestDto,
   ) {
     return this.contactSearchService.searchContacts(userId, query);
+  }
+
+  /**
+   * Get specific user profile (REST)
+   */
+  @Get('contacts/:targetId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get user profile' })
+  async getContactProfile(
+    @CurrentUserId() userId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.contactSearchService.getContactDetails(userId, targetId);
   }
 
   // ============================================================================

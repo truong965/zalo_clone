@@ -29,6 +29,7 @@ export class UserProfileUpdatedEvent extends DomainEvent {
     readonly userId: string,
     readonly updates: {
       displayName?: string;
+      email?: string;
       avatarUrl?: string;
       bio?: string;
       gender?: string;

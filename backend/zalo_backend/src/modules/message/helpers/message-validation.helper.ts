@@ -190,7 +190,12 @@ export class MessageValidator {
         return [MediaType.VIDEO];
 
       case MessageType.FILE:
-        return [MediaType.DOCUMENT];
+        return [
+          MediaType.IMAGE,
+          MediaType.VIDEO,
+          MediaType.AUDIO,
+          MediaType.DOCUMENT,
+        ];
 
       case MessageType.AUDIO:
       case MessageType.VOICE:

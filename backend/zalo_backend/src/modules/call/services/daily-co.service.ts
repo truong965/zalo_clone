@@ -233,6 +233,7 @@ export class DailyCoService implements OnModuleInit {
    * Build the full room URL for the frontend to join.
    */
   getRoomUrl(roomName: string): string {
-    return `https://${this.domain}.daily.co/${roomName}`;
+    const baseUrl = this.domain.includes('.daily.co') ? this.domain : `${this.domain}.daily.co`;
+    return `https://${baseUrl}/${roomName}`;
   }
 }

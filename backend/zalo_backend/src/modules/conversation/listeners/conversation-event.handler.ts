@@ -16,6 +16,7 @@ import type {
   ConversationMemberLeftEvent,
   ConversationMemberPromotedEvent,
 } from '../events';
+import type { MediaAvatarUploadInitiatedPayload } from '@common/contracts/events/event-contracts';
 
 export interface UserProfileUpdatedEvent {
   eventId?: string;
@@ -711,6 +712,35 @@ export class ConversationEventHandler {
         );
       }
       throw error;
+    }
+  }
+
+  @OnEvent(InternalEventNames.MEDIA_AVATAR_UPLOAD_INITIATED)
+  async handleAvatarUploadInitiated(
+    payload: MediaAvatarUploadInitiatedPayload,
+  ): Promise<void> {
+    if (payload.targetType !== 'GROUP') return;
+
+    const { targetId, avatarUrl } = payload;
+
+    try {
+      this.logger.log(
+        `[GROUP_AVATAR_UPDATE] Updating avatar for group ${targetId} to ${avatarUrl}`,
+      );
+
+      await this.prisma.conversation.update({
+        where: { id: targetId },
+        data: { avatarUrl },
+      });
+
+      this.logger.debug(
+        `[GROUP_AVATAR_UPDATE] Successfully updated avatar for group ${targetId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[GROUP_AVATAR_UPDATE] Failed to update avatar for group ${targetId}: ${error.message}`,
+        error.stack,
+      );
     }
   }
 }

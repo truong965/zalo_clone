@@ -20,6 +20,7 @@ import { QrLoginService } from './services/qr-login.service';
 import { QrSessionRedisService } from './services/qr-session-redis.service';
 import { QrLoginSocketListener } from './listeners/qr-login-socket.listener';
 import { RedisModule } from 'src/shared/redis/redis.module';
+import { MailModule } from 'src/shared/mail/mail.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RedisModule } from 'src/shared/redis/redis.module';
     EventEmitterModule,
     IdempotencyModule, // ✅ PHASE 3.3: Idempotency tracking for event handlers
     RedisModule, // Needed for RedisRegistryService in AuthService.getSessions
+    MailModule,
   ],
   controllers: [AuthController, QrLoginController],
   providers: [

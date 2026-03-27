@@ -209,6 +209,7 @@ export class SearchAnalyticsService {
       },
       take: limit,
       select: {
+        id: true,
         keyword: true,
         searchType: true,
         resultCount: true,

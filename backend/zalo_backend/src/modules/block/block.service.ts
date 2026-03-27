@@ -426,17 +426,20 @@ export class BlockService {
       where.blockedId = { in: matchedIds };
     }
 
-    const blocks = await this.prisma.block.findMany({
-      where,
-      ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        blockedId: true,
-        createdAt: true,
-        reason: true,
-      },
-    });
+    const [total, blocks] = await Promise.all([
+      this.prisma.block.count({ where }),
+      this.prisma.block.findMany({
+        where,
+        ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          blockedId: true,
+          createdAt: true,
+          reason: true,
+        },
+      }),
+    ]);
 
     const blockedIds = blocks.map((b) => b.blockedId);
     const blockedUsers =
@@ -457,6 +460,7 @@ export class BlockService {
     return CursorPaginationHelper.buildResult({
       items: blocks,
       limit,
+      total,
       getCursor: (block) => block.id,
       mapToDto: (block) => {
         const blockedUser = blockedUserMap.get(block.blockedId);

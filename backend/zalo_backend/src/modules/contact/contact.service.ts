@@ -316,11 +316,14 @@ export class ContactService {
     }
 
     // 1. Query with cursor pagination
-    const contacts = await this.prisma.userContact.findMany({
-      where,
-      ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
-      orderBy: { createdAt: 'desc' },
-    });
+    const [total, contacts] = await Promise.all([
+      this.prisma.userContact.count({ where }),
+      this.prisma.userContact.findMany({
+        where,
+        ...CursorPaginationHelper.buildPrismaParams(limit, cursor),
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
     // Fetch user profiles manually
     const displayNodes = contacts.slice(0, limit);
@@ -347,6 +350,7 @@ export class ContactService {
     return CursorPaginationHelper.buildResult({
       items: contacts,
       limit,
+      total,
       getCursor: (c) => c.id,
       mapToDto: (contact): ContactResponseDto => {
         const u = userMap.get(contact.contactUserId);

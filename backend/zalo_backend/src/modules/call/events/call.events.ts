@@ -25,6 +25,7 @@ export const CallEndReason = {
   REJECTED: 'REJECTED',
   NO_ANSWER: 'NO_ANSWER',
   RELATIONSHIP_CHANGED: 'RELATIONSHIP_CHANGED',
+  PRIVACY_RESTRICTED: 'PRIVACY_RESTRICTED',
 } as const;
 
 export type CallEndReasonType =

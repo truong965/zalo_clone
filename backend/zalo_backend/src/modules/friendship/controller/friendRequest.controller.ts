@@ -6,12 +6,15 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '@common/decorator/customize';
 import { FriendshipService } from '../service/friendship.service';
 import type { User } from '@prisma/client';
+import { GetFriendRequestsQueryDto } from '../dto/friendship.dto';
+
 @ApiTags('friend-requests')
 @Controller('friend-requests')
 export class FriendRequestController {
@@ -31,14 +34,20 @@ export class FriendRequestController {
 
   @Get('received')
   @ApiOperation({ summary: 'Get received friend requests (Pending)' })
-  async getReceivedRequests(@CurrentUser() user: User) {
-    return await this.friendshipService.getReceivedRequests(user.id);
+  async getReceivedRequests(
+    @CurrentUser() user: User,
+    @Query() query: GetFriendRequestsQueryDto,
+  ) {
+    return await this.friendshipService.getReceivedRequests(user.id, query);
   }
 
   @Get('sent')
   @ApiOperation({ summary: 'Get sent friend requests (Pending)' })
-  async getSentRequests(@CurrentUser() user: User) {
-    return this.friendshipService.getSentRequests(user.id);
+  async getSentRequests(
+    @CurrentUser() user: User,
+    @Query() query: GetFriendRequestsQueryDto,
+  ) {
+    return this.friendshipService.getSentRequests(user.id, query);
   }
 
   @Put(':requestId/accept')

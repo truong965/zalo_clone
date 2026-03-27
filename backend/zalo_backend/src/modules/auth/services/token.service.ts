@@ -101,6 +101,34 @@ export class TokenService {
   }
 
   /**
+   * Combined method to generate access and refresh tokens
+   */
+  async generateTokens(
+    user: User,
+    deviceInfo: DeviceInfo,
+    loginMethod: LoginMethod = LoginMethod.PASSWORD,
+  ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+    const { token: refreshToken, tokenId } = await this.createRefreshToken(
+      user,
+      deviceInfo,
+      undefined,
+      loginMethod,
+    );
+    const accessToken = this.createAccessToken(
+      user,
+      tokenId,
+      deviceInfo.deviceId,
+    );
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: this.parseExpiresIn(
+        this.jwtConfiguration.accessToken.expiresIn,
+      ),
+    };
+  }
+
+  /**
    * Rotate refresh token (invalidate old, issue new)
    * ⭐ TOKEN REUSE DETECTION: If old token already has children → security breach
    */

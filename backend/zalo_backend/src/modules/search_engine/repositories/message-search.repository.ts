@@ -156,6 +156,20 @@ export class MessageSearchRepository {
         AND m.deleted_at IS NULL
         AND cm.user_id = $3::uuid 
         AND cm.status = 'ACTIVE'
+        AND c.deleted_at IS NULL
+        -- Extra block check for DIRECT conversations (Defense in depth)
+        AND (
+          c.type != 'DIRECT'
+          OR NOT EXISTS (
+            SELECT 1 FROM conversation_members mcm
+            JOIN blocks b ON (
+              (b.blocker_id = mcm.user_id AND b.blocked_id = $3::uuid) OR
+              (b.blocker_id = $3::uuid AND b.blocked_id = mcm.user_id)
+            )
+            WHERE mcm.conversation_id = m.conversation_id
+              AND mcm.user_id != $3::uuid
+          )
+        )
         AND (
           m.search_vector @@ phraseto_tsquery('simple', unaccent($1::text))
           OR unaccent(m.content) ILIKE unaccent(concat('%', $1::text, '%'))
@@ -487,12 +501,28 @@ export class MessageSearchRepository {
         m.seen_count as seen_count
       FROM messages m
       JOIN conversations c ON m.conversation_id = c.id
+      JOIN conversation_members cm ON m.conversation_id = cm.conversation_id AND cm.user_id = $3::uuid
       LEFT JOIN users u ON m.sender_id = u.id
       LEFT JOIN user_contacts uc ON uc.owner_id = $3::uuid AND uc.contact_user_id = m.sender_id
       WHERE m.deleted_at IS NULL
+        AND cm.status = 'ACTIVE'
+        AND c.deleted_at IS NULL
         AND (
           m.search_vector @@ phraseto_tsquery('simple', unaccent($1::text))
           OR unaccent(m.content) ILIKE unaccent(concat('%', $1::text, '%'))
+        )
+        -- Extra block check for DIRECT conversations (Defense in depth)
+        AND (
+          c.type != 'DIRECT'
+          OR NOT EXISTS (
+            SELECT 1 FROM conversation_members mcm
+            JOIN blocks b ON (
+              (b.blocker_id = mcm.user_id AND b.blocked_id = $3::uuid) OR
+              (b.blocker_id = $3::uuid AND b.blocked_id = mcm.user_id)
+            )
+            WHERE mcm.conversation_id = m.conversation_id
+              AND mcm.user_id != $3::uuid
+          )
         )
         ${conversationFilter}
       ORDER BY rank_score DESC, m.created_at DESC
@@ -548,19 +578,31 @@ export class MessageSearchRepository {
           m.content,
           m.created_at,
           ts_headline(
-            'simple',
-            COALESCE(unaccent(m.content), ''),
-            phraseto_tsquery('simple', unaccent($1::text)),
-            'StartSel=[[HL]], StopSel=[[/HL]], MaxWords=15, MinWords=5, HighlightAll=false'
-          ) as preview_snippet,
+          m.search_vector,
+          m.seen_count,
           ts_rank(m.search_vector, phraseto_tsquery('simple', unaccent($1::text))) as rank_score
         FROM messages m
-        LEFT JOIN users u ON m.sender_id = u.id
-        LEFT JOIN user_contacts uc ON uc.owner_id = $3::uuid AND uc.contact_user_id = m.sender_id
+        JOIN conversations c ON m.conversation_id = c.id
+        JOIN conversation_members cm ON m.conversation_id = cm.conversation_id AND cm.user_id = $3::uuid
         WHERE m.deleted_at IS NULL
+          AND cm.status = 'ACTIVE'
+          AND c.deleted_at IS NULL
           AND (
             m.search_vector @@ phraseto_tsquery('simple', unaccent($1::text))
             OR unaccent(m.content) ILIKE unaccent(concat('%', $1::text, '%'))
+          )
+          -- Extra block check for DIRECT conversations (Defense in depth)
+          AND (
+            c.type != 'DIRECT'
+            OR NOT EXISTS (
+              SELECT 1 FROM conversation_members mcm
+              JOIN blocks b ON (
+                (b.blocker_id = mcm.user_id AND b.blocked_id = $3::uuid) OR
+                (b.blocker_id = $3::uuid AND b.blocked_id = mcm.user_id)
+              )
+              WHERE mcm.conversation_id = m.conversation_id
+                AND mcm.user_id != $3::uuid
+            )
           )
           ${conversationFilter}
       ),

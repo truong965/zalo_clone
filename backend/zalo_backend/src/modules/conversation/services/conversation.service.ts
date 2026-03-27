@@ -380,12 +380,20 @@ export class ConversationService {
     cursor?: string,
     limit: number = 20,
     isArchived: boolean = false,
+    unread: boolean = false,
   ): Promise<CursorPaginatedResult<unknown>> {
     // Two-phase query: pinned conversations first, then rest by lastMessageAt
     // This ensures pinned conversations always appear at the top of the list.
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        members: { some: { userId, status: MemberStatus.ACTIVE, isArchived } },
+        members: {
+          some: {
+            userId,
+            status: MemberStatus.ACTIVE,
+            isArchived,
+            ...(unread ? { unreadCount: { gt: 0 } } : {}),
+          },
+        },
         deletedAt: null,
         lastMessageAt: { not: null },
       },

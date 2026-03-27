@@ -100,6 +100,30 @@ export class CallNotificationListener {
   }
 
   /**
+   * Handle push notification cancellation.
+   * Fired when caller cancels the call, or when receiver answers on another device.
+   */
+  @OnEvent(InternalEventNames.CALL_PUSH_NOTIFICATION_CANCELLED, { async: true })
+  async handleCallPushCancellation(
+    payload: { callId: string; userId: string },
+  ): Promise<void> {
+    if (!this.pushService.isAvailable) return;
+
+    this.logger.log(
+      `[CANCEL_PUSH] Sending cancel push for call ${payload.callId} to user ${payload.userId.slice(0, 8)}…`,
+    );
+
+    try {
+      await this.pushService.cancelCallNotification(payload.callId, payload.userId);
+    } catch (error) {
+      this.logger.error(
+        `[CANCEL_PUSH] Failed for call ${payload.callId} to user ${payload.userId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
    * Handle missed-call push notification.
    * Listens directly to call.ended — only acts when status is MISSED or NO_ANSWER.
    * Loops per-receiver and queries callerName/callerAvatar from DB.

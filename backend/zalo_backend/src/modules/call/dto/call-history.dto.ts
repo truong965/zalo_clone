@@ -17,7 +17,8 @@ import { Type } from 'class-transformer';
  * Not exposed via HTTP — no class-validator decorators needed.
  */
 export interface EndCallInput {
-  callerId: string;
+  callId?: string;
+  initiatorId: string;
   calleeId: string;
   status: CallStatus;
   duration?: number;
@@ -58,6 +59,31 @@ export class CallParticipantDto {
     displayName: string;
     avatarUrl?: string | null;
   };
+}
+
+export class JoinExistingCallDto {
+  @ApiProperty()
+  conversationId: string;
+}
+
+export class ActiveGroupCallDto {
+  @ApiProperty()
+  callId: string;
+
+  @ApiProperty()
+  conversationId: string;
+
+  @ApiProperty({ enum: CallStatus })
+  status: CallStatus;
+
+  @ApiProperty()
+  participantCount: number;
+
+  @ApiProperty()
+  startedAt: Date;
+
+  @ApiProperty()
+  isJoined: boolean;
 }
 
 export class CallHistoryResponseDto {
@@ -119,7 +145,7 @@ export class CallHistoryResponseDto {
  */
 export class ActiveCallSession {
   callId: string;
-  callerId: string;
+  initiatorId: string;
   calleeId: string;
   callType: CallType;
   provider: CallProvider;
@@ -138,6 +164,37 @@ export class ActiveCallSession {
 
   /** True when receiverIds.length > 1 (forces Daily.co) */
   isGroupCall?: boolean;
+  /**
+   * Map: userId -> deviceId
+   */
+  activeDevices?: Record<string, string>;
+
+  /**
+   * Map: userId -> boolean (true if mobile device)
+   * Prevents premature disconnects on backgrounding
+   */
+  mobileDevices?: Record<string, boolean>;
+
+  /**
+   * D2: Accurate duration tracking (excluding reconnecting time).
+   */
+  accumulatedDurationS?: number;
+  lastStatusChangedAt?: string;
+
+  /**
+   * Phase 3: G4/D1 - Track actual participant journey
+   * Map: userId -> array of timeline segments
+   */
+  participantTimeline?: Record<
+    string,
+    { joinedAt: string; leftAt?: string; durationS?: number }[]
+  >;
+
+  /**
+   * Phase 4: L5 - Media state persistence
+   * Map: userId -> { audioEnabled, videoEnabled }
+   */
+  mediaState?: Record<string, { audioEnabled?: boolean; videoEnabled?: boolean }>;
 }
 
 /**

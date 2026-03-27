@@ -261,9 +261,20 @@ export interface CallPushNotificationNeededEventPayload {
   calleeId: string;
 }
 
+export interface CallPushNotificationCancelledEventPayload {
+  callId: string;
+  userId: string;
+}
+
 export interface MediaEventPayload {
   mediaId: string;
   ownerId?: string;
+}
+
+export interface MediaAvatarUploadInitiatedPayload extends DomainEventEnvelope {
+  targetId: string;
+  targetType: 'USER' | 'GROUP';
+  avatarUrl: string;
 }
 
 export interface ReminderCreatedEventPayload {
@@ -340,7 +351,10 @@ export interface InternalEventPayloadMap {
 
   [InternalEventNames.CALL_ENDED]: CallEndedEventPayload;
   [InternalEventNames.CALL_PUSH_NOTIFICATION_NEEDED]: CallPushNotificationNeededEventPayload;
+  [InternalEventNames.CALL_PUSH_NOTIFICATION_CANCELLED]: CallPushNotificationCancelledEventPayload;
 
+  [InternalEventNames.MEDIA_UPLOAD_INITIATED]: MediaEventPayload; // Added if needed
+  [InternalEventNames.MEDIA_AVATAR_UPLOAD_INITIATED]: MediaAvatarUploadInitiatedPayload;
   [InternalEventNames.MEDIA_UPLOADED]: MediaEventPayload;
   [InternalEventNames.MEDIA_PROCESSED]: MediaEventPayload;
   [InternalEventNames.MEDIA_FAILED]: MediaEventPayload;

@@ -130,6 +130,11 @@ export class RedisKeyBuilder {
     return `AUTH:USER_PROFILE:${userId}`;
   }
 
+  /** Email OTP for forgot password: AUTH:EMAIL_OTP:{email} (TTL: 5min) */
+  static emailOtp(email: string): string {
+    return `${this.DOMAIN_AUTH}:EMAIL_OTP:${email}`;
+  }
+
   // ============ QR LOGIN KEYS ============
 
   /** QR session data: AUTH:QR_SESSION:{qrSessionId} (TTL: 180s) */

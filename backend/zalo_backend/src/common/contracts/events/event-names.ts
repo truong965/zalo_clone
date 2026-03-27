@@ -63,8 +63,11 @@ export const InternalEventNames = {
   // Calls
   CALL_ENDED: 'call.ended',
   CALL_PUSH_NOTIFICATION_NEEDED: 'call.push_notification_needed',
+  CALL_PUSH_NOTIFICATION_CANCELLED: 'call.push_notification_cancelled',
 
   // Media
+  MEDIA_UPLOAD_INITIATED: 'media.upload_initiated',
+  MEDIA_AVATAR_UPLOAD_INITIATED: 'media.avatar_upload_initiated',
   MEDIA_UPLOADED: 'media.uploaded',
   MEDIA_PROCESSED: 'media.processed',
   MEDIA_FAILED: 'media.failed',

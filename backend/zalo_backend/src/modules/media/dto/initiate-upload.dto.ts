@@ -1,5 +1,5 @@
 // src/modules/media/dto/initiate-upload.dto.ts
-import { IsString, IsInt, Min, Max, MaxLength, Matches } from 'class-validator';
+import { IsString, IsInt, Min, Max, MaxLength, Matches, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class InitiateUploadDto {
@@ -51,6 +51,14 @@ export class AvatarUploadDto {
   @Min(1)
   @Max(10 * 1024 * 1024) // 10 MB
   fileSize: number;
+
+  @IsOptional()
+  @IsString()
+  targetId?: string;
+
+  @IsOptional()
+  @IsEnum(['USER', 'GROUP'])
+  targetType?: 'USER' | 'GROUP';
 }
 
 export interface AvatarUploadResponse {
