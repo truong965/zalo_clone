@@ -27,12 +27,13 @@ import {
  * 2. PUT file to presigned URL
  * 3. Return the final file URL
  */
-async function uploadAvatar(file: File): Promise<string> {
+async function uploadAvatar(file: File, options?: { targetType?: 'USER' | 'GROUP' }): Promise<string> {
       // Step 1: Get presigned PUT URL + final CloudFront/S3 URL
       const { data: initRes } = await apiClient.post(API_ENDPOINTS.MEDIA.UPLOAD_AVATAR, {
             fileName: file.name,
             mimeType: file.type,
             fileSize: file.size,
+            targetType: options?.targetType,
       });
 
       const { presignedUrl, fileUrl } = initRes.data;
@@ -84,7 +85,7 @@ export function useCreateGroup() {
                   let avatarUrl: string | undefined;
                   if (avatarFile) {
                         try {
-                              avatarUrl = await uploadAvatar(avatarFile);
+                              avatarUrl = await uploadAvatar(avatarFile, { targetType: 'GROUP' });
                         } catch {
                               notification.warning({
                                     message: 'Không thể tải ảnh nhóm',

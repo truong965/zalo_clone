@@ -15,7 +15,6 @@ import {
       // Using a workaround icon for camera off (no direct AntD icon)
       StopOutlined,
       PhoneOutlined,
-      SoundOutlined,
 } from '@ant-design/icons';
 import { useCallStore } from '../stores/call.store';
 
@@ -84,25 +83,7 @@ export function HangupButton({ onHangup }: HangupButtonProps) {
       );
 }
 
-export function SpeakerButton() {
-      const isSpeakerOn = useCallStore((s) => s.isSpeakerOn);
-      const toggleSpeaker = useCallStore((s) => s.toggleSpeaker);
 
-      return (
-            <Tooltip title={isSpeakerOn ? 'Tắt loa' : 'Bật loa'}>
-                  <Button
-                        shape="circle"
-                        size="large"
-                        icon={<SoundOutlined />}
-                        onClick={toggleSpeaker}
-                        className={`!w-14 !h-14 !text-lg ${isSpeakerOn
-                              ? '!bg-white/10 !border-white/20 !text-white'
-                              : '!bg-white/20 !border-white/30 !text-gray-400'
-                              }`}
-                  />
-            </Tooltip>
-      );
-}
 
 // ============================================================================
 // COMPOSED CONTROLS BAR
@@ -118,7 +99,6 @@ export function CallControls({ onHangup }: CallControlsProps) {
                   <MuteButton />
                   <CameraButton />
                   <HangupButton onHangup={onHangup} />
-                  <SpeakerButton />
             </div>
       );
 }

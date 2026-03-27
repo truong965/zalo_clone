@@ -15,145 +15,56 @@
  * Following vercel-react-best-practices: rendering-conditional-render (ternary).
  */
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import { useCallStore } from '../stores/call.store';
-import { QualityIndicator } from './QualityIndicator';
-import type { DailyParticipant } from '../types';
+import { useDailyCall } from '../hooks/use-daily-call';
+import { useAuthStore } from '@/features/auth';
 import { useTranslation } from 'react-i18next';
 
-// ============================================================================
-// PARTICIPANT TILE
-// ============================================================================
-
-function ParticipantTile({ participant, youLabel }: { participant: DailyParticipant; youLabel: string }) {
-      const videoRef = useRef<HTMLVideoElement>(null);
-
-      useEffect(() => {
-            const el = videoRef.current;
-            if (!el) return;
-
-            if (participant.videoTrack) {
-                  el.srcObject = new MediaStream([participant.videoTrack]);
-            } else {
-                  el.srcObject = null;
-            }
-      }, [participant.videoTrack, participant.videoEnabled]);
-
-      // Attach audio only for remote participants
-      const audioRef = useRef<HTMLAudioElement>(null);
-      useEffect(() => {
-            const el = audioRef.current;
-            if (!el || participant.isLocal) return;
-
-            if (participant.audioTrack) {
-                  el.srcObject = new MediaStream([participant.audioTrack]);
-            } else {
-                  el.srcObject = null;
-            }
-      }, [participant.audioTrack, participant.isLocal]);
-
-      return (
-            <div className="relative flex items-center justify-center overflow-hidden rounded-lg bg-gray-800">
-                  {/* Video */}
-                  {participant.videoEnabled && participant.videoTrack ? (
-                        <video
-                              ref={videoRef}
-                              autoPlay
-                              playsInline
-                              muted={participant.isLocal}
-                              className={`h-full w-full object-cover ${participant.isLocal ? 'scale-x-[-1]' : ''}`}
-                        />
-                  ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-2">
-                              {participant.avatarUrl ? (
-                                    <img
-                                          src={participant.avatarUrl}
-                                          alt={participant.displayName}
-                                          className="h-20 w-20 rounded-full object-cover ring-2 ring-white/20 sm:h-24 sm:w-24"
-                                    />
-                              ) : (
-                                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-600 text-3xl font-bold text-white ring-2 ring-white/20 sm:h-24 sm:w-24 sm:text-4xl">
-                                          {participant.displayName.charAt(0).toUpperCase()}
-                                    </div>
-                              )}
-                              <span className="text-sm text-white/80">
-                                    {participant.isLocal ? youLabel : participant.displayName}
-                              </span>
-                        </div>
-                  )}
-
-                  {/* Remote audio (hidden element) */}
-                  {!participant.isLocal && (
-                        <audio ref={audioRef} autoPlay playsInline />
-                  )}
-
-                  {/* Name + mute indicator */}
-                  <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
-                        {!participant.audioEnabled && (
-                              <span className="text-red-400">🔇</span>
-                        )}
-                        <span>{participant.isLocal ? youLabel : participant.displayName}</span>
-                  </div>
-            </div>
-      );
-}
-
-// ============================================================================
-// GRID LAYOUT
-// ============================================================================
-
-function getGridClass(count: number): string {
-      if (count <= 1) return 'grid-cols-1 grid-rows-1';
-      if (count === 2) return 'grid-cols-2 grid-rows-1';
-      if (count <= 4) return 'grid-cols-2 grid-rows-2';
-      return 'grid-cols-3 grid-rows-3';
-}
-
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
+/**
+ * DailyCallView — Renders Daily.co Prebuilt UI in an iframe.
+ * 
+ * Instead of a custom grid, we use Daily's optimized Prebuilt UI.
+ * This provides features like screen sharing, chat, and device settings
+ * out of the box.
+ */
 export function DailyCallView() {
+      const containerRef = useRef<HTMLDivElement>(null);
+      const { join, cleanup } = useDailyCall();
       const { t } = useTranslation();
-      const participants = useCallStore((s) => s.dailyParticipants);
-      const connectionQuality = useCallStore((s) => s.connectionQuality);
+      
+      const dailyRoomUrl = useCallStore((s) => s.dailyRoomUrl);
+      const dailyToken = useCallStore((s) => s.dailyToken);
+      const callType = useCallStore((s) => s.callType);
+      const callStatus = useCallStore((s) => s.callStatus);
+      const user = useAuthStore((s) => s.user);
 
-      // Sort: local user last so they appear in bottom-right
-      const sorted = [...participants].sort((a, b) => {
-            if (a.isLocal && !b.isLocal) return 1;
-            if (!a.isLocal && b.isLocal) return -1;
-            return 0;
-      });
+      useEffect(() => {
+            if (!containerRef.current || !dailyRoomUrl || !dailyToken || callStatus !== 'ACTIVE') {
+                  return;
+            }
 
-      const handleClick = useCallback(() => {
-            // Future: toggle controls visibility
-      }, []);
+            // Initialize Daily Prebuilt
+            const avatarUrl = user?.avatarUrl ?? undefined;
+            void join(containerRef.current, dailyRoomUrl, dailyToken, callType ?? undefined, avatarUrl);
+
+            return () => {
+                  void cleanup();
+            };
+      }, [dailyRoomUrl, dailyToken, callType, callStatus, user?.avatarUrl, join, cleanup]);
 
       return (
-            <div
-                  className="relative h-full w-full bg-gray-900 cursor-pointer"
-                  onClick={handleClick}
-            >
-                  {/* Quality indicator */}
-                  <div className="absolute left-3 top-3 z-10">
-                        <QualityIndicator quality={connectionQuality} />
-                  </div>
+            <div className="relative h-full w-full bg-gray-900 overflow-hidden flex flex-col">
+                  {/* Container for Daily Prebuilt iframe */}
+                  <div 
+                        ref={containerRef} 
+                        className="flex-1 w-full h-full min-h-0"
+                  />
 
-                  {/* Participant grid */}
-                  <div className={`grid h-full w-full gap-1 p-1 ${getGridClass(sorted.length)}`}>
-                        {sorted.map((participant) => (
-                              <ParticipantTile
-                                    key={participant.sessionId}
-                                    participant={participant}
-                                    youLabel={t('call.youLabel')}
-                              />
-                        ))}
-                  </div>
-
-                  {/* Empty state */}
-                  {participants.length === 0 && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="text-white/60 text-lg">
+                  {/* Loading state if not yet joined */}
+                  {!dailyRoomUrl && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+                              <div className="text-white/60 text-lg animate-pulse">
                                     {t('call.dailyConnecting')}
                               </div>
                         </div>
@@ -161,3 +72,5 @@ export function DailyCallView() {
             </div>
       );
 }
+
+DailyCallView.displayName = 'DailyCallView';

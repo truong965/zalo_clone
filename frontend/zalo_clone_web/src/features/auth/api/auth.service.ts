@@ -6,7 +6,7 @@
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import api from '@/lib/axios';
-import type { LoginRequest, RegisterRequest, User } from '@/types/api';
+import type { LoginRequest, RegisterRequest, User, ForgotPasswordRequest, VerifyOtpRequest, ResetPasswordRequest, ChangePasswordRequest } from '@/types/api';
 
 // ============================================================================
 // TYPES
@@ -126,6 +126,14 @@ export const authService = {
       },
 
       /**
+       * Update current user profile
+       */
+      async updateProfile(id: string, payload: Partial<User>) {
+            const response = await api.patch(API_ENDPOINTS.USERS.UPDATE_PROFILE(id), payload);
+            return response.data.data as User;
+      },
+
+      /**
        * Get all active sessions for current user
        */
       async getSessions() {
@@ -195,5 +203,33 @@ export const authService = {
       clearAuthData() {
             localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
             localStorage.removeItem(STORAGE_KEYS.EXPIRES_IN);
+      },
+
+      /**
+       * Forgot password - request OTP
+       */
+      async forgotPassword(payload: ForgotPasswordRequest) {
+            await api.post(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, payload);
+      },
+
+      /**
+       * Verify OTP
+       */
+      async verifyOtp(payload: VerifyOtpRequest) {
+            await api.post(API_ENDPOINTS.AUTH.VERIFY_OTP, payload);
+      },
+
+      /**
+       * Reset password
+       */
+      async resetPassword(payload: ResetPasswordRequest) {
+            await api.post(API_ENDPOINTS.AUTH.RESET_PASSWORD, payload);
+      },
+
+      /**
+       * Change password
+       */
+      async changePassword(payload: ChangePasswordRequest) {
+            await api.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, payload);
       },
 };

@@ -69,12 +69,17 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      // Skip refresh for auth endpoints (login, register, refresh)
+      // Skip refresh for auth endpoints (login, register)
+      // These are handled by the page logic, don't redirect/reload
       if (
         originalRequest.url?.includes('/auth/login') ||
-        originalRequest.url?.includes('/auth/register') ||
-        originalRequest.url?.includes('/auth/refresh')
+        originalRequest.url?.includes('/auth/register')
       ) {
+        return Promise.reject(ApiError.from(error));
+      }
+
+      // If refresh itself fails with 401, redirect to login
+      if (originalRequest.url?.includes('/auth/refresh')) {
         redirectToLogin();
         return Promise.reject(ApiError.from(error));
       }

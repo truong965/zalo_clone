@@ -48,8 +48,11 @@ export function IncomingCallOverlay() {
             const { callId } = useCallStore.getState();
             if (!callId) return;
 
-            // Dispatch reject event for CallManager
+            // Dispatch reject event for CallManager first
+            // This ensures webrtc.rejectCall() can read the callId before it's cleared
             window.dispatchEvent(new CustomEvent('call:reject-incoming'));
+            
+            // Then reset state (stops tracks, clears callId, hides overlay)
             resetCallState();
       }, [resetCallState]);
 

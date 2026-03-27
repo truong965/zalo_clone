@@ -12,9 +12,12 @@ socketManager.init({
       onLogout: () => useAuthStore.getState().logout(),
       onReset: () => useAuthStore.getState().reset(),
       onError: (message: string) => {
+            const description = message === 'answered_elsewhere' 
+                 ? 'Cuộc gọi đã được trả lời trên thiết bị khác' 
+                 : message;
             notification.error({
-                  message: 'Lỗi kết nối',
-                  description: message,
+                  message: 'Thông báo',
+                  description,
                   placement: 'topRight',
             });
       },

@@ -39,13 +39,21 @@ export function useFriendRequestStatus(otherUserId: string | null) {
       const cancelRequest = useCancelRequest();
 
       const requestSentByMe = useMemo<FriendRequestWithUserDto | null>(() => {
-            if (!otherUserId) return null;
-            return sentRequests.data?.find((r) => r.target.userId === otherUserId) ?? null;
+            if (!otherUserId || !sentRequests.data) return null;
+            return (
+                  sentRequests.data.pages
+                        .flatMap((page) => page.data)
+                        .find((r) => r.target.userId === otherUserId) ?? null
+            );
       }, [otherUserId, sentRequests.data]);
 
       const requestReceivedFromOther = useMemo<FriendRequestWithUserDto | null>(() => {
-            if (!otherUserId) return null;
-            return receivedRequests.data?.find((r) => r.requester.userId === otherUserId) ?? null;
+            if (!otherUserId || !receivedRequests.data) return null;
+            return (
+                  receivedRequests.data.pages
+                        .flatMap((page) => page.data)
+                        .find((r) => r.requester.userId === otherUserId) ?? null
+            );
       }, [otherUserId, receivedRequests.data]);
 
       const isFriend = friendshipStatus === 'ACCEPTED';

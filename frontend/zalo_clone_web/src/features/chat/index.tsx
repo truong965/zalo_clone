@@ -18,6 +18,7 @@ import { ChatContent } from './components/chat-content';
 import { ReplyPreviewBar } from './components/reply-preview-bar';
 import { PinnedMessagesBanner } from './components/pinned-messages-banner';
 import { MediaBrowserPanel } from './components/media-browser-panel';
+import { ActiveGroupCallBanner } from './components/ActiveGroupCallBanner';
 
 // ── Cross-feature components (rendered by page-level host) ───────────────
 import { FriendshipSearchModal } from '@/features/contacts';
@@ -42,6 +43,10 @@ import { useMarkAsSeen } from './hooks/use-mark-as-seen';
 import { useTypingIndicator, useHandleTypingChange } from './hooks/use-typing-indicator';
 import { useConversationListMutations } from './hooks/use-conversation-list-mutations';
 import { useConversationLoader } from './hooks/use-conversation-loader';
+
+// ── Call feature ─────────────────────────────────────────────────────────
+import { getActiveCall } from '@/features/call/api/call.api';
+import { useCallStore } from '@/features/call/stores/call.store';
 
 // ── Store ────────────────────────────────────────────────────────────────
 import { useChatStore } from './stores/chat.store';
@@ -203,6 +208,18 @@ export function ChatFeature() {
             [pinnedMessages],
       );
 
+      // ── Phase 3: Active call sync on conversation switch ────────────────
+      const { setActiveGroupCall, callStatus } = useCallStore();
+
+      useEffect(() => {
+            if (!selectedId || !selectedId.includes(':')) { // Basic check if it's a UUID or custom ID (groups usually have UUIDs)
+                  // Actually safer to check selectedConversation?.type
+            }
+            if (selectedId && selectedId.length > 0) {
+                  // Logic below handles type check
+            }
+      }, [selectedId]);
+
       // ── Hook: messages ───────────────────────────────────────────────────
       const {
             messages,
@@ -241,8 +258,6 @@ export function ChatFeature() {
       const { typingText, onTypingStatus } = useTypingIndicator({ currentUserId });
 
       // ── Bug 1 fix: factory to derive the correct messages query key for any conversationId.
-      // useMessageSocket uses this to apply receipt updates to the right conversation cache,
-      // even when the user has switched away from the conversation that owns the message.
       const buildMessagesQueryKey = useCallback(
             (cid: string) => ['messages', { conversationId: cid, limit: 50 }] as const,
             [],
@@ -299,11 +314,6 @@ export function ChatFeature() {
                   if (!msg.mediaAttachments) continue;
                   for (const a of msg.mediaAttachments) {
                         const isPending = !DONE_STATUSES.has(a.processingStatus);
-                        // Bug 2 fix: also keep watching READY videos/images that still lack a thumbnail.
-                        // The backend marks processingStatus=READY immediately after upload, but the
-                        // media worker generates thumbnails asynchronously. Without this, pendingMediaIds
-                        // excludes these attachments and no socket listener is registered, so the
-                        // thumbnail update from the worker is never applied (requires F5).
                         const isReadyWithoutThumb =
                               a.processingStatus === 'READY' &&
                               !a.thumbnailUrl &&
@@ -316,12 +326,6 @@ export function ChatFeature() {
             return ids;
       }, [messages]);
 
-      // DEBUG: Log pending media files
-      if (pendingMediaIds.length > 0) {
-            console.log('🎬 [Chat] Pending media files (PROCESSING):', pendingMediaIds);
-            console.log('📊 [Chat] Total pending media:', pendingMediaIds.length);
-      }
-
       useMediaProgress({ messagesQueryKey, mediaIds: pendingMediaIds });
 
       // ── Hook: conversation loader (search result / deep link) ────────────
@@ -330,6 +334,29 @@ export function ChatFeature() {
             conversations,
             prependConversation,
       });
+
+      // Phase 3: Sync active call on conversation change
+      useEffect(() => {
+            if (selectedId && selectedConversation?.type === 'GROUP') {
+                  const sync = async () => {
+                        try {
+                              // Phase 9: Add a small delay to allow backend to process hangup event
+                              // This prevents a race condition where sync() hits backend before user is removed from session
+                              if (callStatus === 'IDLE') {
+                                    await new Promise(resolve => setTimeout(resolve, 300));
+                              }
+                              
+                              const res = await getActiveCall(selectedId);
+                              console.log("res active", res);
+                              // Phase 6 & 9: res is now already unwrapped by call.api.ts
+                              setActiveGroupCall(selectedId, res.active, res.dailyRoomUrl);
+                        } catch (e) {
+                              console.warn('Failed to sync active call:', e);
+                        }
+                  };
+                  void sync();
+            }
+      }, [selectedId, selectedConversation?.type, setActiveGroupCall, callStatus]);
 
       // ── Messages infinite scroll (older + newer) ────────────────────────
       const msgHasMore = messagesQuery.hasNextPage;
@@ -434,6 +461,12 @@ export function ChatFeature() {
                                                 onToggleInfo={() => setRightSidebar((prev) => prev === 'info' ? 'none' : 'info')}
                                           />
 
+                                          <ActiveGroupCallBanner
+                                                conversationId={selectedConversation.id}
+                                                displayName={selectedConversation.name || 'Hội thoại'}
+                                                avatarUrl={selectedConversation.avatar ?? null}
+                                          />
+
                                           <PinnedMessagesBanner
                                                 pinnedMessages={pinnedMessages ?? []}
                                                 onJumpToMessage={(msgId) => void jumpToMessage(msgId)}
@@ -520,8 +553,6 @@ export function ChatFeature() {
                                     onClose={() => setRightSidebar('none')}
                                     onOpenMediaBrowser={handleOpenMediaBrowser}
                                     onLeaveGroup={() => {
-                                          // Immediately remove from cache + clear selection
-                                          // to prevent stale API calls (members, messages, message:seen)
                                           if (selectedId) removeConversation(selectedId);
                                           setSelectedId(null);
                                           setRightSidebar('none');

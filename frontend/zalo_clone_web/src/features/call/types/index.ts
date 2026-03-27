@@ -29,7 +29,8 @@ export type CallEndReason =
   | 'TIMEOUT'
   | 'NETWORK_DROP'
   | 'NO_ANSWER'
-  | 'CANCEL';
+  | 'CANCEL'
+  | 'answered_elsewhere'; // Phase 5: M1
 
 export type CallHistoryStatus = 'COMPLETED' | 'MISSED' | 'REJECTED' | 'CANCELLED' | 'NO_ANSWER' | 'FAILED';
 
@@ -112,6 +113,14 @@ export interface IceCandidateRelayPayload {
   fromUserId: string;
 }
 
+/** Phase 5: W5 - Payload for `call:ice-restart` */
+export interface CallIceRestartPayload {
+  callId: string;
+  fromUserId?: string;
+  iceServers?: IceServerConfig[];
+  iceTransportPolicy?: RTCIceTransportPolicy;
+}
+
 /** Payload for `call:caller-disconnected` */
 export interface CallerDisconnectedPayload {
   callId: string;
@@ -135,6 +144,8 @@ export interface ParticipantJoinedPayload {
   callId: string;
   userId: string;
   displayName: string;
+  /** Phase 5: L5 - Initial media state for late joiners */
+  mediaState?: Record<string, { audioEnabled?: boolean; videoEnabled?: boolean }>;
 }
 
 /** Payload for `call:participant-left` (group call) */

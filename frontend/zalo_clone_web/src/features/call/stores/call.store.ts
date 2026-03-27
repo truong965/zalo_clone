@@ -42,7 +42,6 @@ interface CallStoreState {
       // ── Controls ──────────────────────────────────────────────────────────
       isMuted: boolean;
       isCameraOff: boolean;
-      isSpeakerOn: boolean;
 
       // ── Connection ────────────────────────────────────────────────────────
       connectionQuality: ConnectionQuality;
@@ -71,6 +70,16 @@ interface CallStoreState {
       // ── Group Call (Phase 4.4) ─────────────────────────────────────────────
       /** True when >1 receiver (always uses Daily.co) */
       isGroupCall: boolean;
+
+      // ── Peer media state (cross-platform sync) ──────────────────────────
+      /** Remote peer's camera state (synced via call:media-state event) */
+      peerCameraOff: boolean;
+      /** Remote peer's mute state (synced via call:media-state event) */
+      peerMuted: boolean;
+
+      // ── Group call re-join tracking (Phase 3 & Phase 5) ──────────────────
+      /** Map of conversationId -> Context state for floating banner to consume */
+      activeGroupCalls: Record<string, { active: boolean; roomUrl?: string }>;
 }
 
 // ============================================================================
@@ -85,6 +94,7 @@ interface CallStoreActions {
             peerInfo: PeerInfo;
             conversationId: string | null;
             isGroupCall?: boolean;
+            initialCameraOff?: boolean;
       }) => void;
 
       /** Callee receives an incoming call */
@@ -95,6 +105,8 @@ interface CallStoreActions {
             callId?: string;
             iceServers?: IceServerConfig[];
             iceTransportPolicy?: RTCIceTransportPolicy;
+            initialMuted?: boolean;
+            initialCameraOff?: boolean;
       }) => void;
 
       /** Caller received call:accepted — store ICE config */
@@ -115,9 +127,6 @@ interface CallStoreActions {
 
       /** Toggle camera on/off */
       toggleCamera: () => void;
-
-      /** Toggle speaker (for future mobile support) */
-      toggleSpeaker: () => void;
 
       /** Explicitly set camera off state (used by Daily.co hook on join) */
       setCameraOff: (off: boolean) => void;
@@ -144,6 +153,7 @@ interface CallStoreActions {
 
       /** Switch provider to Daily.co and set room info */
       switchToDaily: (params: {
+            callId: string;
             roomUrl: string;
             token: string;
       }) => void;
@@ -156,6 +166,12 @@ interface CallStoreActions {
 
       /** Set callId after receiving server acknowledgment from call:initiate */
       setCallId: (callId: string) => void;
+
+      /** Update peer media state from call:media-state signaling event */
+      setPeerMediaState: (cameraOff: boolean, muted: boolean) => void;
+
+      /** Update active status of a group call for a specific conversation (Phase 3/5) */
+      setActiveGroupCall: (conversationId: string, isActive: boolean, roomUrl?: string) => void;
 }
 
 // ============================================================================
@@ -174,7 +190,6 @@ const initialState: CallStoreState = {
       remoteStream: null,
       isMuted: false,
       isCameraOff: false,
-      isSpeakerOn: true,
       connectionQuality: 'GOOD',
       callDuration: 0,
       iceServers: [],
@@ -186,6 +201,9 @@ const initialState: CallStoreState = {
       dailyToken: null,
       dailyParticipants: [],
       isGroupCall: false,
+      peerCameraOff: false,
+      peerMuted: false,
+      activeGroupCalls: {},
 };
 
 // ============================================================================
@@ -197,7 +215,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
 
       // ── Actions ───────────────────────────────────────────────────────────
 
-      startDialing: ({ callType, peerId, peerInfo, conversationId, isGroupCall }) =>
+      startDialing: ({ callType, peerId, peerInfo, conversationId, isGroupCall, initialCameraOff }) =>
             set({
                   callStatus: 'DIALING',
                   callType,
@@ -206,6 +224,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   conversationId,
                   provider: isGroupCall ? 'DAILY_CO' : 'WEBRTC_P2P',
                   isGroupCall: isGroupCall ?? false,
+                  isCameraOff: initialCameraOff ?? (callType === 'VOICE'),
                   error: null,
             }),
 
@@ -225,6 +244,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   iceServers: data.iceServers,
                   iceTransportPolicy: data.iceTransportPolicy,
                   isGroupCall: data.isGroupCall ?? false,
+                  isCameraOff: data.callType === 'VOICE',
                   // Store Daily.co info for group calls (received at incoming time)
                   dailyRoomUrl: data.dailyRoomUrl ?? null,
                   dailyToken: data.dailyToken ?? null,
@@ -232,27 +252,45 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
             }),
 
       setCallActive: (params) =>
-            set((state) => ({
-                  callStatus: 'ACTIVE',
-                  callDuration: 0,
-                  incomingCall: null,
-                  ...(params?.callId ? { callId: params.callId } : {}),
-                  ...(params?.iceServers ? { iceServers: params.iceServers } : {}),
-                  ...(params?.iceTransportPolicy
-                        ? { iceTransportPolicy: params.iceTransportPolicy }
-                        : {}),
-                  // Keep existing state fields that weren't provided
-                  callType: state.callType,
-            })),
+            set((state) => {
+                  // Guard: prevent activating an IDLE/ended call state
+                  if (state.callStatus === 'IDLE' && !params?.callId) {
+                        return state;
+                  }
+
+                  // Guard: if params.callId is provided, and we already have a different callId, abort
+                  if (params?.callId && state.callId && params.callId !== state.callId) {
+                        return state;
+                  }
+
+                  return {
+                        ...state, // Preserve existing state (like iceServers if not provided here)
+                        callStatus: 'ACTIVE',
+                        incomingCall: null,
+                        isMuted: params?.initialMuted ?? state.isMuted,
+                        isCameraOff: params?.initialCameraOff ?? state.isCameraOff,
+                        ...(params?.callId ? { callId: params.callId } : {}),
+                        ...(params?.iceServers ? { iceServers: params.iceServers } : {}),
+                        ...(params?.iceTransportPolicy ? { iceTransportPolicy: params.iceTransportPolicy } : {}),
+                  };
+            }),
 
       setCallAccepted: ({ callId, iceServers, iceTransportPolicy }) =>
-            set({
-                  callId,
-                  callStatus: 'ACTIVE',
-                  callDuration: 0,
-                  iceServers,
-                  iceTransportPolicy,
-                  incomingCall: null,
+            set((state) => {
+                  // Guard: prevent late acceptance from re-activating an idle state
+                  if (state.callStatus === 'IDLE' || (state.callId && state.callId !== callId)) {
+                        return state;
+                  }
+
+                  return {
+                        ...state,
+                        callId,
+                        callStatus: 'ACTIVE',
+                        callDuration: 0,
+                        iceServers,
+                        iceTransportPolicy,
+                        incomingCall: null,
+                  };
             }),
 
       setLocalStream: (stream) => set({ localStream: stream }),
@@ -264,7 +302,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   // Immediately toggle audio tracks on the local stream
                   if (state.localStream) {
                         for (const track of state.localStream.getAudioTracks()) {
-                              track.enabled = !next;
+                               track.enabled = !next;
                         }
                   }
                   return { isMuted: next };
@@ -275,13 +313,11 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   const next = !state.isCameraOff;
                   if (state.localStream) {
                         for (const track of state.localStream.getVideoTracks()) {
-                              track.enabled = !next;
+                               track.enabled = !next;
                         }
                   }
                   return { isCameraOff: next };
             }),
-
-      toggleSpeaker: () => set((state) => ({ isSpeakerOn: !state.isSpeakerOn })),
 
       setCameraOff: (off) => set({ isCameraOff: off }),
 
@@ -296,21 +332,33 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   // Stop all local tracks before resetting
                   if (state.localStream) {
                         for (const track of state.localStream.getTracks()) {
-                              track.stop();
+                               track.stop();
                         }
                   }
-                  return { ...initialState };
+                  return {
+                        ...initialState,
+                        activeGroupCalls: state.activeGroupCalls, // Preserve active calls map
+                  };
             }),
 
       // ── Daily.co (Phase 4) ────────────────────────────────────────────
 
-      switchToDaily: ({ roomUrl, token }) =>
-            set({
-                  provider: 'DAILY_CO',
-                  dailyRoomUrl: roomUrl,
-                  dailyToken: token,
-                  callStatus: 'ACTIVE',
-                  connectionQuality: 'GOOD',
+      switchToDaily: ({ callId, roomUrl, token }) =>
+            set((state) => {
+                  // Guard: prevent provider switch if call ended
+                  if (state.callStatus === 'IDLE' || (state.callId && state.callId !== callId)) {
+                        return state;
+                  }
+
+                  return {
+                        ...state,
+                        callId,
+                        provider: 'DAILY_CO',
+                        dailyRoomUrl: roomUrl,
+                        dailyToken: token,
+                        callStatus: 'ACTIVE',
+                        connectionQuality: 'GOOD',
+                  };
             }),
 
       setDailyParticipants: (participants) =>
@@ -319,4 +367,17 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
       setProvider: (provider) => set({ provider }),
 
       setCallId: (callId) => set({ callId }),
+
+      setPeerMediaState: (cameraOff, muted) => set({ peerCameraOff: cameraOff, peerMuted: muted }),
+
+      setActiveGroupCall: (conversationId, isActive, roomUrl) =>
+            set((state) => ({
+                  activeGroupCalls: {
+                        ...state.activeGroupCalls,
+                        [conversationId]: { 
+                              active: isActive, 
+                              roomUrl: roomUrl || state.activeGroupCalls[conversationId]?.roomUrl 
+                        },
+                  },
+            })),
 }));

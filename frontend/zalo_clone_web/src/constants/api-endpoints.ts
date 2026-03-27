@@ -18,13 +18,17 @@ export const API_ENDPOINTS = {
     QR_GENERATE: '/api/v1/auth/qr/generate',
     QR_STATUS: (qrSessionId: string) => `/api/v1/auth/qr/status/${qrSessionId}`,
     QR_EXCHANGE: '/api/v1/auth/qr/exchange',
+    FORGOT_PASSWORD: '/api/v1/auth/forgot-password',
+    VERIFY_OTP: '/api/v1/auth/verify-otp',
+    RESET_PASSWORD: '/api/v1/auth/reset-password',
+    CHANGE_PASSWORD: '/api/v1/auth/change-password',
   },
 
   // Users
   USERS: {
     GET_BY_ID: (id: string) => `/api/v1/users/${id}`,
     GET_PROFILE: '/api/v1/users/profile',
-    UPDATE_PROFILE: '/api/v1/users/profile',
+    UPDATE_PROFILE: (id: string) => `/api/v1/users/${id}`,
     UPLOAD_AVATAR: '/api/v1/users/avatar',
     SEARCH: '/api/v1/users/search',
   },
@@ -91,6 +95,7 @@ export const API_ENDPOINTS = {
     MISSED_COUNT: '/api/v1/calls/missed',
     MARK_MISSED_VIEWED: '/api/v1/calls/missed/view-all',
     DELETE: (id: string) => `/api/v1/calls/history/${id}`,
+    ACTIVE: (conversationId: string) => `/api/v1/calls/active/${conversationId}`,
   },
 
   // Notifications

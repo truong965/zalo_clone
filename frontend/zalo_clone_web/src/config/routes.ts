@@ -9,6 +9,7 @@ export const ROUTES = {
       // --- Auth ---
       LOGIN: '/login',
       REGISTER: '/register',
+      FORGOT_PASSWORD: '/forgot-password',
 
       // --- Client app ---
       HOME: '/chat',

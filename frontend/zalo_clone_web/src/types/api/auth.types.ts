@@ -76,6 +76,7 @@ export interface User {
       bio?: string;
       dateOfBirth?: string;
       gender?: Gender;
+      email?: string;
       status: UserStatus;
       passwordHash?: string;
       passwordVersion?: number;
@@ -180,4 +181,24 @@ export interface AuthResponse {
       accessToken: string;
       refreshToken: string;
       user: User;
+}
+
+export interface ForgotPasswordRequest {
+      email: string;
+}
+
+export interface VerifyOtpRequest {
+      email: string;
+      otp: string;
+}
+
+export interface ResetPasswordRequest {
+      email: string;
+      otp: string;
+      newPassword: string;
+}
+
+export interface ChangePasswordRequest {
+      oldPassword: string;
+      newPassword: string;
 }

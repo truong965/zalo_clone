@@ -9,6 +9,7 @@ import { useAppStore } from '@/stores/use-app-store';
 import { queryClient } from '@/lib/query-client';
 import viVN from 'antd/locale/vi_VN';
 import enUS from 'antd/locale/en_US';
+import { Toaster } from 'sonner';
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -54,6 +55,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       >
         {children}
       </ConfigProvider>
+      <Toaster richColors position="top-right" expand={true} />
     </QueryClientProvider>
   );
 }

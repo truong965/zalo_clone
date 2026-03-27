@@ -1,7 +1,7 @@
 /**
  * CallScreen — Compound component for the full-screen call view.
  *
- * Renders VoiceCallView, VideoCallView, or DailyCallView based on
+ * Renders VideoCallView or DailyCallView based on
  * callType and provider.
  * Includes CallControls, QualityIndicator, ReconnectingOverlay.
  *
@@ -13,16 +13,16 @@
 import { useEffect, useCallback } from 'react';
 import { useCallStore } from '../stores/call.store';
 import { VideoCallView } from './VideoCallView';
-import { VoiceCallView } from './VoiceCallView';
 import { DailyCallView } from './DailyCallView';
 import { CallControls } from './CallControls';
 import { ReconnectingOverlay } from './ReconnectingOverlay';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 export function CallScreen() {
       const callStatus = useCallStore((s) => s.callStatus);
-      const callType = useCallStore((s) => s.callType);
       const provider = useCallStore((s) => s.provider);
       const { t } = useTranslation();
+      const navigate = useNavigate();
 
       // ── Hangup handler (dispatches to CallManager) ──────────────────────
       const handleHangup = useCallback(() => {
@@ -50,6 +50,16 @@ export function CallScreen() {
             };
       }, [callStatus]);
 
+      // ── Auto-navigate away when call ends ───────────────────────────────
+      useEffect(() => {
+            if (callStatus === 'IDLE' || callStatus === 'ENDED') {
+                  const timer = setTimeout(() => {
+                        navigate('/');
+                  }, 2000);
+                  return () => clearTimeout(timer);
+            }
+      }, [callStatus, navigate]);
+
       // If no active call, render nothing (fallback)
       if (callStatus === 'IDLE' || callStatus === 'ENDED') {
             return (
@@ -66,10 +76,8 @@ export function CallScreen() {
                   <div className="flex-1 overflow-hidden">
                         {provider === 'DAILY_CO' ? (
                               <DailyCallView />
-                        ) : callType === 'VIDEO' ? (
-                              <VideoCallView />
                         ) : (
-                              <VoiceCallView />
+                              <VideoCallView />
                         )}
                   </div>
 
@@ -78,10 +86,12 @@ export function CallScreen() {
                         <ReconnectingOverlay onHangup={handleHangup} />
                   )}
 
-                  {/* ── Controls bar (flex, non-overlapping) ──────────────────── */}
-                  <div className="shrink-0 bg-gray-900/95">
-                        <CallControls onHangup={handleHangup} />
-                  </div>
+                  {/* ── Controls bar (hidden for Daily Prebuilt) ──────────── */}
+                  {provider !== 'DAILY_CO' && (
+                        <div className="shrink-0 bg-gray-900/95">
+                              <CallControls onHangup={handleHangup} />
+                        </div>
+                  )}
             </div>
       );
 }

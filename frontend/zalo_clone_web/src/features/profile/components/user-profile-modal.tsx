@@ -14,11 +14,13 @@ interface UserProfileModalProps {
       onClose: () => void;
 }
 
-async function uploadAvatarFile(file: File): Promise<string> {
+async function uploadAvatarFile(file: File, options?: { targetId?: string; targetType?: 'USER' | 'GROUP' }): Promise<string> {
       const { data: initRes } = await apiClient.post(API_ENDPOINTS.MEDIA.UPLOAD_AVATAR, {
             fileName: file.name,
             mimeType: file.type,
             fileSize: file.size,
+            targetId: options?.targetId,
+            targetType: options?.targetType,
       });
 
       const { presignedUrl, fileUrl } = initRes.data;
@@ -81,15 +83,21 @@ export function UserProfileModal({ open, onClose }: UserProfileModalProps) {
 
             try {
                   setLoading(true);
-                  const avatarUrl = await uploadAvatarFile(file);
-                  await patchProfile({ avatarUrl });
+                  if (!user) return;
+                  await uploadAvatarFile(file, {
+                        targetId: user.id,
+                        targetType: 'USER',
+                  });
+                  // Backend now updates the DB via event on upload initiation
+                  // We just need to refresh the local profile state
+                  await getProfile();
                   notification.success({ message: t('profile.avatarSuccess') });
             } catch {
                   notification.error({ message: t('profile.avatarFail') });
             } finally {
                   setLoading(false);
             }
-      }, [patchProfile]);
+      }, [user, getProfile, t]);
 
       if (!user) return null;
 

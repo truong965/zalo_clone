@@ -230,11 +230,13 @@ export function GroupInfoContent({
             invalidateDetail(conversationId);
       };
 
-      async function uploadGroupAvatarFile(file: File): Promise<string> {
+      async function uploadGroupAvatarFile(file: File, options?: { targetId?: string; targetType?: 'USER' | 'GROUP' }): Promise<string> {
             const { data: initRes } = await apiClient.post(API_ENDPOINTS.MEDIA.UPLOAD_AVATAR, {
                   fileName: file.name,
                   mimeType: file.type,
                   fileSize: file.size,
+                  targetId: options?.targetId,
+                  targetType: options?.targetType,
             });
 
             const { presignedUrl, fileUrl } = initRes.data;
@@ -254,8 +256,11 @@ export function GroupInfoContent({
 
       const handleUpdateGroupAvatar = useCallback(async (file: File) => {
             try {
-                  const avatarUrl = await uploadGroupAvatarFile(file);
-                  await updateGroup(conversationId, { avatarUrl: avatarUrl });
+                  await uploadGroupAvatarFile(file, {
+                        targetId: conversationId,
+                        targetType: 'GROUP',
+                  });
+                  // Backend now updates the DB via event on upload initiation
                   invalidateDetail(conversationId);
                   notification.success({ message: 'Cập nhật ảnh đại diện nhóm thành công' });
             } catch (error: any) {

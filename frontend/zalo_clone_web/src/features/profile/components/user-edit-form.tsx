@@ -19,6 +19,7 @@ export function UserEditForm({ user, onCancel, onSave, loading }: UserEditFormPr
       // Map data từ user vào form
       const initialValues = {
             displayName: user.displayName,
+            email: user.email,
             gender: user.gender || Gender.MALE,
             dateOfBirth: user.dateOfBirth ? dayjs(user.dateOfBirth) : null,
       };
@@ -48,6 +49,25 @@ export function UserEditForm({ user, onCancel, onSave, loading }: UserEditFormPr
                                     rules={[{ required: true, message: t('profile.formDisplayNameRequired') }]}
                               >
                                     <Input placeholder={t('profile.formDisplayNamePlaceholder')} />
+                              </Form.Item>
+
+                              {/* Email */}
+                              <Form.Item
+                                    label={t('profile.formEmail')}
+                                    name="email"
+                                    rules={[
+                                          { type: 'email', message: t('profile.formEmailInvalid') },
+                                          {
+                                                validator: (_, value) => {
+                                                      if (!value || value.endsWith('@gmail.com')) {
+                                                            return Promise.resolve();
+                                                      }
+                                                      return Promise.reject(new Error(t('profile.formEmailGmailOnly')));
+                                                },
+                                          },
+                                    ]}
+                              >
+                                    <Input placeholder={t('profile.formEmailPlaceholder')} />
                               </Form.Item>
 
                               {/* Giới tính - Dùng Radio giống ảnh mẫu */}

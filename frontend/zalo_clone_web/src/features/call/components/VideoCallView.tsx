@@ -14,17 +14,24 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useCallStore } from '../stores/call.store';
 import { QualityIndicator } from './QualityIndicator';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/features/auth';
+import { getFullUrl } from '@/utils/url';
+import { UserOutlined } from '@ant-design/icons';
 export function VideoCallView() {
       const { t } = useTranslation();
       const localStream = useCallStore((s) => s.localStream);
       const remoteStream = useCallStore((s) => s.remoteStream);
       const connectionQuality = useCallStore((s) => s.connectionQuality);
       const isCameraOff = useCallStore((s) => s.isCameraOff);
+      const peerCameraOff = useCallStore((s) => s.peerCameraOff);
       const peerInfo = useCallStore((s) => s.peerInfo);
+      const user = useAuthStore((s) => s.user);
       const [showControls, setShowControls] = useState(true);
 
       // Detect if remote peer has their video tracks disabled
       const [remoteVideoOff, setRemoteVideoOff] = useState(false);
+      const [peerAvatarError, setPeerAvatarError] = useState(false);
+      const [userAvatarError, setUserAvatarError] = useState(false);
 
       useEffect(() => {
             const checkVideoTracks = () => {
@@ -58,12 +65,15 @@ export function VideoCallView() {
       }, [remoteStream]);
 
       const remoteVideoRef = useRef<HTMLVideoElement>(null);
+      const remoteAudioRef = useRef<HTMLAudioElement>(null);
       const localVideoRef = useRef<HTMLVideoElement>(null);
 
-      // ── Attach streams to video elements ────────────────────────────────
       useEffect(() => {
             if (remoteVideoRef.current && remoteStream) {
                   remoteVideoRef.current.srcObject = remoteStream;
+            }
+            if (remoteAudioRef.current && remoteStream) {
+                  remoteAudioRef.current.srcObject = remoteStream;
             }
       }, [remoteStream]);
 
@@ -86,6 +96,15 @@ export function VideoCallView() {
             return () => clearTimeout(timer);
       }, [showControls]);
 
+      // ── Ensure video elements play when state changes ───────────────────
+      useEffect(() => {
+            if (!isCameraOff && localVideoRef.current) {
+                  localVideoRef.current.play().catch((err) => {
+                        console.warn('[VideoCallView] Failed to play local video:', err);
+                  });
+            }
+      }, [isCameraOff]);
+
       return (
             <div
                   className="relative h-full w-full bg-black cursor-pointer"
@@ -96,23 +115,32 @@ export function VideoCallView() {
                         ref={remoteVideoRef}
                         autoPlay
                         playsInline
-                        className={`h-full w-full object-cover ${remoteVideoOff || !remoteStream ? 'hidden' : ''}`}
+                        muted={remoteVideoOff} // Mute video element to rely solely on audio element for sound (prevents echo)
+                        className="h-full w-full object-cover"
+                  />
+
+                  {/* Remote audio fallback — dedicated element to prevent playback stalling when video track is disabled */}
+                  <audio
+                        ref={remoteAudioRef}
+                        autoPlay
+                        className="hidden"
                   />
 
                   {/* Remote camera off / waiting — show peer avatar */}
-                  {(!remoteStream || remoteVideoOff) && (
+                  {(!remoteStream || peerCameraOff || remoteVideoOff) && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900">
-                              {peerInfo?.avatarUrl ? (
+                              {getFullUrl(peerInfo?.avatarUrl) && !peerAvatarError ? (
                                     <img
-                                          src={peerInfo.avatarUrl}
-                                          alt={peerInfo.displayName}
+                                          src={getFullUrl(peerInfo?.avatarUrl)}
+                                          alt={peerInfo?.displayName}
                                           className="h-24 w-24 rounded-full object-cover ring-4 ring-white/20"
+                                          onError={() => setPeerAvatarError(true)}
                                     />
-                              ) : (
-                                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-blue-600 text-4xl font-bold text-white ring-4 ring-white/20">
-                                          {peerInfo?.displayName?.charAt(0).toUpperCase() ?? '?'}
+                               ) : (
+                                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-800 ring-4 ring-white/20">
+                                          <UserOutlined className="text-4xl text-white/40" />
                                     </div>
-                              )}
+                               ) }
                               <span className="text-white/80 text-sm">
                                     {!remoteStream
                                           ? t('call.waitingVideo')
@@ -128,15 +156,24 @@ export function VideoCallView() {
                               autoPlay
                               playsInline
                               muted
-                              className={`h-full w-full object-cover mirror ${isCameraOff ? 'hidden' : ''}`}
+                              className={`h-full w-full object-cover ${isCameraOff ? 'hidden' : ''}`}
                               style={{ transform: 'scaleX(-1)' }}
                         />
                         {/* Local camera off — show own avatar */}
                         {isCameraOff && (
-                              <div className="flex h-full w-full flex-col items-center justify-center gap-1">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white">
-                                          Bạn
-                                    </div>
+                              <div className="flex h-full w-full items-center justify-center bg-gray-800">
+                                    {getFullUrl(user?.avatarUrl) && !userAvatarError ? (
+                                          <img
+                                                src={getFullUrl(user?.avatarUrl)}
+                                                alt="Me"
+                                                className="h-16 w-16 rounded-full object-cover border-2 border-white/20"
+                                                onError={() => setUserAvatarError(true)}
+                                          />
+                                     ) : (
+                                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-700">
+                                                <UserOutlined className="text-2xl text-white/30" />
+                                          </div>
+                                    )}
                               </div>
                         )}
                   </div>

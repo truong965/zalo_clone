@@ -176,6 +176,12 @@ export function LoginPage() {
                       />
                     </Form.Item>
 
+                    <div className="flex justify-end mb-4">
+                      <Link to={ROUTES.FORGOT_PASSWORD} className="text-sm text-blue-600 hover:text-blue-700">
+                        {t('auth.login.forgotPassword') || 'Quên mật khẩu?'}
+                      </Link>
+                    </div>
+
                     <Form.Item>
                       <Button
                         type="primary"

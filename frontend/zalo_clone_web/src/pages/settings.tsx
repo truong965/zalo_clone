@@ -27,6 +27,7 @@ import {
       Button,
       Modal,
       Divider,
+      Checkbox,
 } from 'antd';
 import {
       BgColorsOutlined,
@@ -35,12 +36,20 @@ import {
       SaveOutlined,
       SoundOutlined,
       DesktopOutlined,
+      SafetyCertificateOutlined,
+      MailOutlined,
+      ExclamationCircleOutlined,
+      InfoCircleOutlined,
 } from '@ant-design/icons';
 import { NotificationSoundSection } from '@/features/notification/components/notification-sound-section';
 import { DeviceList } from '@/features/device';
 import { useAppStore } from '@/stores/use-app-store';
 import { usePrivacySettings, useUpdatePrivacySettings } from '@/features/privacy/api/privacy.api';
 import type { PrivacyLevel } from '@/features/privacy/types';
+import { useAuth } from '@/features/auth/hooks/use-auth';
+import { authService } from '@/features/auth/api/auth.service';
+import { Form, Input, notification } from 'antd';
+import { ApiError } from '@/lib/api-error';
 
 const { Sider, Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -64,7 +73,7 @@ function SettingRow({
       last = false,
 }: {
       label: string;
-      description?: string;
+      description?: React.ReactNode;
       control: React.ReactNode;
       last?: boolean;
 }) {
@@ -329,10 +338,220 @@ function PrivacySection() {
 }
 
 // ============================================================================
+// Section: Security
+// ============================================================================
+
+function SecuritySection() {
+      const { user, updateProfile } = useAuth();
+      const { t } = useTranslation();
+      const [api, contextHolder] = notification.useNotification();
+      const [isEmailModalVisible, setIsEmailModalVisible] = useState(false);
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [passwordForm] = Form.useForm();
+      const [emailForm] = Form.useForm();
+
+      const handleChangePassword = async (values: any) => {
+            try {
+                  setIsSubmitting(true);
+                  await authService.changePassword({
+                        oldPassword: values.oldPassword,
+                        newPassword: values.newPassword,
+                  });
+                  api.success({
+                        message: t('settings.security.passwordSuccess') || 'Thành công',
+                        description: t('settings.security.passwordSuccessDesc') || 'Mật khẩu đã được thay đổi.',
+                  });
+                  passwordForm.resetFields();
+            } catch (err) {
+                  api.error({
+                        message: t('settings.security.passwordError') || 'Lỗi',
+                        description: ApiError.from(err).message || 'Không thể đổi mật khẩu.',
+                  });
+            } finally {
+                  setIsSubmitting(false);
+            }
+      };
+
+      const handleUpdateEmail = async (values: { email: string }) => {
+            try {
+                  setIsSubmitting(true);
+                  await updateProfile({ email: values.email });
+                  api.success({
+                        message: t('settings.security.emailSuccess') || 'Thành công',
+                        description: t('settings.security.emailSuccessDesc') || 'Email đã được cập nhật.',
+                  });
+                  setIsEmailModalVisible(false);
+                  emailForm.resetFields();
+            } catch (err) {
+                  api.error({
+                        message: t('settings.security.emailError') || 'Lỗi',
+                        description: ApiError.from(err).message || 'Không thể cập nhật email.',
+                  });
+            } finally {
+                  setIsSubmitting(false);
+            }
+      };
+
+      return (
+            <div className="space-y-6">
+                  {contextHolder}
+                  <div>
+                        <Title level={4} className="!text-gray-900 dark:!text-white !mb-1">
+                              {t('settings.security.title') || 'Bảo mật'}
+                        </Title>
+                        <Paragraph className="!text-gray-500 dark:!text-gray-400 !text-sm !mb-0">
+                              {t('settings.security.description') || 'Quản lý mật khẩu và thông tin bảo mật của bạn.'}
+                        </Paragraph>
+                  </div>
+
+                  {/* Email Section */}
+                  <SectionCard>
+                        <SettingRow
+                              label="Email"
+                              description={user?.email || (
+                                    <span className="text-amber-500 flex items-center gap-1">
+                                          <ExclamationCircleOutlined /> {t('settings.security.noEmail') || 'Chưa cập nhật email'}
+                                    </span>
+                              )}
+                              last
+                              control={
+                                    <Button 
+                                          type="link" 
+                                          onClick={() => {
+                                                setIsEmailModalVisible(true);
+                                                emailForm.setFieldsValue({ email: user?.email });
+                                          }}
+                                    >
+                                          {user?.email ? (t('settings.security.changeEmail') || 'Đổi email') : (t('settings.security.addEmail') || 'Thêm email')}
+                                    </Button>
+                              }
+                        />
+                  </SectionCard>
+
+                  {!user?.email && (
+                        <div className="rounded-xl bg-amber-50 border border-amber-100 px-5 py-4">
+                              <Text className="text-xs text-amber-600">
+                                    ⚠️ {t('settings.security.emailWarning') || 'Vui lòng cập nhật email để có thể khôi phục mật khẩu khi cần thiết.'}
+                              </Text>
+                        </div>
+                  )}
+
+                  {/* Password Change Section */}
+                  <div className="mt-8">
+                        <Title level={5} className="!text-gray-800 dark:!text-gray-200 !mb-4">
+                              {t('settings.security.changePassword') || 'Đổi mật khẩu'}
+                        </Title>
+                        <SectionCard>
+                              <div className="p-6">
+                                    <Form
+                                          form={passwordForm}
+                                          layout="vertical"
+                                          onFinish={handleChangePassword}
+                                          requiredMark={false}
+                                    >
+                                          <Form.Item
+                                                label={t('settings.security.oldPassword') || 'Mật khẩu hiện tại'}
+                                                name="oldPassword"
+                                                rules={[{ required: true, message: t('settings.security.oldPasswordRequired') || 'Vui lòng nhập mật khẩu hiện tại' }]}
+                                          >
+                                                <Input.Password prefix={<LockOutlined />} placeholder="******" />
+                                          </Form.Item>
+                                          <Form.Item
+                                                label={t('settings.security.newPassword') || 'Mật khẩu mới'}
+                                                name="newPassword"
+                                                rules={[
+                                                      { required: true, message: t('settings.security.newPasswordRequired') || 'Vui lòng nhập mật khẩu mới' },
+                                                      { min: 6, message: t('settings.security.passwordMin') || 'Mật khẩu phải từ 6 ký tự' }
+                                                ]}
+                                          >
+                                                <Input.Password prefix={<LockOutlined />} placeholder="******" />
+                                          </Form.Item>
+                                          <Form.Item
+                                                label={t('settings.security.confirmPassword') || 'Xác nhận mật khẩu mới'}
+                                                name="confirmPassword"
+                                                dependencies={['newPassword']}
+                                                rules={[
+                                                      { required: true, message: t('settings.security.confirmPasswordRequired') || 'Vui lòng xác nhận mật khẩu mới' },
+                                                      ({ getFieldValue }) => ({
+                                                            validator(_, value) {
+                                                                  if (!value || getFieldValue('newPassword') === value) {
+                                                                        return Promise.resolve();
+                                                                  }
+                                                                  return Promise.reject(new Error(t('settings.security.passwordMismatch') || 'Mật khẩu xác nhận không khớp'));
+                                                            },
+                                                      }),
+                                                ]}
+                                          >
+                                                <Input.Password prefix={<LockOutlined />} placeholder="******" />
+                                          </Form.Item>
+                                          <Form.Item
+                                                name="logoutAllDevices"
+                                                valuePropName="checked"
+                                                initialValue={true}
+                                                className="mb-4"
+                                            >
+                                                <Checkbox>
+                                                      {t('settings.security.logoutAllDevices') || 'Đăng xuất khỏi tất cả các thiết bị khác'}
+                                                </Checkbox>
+                                          </Form.Item>
+                                          <Button type="primary" htmlType="submit" loading={isSubmitting} block>
+                                                {t('settings.security.updatePassword') || 'Cập nhật mật khẩu'}
+                                          </Button>
+                                    </Form>
+                                    <div className="mt-4 text-center">
+                                          <Text type="secondary" className="text-xs">
+                                                <InfoCircleOutlined className="mr-1" />
+                                                {t('settings.security.logoutInfo') || 'Hệ thống sẽ cập nhật phiên bản bảo mật để bảo vệ tài khoản của bạn.'}
+                                          </Text>
+                                    </div>
+                              </div>
+                        </SectionCard>
+                  </div>
+
+                  {/* Email Update Modal */}
+                  <Modal
+                        title={t('settings.security.updateEmailTitle') || 'Cập nhật Email'}
+                        open={isEmailModalVisible}
+                        onCancel={() => setIsEmailModalVisible(false)}
+                        footer={null}
+                        centered
+                  >
+                        <Form
+                              form={emailForm}
+                              layout="vertical"
+                              onFinish={handleUpdateEmail}
+                              initialValues={{ email: user?.email }}
+                              className="mt-4"
+                        >
+                              <Form.Item
+                                    label="Email"
+                                    name="email"
+                                    rules={[
+                                          { required: true, message: t('settings.security.emailRequired') || 'Vui lòng nhập email' },
+                                          { type: 'email', message: t('settings.security.emailInvalid') || 'Email không hợp lệ' }
+                                    ]}
+                              >
+                                    <Input prefix={<MailOutlined />} placeholder="example@gmail.com" />
+                              </Form.Item>
+                              <div className="flex justify-end gap-2 mt-6">
+                                    <Button onClick={() => setIsEmailModalVisible(false)}>
+                                          {t('settings.security.cancel') || 'Hủy'}
+                                    </Button>
+                                    <Button type="primary" htmlType="submit" loading={isSubmitting}>
+                                          {t('settings.security.save') || 'Lưu'}
+                                    </Button>
+                              </div>
+                        </Form>
+                  </Modal>
+            </div>
+      );
+}
+
+// ============================================================================
 // Section switcher (lazy — hooks only run for the active section)
 // ============================================================================
 
-type SectionKey = 'appearance' | 'language' | 'privacy' | 'notifications' | 'devices';
+type SectionKey = 'appearance' | 'language' | 'privacy' | 'security' | 'notifications' | 'devices';
 
 function ActiveSection({ activeKey }: { activeKey: SectionKey }) {
       switch (activeKey) {
@@ -342,6 +561,8 @@ function ActiveSection({ activeKey }: { activeKey: SectionKey }) {
                   return <LanguageSection />;
             case 'privacy':
                   return <PrivacySection />;
+            case 'security':
+                  return <SecuritySection />;
             case 'notifications':
                   return <NotificationSoundSection />;
             case 'devices':
@@ -361,6 +582,7 @@ export function SettingsPage() {
             { key: 'appearance' as SectionKey, icon: <BgColorsOutlined />, label: t('settings.menu.appearance') },
             { key: 'language' as SectionKey, icon: <GlobalOutlined />, label: t('settings.menu.language') },
             { key: 'privacy' as SectionKey, icon: <LockOutlined />, label: t('settings.menu.privacy') },
+            { key: 'security' as SectionKey, icon: <SafetyCertificateOutlined />, label: t('settings.menu.security') || 'Bảo mật' },
             { key: 'notifications' as SectionKey, icon: <SoundOutlined />, label: t('settings.menu.notifications') },
             { key: 'devices' as SectionKey, icon: <DesktopOutlined />, label: t('settings.menu.devices') },
       ];

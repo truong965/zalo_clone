@@ -25,6 +25,8 @@ import { useAuthStore } from '@/features/auth';
 import { useTranslation } from 'react-i18next';
 import { useFriendRequestStatus } from '@/features/contacts/hooks/use-friend-request-status';
 
+import { getActiveCall } from '@/features/call/api/call.api';
+
 const { Title } = Typography;
 
 interface ChatHeaderProps {
@@ -149,6 +151,29 @@ export function ChatHeader({
                         if (!conversationId) return;
                         setCallLoading(true);
                         try {
+                              // Check for an existing active call before initiating
+                              const activeCall = await getActiveCall(conversationId);
+                              if (activeCall.active) {
+                                    // Ask user if they want to join the existing call
+                                    Modal.confirm({
+                                          title: 'Cuộc gọi nhóm đang diễn ra',
+                                          content: `Nhóm đang có cuộc gọi với ${activeCall.participantCount ?? 0} người tham gia. Bạn có muốn tham gia không?`,
+                                          okText: 'Tham gia',
+                                          cancelText: 'Hủy',
+                                          onOk: () => {
+                                                window.dispatchEvent(
+                                                      new CustomEvent('call:join-existing', {
+                                                            detail: {
+                                                                  conversationId,
+                                                                  peerInfo,
+                                                            },
+                                                      }),
+                                                );
+                                          },
+                                    });
+                                    return;
+                              }
+
                               const members = await conversationApi.getConversationMembers(conversationId);
                               const receiverIds = members
                                     .map((m) => m.id)

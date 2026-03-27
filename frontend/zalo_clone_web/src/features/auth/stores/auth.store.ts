@@ -34,6 +34,7 @@ export interface AuthState {
       logout: () => Promise<void>;
       refreshToken: () => Promise<void>;
       getProfile: () => Promise<void>;
+      updateProfile: (payload: Partial<User>) => Promise<void>;
       getSessions: () => Promise<void>;
       revokeSession: (deviceId: string) => Promise<void>;
 
@@ -51,7 +52,7 @@ export interface AuthState {
 export const useAuthStore = create<AuthState>()(
       devtools(
             persist(
-                  (set) => ({
+                  (set, get) => ({
                         // ========== INITIAL STATE ==========
                         user: null,
                         isAuthenticated: authService.isAuthenticated(),
@@ -161,6 +162,23 @@ export const useAuthStore = create<AuthState>()(
                                     set({ user, isLoading: false });
                               } catch (error: unknown) {
                                     const errorMsg = ApiError.from(error).message || 'Failed to fetch profile';
+                                    set({ error: errorMsg, isLoading: false });
+                                    throw error;
+                              }
+                        },
+
+                        /**
+                         * Update current user profile
+                         */
+                        updateProfile: async (payload: Partial<User>) => {
+                              try {
+                                    const { user } = get();
+                                    if (!user) throw new Error('Unauthorized');
+                                    set({ isLoading: true, error: null });
+                                    const updatedUser = await authService.updateProfile(user.id, payload);
+                                    set({ user: updatedUser, isLoading: false });
+                              } catch (error: unknown) {
+                                    const errorMsg = ApiError.from(error).message || 'Failed to update profile';
                                     set({ error: errorMsg, isLoading: false });
                                     throw error;
                               }

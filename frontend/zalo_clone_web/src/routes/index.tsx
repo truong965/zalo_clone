@@ -13,6 +13,7 @@ import { PageSkeleton } from '@/components/shared/page-skeleton';
 // Auth Pages (lazy)
 const LoginPage = lazy(() => import('@/pages/login').then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('@/pages/register').then(m => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password').then(m => ({ default: m.ForgotPasswordPage })));
 
 // Client Pages (lazy)
 const ChatPage = lazy(() => import('@/pages/chat').then(m => ({ default: m.ChatPage })));
@@ -52,6 +53,16 @@ export const router = createBrowserRouter([
                   <ErrorBoundary>
                         <Suspense fallback={<PageSkeleton />}>
                               <RegisterPage />
+                        </Suspense>
+                  </ErrorBoundary>
+            ),
+      },
+      {
+            path: '/forgot-password',
+            element: (
+                  <ErrorBoundary>
+                        <Suspense fallback={<PageSkeleton />}>
+                              <ForgotPasswordPage />
                         </Suspense>
                   </ErrorBoundary>
             ),

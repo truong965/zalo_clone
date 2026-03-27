@@ -23,11 +23,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useCallStore } from '../stores/call.store';
 import type { useCallSocket } from './use-call-socket';
 import type {
-      CallType,
       SdpRelayPayload,
       IceCandidateRelayPayload,
       CallAcceptedPayload,
       IceServerConfig,
+      CallIceRestartPayload,
 } from '../types';
 
 // ============================================================================
@@ -187,6 +187,12 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                         const state = pc.iceConnectionState;
                         dbg('ICE connection state →', state);
 
+                        const store = useCallStore.getState();
+                        if (store.callStatus === 'IDLE' || store.callStatus === 'ENDED') {
+                              dbg('Ignoring ICE state change because call is inactive');
+                              return;
+                        }
+
                         switch (state) {
                               case 'connected':
                               case 'completed':
@@ -310,15 +316,15 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       }, []);
 
       // ── Get local media ─────────────────────────────────────────────────
-
-      const acquireLocalMedia = useCallback(async (callType: CallType) => {
-            const wantVideo = callType === 'VIDEO';
+      const acquireLocalMedia = useCallback(async () => {
+            // Unified model: always try to get video to allow later toggling
+            const tryVideo = true; 
 
             try {
-                  dbg('acquireLocalMedia: requesting getUserMedia', { audio: true, video: wantVideo });
+                  dbg('acquireLocalMedia: requesting getUserMedia', { audio: true, video: tryVideo });
                   const stream = await navigator.mediaDevices.getUserMedia({
                         audio: true,
-                        video: wantVideo,
+                        video: tryVideo,
                   });
                   dbg('acquireLocalMedia: SUCCESS', { tracks: stream.getTracks().map(t => `${t.kind}:${t.readyState}`) });
 
@@ -348,7 +354,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                   // NotReadableError. The call should still work (audio-only) rather
                   // than aborting entirely.
                   if (
-                        wantVideo &&
+                        tryVideo &&
                         err instanceof DOMException &&
                         (err.name === 'NotFoundError' ||
                               err.name === 'NotReadableError' ||
@@ -394,7 +400,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                   const callType = useCallStore.getState().callType;
                   if (!callType) { dbg('ABORT startCallAsCaller: callType is null'); return; }
 
-                  const stream = await acquireLocalMedia(callType);
+                  const stream = await acquireLocalMedia();
                   if (!stream) {
                         dbg('ABORT startCallAsCaller: acquireLocalMedia failed — ending call');
                         const cid = useCallStore.getState().callId;
@@ -454,7 +460,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
                   let stream = localStreamRef.current;
                   if (!stream) {
                         dbg('handleOffer: localStream not ready, acquiring media...');
-                        stream = await acquireLocalMedia(callType);
+                        stream = await acquireLocalMedia();
                         if (!stream) {
                               dbg('ABORT handleOffer: acquireLocalMedia failed — ending call');
                               const cid = useCallStore.getState().callId;
@@ -525,6 +531,30 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
             }
       }, []);
 
+      // ── Handle incoming ICE restart payload (fresh credentials) ───────────
+
+      const handleIceRestart = useCallback(async (payload: CallIceRestartPayload) => {
+            const pc = pcRef.current;
+            if (!pc || !payload.iceServers) {
+                  dbg('SKIP handleIceRestart: pcRef is null or no iceServers provided');
+                  return;
+            }
+
+            try {
+                  dbg('handleIceRestart received fresh credentials', {
+                        iceServersLen: payload.iceServers.length,
+                        policy: payload.iceTransportPolicy,
+                  });
+                  // Natively inject the replenished coturn credentials into the active tunnel
+                  pc.setConfiguration({
+                        iceServers: payload.iceServers as RTCIceServer[],
+                        iceTransportPolicy: payload.iceTransportPolicy || 'all',
+                  });
+            } catch (err) {
+                  dbg('Failed to apply fresh ICE credentials mid-call', err);
+            }
+      }, []);
+
       // ── Handle incoming ICE candidates ──────────────────────────────────
 
       const handleIceCandidate = useCallback(async (payload: IceCandidateRelayPayload) => {
@@ -571,22 +601,44 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
             dbg('acceptCall', { hasIncomingCall: !!incomingCall, callId });
             if (!incomingCall || !callId) { dbg('ABORT acceptCall: missing incomingCall or callId'); return; }
 
-            // Read callType BEFORE clearing incomingCall
-            const callType = incomingCall.callType;
 
-            // Emit accept to server
-            emittersRef.current.emitAcceptCall({ callId });
-
-            // Hide IncomingCallOverlay immediately (set incomingCall → null)
-            useCallStore.getState().setCallActive();
+            // Must await emitAcceptCall to handle race condition errors
+            try {
+                  await emittersRef.current.emitAcceptCall({ callId });
+                  
+                  // Hide IncomingCallOverlay immediately on success
+                  useCallStore.getState().setCallActive();
+            } catch (err) {
+                  dbg('ABORT acceptCall: server rejected acceptance (answered elsewhere or ended)', err);
+                  if (callId) emittersRef.current.emitHangup({ callId });
+                  cleanup();
+                  useCallStore.getState().resetCallState();
+                  return;
+            }
 
             // Acquire media early (while waiting for offer)
-            const stream = await acquireLocalMedia(callType);
+            const stream = await acquireLocalMedia();
+            
+            // Phase 4 RACE CONDITION GUARD:
+            // If the call was ended (e.g., by the initiator) while we were 
+            // acquiring media, abort the acceptance flow.
+            const currentStatus = useCallStore.getState().callStatus;
+            const currentCallId = useCallStore.getState().callId;
+            
+            if (currentStatus === 'IDLE' || !currentCallId || currentCallId !== callId) {
+                  dbg('ABORT acceptCall: call was ended or changed during media acquisition');
+                  if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                  }
+                  return;
+            }
+
             if (!stream) {
                   dbg('ABORT acceptCall: acquireLocalMedia failed — ending call');
                   if (callId) emittersRef.current.emitHangup({ callId });
                   cleanup();
                   useCallStore.getState().resetCallState();
+                  return;
             }
       }, [acquireLocalMedia]);
 
@@ -595,7 +647,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       const hangup = useCallback(() => {
             const callId = useCallStore.getState().callId;
             if (callId) {
-                  emittersRef.current.emitHangup({ callId });
+                  emittersRef.current.emitHangup({ callId }, { skipGlobalError: true }).catch(() => {});
             }
             cleanup();
             useCallStore.getState().setReconnectStartedAt(null);
@@ -607,7 +659,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       const rejectCall = useCallback(() => {
             const callId = useCallStore.getState().callId;
             if (callId) {
-                  emittersRef.current.emitRejectCall({ callId });
+                  emittersRef.current.emitRejectCall({ callId }, { skipGlobalError: true }).catch(() => {});
             }
             cleanup();
             useCallStore.getState().resetCallState();
@@ -619,6 +671,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
             handleOffer,
             handleAnswer,
             handleIceCandidate,
+            handleIceRestart,
             // Call control actions
             acceptCall,
             hangup,

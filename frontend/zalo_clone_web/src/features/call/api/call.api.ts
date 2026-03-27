@@ -44,3 +44,25 @@ export async function markMissedAsViewed(): Promise<void> {
 export async function deleteCallLog(callId: string): Promise<void> {
       await api.delete(API_ENDPOINTS.CALL.DELETE(callId));
 }
+
+// ============================================================================
+// ACTIVE CALL CHECK (Re-join feature)
+// ============================================================================
+
+export interface ActiveCallResponse {
+      active: boolean;
+      callId?: string;
+      conversationId?: string;
+      participantCount?: number;
+      startedAt?: string;
+      isJoined?: boolean;
+      /** Phase 6: Daily.co room URL for instant rejoin */
+      dailyRoomUrl?: string;
+}
+
+export async function getActiveCall(conversationId: string): Promise<ActiveCallResponse> {
+      const { data } = await api.get<ApiResponse<ActiveCallResponse>>(
+            API_ENDPOINTS.CALL.ACTIVE(conversationId),
+      );
+      return data.data;
+}

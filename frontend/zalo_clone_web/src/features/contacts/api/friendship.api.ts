@@ -159,7 +159,7 @@ export function useFriendsList(params?: { search?: string; limit?: number; conve
 /**
  * Infinite query for received friend requests.
  */
-export function useReceivedRequests(params?: { limit?: number }) {
+export function useReceivedRequests(params?: { limit?: number; enabled?: boolean }) {
       const limit = params?.limit ?? 20;
 
       return useInfiniteQuery({
@@ -169,13 +169,14 @@ export function useReceivedRequests(params?: { limit?: number }) {
             getNextPageParam: (lastPage) =>
                   lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
             staleTime: 10_000,
+            enabled: params?.enabled,
       });
 }
 
 /**
  * Infinite query for sent friend requests.
  */
-export function useSentRequests(params?: { limit?: number }) {
+export function useSentRequests(params?: { limit?: number; enabled?: boolean }) {
       const limit = params?.limit ?? 20;
 
       return useInfiniteQuery({
@@ -185,6 +186,7 @@ export function useSentRequests(params?: { limit?: number }) {
             getNextPageParam: (lastPage) =>
                   lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
             staleTime: 10_000,
+            enabled: params?.enabled,
       });
 }
 

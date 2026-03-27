@@ -27,6 +27,7 @@ export function useAuth() {
             getSessions,
             revokeSession,
             refreshToken,
+            updateProfile,
       } = useAuthStore();
 
       // ============================================================================
@@ -110,6 +111,7 @@ export function useAuth() {
             getSessions,
             revokeSession,
             refreshToken,
+            updateProfile,
 
             // Utilities
             clearError,
