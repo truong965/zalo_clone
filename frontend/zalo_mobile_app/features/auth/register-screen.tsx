@@ -23,6 +23,8 @@ export function RegisterScreen() {
                         displayName: payload.displayName.trim(),
                         phoneNumber: payload.phoneNumber.trim(),
                         password: payload.password,
+                        gender: payload.gender,
+                        dateOfBirth: payload.dateOfBirth instanceof Date ? payload.dateOfBirth.toISOString() : payload.dateOfBirth,
                   });
                   Alert.alert(t('common.success'), t('auth.registerSuccessMessage'));
                   router.replace(loginHref);

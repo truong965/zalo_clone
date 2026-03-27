@@ -4,7 +4,12 @@ import type {
       LoginPayload,
       QrScanResponse,
       RegisterPayload,
+      UpdateUserPayload,
+      ChangePasswordPayload,
       UserProfile,
+      ForgotPasswordPayload,
+      VerifyOtpPayload,
+      ResetPasswordPayload,
 } from '@/types/auth';
 import type { Conversation, ConversationListResponse, ConversationMember } from '@/types/conversation';
 import type { Message, RecentMediaItemDto } from '@/types/message';
@@ -12,6 +17,9 @@ import type { ReminderItem, CreateReminderParams, UpdateReminderParams } from '@
 import type { CallHistoryItem, CursorPaginatedResult } from '@/types/call';
 import type { ConversationSearchMember } from '@/features/chats/search.types';
 import type { SearchHistoryItem, SearchSuggestion, TrendingKeyword } from '@/features/search/types';
+import type { PrivacySettings, UpdatePrivacySettingsPayload } from '@/types/privacy';
+import type { ContactSearchResult } from '@/features/search/types';
+import type { BlockedUser, BlockedListResponse } from '@/types/block';
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
@@ -266,6 +274,41 @@ export const mobileApi = {
             return apiRequest<UserProfile>('/api/v1/auth/me', { method: 'GET' }, accessToken);
       },
 
+      updateUserProfile(id: string, payload: UpdateUserPayload, accessToken: string) {
+            return apiRequest<UserProfile>(`/api/v1/users/${id}`, {
+                  method: 'PATCH',
+                  body: JSON.stringify(payload),
+            }, accessToken);
+      },
+
+      changePassword(payload: ChangePasswordPayload, accessToken: string) {
+            return apiRequest<any>('/api/v1/auth/change-password', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            }, accessToken);
+      },
+      
+      forgotPassword(payload: ForgotPasswordPayload) {
+            return apiRequest<void>('/api/v1/auth/forgot-password', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            });
+      },
+
+      verifyOtp(payload: VerifyOtpPayload) {
+            return apiRequest<void>('/api/v1/auth/verify-otp', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            });
+      },
+
+      resetPassword(payload: ResetPasswordPayload) {
+            return apiRequest<void>('/api/v1/auth/reset-password', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            });
+      },
+
       getConversations(accessToken: string, params: { cursor?: string; limit?: number } = {}) {
             const query = new URLSearchParams();
             if (params.cursor) query.append('cursor', params.cursor);
@@ -422,12 +465,13 @@ export const mobileApi = {
             );
       },
 
-      getBlockedList(accessToken: string, params: { cursor?: string; limit?: number } = {}) {
+      getBlockedList(accessToken: string, params: { cursor?: string; limit?: number; search?: string } = {}) {
             const query = new URLSearchParams();
             if (params.cursor) query.append('cursor', params.cursor);
             if (params.limit) query.append('limit', params.limit.toString());
+            if (params.search) query.append('search', params.search);
             const queryString = query.toString();
-            return apiRequest<{ data: any[]; meta: { hasNextPage: boolean; nextCursor?: string } }>(
+            return apiRequest<BlockedListResponse>(
                   `/api/v1/block/blocked${queryString ? `?${queryString}` : ''}`,
                   { method: 'GET' },
                   accessToken
@@ -528,8 +572,8 @@ export const mobileApi = {
             );
       },
 
-      initiateAvatarUpload(payload: { fileName: string; mimeType: string; fileSize: number }, accessToken: string) {
-            return apiRequest<{ presignedUrl: string; fileUrl: string }>(
+      initiateAvatarUpload(payload: { fileName: string; mimeType: string; fileSize: number; targetId?: string; targetType?: 'USER' | 'GROUP' }, accessToken: string) {
+            return apiRequest<{ presignedUrl: string; fileUrl: string; expiresIn: number; s3Key: string }>(
                   '/api/v1/media/upload/avatar',
                   {
                         method: 'POST',
@@ -733,6 +777,34 @@ export const mobileApi = {
 
       clearSearchHistory(accessToken: string) {
             return apiRequest<void>('/api/v1/search/analytics/history', { method: 'DELETE' }, accessToken);
+      },
+
+      // --- Privacy Settings ---
+      getPrivacySettings(accessToken: string) {
+            return apiRequest<PrivacySettings>('/api/v1/privacy', { method: 'GET' }, accessToken);
+      },
+
+      updatePrivacySettings(payload: UpdatePrivacySettingsPayload, accessToken: string) {
+            return apiRequest<PrivacySettings>(
+                  '/api/v1/privacy',
+                  {
+                        method: 'PATCH',
+                        body: JSON.stringify(payload),
+                  },
+                  accessToken,
+            );
+      },
+
+      getContactProfile(targetId: string, accessToken: string) {
+            return apiRequest<ContactSearchResult>(`/api/v1/search/contacts/${targetId}`, { method: 'GET' }, accessToken);
+      },
+
+      getActiveCall(conversationId: string, accessToken: string) {
+            return apiRequest<{ active: boolean; callId?: string; conversationId?: string; participantCount?: number; startedAt?: string; isJoined?: boolean; dailyRoomUrl?: string }>(
+                  `/api/v1/calls/active/${conversationId}`,
+                  { method: 'GET' },
+                  accessToken,
+            );
       },
 };
 

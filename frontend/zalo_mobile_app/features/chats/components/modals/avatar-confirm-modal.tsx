@@ -8,6 +8,7 @@ interface AvatarConfirmModalProps {
   onConfirm: () => void;
   imageUri: string | null;
   isLoading?: boolean;
+  description?: string;
 }
 
 export const AvatarConfirmModal = ({
@@ -16,6 +17,7 @@ export const AvatarConfirmModal = ({
   onConfirm,
   imageUri,
   isLoading,
+  description = 'Bạn có muốn sử dụng ảnh này làm ảnh đại diện không?',
 }: AvatarConfirmModalProps) => {
   const theme = useTheme();
 

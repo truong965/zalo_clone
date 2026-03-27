@@ -5,6 +5,7 @@ import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { mobileApi } from '@/services/api';
 import { REMINDERS_BASE_KEY } from './use-reminders';
+import { useNotificationStore } from '@/lib/notification-settings';
 import { useSocket } from '@/providers/socket-provider';
 import { useAuth } from '@/providers/auth-provider';
 import type { ReminderAlert } from '../components/reminder/reminder-alert-overlay';
@@ -22,9 +23,12 @@ if (!isExpoGo) {
 }
 
 // ── Firebase (optional — works only in dev-builds, not Expo Go) ────
-let messaging: any;
+let messagingInternal: any;
+let AuthorizationStatus: any;
 try {
-  messaging = require('@react-native-firebase/messaging').default;
+  const firebaseMessaging = require('@react-native-firebase/messaging');
+  messagingInternal = firebaseMessaging.getMessaging();
+  AuthorizationStatus = firebaseMessaging.AuthorizationStatus;
 } catch {
   // Silent – Expo Go or missing native module
 }
@@ -53,9 +57,21 @@ async function saveScheduledMap(map: Record<string, string>): Promise<void> {
 export function useReminderNotifications() {
   const { isConnected, socket } = useSocket();
   const { accessToken, user } = useAuth();
+  const { isEnabled } = useNotificationStore();
   const queryClient = useQueryClient();
   const currentUserId = user?.id ?? null;
   const didInitRef = useRef(false);
+
+  // ── Auto-cancel or re-sync when setting changes ──────────────────
+  useEffect(() => {
+    if (!isEnabled) {
+      if (!isExpoGo && Notifications) {
+        void Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
+      }
+    } else if (didInitRef.current && accessToken) {
+      void syncAllReminders();
+    }
+  }, [isEnabled, accessToken]);
 
   // Alerts shown as full-screen modal overlay
   const [alerts, setAlerts] = useState<ReminderAlert[]>([]);
@@ -67,10 +83,10 @@ export function useReminderNotifications() {
       return [...prev, alert];
     });
 
-    // Also trigger a system notification immediately for background visibility.
+    // ALSO trigger a system notification immediately for background visibility.
     // BUT only if it didn't come from a local notification itself (to avoid loop/duplicates).
     const isLocalSource = alert.id.startsWith('local-');
-    if (!isExpoGo && Notifications && !isLocalSource) {
+    if (!isExpoGo && Notifications && !isLocalSource && isEnabled) {
       void Notifications.scheduleNotificationAsync({
         content: {
           title: '🔔 Nhắc hẹn',
@@ -131,6 +147,8 @@ export function useReminderNotifications() {
 
       // Cancel any existing schedule for this reminder
       await cancelLocalReminder(reminder.id);
+
+      if (!isEnabled) return;
 
       const notifId = await Notifications.scheduleNotificationAsync({
         content: {
@@ -199,15 +217,15 @@ export function useReminderNotifications() {
 
   // ── Register device for FCM push (dev-build only) ───────────────
   const registerDevice = useCallback(async () => {
-    if (!accessToken || !user || !messaging) return;
+    if (!accessToken || !user || !messagingInternal) return;
     try {
-      const authStatus = await messaging().requestPermission();
+      const authStatus = await messagingInternal.requestPermission();
       const enabled =
-        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+        authStatus === AuthorizationStatus.AUTHORIZED ||
+        authStatus === AuthorizationStatus.PROVISIONAL;
       if (!enabled) return;
 
-      const fcmToken = await messaging().getToken();
+      const fcmToken = await messagingInternal.getToken();
       if (!fcmToken) return;
 
       const deviceId = Device.osInternalBuildId || 'unknown_device';
@@ -263,9 +281,9 @@ export function useReminderNotifications() {
 
   // ── FCM foreground listener (dev-build only) ─────────────────────
   useEffect(() => {
-    if (!messaging) return;
+    if (!messagingInternal) return;
     try {
-      const unsub = messaging().onMessage(async (msg: any) => {
+      const unsub = messagingInternal.onMessage(async (msg: any) => {
         const { data } = msg;
         if (!data) return;
 

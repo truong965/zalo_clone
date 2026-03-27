@@ -2,6 +2,7 @@ import { useMutation, useQueryClient, useQuery, useInfiniteQuery } from '@tansta
 import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
 import { Friend, FriendRequest } from '@/types/friendship';
+import Toast from 'react-native-toast-message';
 
 // ============================================================================
 // Query Keys
@@ -142,6 +143,18 @@ export function useSendFriendRequest(
                   if (!accessToken) throw new Error("No access token");
                   return mobileApi.sendFriendRequest(targetUserId, accessToken);
             },
+            onError: (...args) => {
+                  if (options?.onError) {
+                        options.onError(...args);
+                        return;
+                  }
+                  const error = args[0] as any;
+                  Toast.show({
+                        type: 'error',
+                        text1: 'Lỗi',
+                        text2: error?.message || 'Không thể gửi yêu cầu kết bạn',
+                  });
+            },
             onSuccess: (...args) => {
                   queryClient.invalidateQueries({
                         queryKey: friendshipKeys.all,
@@ -167,6 +180,18 @@ export function useAcceptRequest(
             mutationFn: (requestId: string) => {
                   if (!accessToken) throw new Error("No access token");
                   return mobileApi.acceptFriendRequest(requestId, accessToken);
+            },
+            onError: (...args) => {
+                  if (options?.onError) {
+                        options.onError(...args);
+                        return;
+                  }
+                  const error = args[0] as any;
+                  Toast.show({
+                        type: 'error',
+                        text1: 'Lỗi',
+                        text2: error?.message || 'Không thể chấp nhận yêu cầu kết bạn',
+                  });
             },
             onSuccess: (...args) => {
                   queryClient.invalidateQueries({
@@ -194,6 +219,18 @@ export function useDeclineRequest(
                   if (!accessToken) throw new Error("No access token");
                   return mobileApi.declineFriendRequest(requestId, accessToken);
             },
+            onError: (...args) => {
+                  if (options?.onError) {
+                        options.onError(...args);
+                        return;
+                  }
+                  const error = args[0] as any;
+                  Toast.show({
+                        type: 'error',
+                        text1: 'Lỗi',
+                        text2: error?.message || 'Không thể từ chối yêu cầu kết bạn',
+                  });
+            },
             onSuccess: (...args) => {
                   queryClient.invalidateQueries({
                         queryKey: friendshipKeys.all,
@@ -219,6 +256,18 @@ export function useCancelRequest(
             mutationFn: (requestId: string) => {
                   if (!accessToken) throw new Error("No access token");
                   return mobileApi.cancelFriendRequest(requestId, accessToken);
+            },
+            onError: (...args) => {
+                  if (options?.onError) {
+                        options.onError(...args);
+                        return;
+                  }
+                  const error = args[0] as any;
+                  Toast.show({
+                        type: 'error',
+                        text1: 'Lỗi',
+                        text2: error?.message || 'Không thể hủy yêu cầu kết bạn',
+                  });
             },
             onSuccess: (...args) => {
                   queryClient.invalidateQueries({

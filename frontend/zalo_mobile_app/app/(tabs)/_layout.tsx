@@ -11,6 +11,7 @@ import { useFriendshipUIStore } from '@/features/friendship/stores/friendship-ui
 import { HapticTab } from '@/components/haptic-tab';
 import { useAuth } from '@/providers/auth-provider';
 import { FriendshipSearchModal } from '@/features/contacts/components/friendship-search-modal';
+import { useFriendshipSocket } from '@/features/friendship/hooks/use-friendship-socket';
 import { CreateGroupModal } from '@/features/chats/components/modals/create-group-modal';
 
 export default function TabLayout() {
@@ -23,10 +24,13 @@ export default function TabLayout() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [isFriendSearchOpen, setIsFriendSearchOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
-  
+
+  // Listen for real-time friendship events
+  useFriendshipSocket();
+
   const { lastSeenInvitationCount, isBadgeDismissed } = useFriendshipUIStore();
   const { data: receivedRequestsData } = useReceivedRequests({ limit: 1 });
-  
+
   const receivedRequests = receivedRequestsData?.pages.flatMap(page => page.data) || [];
   const totalReceived = (receivedRequestsData?.pages[0]?.meta as any)?.totalCount ?? receivedRequests.length;
   const showBadge = !isBadgeDismissed && totalReceived > lastSeenInvitationCount;
@@ -87,13 +91,6 @@ export default function TabLayout() {
           <Appbar.Action
             icon={({ size, color }) => <Ionicons name="person-add-outline" size={size} color={color} />}
             onPress={() => setIsFriendSearchOpen(true)}
-          />
-        );
-      case 'profile':
-        return (
-          <Appbar.Action
-            icon={({ size, color }) => <Ionicons name="settings-outline" size={size} color={color} />}
-            onPress={() => router.push('/profile/settings' as Href)}
           />
         );
       default:

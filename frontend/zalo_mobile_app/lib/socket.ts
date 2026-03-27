@@ -35,6 +35,14 @@ class SocketManager {
       console.error('❌ Socket connection error:', error.message);
     });
 
+    this.socket.on('error', (error) => {
+      console.error('❌ Socket transport error:', error);
+    });
+
+    this.socket.on(SocketEvents.ERROR, (payload: any) => {
+      console.error('❌ Socket application error:', payload);
+    });
+
     return this.socket;
   }
 
@@ -59,7 +67,7 @@ class SocketManager {
 
     return new Promise((resolve, reject) => {
       // Setup timeout to avoid hanging promises (same behavior as web or reasonable UX)
-      this.socket?.timeout(5000).emit(event, data, (err: any, response: any) => {
+      this.socket?.timeout(15000).emit(event, data, (err: any, response: any) => {
         if (err) {
           reject(new Error('Socket emit timeout'));
           return;

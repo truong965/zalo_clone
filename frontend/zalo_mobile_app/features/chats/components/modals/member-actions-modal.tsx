@@ -1,7 +1,8 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Modal, Text, List, Button, useTheme } from 'react-native-paper';
+import { Modal, Text, List, Button, useTheme, Portal } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
+import { UserProfileModal } from '../../../profile/components/user-profile-modal';
 
 interface MemberActionsModalProps {
   visible: boolean;
@@ -21,6 +22,7 @@ export const MemberActionsModal = ({
   onRemoveMember,
 }: MemberActionsModalProps) => {
   const theme = useTheme();
+  const [profileVisible, setProfileVisible] = React.useState(false);
 
   if (!member) return null;
 
@@ -56,13 +58,14 @@ export const MemberActionsModal = ({
         title="Xem trang cá nhân"
         left={props => <List.Icon {...props} icon="account-outline" />}
         onPress={() => {
-          onDismiss();
-          Toast.show({ 
-            type: 'info', 
-            text1: 'Tính năng đang phát triển', 
-            text2: `Xem hồ sơ: ${memberId}` 
-          });
+          setProfileVisible(true);
         }}
+      />
+
+      <UserProfileModal 
+        visible={profileVisible}
+        onDismiss={() => setProfileVisible(false)}
+        userId={memberId}
       />
 
       {isAdmin && (

@@ -12,8 +12,8 @@ export function useFriendRequestStatus(otherUserId: string | null) {
             otherUserId ?? null,
       );
 
-      const receivedRequests = useReceivedRequests({ enabled: !!otherUserId });
-      const sentRequests = useSentRequests({ enabled: !!otherUserId });
+      const receivedRequests = useReceivedRequests(undefined, { enabled: !!otherUserId });
+      const sentRequests = useSentRequests(undefined, { enabled: !!otherUserId });
 
       const isLoading =
             isCheckingFriendship || receivedRequests.isLoading || sentRequests.isLoading;
@@ -23,12 +23,20 @@ export function useFriendRequestStatus(otherUserId: string | null) {
 
       const requestSentByMe = useMemo(() => {
             if (!otherUserId || !sentRequests.data) return null;
-            return sentRequests.data.find((r: any) => (r.target?.userId || r.targetId) === otherUserId) ?? null;
+            for (const page of sentRequests.data.pages) {
+                  const found = page.data.find((r: any) => (r.target?.userId || r.targetId) === otherUserId);
+                  if (found) return found;
+            }
+            return null;
       }, [otherUserId, sentRequests.data]);
 
       const requestReceivedFromOther = useMemo(() => {
             if (!otherUserId || !receivedRequests.data) return null;
-            return receivedRequests.data.find((r: any) => (r.requester?.userId || r.requesterId) === otherUserId) ?? null;
+            for (const page of receivedRequests.data.pages) {
+                  const found = page.data.find((r: any) => (r.requester?.userId || r.requesterId) === otherUserId);
+                  if (found) return found;
+            }
+            return null;
       }, [otherUserId, receivedRequests.data]);
 
       const pendingRequestDirection = useMemo<'OUTGOING' | 'INCOMING' | null>(() => {

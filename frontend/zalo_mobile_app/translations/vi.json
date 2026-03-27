@@ -21,6 +21,12 @@
             "confirmPassword": "Xác nhận mật khẩu",
             "createAccount": "Tạo tài khoản",
             "hasAccountLogin": "Đã có tài khoản? Đăng nhập",
+            "birthday": "Ngày sinh",
+            "genderMale": "Nam",
+            "genderFemale": "Nữ",
+            "genderOther": "Khác",
+            "email": "Email",
+            "save": "Lưu thay đổi",
             "missingInfoRegister": "Vui lòng nhập đầy đủ thông tin bắt buộc.",
             "confirmErrorTitle": "Lỗi xác nhận",
             "confirmPasswordMismatch": "Mật khẩu xác nhận không khớp.",
@@ -31,8 +37,27 @@
                   "phoneRequired": "Vui lòng nhập số điện thoại",
                   "passwordRequired": "Vui lòng nhập mật khẩu",
                   "confirmPasswordRequired": "Vui lòng xác nhận mật khẩu",
-                  "passwordMismatch": "Mật khẩu xác nhận không khớp"
-            }
+                  "passwordMismatch": "Mật khẩu xác nhận không khớp",
+                  "passwordMin": "Mật khẩu phải có ít nhất 6 ký tự",
+                  "invalidPhoneNumber": "Số điện thoại không hợp lệ (ví dụ: 09xxx...)",
+                  "dobInFuture": "Ngày sinh không được ở tương lai",
+                  "invalidEmail": "Email không hợp lệ",
+                  "gmailRequired": "Chỉ chấp nhận địa chỉ @gmail.com",
+                  "otpRequired": "Vui lòng nhập mã OTP",
+                  "invalidOtp": "Mã OTP phải có 6 chữ số"
+            },
+            "forgotPassword": "Quên mật khẩu?",
+            "forgotPasswordTitle": "Lấy lại mật khẩu",
+            "forgotPasswordSubtitle": "Nhập email của bạn để nhận mã xác nhận",
+            "sendOtp": "Gửi mã xác nhận",
+            "otpCode": "Mã xác nhận (OTP)",
+            "verifyOtp": "Tiếp tục",
+            "newPassword": "Mật khẩu mới",
+            "resetPassword": "Cập nhật mật khẩu",
+            "resetSuccess": "Mật khẩu của bạn đã được cập nhật.",
+            "backToLogin": "Quay lại đăng nhập",
+            "otpSent": "Mã OTP đã được gửi đến email của bạn.",
+            "otpCorrect": "Mã OTP chính xác. Vui lòng đặt mật khẩu mới."
       },
       "tabs": {
             "chats": "Tin nhắn",
@@ -107,5 +132,34 @@
       "modal": {
             "title": "Đây là màn hình modal",
             "backHome": "Về màn hình chính"
+      },
+      "settings": {
+            "privacy": {
+                  "title": "Quyền riêng tư",
+                  "description": "Quản lý ai có thể xem thông tin và liên hệ với bạn",
+                  "showProfile": "Ai có thể xem thông tin cá nhân",
+                  "showProfileDesc": "Cho phép mọi người hoặc chỉ bạn bè xem thông tin của bạn",
+                  "whoCanMessageMe": "Ai có thể nhắn tin cho tôi",
+                  "whoCanMessageMeDesc": "Quản lý quyền nhận tin nhắn từ người lạ",
+                  "whoCanCallMe": "Ai có thể gọi cho tôi",
+                  "whoCanCallMeDesc": "Quản lý quyền nhận cuộc gọi từ người lạ",
+                  "everyone": "Mọi người",
+                  "contacts": "Bạn bè",
+                  "confirmTitle": "Xác nhận thay đổi",
+                  "confirmContent": "Bạn có chắc chắn muốn lưu các thay đổi về quyền riêng tư này không?",
+                  "saveChanges": "Lưu thay đổi",
+                  "cancel": "Hủy bỏ",
+                  "unsavedChanges": "Bạn có thay đổi chưa lưu",
+                  "updateSuccess": "Đã cập nhật cài đặt quyền riêng tư",
+                  "updateError": "Không thể cập nhật cài đặt",
+                  "blockedListTitle": "Danh sách chặn",
+                  "blockedListSearchPlaceholder": "Tìm kiếm người bị chặn",
+                  "blockedListEmpty": "Chưa chặn ai",
+                  "blockedListBlockedAt": "Đã chặn vào {{date}}",
+                  "unblockBtn": "Bỏ chặn",
+                  "unblockConfirmTitle": "Bỏ chặn",
+                  "unblockConfirmContent": "Bạn có chắc chắn muốn bỏ chặn \"{{name}}\"?",
+                  "unblockSuccess": "Đã bỏ chặn người dùng"
+            }
       }
 }

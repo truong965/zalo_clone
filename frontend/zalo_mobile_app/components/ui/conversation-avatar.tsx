@@ -63,5 +63,7 @@ const styles = StyleSheet.create({
       avatarContainer: {
             justifyContent: 'center',
             alignItems: 'center',
+            borderWidth: 1,
+            borderColor: '#E0E0E0'
       },
 });

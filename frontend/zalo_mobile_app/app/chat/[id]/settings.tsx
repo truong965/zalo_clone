@@ -124,7 +124,7 @@ export default function SettingsScreen() {
     if (!pickedImage) return;
 
     try {
-      const fileUrl = await uploadAvatar(pickedImage);
+      const fileUrl = await uploadAvatar(pickedImage, id, 'GROUP');
 
       // Update conversation
       updateMutation.mutate({ avatarUrl: fileUrl }, {

@@ -131,7 +131,7 @@ export function FriendshipSearchModal({ visible, onClose }: { visible: boolean; 
             try {
                   const conversationId = contact.existingConversationId
                         ? contact.existingConversationId
-                        : (await mobileApi.createDirectConversation(contact.id, accessToken)).id;
+                        : (await mobileApi.getOrCreateDirectConversation(contact.id, accessToken)).id;
 
                   onClose();
                   router.push({ pathname: '/chat/[id]', params: { id: conversationId } });

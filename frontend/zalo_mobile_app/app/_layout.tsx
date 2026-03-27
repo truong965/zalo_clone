@@ -11,24 +11,28 @@ import '@/lib/i18n';
 import '../global.css';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+import { isExpoGo } from '@/constants/platform';
 
 import { AuthProvider } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { SocketProvider } from '@/providers/socket-provider';
+import { getNotificationEnabledSync } from '@/lib/notification-settings';
 
 // ── Notification handler ───────────────────────────────────────────
 if (!isExpoGo) {
   try {
     const Notifications = require('expo-notifications');
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
+      handleNotification: async () => {
+        const isEnabled = getNotificationEnabledSync();
+        return {
+          shouldShowAlert: isEnabled,
+          shouldPlaySound: isEnabled,
+          shouldSetBadge: false,
+          shouldShowBanner: isEnabled,
+          shouldShowList: isEnabled,
+        };
+      },
     });
 
     // Configure notification channel for Android
@@ -46,10 +50,9 @@ if (!isExpoGo) {
 }
 
 // ── Firebase background handler (dev-build only) ──────────────────
-let messaging: any;
 try {
-  messaging = require('@react-native-firebase/messaging').default;
-  messaging().setBackgroundMessageHandler(async (_remoteMessage: any) => {
+  const { setBackgroundMessageHandler } = require('@react-native-firebase/messaging');
+  setBackgroundMessageHandler(async (_remoteMessage: any) => {
     // Wakes the app silently — actual processing in useReminderNotifications
   });
 } catch {
@@ -119,10 +122,15 @@ export default function RootLayout() {
 import { useReminderNotifications } from '@/features/chats/hooks/use-reminder-notifications';
 import { ReminderAlertOverlay } from '@/features/chats/components/reminder/reminder-alert-overlay';
 import { useConversationRealtime } from '@/features/chats/hooks/use-conversation-realtime';
+import { IncomingCallModal } from '@/features/calls/components/incoming-call-modal';
+import { useCallSocket } from '@/features/calls/hooks/use-call-socket';
 
 function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {
   const { alerts, dismissAlert, acknowledgeAlert } = useReminderNotifications();
   useConversationRealtime();
+  if (!isExpoGo) {
+    useCallSocket();
+  }
 
   return (
     <PaperProvider theme={colorScheme === 'dark' ? PaperDarkTheme : PaperLightTheme}>
@@ -133,7 +141,7 @@ function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | un
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="chat" />
           <Stack.Screen name="qr-scanner" />
-          <Stack.Screen name="profile" />
+          {/* profile is managed via its own directory routes like profile/index, profile/settings etc */}
         </Stack>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       </ThemeProvider>
@@ -142,6 +150,7 @@ function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | un
         onDismiss={dismissAlert}
         onAcknowledge={acknowledgeAlert}
       />
+      {!isExpoGo && <IncomingCallModal />}
       <Toast />
     </PaperProvider>
   );

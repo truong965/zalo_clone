@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { PropsWithChildren } from 'react';
 
 import { mobileApi } from '@/services/api';
-import type { LoginPayload, RegisterPayload, UserProfile } from '@/types/auth';
+import type { LoginPayload, RegisterPayload, UserProfile, UpdateUserPayload, ChangePasswordPayload } from '@/types/auth';
 
 const ACCESS_TOKEN_KEY = 'zalo_mobile_access_token';
 
@@ -28,6 +28,8 @@ type AuthContextValue = {
       register: (payload: RegisterPayload) => Promise<void>;
       logout: () => Promise<void>;
       refreshProfile: () => Promise<void>;
+      updateProfile: (payload: UpdateUserPayload) => Promise<void>;
+      changePassword: (payload: ChangePasswordPayload) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -95,6 +97,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
             setUser(profile);
       }, [accessToken]);
 
+      const updateProfile = useCallback(async (payload: UpdateUserPayload) => {
+            if (!accessToken || !user) throw new Error('Not authenticated');
+            await mobileApi.updateUserProfile(user.id, payload, accessToken);
+            await refreshProfile();
+      }, [accessToken, user, refreshProfile]);
+
+      const changePassword = useCallback(async (payload: ChangePasswordPayload) => {
+            if (!accessToken) throw new Error('Not authenticated');
+            const result = await mobileApi.changePassword(payload, accessToken);
+            // Optionally update token if rotated (backend currently rotates)
+            if (result.accessToken) {
+                  await setAccessTokenInStorage(result.accessToken);
+                  setAccessToken(result.accessToken);
+            }
+      }, [accessToken]);
+
       const value = useMemo<AuthContextValue>(
             () => ({
                   accessToken,
@@ -105,8 +123,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
                   register,
                   logout,
                   refreshProfile,
+                  updateProfile,
+                  changePassword,
             }),
-            [accessToken, isLoading, login, logout, refreshProfile, register, user],
+            [accessToken, isLoading, login, logout, refreshProfile, register, user, updateProfile, changePassword],
       );
 
       return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

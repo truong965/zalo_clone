@@ -47,7 +47,13 @@ export const UserAvatar = React.memo(({ uri, size = 40, updatedAt }: UserAvatarP
       <Image
         key={finalUri} // Use URI as key to force component remount for standard Image
         source={{ uri: finalUri }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
+        style={{ 
+          width: size, 
+          height: size, 
+          borderRadius: size / 2,
+          borderWidth: 1,
+          borderColor: '#E0E0E0'
+        }}
         resizeMode="cover"
         onError={() => setHasError(true)}
       />
@@ -63,5 +69,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0'
   },
 });

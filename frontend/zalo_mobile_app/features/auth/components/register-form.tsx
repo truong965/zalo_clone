@@ -3,7 +3,12 @@ import { Link } from 'expo-router';
 import type { Href } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View, Platform, TouchableOpacity } from 'react-native';
+import { SegmentedButtons } from 'react-native-paper';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useState } from 'react';
+import { format } from 'date-fns';
+import { Ionicons } from '@expo/vector-icons';
 
 import { registerSchema, type RegisterFormData } from '@/features/auth/schemas/register-schema';
 
@@ -16,6 +21,8 @@ export function RegisterForm({ isSubmitting, onSubmit }: RegisterFormProps) {
       const { t } = useTranslation();
       const loginHref = '/login' as Href;
 
+      const [showDatePicker, setShowDatePicker] = useState(false);
+
       const {
             control,
             handleSubmit,
@@ -27,6 +34,8 @@ export function RegisterForm({ isSubmitting, onSubmit }: RegisterFormProps) {
                   phoneNumber: '',
                   password: '',
                   confirmPassword: '',
+                  gender: 'MALE',
+                  dateOfBirth: new Date(),
             },
       });
 
@@ -94,6 +103,64 @@ export function RegisterForm({ isSubmitting, onSubmit }: RegisterFormProps) {
                               </View>
                         )}
                   />
+
+                  <View className="gap-1.5">
+                        <Text className="text-sm font-medium text-foreground">{t('auth.gender')}</Text>
+                        <Controller
+                              control={control}
+                              name="gender"
+                              render={({ field: { onChange, value } }) => (
+                                    <SegmentedButtons
+                                          value={value || 'MALE'}
+                                          onValueChange={onChange}
+                                          buttons={[
+                                                { value: 'MALE', label: 'Nam' },
+                                                { value: 'FEMALE', label: 'Nữ' },
+                                                { value: 'OTHER', label: 'Khác' },
+                                          ]}
+                                          style={{ borderRadius: 12 }}
+                                    />
+                              )}
+                        />
+                  </View>
+
+                  <View className="gap-1.5">
+                        <Text className="text-sm font-medium text-foreground">{t('auth.birthday')}</Text>
+                        <Controller
+                              control={control}
+                              name="dateOfBirth"
+                              render={({ field: { value, onChange } }) => (
+                                    <View>
+                                          <TouchableOpacity
+                                                onPress={() => setShowDatePicker(true)}
+                                                className="flex-row items-center justify-between rounded-xl border border-border bg-background px-3 py-2.5">
+                                                <Text className="text-base text-foreground">
+                                                      {value instanceof Date ? format(value, 'dd/MM/yyyy') : t('common.unknown')}
+                                                </Text>
+                                                <Ionicons name="calendar-outline" size={20} color="#8E8E93" />
+                                          </TouchableOpacity>
+
+                                          {showDatePicker && (
+                                                <DateTimePicker
+                                                      value={value instanceof Date ? value : new Date()}
+                                                      mode="date"
+                                                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                                      maximumDate={new Date()}
+                                                      onChange={(_event, date) => {
+                                                            setShowDatePicker(false);
+                                                            if (date) {
+                                                                  onChange(date);
+                                                            }
+                                                      }}
+                                                />
+                                          )}
+                                          {errors.dateOfBirth ? (
+                                                <Text className="text-sm text-danger">{t(errors.dateOfBirth.message as any)}</Text>
+                                          ) : null}
+                                    </View>
+                              )}
+                        />
+                  </View>
 
                   <Controller
                         control={control}

@@ -15,6 +15,7 @@ type LoginFormProps = {
 export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
       const { t } = useTranslation();
       const registerHref = '/register' as Href;
+      const forgotPasswordHref = '/forgot-password' as Href;
 
       const {
             control,
@@ -85,6 +86,12 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
                   <Link href={registerHref} asChild>
                         <Pressable>
                               <Text className="mt-1 text-center font-semibold text-primary">{t('auth.registerNow')}</Text>
+                        </Pressable>
+                  </Link>
+
+                  <Link href={forgotPasswordHref} asChild>
+                        <Pressable>
+                              <Text className="mt-2 text-center text-sm text-secondary-foreground">{t('auth.forgotPassword')}</Text>
                         </Pressable>
                   </Link>
             </View>

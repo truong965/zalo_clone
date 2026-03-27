@@ -20,7 +20,13 @@
             "displayName": "Display name",
             "confirmPassword": "Confirm password",
             "createAccount": "Create account",
-            "hasAccountLogin": "Already have an account? Sign in",
+            "gender": "Gender",
+            "genderMale": "Male",
+            "genderFemale": "Female",
+            "genderOther": "Other",
+            "birthday": "Date of Birth",
+            "email": "Email",
+            "save": "Save changes",
             "missingInfoRegister": "Please fill in all required information.",
             "confirmErrorTitle": "Confirmation error",
             "confirmPasswordMismatch": "Confirm password does not match.",
@@ -31,8 +37,24 @@
                   "phoneRequired": "Phone number is required",
                   "passwordRequired": "Password is required",
                   "confirmPasswordRequired": "Please confirm your password",
-                  "passwordMismatch": "Confirm password does not match"
-            }
+                  "passwordMismatch": "Confirm password does not match",
+                  "invalidEmail": "Invalid email",
+                  "gmailRequired": "Only @gmail.com addresses are accepted",
+                  "otpRequired": "OTP is required",
+                  "invalidOtp": "OTP must be 6 digits"
+            },
+            "forgotPassword": "Forgot password?",
+            "forgotPasswordTitle": "Reset Password",
+            "forgotPasswordSubtitle": "Enter your email to receive a verification code",
+            "sendOtp": "Send OTP",
+            "otpCode": "OTP Code",
+            "verifyOtp": "Continue",
+            "newPassword": "New Password",
+            "resetPassword": "Update Password",
+            "resetSuccess": "Your password has been updated.",
+            "backToLogin": "Back to login",
+            "otpSent": "OTP has been sent to your email.",
+            "otpCorrect": "OTP verified. Please set a new password."
       },
       "tabs": {
             "chats": "Chats",
@@ -101,5 +123,26 @@
       "modal": {
             "title": "This is a modal",
             "backHome": "Go to home screen"
+      },
+      "settings": {
+            "privacy": {
+                  "title": "Privacy Settings",
+                  "description": "Manage who can see your info and contact you",
+                  "showProfile": "Who can see profile info",
+                  "showProfileDesc": "Allow everyone or only contacts to see your profile",
+                  "whoCanMessageMe": "Who can message me",
+                  "whoCanMessageMeDesc": "Manage who can send you messages",
+                  "whoCanCallMe": "Who can call me",
+                  "whoCanCallMeDesc": "Manage who can make calls to you",
+                  "everyone": "Everyone",
+                  "contacts": "Contacts",
+                  "confirmTitle": "Confirm Changes",
+                  "confirmContent": "Are you sure you want to save these privacy changes?",
+                  "saveChanges": "Save Changes",
+                  "cancel": "Cancel",
+                  "unsavedChanges": "You have unsaved changes",
+                  "updateSuccess": "Privacy settings updated",
+                  "updateError": "Failed to update settings"
+            }
       }
 }

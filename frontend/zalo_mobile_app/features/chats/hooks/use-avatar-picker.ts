@@ -63,7 +63,7 @@ export function useAvatarPicker() {
     }
   }, []);
 
-  const uploadAvatar = useCallback(async (pickedImage: PickedAvatar): Promise<string> => {
+  const uploadAvatar = useCallback(async (pickedImage: PickedAvatar, targetId?: string, targetType?: 'USER' | 'GROUP'): Promise<string> => {
     if (!accessToken) throw new Error('Not authenticated');
 
     setIsUploading(true);
@@ -74,6 +74,8 @@ export function useAvatarPicker() {
           fileName: pickedImage.name,
           mimeType: pickedImage.type,
           fileSize: pickedImage.fileSize,
+          targetId,
+          targetType,
         },
         accessToken
       );

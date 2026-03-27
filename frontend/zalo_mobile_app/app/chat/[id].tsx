@@ -34,6 +34,8 @@ import { MessageActionSheet } from '@/features/chats/components/message-action-s
 import { useChatStore } from '@/features/chats/stores/chat.store';
 import { useMarkAsSeen } from '@/features/chats/hooks/use-mark-as-seen';
 import { MediaViewerModal } from '@/features/chats/components/media-viewer-modal';
+import { useCallStore } from '@/features/calls/stores/call.store';
+import { ActiveGroupCallBanner } from '@/features/chats/components/ActiveGroupCallBanner';
 
 const uuidv4 = () =>
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -184,6 +186,7 @@ export default function ChatDetailScreen() {
     }
   }, [jumpToMessageId, jumpToMessage, setJumpToMessageId, accessToken]);
 
+
   const messages = useMemo(() => {
     if (!data?.pages) return [];
     const raw: Message[] = [];
@@ -238,6 +241,29 @@ export default function ChatDetailScreen() {
 
   const isGroup = conversation?.type === 'GROUP';
   const isDirect = !isGroup;
+
+  // Sync active group call status on mount
+  useEffect(() => {
+    if (id && accessToken && isGroup) {
+      const syncActiveCall = async () => {
+        try {
+          // Phase 11: Add a small delay if currently IDLE to handle backend-settle time
+          const currentCallStatus = useCallStore.getState().callStatus;
+          if (currentCallStatus === 'IDLE') {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+
+          const res = await mobileApi.getActiveCall(id, accessToken);
+          // Phase 7: Pass dailyRoomUrl for instant rejoin
+          useCallStore.getState().setActiveGroupCall(id, res.active, res.dailyRoomUrl);
+        } catch (err) {
+          console.warn('[ChatScreen] Failed to fetch active call:', err);
+        }
+      };
+      
+      void syncActiveCall();
+    }
+  }, [id, accessToken, isGroup]);
 
   const latestMyMessageId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--)
@@ -395,6 +421,12 @@ export default function ChatDetailScreen() {
       <PinnedMessagesHeader
         pinnedMessages={pinnedMessages}
         onViewAllPinned={() => router.push(`/chat/${id}/pinned`)}
+      />
+
+      <ActiveGroupCallBanner
+        conversationId={id}
+        displayName={conversation?.name || 'Hội thoại'}
+        avatarUrl={conversation?.avatarUrl}
       />
 
       <KeyboardAvoidingView

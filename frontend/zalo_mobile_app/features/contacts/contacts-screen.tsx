@@ -4,6 +4,7 @@ import { ActivityIndicator, View, TouchableOpacity, Text } from 'react-native';
 import { useTheme, Appbar, Searchbar, Badge } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import Toast from 'react-native-toast-message';
 import { 
   useReceivedRequests, 
   useSentRequests, 
@@ -122,15 +123,27 @@ export function ContactsScreen() {
   };
 
   const handleAccept = (id: string) => {
-    acceptRequest(id);
+    acceptRequest(id, {
+      onSuccess: () => {
+        Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã chấp nhận kết bạn' });
+      }
+    });
   };
 
   const handleDecline = (id: string) => {
-    declineRequest(id);
+    declineRequest(id, {
+      onSuccess: () => {
+        Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã từ chối lời mời' });
+      }
+    });
   };
 
   const handleCancel = (id: string) => {
-    cancelRequest(id);
+    cancelRequest(id, {
+      onSuccess: () => {
+        Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã hủy lời mời' });
+      }
+    });
   };
 
   const handlePressFriend = (friend: Friend) => {
@@ -146,7 +159,12 @@ export function ContactsScreen() {
   };
 
   const handleCall = (friend: Friend) => {
-    console.log('Calling', friend.resolvedDisplayName || friend.displayName);
+    // Phase 6: Call implementation will go here
+    Toast.show({
+      type: 'info',
+      text1: 'Thông báo',
+      text2: `Tính năng gọi video cho ${friend.resolvedDisplayName || friend.displayName} đang được phát triển`,
+    });
   };
 
   const searchPlaceholder = useMemo(() => {
