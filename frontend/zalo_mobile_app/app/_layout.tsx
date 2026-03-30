@@ -24,13 +24,12 @@ if (!isExpoGo) {
     const Notifications = require('expo-notifications');
     Notifications.setNotificationHandler({
       handleNotification: async () => {
-        const isEnabled = getNotificationEnabledSync();
+        // App in FOREGROUND: suppress system tray alert to avoid annoyance.
+        // usePushNotifications/useReminderNotifications will show in-app Toasts/Modals instead.
         return {
-          shouldShowAlert: isEnabled,
-          shouldPlaySound: isEnabled,
+          shouldShowAlert: false,
+          shouldPlaySound: false,
           shouldSetBadge: false,
-          shouldShowBanner: isEnabled,
-          shouldShowList: isEnabled,
         };
       },
     });
@@ -49,15 +48,6 @@ if (!isExpoGo) {
   }
 }
 
-// ── Firebase background handler (dev-build only) ──────────────────
-try {
-  const { setBackgroundMessageHandler } = require('@react-native-firebase/messaging');
-  setBackgroundMessageHandler(async (_remoteMessage: any) => {
-    // Wakes the app silently — actual processing in useReminderNotifications
-  });
-} catch {
-  // Silent – Expo Go or not linked
-}
 
 // ── Themes ─────────────────────────────────────────────────────────
 const { LightTheme: AdaptedLightTheme, DarkTheme: AdaptedDarkTheme } = adaptNavigationTheme({
@@ -124,10 +114,12 @@ import { ReminderAlertOverlay } from '@/features/chats/components/reminder/remin
 import { useConversationRealtime } from '@/features/chats/hooks/use-conversation-realtime';
 import { IncomingCallModal } from '@/features/calls/components/incoming-call-modal';
 import { useCallSocket } from '@/features/calls/hooks/use-call-socket';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {
   const { alerts, dismissAlert, acknowledgeAlert } = useReminderNotifications();
   useConversationRealtime();
+  usePushNotifications();
   if (!isExpoGo) {
     useCallSocket();
   }

@@ -65,12 +65,13 @@ export function GroupCallWebView({ url, onLeave }: GroupCallWebViewProps) {
         // Detect if Daily navigates away from the room (e.g. after leaving)
         onNavigationStateChange={(navState) => {
           console.log('[GroupCallWebView] Navigation state:', navState.url);
-          // Detect both full navigation and hash changes that indicate leaving
+          // Only trigger onLeave if we are explicitly on a "left" page
+          // This avoids false positives during initial load or redirects
           if (navState.url && (
-              (!navState.url.includes('/call-') && !navState.url.includes('?t=')) ||
               navState.url.includes('#left') || 
               navState.url.includes('/left')
           )) {
+            console.log('[GroupCallWebView] User left via URL navigation');
              onLeave?.();
           }
         }}

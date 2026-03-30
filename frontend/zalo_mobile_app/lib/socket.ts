@@ -43,6 +43,13 @@ class SocketManager {
       console.error('❌ Socket application error:', payload);
     });
 
+    // Wrap emit to log all outgoing events
+    const originalEmit = this.socket.emit.bind(this.socket);
+    this.socket.emit = (event: string, ...args: any[]) => {
+      console.log(`[Socket] emit: ${event}`, args[0]);
+      return originalEmit(event, ...args);
+    };
+
     return this.socket;
   }
 
@@ -61,6 +68,7 @@ class SocketManager {
     event: string,
     data: any,
   ): Promise<T> {
+    console.log(`[Socket] emitWithAck: ${event}`, data);
     if (!this.socket) {
       throw new Error('Socket not connected');
     }

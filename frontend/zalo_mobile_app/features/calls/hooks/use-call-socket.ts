@@ -5,8 +5,9 @@ import { useCallStore, IncomingCallData } from '../stores/call.store';
 import { useAuth } from '@/providers/auth-provider';
 import { useNotificationStore } from '@/lib/notification-settings';
 import { useSocket } from '@/providers/socket-provider';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import Toast from 'react-native-toast-message';
+import * as Notifications from 'expo-notifications';
 import { useWebRTCCall } from './use-webrtc-call';
 import { isExpoGo } from '@/constants/platform';
 
@@ -63,7 +64,24 @@ export function useCallSocket() {
         receivedAt: Date.now(),
       });
 
-      // Send ringing acknowledgement to server (prevents backup FCM push)
+      // Show local notification if app is in background but socket is still alive
+      if (AppState.currentState !== 'active') {
+        Notifications.scheduleNotificationAsync({
+          identifier: payload.callId,
+          content: {
+            title: `Cuộc gọi từ ${payload.callerInfo?.displayName || 'Người dùng'}`,
+            body: payload.callType === 'VIDEO' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến',
+            data: { ...payload, type: 'INCOMING_CALL' },
+            sound: true,
+            priority: Notifications.AndroidNotificationPriority.MAX,
+          },
+          trigger: { 
+            channelId: 'default',
+          } as any, // immediate with channel
+        }).catch(err => console.error('[CallSocket] Failed to show background notification:', err));
+      }
+
+      // Send ringing acknowledgement to server (prevents backup FCM push if possible)
       socket.emit(SocketEvents.CALL_RINGING_ACK, { callId: payload.callId });
     };
 
@@ -146,6 +164,12 @@ export function useCallSocket() {
 
       console.log('[CallSocket] resetting call state due to onEnded');
       cleanupWebRTC();
+      
+      // Dismiss any existing notification for this call
+      if (payload.callId) {
+        Notifications.dismissNotificationAsync(payload.callId).catch(() => {});
+      }
+      
       store.resetCallState();
     };
 

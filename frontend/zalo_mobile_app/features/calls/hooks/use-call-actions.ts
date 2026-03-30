@@ -30,13 +30,13 @@ export function useCallActions() {
     const unsubscribe = useCallStore.subscribe(
       (state) => ({ status: state.callStatus, url: state.dailyRoomUrl }),
       ({ status, url }: { status: string; url: string | null }) => {
-        if (status === 'ACTIVE' && url) {
-          console.log('[useCallActions] Call active with URL, keeping state for in-app WebView:', url);
+        if (status === 'ACTIVE' && url && url.includes('daily.co')) {
+          console.log('[useCallActions] Call active with Daily.co URL, triggering WebView overlay');
           openWebCall(url);
           resetCallWithTimeout();
-          // DO NOT resetCallState here. The IncomingCallModal handles the WebView rendering.
         }
-      }
+      },
+      { equalityFn: (a, b) => a.status === b.status && a.url === b.url }
     );
     return () => unsubscribe();
   }, [openWebCall, resetCallWithTimeout]);
@@ -139,18 +139,24 @@ export function useCallActions() {
     // Wait for the server to acknowledge the acceptance successfully.
     // If it throws (e.g., answered elsewhere), it will be caught below.
     try {
+      // SET ACTIVE EARLY: This prevents race conditions where cleanup FCM messages (CANCEL_CALL)
+      // reset the state because it's still "RINGING" while we await the socket response.
+      store.setCallActive({ callId });
+
       const response: any = await socketManager.emitWithAck(SocketEvents.CALL_ACCEPT, { callId });
       
-      // RACE CONDITION FIX RESUMED: Set ACTIVE so the modal closes and the call UI opens natively.
-      store.setCallActive({ callId });
+      // Update with any additional data from server (like room URL)
       // If server returns a room URL in response (often it does for group calls)
       // or if we already had it in the store
-      const url = dailyRoomUrl || response?.dailyRoomUrl;
+      const url = response?.dailyRoomUrl || dailyRoomUrl;
 
-      if (url) {
+      // Only open WebView if we have a valid Daily.co URL. 
+      // This prevents 1v1 P2P calls from accidentally triggering the WebView overlay
+      // if there's stale state or a malformed response.
+      if (url && (url.includes('daily.co') || store.isGroupCall)) {
         console.log('[useCallActions] acceptCall: opening in-app web call URL', url);
+        store.setCallActive({ callId, dailyRoomUrl: url, dailyToken: response?.dailyToken });
         openWebCall(url);
-        // Do not reset the state, keep it ACTIVE to render the GroupCallWebView
       }
     } catch (err) {
       console.error('[useCallActions] acceptCall error:', err);
@@ -158,27 +164,43 @@ export function useCallActions() {
     }
   }, [openWebCall, resetCallWithTimeout]);
 
-  const rejectCall = useCallback(async () => {
-    console.log('[useCallActions] rejectCall');
+  const endCall = useCallback(async () => {
     const store = useCallStore.getState();
-    const { callId } = store;
+    const { callId, callStatus } = store;
 
-    resetCallWithTimeout();
-    if (callId) {
-      socketManager.emitWithAck(SocketEvents.CALL_REJECT, { callId }).catch(e => console.warn('[useCallActions] emitRejectCall error:', e));
+    if (callStatus === 'IDLE' || callStatus === 'ENDED') {
+      return;
     }
+
+    console.log('[useCallActions] endCall initiated', { callId, callStatus });
+    resetCallWithTimeout();
+    
+    if (callId) {
+      socketManager.emitWithAck(SocketEvents.CALL_HANGUP, { callId })
+        .catch(e => console.warn('[useCallActions] emitHangup error:', e));
+    }
+    
     store.resetCallState();
   }, [resetCallWithTimeout]);
 
-  const endCall = useCallback(async () => {
+  const rejectCall = useCallback(async () => {
     const store = useCallStore.getState();
-    const { callId } = store;
+    const { callId, callStatus } = store;
 
-    resetCallWithTimeout();
-    if (callId) {
-      socketManager.emitWithAck(SocketEvents.CALL_HANGUP, { callId }).catch(e => console.warn('[useCallActions] emitHangup error:', e));
+    if (callStatus !== 'RINGING' || !callId) {
+      return;
     }
-    store.resetCallState();
+
+    console.log('[useCallActions] rejectCall initiated', { callId });
+    resetCallWithTimeout();
+
+    try {
+      await socketManager.emitWithAck(SocketEvents.CALL_REJECT, { callId });
+    } catch (err) {
+      console.error('[useCallActions] rejectCall error:', err);
+    } finally {
+      store.resetCallState();
+    }
   }, [resetCallWithTimeout]);
 
   const joinExistingCall = useCallback(

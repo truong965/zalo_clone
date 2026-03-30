@@ -4,14 +4,7 @@ import { Portal } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
 
-export interface ReminderAlert {
-  id: string;
-  reminderId: string;
-  content: string;
-  conversationId?: string;
-  creatorId?: string;
-  triggeredAt?: string;
-}
+import { ReminderAlert } from '../../stores/reminder.store';
 
 interface ReminderAlertOverlayProps {
   alerts: ReminderAlert[];

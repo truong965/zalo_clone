@@ -49,6 +49,13 @@ export function useWebRTCCall(socketEmitters: {
             InCallManager.setSpeakerphoneOn(speakerOn);
           }
         }
+      },
+      {
+        equalityFn: (a, b) =>
+          a.status === b.status &&
+          a.speakerOn === b.speakerOn &&
+          a.type === b.type &&
+          a.isGroupCall === b.isGroupCall,
       }
     );
 
@@ -203,12 +210,31 @@ export function useWebRTCCall(socketEmitters: {
         iceTransportPolicy: (store.iceTransportPolicy as any) || 'all',
       });
 
+      const candidateBufferRef = { current: [] as any[] };
+      let flushTimeout: any = null;
+
       (pc as any).onicecandidate = (event: any) => {
         if (event.candidate) {
-          socketEmitters.emitIceCandidate({
-            callId: useCallStore.getState().callId,
-            candidates: JSON.stringify(event.candidate.toJSON())
-          });
+          candidateBufferRef.current.push(event.candidate.toJSON());
+          
+          if (!flushTimeout) {
+            flushTimeout = setTimeout(() => {
+              const candidates = candidateBufferRef.current;
+              candidateBufferRef.current = [];
+              flushTimeout = null;
+
+              if (candidates.length > 0) {
+                // Use plain emit for candidates to avoid ACK overhead and rate limiting
+                const socket = require('@/lib/socket').socketManager.getSocket();
+                if (socket) {
+                  socket.emit(require('@/constants/socket-events').SocketEvents.CALL_ICE_CANDIDATE, {
+                    callId: useCallStore.getState().callId,
+                    candidates: JSON.stringify(candidates)
+                  });
+                }
+              }
+            }, 100); // 100ms batch window
+          }
         }
       };
 

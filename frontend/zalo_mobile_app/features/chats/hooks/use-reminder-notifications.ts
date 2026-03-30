@@ -8,7 +8,7 @@ import { REMINDERS_BASE_KEY } from './use-reminders';
 import { useNotificationStore } from '@/lib/notification-settings';
 import { useSocket } from '@/providers/socket-provider';
 import { useAuth } from '@/providers/auth-provider';
-import type { ReminderAlert } from '../components/reminder/reminder-alert-overlay';
+import { useReminderStore, ReminderAlert } from '../stores/reminder.store';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -23,12 +23,14 @@ if (!isExpoGo) {
 }
 
 // ── Firebase (optional — works only in dev-builds, not Expo Go) ────
-let messagingInternal: any;
-let AuthorizationStatus: any;
+let messagingInstance: any;
+let getTokenModular: any;
+let onMessageModular: any;
 try {
-  const firebaseMessaging = require('@react-native-firebase/messaging');
-  messagingInternal = firebaseMessaging.getMessaging();
-  AuthorizationStatus = firebaseMessaging.AuthorizationStatus;
+  const messagingModule = require('@react-native-firebase/messaging');
+  messagingInstance = messagingModule.getMessaging();
+  getTokenModular = messagingModule.getToken;
+  onMessageModular = messagingModule.onMessage;
 } catch {
   // Silent – Expo Go or missing native module
 }
@@ -73,48 +75,40 @@ export function useReminderNotifications() {
     }
   }, [isEnabled, accessToken]);
 
-  // Alerts shown as full-screen modal overlay
-  const [alerts, setAlerts] = useState<ReminderAlert[]>([]);
+  // Alerts stored globally
+  const { alerts, pushAlert: storePushAlert, dismissAlert: storeDismissAlert } = useReminderStore();
 
-  // ── Push alert (dedup by reminderId) ─────────────────────────────
+  // ── Push alert (dedup handled by store) ─────────────────────────────
   const pushAlert = useCallback((alert: ReminderAlert) => {
-    setAlerts((prev) => {
-      if (prev.some((a) => a.reminderId === alert.reminderId)) return prev;
-      return [...prev, alert];
-    });
-
-    // ALSO trigger a system notification immediately for background visibility.
-    // BUT only if it didn't come from a local notification itself (to avoid loop/duplicates).
-    const isLocalSource = alert.id.startsWith('local-');
-    if (!isExpoGo && Notifications && !isLocalSource && isEnabled) {
-      void Notifications.scheduleNotificationAsync({
+    storePushAlert(alert);
+    
+    // If app is in background but socket/FCM foreground listener received the alert,
+    // show a local system notification so the user actually sees it.
+    if (AppState.currentState !== 'active' && !isExpoGo && Notifications) {
+      Notifications.scheduleNotificationAsync({
+        identifier: alert.reminderId,
         content: {
           title: '🔔 Nhắc hẹn',
           body: alert.content || 'Bạn có nhắc hẹn',
-          data: {
-            reminderId: alert.reminderId,
-            content: alert.content,
-            conversationId: alert.conversationId,
-            type: 'REMINDER_TRIGGERED',
-            source: 'immediate_local',
-          },
+          data: { ...alert, type: 'REMINDER_TRIGGERED' },
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
-          channelId: 'default',
-        } as any,
-        trigger: null, // show immediately
-      }).catch(() => { /* silent */ });
+        },
+        trigger: { 
+          channelId: 'default' 
+        } as any, // immediate with channel
+      }).catch((err: any) => console.error('[ReminderNotif] Failed to show background notification:', err));
     }
-  }, []);
+  }, [storePushAlert]);
 
   const dismissAlert = useCallback((alert: ReminderAlert) => {
-    setAlerts((prev) => prev.filter((a) => a.reminderId !== alert.reminderId));
-  }, []);
+    storeDismissAlert(alert.reminderId);
+  }, [storeDismissAlert]);
 
   const acknowledgeAlert = useCallback(
     (alert: ReminderAlert) => {
-      // Remove from UI immediately
-      setAlerts((prev) => prev.filter((a) => a.reminderId !== alert.reminderId));
+      // Remove from store
+      storeDismissAlert(alert.reminderId);
 
       if (!accessToken) return;
       void mobileApi
@@ -124,7 +118,7 @@ export function useReminderNotifications() {
         })
         .catch(() => { /* silent */ });
     },
-    [accessToken, queryClient],
+    [accessToken, queryClient, storeDismissAlert],
   );
 
   // ── Local notification scheduling ────────────────────────────────
@@ -162,9 +156,12 @@ export function useReminderNotifications() {
           },
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
-          channelId: 'default',
         } as any,
-        trigger: triggerDate as any,
+        trigger: { 
+          type: Notifications.SchedulableTriggerInputTypes.DATE, 
+          date: triggerDate,
+          channelId: 'default'
+        },
       });
 
       const map = await getScheduledMap();
@@ -217,15 +214,12 @@ export function useReminderNotifications() {
 
   // ── Register device for FCM push (dev-build only) ───────────────
   const registerDevice = useCallback(async () => {
-    if (!accessToken || !user || !messagingInternal) return;
+    if (!accessToken || !user || !messagingInstance || !getTokenModular) return;
     try {
-      const authStatus = await messagingInternal.requestPermission();
-      const enabled =
-        authStatus === AuthorizationStatus.AUTHORIZED ||
-        authStatus === AuthorizationStatus.PROVISIONAL;
-      if (!enabled) return;
-
-      const fcmToken = await messagingInternal.getToken();
+      // Note: modular requestPermission is usually standalone too, 
+      // but if we just want the token, getToken will handle it or fail if no permission.
+      // For simplicity in this legacy-to-modular transition:
+      const fcmToken = await getTokenModular(messagingInstance);
       if (!fcmToken) return;
 
       const deviceId = Device.osInternalBuildId || 'unknown_device';
@@ -281,9 +275,9 @@ export function useReminderNotifications() {
 
   // ── FCM foreground listener (dev-build only) ─────────────────────
   useEffect(() => {
-    if (!messagingInternal) return;
+    if (!messagingInstance || !onMessageModular) return;
     try {
-      const unsub = messagingInternal.onMessage(async (msg: any) => {
+      const unsub = onMessageModular(messagingInstance, async (msg: any) => {
         const { data } = msg;
         if (!data) return;
 
@@ -297,7 +291,11 @@ export function useReminderNotifications() {
             triggeredAt: new Date().toISOString(),
           });
           void queryClient.invalidateQueries({ queryKey: REMINDERS_BASE_KEY });
-        } else if (data.type === 'REMINDER_UPDATED' || data.type === 'REMINDER_DELETED') {
+        } else if (
+          data.type === 'REMINDER_CREATED' ||
+          data.type === 'REMINDER_UPDATED' || 
+          data.type === 'REMINDER_DELETED'
+        ) {
           if (data.type === 'REMINDER_DELETED' && data.reminderId) {
             await cancelLocalReminder(data.reminderId);
           }

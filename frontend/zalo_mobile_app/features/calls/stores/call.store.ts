@@ -163,9 +163,9 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
         callStatus: 'ACTIVE',
         callDuration: 0,
         incomingCall: null,
-        ...(params?.callId ? { callId: params.callId } : {}),
-        ...(params?.dailyRoomUrl ? { dailyRoomUrl: params.dailyRoomUrl } : {}),
-        ...(params?.dailyToken ? { dailyToken: params.dailyToken } : {}),
+        callId: params?.callId || state.callId,
+        dailyRoomUrl: params?.dailyRoomUrl || null,
+        dailyToken: params?.dailyToken || null,
         callType: state.callType,
       }));
     },
