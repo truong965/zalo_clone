@@ -35,3 +35,16 @@ export class ReminderDeletedEvent {
     public readonly userId: string,
   ) {}
 }
+
+/** Emitted when a reminder is updated (content, time, or status) */
+export class ReminderUpdatedEvent {
+  constructor(
+    public readonly reminderId: string,
+    public readonly userId: string,
+    public readonly conversationId: string | null,
+    public readonly messageId: bigint | null,
+    public readonly content: string,
+    public readonly remindAt: Date,
+    public readonly isCompleted: boolean,
+  ) {}
+}

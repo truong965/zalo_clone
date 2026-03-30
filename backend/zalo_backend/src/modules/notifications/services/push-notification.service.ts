@@ -22,6 +22,10 @@ export interface IncomingCallPushParams {
   callerAvatar: string | null;
   calleeId: string;
   conversationId?: string;
+  /** Group call flag — drives group-aware push content */
+  isGroupCall?: boolean;
+  /** Group conversation name */
+  groupName?: string | null;
 }
 
 export interface MissedCallPushParams {
@@ -72,6 +76,20 @@ export interface GroupEventPushParams {
 }
 
 /**
+ * Params for reminder push notifications.
+ * Built by ReminderNotificationListener from domain events.
+ */
+export interface ReminderPushParams {
+  recipientId: string;
+  reminderId: string;
+  content: string;
+  conversationId: string | null;
+  creatorId: string;
+  title: string;
+  body: string;
+}
+
+/**
  * Params for message push notifications (single or batched).
  * Built by MessageNotificationListener from BatchState.
  */
@@ -116,6 +134,8 @@ export class PushNotificationService {
       callerAvatar,
       calleeId,
       conversationId,
+      isGroupCall,
+      groupName,
     } = params;
 
     const tokens = await this.deviceTokens.getTokensByUserId(calleeId);
@@ -136,6 +156,8 @@ export class PushNotificationService {
       callerName,
       callerAvatar: callerAvatar ?? '',
       conversationId: conversationId ?? '',
+      isGroupCall: isGroupCall ? 'true' : 'false',
+      groupName: groupName ?? '',
       timestamp: new Date().toISOString(),
     };
 
@@ -422,6 +444,47 @@ export class PushNotificationService {
 
     this.logger.log(
       `📱 Group event push sent: ${subtype} conv=${conversationId.slice(0, 8)}… → user=${recipientId.slice(0, 8)}… (${tokens.length} device(s))`,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Reminder push (data-only, no batching)
+  // ─────────────────────────────────────────────────────────────────────
+
+  async sendReminderPush(params: ReminderPushParams): Promise<void> {
+    const {
+      recipientId,
+      reminderId,
+      content,
+      conversationId,
+      creatorId,
+      title,
+      body,
+    } = params;
+
+    const tokens = await this.deviceTokens.getTokensByUserId(recipientId);
+    if (tokens.length === 0) return;
+
+    const data: Record<string, string> = {
+      type: 'REMINDER_TRIGGERED',
+      reminderId,
+      content,
+      conversationId: conversationId ?? '',
+      creatorId,
+      title,
+      body,
+      timestamp: new Date().toISOString(),
+    };
+
+    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+      priority: 'high', // Reminders are time-sensitive
+      ttlSeconds: 3600, // 1 hour — reminder is stale if delivered much later
+    });
+
+    await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+
+    this.logger.log(
+      `📱 Reminder push sent: ${reminderId.slice(0, 8)}… → user=${recipientId.slice(0, 8)}… (${tokens.length} device(s))`,
     );
   }
 

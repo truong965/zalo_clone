@@ -26,6 +26,7 @@ import {
 import {
   ReminderCreatedEvent,
   ReminderDeletedEvent,
+  ReminderUpdatedEvent,
 } from '../events/reminder.events';
 import { InternalEventNames } from '@common/contracts/events/event-names';
 import type { CreateReminderDto } from '../dto/create-reminder.dto';
@@ -206,6 +207,21 @@ export class ReminderService {
     }
 
     this.logger.log(`Reminder ${reminderId} updated by user ${userId}`);
+
+    // Emit event → listeners trigger FCM sync for mobile
+    this.eventEmitter.emit(
+      InternalEventNames.REMINDER_UPDATED,
+      new ReminderUpdatedEvent(
+        updated.id,
+        userId,
+        updated.conversationId,
+        updated.messageId,
+        updated.content,
+        updated.remindAt,
+        updated.isCompleted,
+      ),
+    );
+
     return this.serializeReminder(updated);
   }
 

@@ -77,6 +77,7 @@ export const InternalEventNames = {
   REMINDER_CREATED: 'reminder.created',
   REMINDER_TRIGGERED: 'reminder.triggered',
   REMINDER_DELETED: 'reminder.deleted',
+  REMINDER_UPDATED: 'reminder.updated',
 } as const;
 
 export type InternalEventName =

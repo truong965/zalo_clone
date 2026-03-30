@@ -226,6 +226,7 @@ QR_CODE QR_CODE
   "users" {
     String id "🗝️"
     String phone_number 
+    String email "❓"
     String phone_country_code 
     String phone_number_hash "❓"
     String phone_number_normalized "❓"

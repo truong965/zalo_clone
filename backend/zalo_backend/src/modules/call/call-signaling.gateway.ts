@@ -338,29 +338,70 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
 
     // If callee reconnects while call is still RINGING, re-emit call:incoming
     // This handles the push notification flow: callee was offline → got push → opened app → socket connected
-    if (session.status === 'RINGING' && session.calleeId === userId) {
+    // If callee reconnects while call is still RINGING, re-emit call:incoming
+    // This handles the push notification flow: callee was offline → got push → opened app → socket connected
+    const isParticipant = session.calleeId === userId || (session.participantIds?.includes(userId) ?? false);
+    if (session.status === 'RINGING' && isParticipant) {
       this.logger.log(
-        `Call ${callId}: callee ${userId} reconnected during RINGING, re-emitting call:incoming`,
+        `Call ${callId}: participant ${userId} reconnected during RINGING, re-emitting call:incoming`,
       );
 
       const callerDisplayName = await this.getParticipantDisplayName(
         session.initiatorId,
       );
-      const calleeIceConfig = await this.iceConfigService.getIceConfig(userId);
       const callerAvatarUrl = await this.lookupUserAvatar(session.initiatorId);
 
-      socket.emit(SocketEvents.CALL_INCOMING, {
-        callId,
-        callType: session.callType,
-        conversationId: session.conversationId,
-        callerInfo: {
-          id: session.initiatorId,
-          displayName: callerDisplayName,
-          avatarUrl: callerAvatarUrl,
-        },
-        iceServers: calleeIceConfig.iceServers,
-        iceTransportPolicy: calleeIceConfig.iceTransportPolicy,
-      });
+      if (session.isGroupCall) {
+        // Resolve group info
+        let conversationName: string | null = null;
+        if (session.conversationId) {
+          const conv = await this.prisma.conversation.findUnique({
+            where: { id: session.conversationId },
+            select: { name: true },
+          });
+          conversationName = conv?.name ?? null;
+        }
+
+        // Generate meeting token for this specific participant on-the-fly
+        const dailyRoomUrl = this.dailyCoService.getRoomUrl(`call-${session.callId}`);
+        const token = await this.dailyCoService.createMeetingToken(
+          `call-${session.callId}`,
+          userId,
+          await this.getParticipantDisplayName(userId),
+          false,
+        );
+
+        socket.emit(SocketEvents.CALL_INCOMING, {
+          callId,
+          callType: session.callType,
+          conversationId: session.conversationId,
+          callerInfo: {
+            id: session.initiatorId,
+            displayName: callerDisplayName,
+            avatarUrl: callerAvatarUrl,
+          },
+          isGroupCall: true,
+          participantCount: (session.participantIds?.length ?? 0) + 1,
+          conversationName,
+          dailyRoomUrl,
+          dailyToken: token,
+        });
+      } else {
+        const calleeIceConfig = await this.iceConfigService.getIceConfig(userId);
+        socket.emit(SocketEvents.CALL_INCOMING, {
+          callId,
+          callType: session.callType,
+          conversationId: session.conversationId,
+          callerInfo: {
+            id: session.initiatorId,
+            displayName: callerDisplayName,
+            avatarUrl: callerAvatarUrl,
+          },
+          iceServers: calleeIceConfig.iceServers,
+          iceTransportPolicy: calleeIceConfig.iceTransportPolicy,
+          isGroupCall: false,
+        });
+      }
       return;
     }
   }
@@ -768,6 +809,36 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
       );
       const roomUrl = this.dailyCoService.getRoomUrl(room.name);
 
+      // Phase 4.6: Optimize notification latency
+      // 1. First, check socket availability for all receivers in parallel
+      const receiverSocketMap = new Map<string, string[]>();
+      await Promise.all(
+        finalReceiverIds.map(async (receiverId) => {
+          const socketIds = await this.socketState.getUserSockets(receiverId);
+          receiverSocketMap.set(receiverId, socketIds);
+
+          // 2. Immediately trigger push for offline users (don't wait for tokens)
+          if (socketIds.length === 0) {
+            this.eventEmitter.emit(
+              InternalEventNames.CALL_PUSH_NOTIFICATION_NEEDED,
+              {
+                callId,
+                callType,
+                callerId: callerInfo.id,
+                callerName: callerInfo.displayName,
+                callerAvatar: callerInfo.avatarUrl,
+                calleeId: receiverId,
+                conversationId,
+                conversationName,
+                reason: 'CALLEE_OFFLINE',
+                isGroupCall: true,
+              },
+            );
+          }
+        }),
+      );
+
+      // 3. Generate meeting tokens (N API calls) only after pushes are already in flight
       const allParticipantIds = [callerInfo.id, ...finalReceiverIds];
       const tokenEntries = await Promise.all(
         allParticipantIds.map(async (userId) => {
@@ -779,7 +850,7 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
             room.name,
             userId,
             displayName,
-            false, // Disable owner status to prevent host from ending the room for all
+            false,
           );
           return [userId, token] as const;
         }),
@@ -792,27 +863,11 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
         {},
       );
 
+      // 4. Send socket events to online users
       for (const receiverId of finalReceiverIds) {
-        const receiverSocketIds =
-          await this.socketState.getUserSockets(receiverId);
+        const receiverSocketIds = receiverSocketMap.get(receiverId) || [];
 
-        if (receiverSocketIds.length === 0) {
-          this.eventEmitter.emit(
-            InternalEventNames.CALL_PUSH_NOTIFICATION_NEEDED,
-            {
-              callId,
-              callType,
-              callerId: callerInfo.id,
-              callerName: callerInfo.displayName,
-              callerAvatar: callerInfo.avatarUrl,
-              calleeId: receiverId,
-              conversationId,
-              conversationName,
-              reason: 'CALLEE_OFFLINE',
-              isGroupCall: true,
-            },
-          );
-        } else {
+        if (receiverSocketIds.length > 0) {
           for (const socketId of receiverSocketIds) {
             this.server.in(socketId).socketsJoin(callRoom);
           }

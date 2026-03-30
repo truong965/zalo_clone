@@ -30,6 +30,9 @@ export interface CallPushNotificationPayload {
   callerAvatar: string | null;
   calleeId: string;
   conversationId?: string;
+  conversationName?: string | null;
+  /** Group call flag */
+  isGroupCall?: boolean;
   reason: 'CALLEE_OFFLINE' | 'NO_RINGING_ACK';
 }
 
@@ -90,6 +93,8 @@ export class CallNotificationListener {
         callerAvatar: payload.callerAvatar,
         calleeId: payload.calleeId,
         conversationId: payload.conversationId,
+        isGroupCall: payload.isGroupCall,
+        groupName: payload.conversationName,
       });
     } catch (error) {
       this.logger.error(

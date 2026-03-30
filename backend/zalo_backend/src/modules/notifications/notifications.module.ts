@@ -38,6 +38,7 @@ import { CallNotificationListener } from './listeners/call-notification.listener
 import { MessageNotificationListener } from './listeners/message-notification.listener';
 import { FriendshipPushNotificationListener } from './listeners/friendship-notification.listener';
 import { GroupNotificationListener } from './listeners/group-notification.listener';
+import { ReminderNotificationListener } from './listeners/reminder-notification.listener';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { GroupNotificationListener } from './listeners/group-notification.listen
     MessageNotificationListener,
     FriendshipPushNotificationListener,
     GroupNotificationListener,
+    ReminderNotificationListener,
   ],
   exports: [PushNotificationService, DeviceTokenService],
 })

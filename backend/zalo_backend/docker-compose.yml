@@ -44,6 +44,9 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_API_CORS_ALLOW_ORIGIN: "*"
+      MINIO_SERVER_URL: ${MINIO_PUBLIC_URL} # <-- thêm dòng này
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_PUBLIC_URL} # <-- thêm dòng này
+
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -69,6 +72,8 @@ services:
   # 3. For dev: coturn runs locally, no TLS, narrow port range
   coturn:
     image: coturn/coturn:latest
+    profiles:
+      - coturn
     container_name: zalo_coturn
     restart: always
     ports:
@@ -98,6 +103,20 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c " echo 'Waiting for MinIO to start...'; sleep 5; mc alias set myminio http://minio:9000 minioadmin minioadmin; mc mb myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set download myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1 myminio/zalo-clone-media-dev --prefix 'temp/'; echo 'MinIO bucket initialized with lifecycle rule (anonymous download enabled for dev)'; "
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: zalo_cloudflared
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflare:/etc/cloudflared:ro # mount thư mục chứa credentials + config
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # cho phép gọi ra host (cần thiết trên Linux)
+    depends_on:
+      - minio
+    profiles:
+      - tunnel # chỉ chạy khi thêm --profile tunnel (không ảnh hưởng người không dùng tunnel)
 
 volumes:
   postgres_data:
