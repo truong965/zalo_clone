@@ -195,6 +195,27 @@ if (!isConfigured) {
                         });
                   }
 
+                  if (data.type === 'REMINDER_TRIGGERED') {
+                        const title = data.title || '🔔 Nhắc hẹn';
+                        const body = data.content || data.body || 'Bạn có một nhắc hẹn';
+                        const tag = `reminder-${data.reminderId || 'unknown'}`;
+
+                        return self.registration.showNotification(title, {
+                              body,
+                              icon: '/favicon.ico',
+                              badge: '/favicon.ico',
+                              tag,
+                              requireInteraction: true,
+                              renotify: true,
+                              data: {
+                                    type: 'REMINDER_TRIGGERED',
+                                    reminderId: data.reminderId,
+                                    conversationId: data.conversationId,
+                                    url: data.conversationId ? `/chat/${data.conversationId}` : '/',
+                              },
+                        });
+                  }
+
                   if (data.title) {
                         return self.registration.showNotification(data.title, {
                               body: data.body || '',
@@ -220,60 +241,65 @@ if (!isConfigured) {
             event.waitUntil(
                   self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
                         for (const client of clients) {
-                              if (client.url.includes(self.location.origin) && 'focus' in client) {
-                                    if (data.type === 'NEW_MESSAGE' && data.conversationId) {
-                                          client.postMessage({
-                                                type: 'NAVIGATE_TO_CONVERSATION',
-                                                conversationId: data.conversationId,
-                                          });
-                                    } else if (data.type === 'FRIEND_REQUEST') {
-                                          client.postMessage({
-                                                type: 'NAVIGATE_TO_CONTACTS',
-                                                tab: 'requests',
-                                          });
-                                    } else if (data.type === 'FRIEND_ACCEPTED') {
-                                          client.postMessage({
-                                                type: 'NAVIGATE_TO_CONTACTS',
-                                          });
-                                    } else if (data.type === 'GROUP_EVENT' && data.conversationId) {
-                                          client.postMessage({
-                                                type: 'NAVIGATE_TO_CONVERSATION',
-                                                conversationId: data.conversationId,
-                                          });
-                                    } else if (data.type === 'INCOMING_CALL' && data.callId) {
-                                          client.postMessage({
-                                                type: 'NAVIGATE_TO_INCOMING_CALL',
-                                                callId: data.callId,
-                                                callType: data.callType,
-                                                callerId: data.callerId,
-                                                callerName: data.callerName,
-                                                callerAvatar: data.callerAvatar,
-                                                conversationId: data.conversationId,
-                                          });
-                                    } else {
-                                          client.postMessage({
-                                                type: data.type || 'NOTIFICATION_CLICK',
-                                                callId: data.callId,
-                                          });
-                                    }
-                                    return client.focus();
-                              }
+                               if (client.url.includes(self.location.origin) && 'focus' in client) {
+                                     if (data.type === 'NEW_MESSAGE' && data.conversationId) {
+                                           client.postMessage({
+                                                 type: 'NAVIGATE_TO_CONVERSATION',
+                                                 conversationId: data.conversationId,
+                                           });
+                                     } else if (data.type === 'FRIEND_REQUEST') {
+                                           client.postMessage({
+                                                 type: 'NAVIGATE_TO_CONTACTS',
+                                                 tab: 'requests',
+                                           });
+                                     } else if (data.type === 'FRIEND_ACCEPTED') {
+                                           client.postMessage({
+                                                 type: 'NAVIGATE_TO_CONTACTS',
+                                           });
+                                     } else if (data.type === 'GROUP_EVENT' && data.conversationId) {
+                                           client.postMessage({
+                                                 type: 'NAVIGATE_TO_CONVERSATION',
+                                                 conversationId: data.conversationId,
+                                           });
+                                     } else if (data.type === 'REMINDER_TRIGGERED' && data.conversationId) {
+                                           client.postMessage({
+                                                 type: 'NAVIGATE_TO_CONVERSATION',
+                                                 conversationId: data.conversationId,
+                                           });
+                                     } else if (data.type === 'INCOMING_CALL' && data.callId) {
+                                           client.postMessage({
+                                                 type: 'NAVIGATE_TO_INCOMING_CALL',
+                                                 callId: data.callId,
+                                                 callType: data.callType,
+                                                 callerId: data.callerId,
+                                                 callerName: data.callerName,
+                                                 callerAvatar: data.callerAvatar,
+                                                 conversationId: data.conversationId,
+                                           });
+                                     } else {
+                                           client.postMessage({
+                                                 type: data.type || 'NOTIFICATION_CLICK',
+                                                 callId: data.callId,
+                                           });
+                                     }
+                                     return client.focus();
+                               }
                         }
                         if (self.clients.openWindow) {
-                              return self.clients.openWindow(urlToOpen).then((newClient) => {
-                                    if (newClient && data.type === 'INCOMING_CALL' && data.callId) {
-                                          newClient.postMessage({
-                                                type: 'NAVIGATE_TO_INCOMING_CALL',
-                                                callId: data.callId,
-                                                callType: data.callType,
-                                                callerId: data.callerId,
-                                                callerName: data.callerName,
-                                                callerAvatar: data.callerAvatar,
-                                                conversationId: data.conversationId,
-                                          });
-                                    }
-                                    return undefined;
-                              });
+                               return self.clients.openWindow(urlToOpen).then((newClient) => {
+                                     if (newClient && data.type === 'INCOMING_CALL' && data.callId) {
+                                           newClient.postMessage({
+                                                 type: 'NAVIGATE_TO_INCOMING_CALL',
+                                                 callId: data.callId,
+                                                 callType: data.callType,
+                                                 callerId: data.callerId,
+                                                 callerName: data.callerName,
+                                                 callerAvatar: data.callerAvatar,
+                                                 conversationId: data.conversationId,
+                                           });
+                                     }
+                                     return undefined;
+                               });
                         }
                   }),
             );
