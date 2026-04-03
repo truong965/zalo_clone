@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { format } from 'date-fns';
@@ -7,12 +7,17 @@ import { UserAvatar } from '@/components/ui/user-avatar';
 import { getFullUrl, getSendStatus, getReceiptDisplayState } from './message-item.utils';
 import { styles } from './message-item.styles';
 import { MessageContent } from './message-content';
+import { ActionSheetMenu, MenuOption } from '@/components/ui/action-sheet-menu';
+import { useTranslate } from '@/hooks/use-translate';
+import { useTranslationStore } from '@/hooks/use-translation-store';
 
 export interface MessageItemProps {
   message: Message;
   isMe: boolean;
   isDirect: boolean;
   isLatestMyMessage: boolean;
+  conversationId: string;
+  isPinned?: boolean;
   showAvatar?: boolean;
   showSenderName?: boolean;
   showTime?: boolean;
@@ -20,6 +25,8 @@ export interface MessageItemProps {
   onJumpToMessage?: (messageId: string) => void;
   onMediaPress?: (mediaId: string) => void;
   onRetry?: (message: Message) => void;
+  onPin?: (message: Message) => void;
+  onUnpin?: (message: Message) => void;
   isHighlighted?: boolean;
 }
 
@@ -28,15 +35,31 @@ export function MessageItem({
   isMe,
   isDirect,
   isLatestMyMessage,
+  conversationId,
+  isPinned = false,
   showSenderName,
   showTime = false,
   onLongPress,
   onJumpToMessage,
   onMediaPress,
   onRetry,
+  onPin,
+  onUnpin,
   isHighlighted,
 }: MessageItemProps) {
   const theme = useTheme();
+  const [menuVisible, setMenuVisible] = useState(false);
+  const { translate } = useTranslate();
+  const {
+    translations,
+    pendingTranslations,
+    getTranslation,
+    isTranslationHidden,
+    hideTranslation,
+    showTranslation,
+    removeTranslation,
+    isTranslationPending,
+  } = useTranslationStore();
 
   if (!message || typeof message !== 'object') return null;
 
@@ -44,53 +67,129 @@ export function MessageItem({
   const sender     = message?.sender;
   const senderName = sender?.displayName || 'Người dùng';
 
+  // Build menu options for long press
+  const msgId = String(message.id);
+  const hasViTranslation = Boolean(translations[msgId]?.vi);
+  const hasEnTranslation = Boolean(translations[msgId]?.en);
+  const viPending = isTranslationPending(msgId, 'vi');
+  const enPending = isTranslationPending(msgId, 'en');
+  const viHidden = isTranslationHidden(msgId, 'vi');
+  const enHidden = isTranslationHidden(msgId, 'en');
+
+  const menuOptions: (MenuOption | { divider: boolean })[] = [
+    {
+      id: 'pin_toggle',
+      label: isPinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn',
+      icon: isPinned ? 'bookmark' : 'bookmark-outline',
+      color: '#007AFF',
+      onPress: () => {
+        if (isPinned) {
+          onUnpin?.(message);
+        } else {
+          onPin?.(message);
+        }
+      },
+      hidden: !onPin || !onUnpin,
+    },
+    {
+      id: 'reply',
+      label: 'Trả lời',
+      icon: 'arrow-undo',
+      color: '#007AFF',
+      onPress: () => onLongPress?.(message),
+    },
+    {
+      divider: true,
+    },
+    // Translate submenu
+    {
+      id: 'translate_vi',
+      label: viPending
+        ? 'Đang dịch sang Tiếng Việt...'
+        : `${hasViTranslation ? '✓ ' : ''}Dịch sang Tiếng Việt`,
+      icon: 'language',
+      color: hasViTranslation ? '#34C759' : viPending ? '#9ca3af' : '#007AFF',
+      onPress: () => {
+        if (!hasViTranslation && !viPending) {
+          translate(msgId, conversationId, 'vi', message.content || '');
+        }
+      },
+      disabled: hasViTranslation || viPending,
+    },
+    {
+      id: 'translate_en',
+      label: enPending
+        ? 'Đang dịch sang Tiếng Anh...'
+        : `${hasEnTranslation ? '✓ ' : ''}Dịch sang Tiếng Anh`,
+      icon: 'language',
+      color: hasEnTranslation ? '#34C759' : enPending ? '#9ca3af' : '#007AFF',
+      onPress: () => {
+        if (!hasEnTranslation && !enPending) {
+          translate(msgId, conversationId, 'en', message.content || '');
+        }
+      },
+      disabled: hasEnTranslation || enPending,
+    },
+    ...(hasViTranslation || hasEnTranslation ? [{ divider: true } as const] : []),
+  ];
+
   return (
-    <View style={[styles.row, isMe ? styles.rowMe : styles.rowOther]}>
-      {/* Avatar (other users only) */}
-      {!isMe && (
-        <View style={styles.avatarWrapper}>
-          <UserAvatar uri={getFullUrl(sender?.avatarUrl)} size={36} />
-        </View>
-      )}
-
-      <View style={styles.bubbleColumn}>
-        {/* Sender name */}
-        {!isMe && showSenderName && sender && (
-          <Text style={styles.senderName}>{senderName}</Text>
-        )}
-
-        {/* Bubble */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onLongPress={() => onLongPress?.(message)}
-          style={[
-            styles.bubble,
-            isMe ? styles.bubbleMe        : styles.bubbleOther,
-            isMe ? styles.bubbleCornerMe  : styles.bubbleCornerOther,
-            isHighlighted && styles.highlighted,
-          ]}
-        >
-          <MessageContent 
-            message={message} 
-            isMe={isMe} 
-            theme={theme} 
-            onJumpToMessage={onJumpToMessage}
-            onMediaPress={onMediaPress}
-            isHighlighted={isHighlighted}
-          />
-        </TouchableOpacity>
-
-        {/* Timestamp + send status */}
-        {showTime && (
-          <View style={[styles.timeRow, isMe ? styles.timeRowMe : styles.timeRowOther]}>
-            <Text style={styles.timeText}>{time}</Text>
-            {isMe && isLatestMyMessage && (
-              <SendStatusLabel message={message} isDirect={isDirect} onRetry={onRetry} />
-            )}
+    <>
+      <ActionSheetMenu
+        visible={menuVisible}
+        options={menuOptions}
+        onClose={() => setMenuVisible(false)}
+      />
+      <View style={[styles.row, isMe ? styles.rowMe : styles.rowOther]}>
+        {/* Avatar (other users only) */}
+        {!isMe && (
+          <View style={styles.avatarWrapper}>
+            <UserAvatar uri={getFullUrl(sender?.avatarUrl)} size={36} />
           </View>
         )}
+
+        <View style={styles.bubbleColumn}>
+          {/* Sender name */}
+          {!isMe && showSenderName && sender && (
+            <Text style={styles.senderName}>{senderName}</Text>
+          )}
+
+          {/* Bubble */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() => setMenuVisible(true)}
+            style={[
+              styles.bubble,
+              isMe ? styles.bubbleMe        : styles.bubbleOther,
+              isMe ? styles.bubbleCornerMe  : styles.bubbleCornerOther,
+              isHighlighted && styles.highlighted,
+            ]}
+          >
+            <MessageContent 
+              message={message} 
+              isMe={isMe} 
+              theme={theme} 
+              onJumpToMessage={onJumpToMessage}
+              onMediaPress={onMediaPress}
+              isHighlighted={isHighlighted}
+              translations={translations[msgId] || {}}
+              isTranslationHidden={isTranslationHidden}
+              pendingLangs={pendingTranslations[msgId] || []}
+            />
+          </TouchableOpacity>
+
+          {/* Timestamp + send status */}
+          {showTime && (
+            <View style={[styles.timeRow, isMe ? styles.timeRowMe : styles.timeRowOther]}>
+              <Text style={styles.timeText}>{time}</Text>
+              {isMe && isLatestMyMessage && (
+                <SendStatusLabel message={message} isDirect={isDirect} onRetry={onRetry} />
+              )}
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </>
   );
 }
 

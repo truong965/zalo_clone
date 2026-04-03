@@ -14,7 +14,10 @@ class SocketManager {
       this.socket.disconnect();
     }
 
-    const baseUrl = this.baseUrl.replace('/api/v1', '') || 'http://localhost:8000';
+    const baseUrl = this.baseUrl.replace('/api/v1', '');
+    if (!baseUrl) {
+      throw new Error('Socket base URL not configured');
+    }
     const socketUrl = `${baseUrl}/socket.io`;
 
     this.socket = io(socketUrl, {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
+import { View, TextInput, TouchableOpacity, ActivityIndicator, Text, Keyboard, Platform } from 'react-native';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,12 +25,29 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const [showExtraOptions, setShowExtraOptions] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const { pickMedia, pickDocuments, isUploading } = useMobileMediaUpload();
     const { isRecording, isUploadingAudio, recordingDuration, metering, startRecording, cancelRecording, stopAndSend } = useAudioRecorder();
     const { createReminder } = useReminders(conversationId);
     const { replyTarget, clearReplyTarget } = useChatStore();
+
+
+    React.useEffect(() => {
+        const showSubscription = Keyboard.addListener(
+            Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow', 
+            () => setIsKeyboardVisible(true)
+        );
+        const hideSubscription = Keyboard.addListener(
+            Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide', 
+            () => setIsKeyboardVisible(false)
+        );
+        return () => {
+            showSubscription.remove();
+            hideSubscription.remove();
+        };
+    }, []);
 
     const handleSend = () => {
         if (content.trim()) {
@@ -120,7 +137,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     }
 
     return (
-        <View className="bg-card border-t border-border" style={{ paddingBottom: Math.max(insets.bottom, 8) }}>
+        <View className="bg-card border-t border-border" style={{ paddingBottom: isKeyboardVisible ? 8 : Math.max(insets.bottom, 8) }}>
             {replyTarget && (
                 <View className="flex-row items-center px-4 py-2 bg-muted/30 border-b border-border/30 border-l-2 border-l-primary/60">
                     <View className="mr-3 p-1">

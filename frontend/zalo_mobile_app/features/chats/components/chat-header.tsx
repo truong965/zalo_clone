@@ -11,6 +11,7 @@ import { useCallActions } from '../../calls/hooks/use-call-actions';
 import { CallType } from '../../calls/stores/call.store';
 import { Alert } from 'react-native';
 import { mobileApi } from '@/services/api';
+import { ChatAiModal } from './chat-ai-modal';
 
 interface ChatHeaderProps {
   conversation: Conversation | null;
@@ -21,6 +22,7 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
   const router = useRouter();
   const { initiateCall, joinExistingCall } = useCallActions();
   const [showCallMenu, setShowCallMenu] = React.useState(false);
+  const [showAiModal, setShowAiModal] = React.useState(false);
 
   const hasData =
     conversation &&
@@ -175,6 +177,12 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
         <TouchableOpacity onPress={handleGoToSearch} style={styles.actionBtn}>
           <Ionicons name="search-outline" size={22} color="white" />
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setShowAiModal(true)}
+          style={styles.actionBtn}
+        >
+          <Text style={{ fontSize: 18 }}>✨</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={handleGoToSettings} style={styles.actionBtn}>
           <Ionicons name="list-outline" size={24} color="white" />
         </TouchableOpacity>
@@ -223,6 +231,15 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
           </Button>
         </Modal>
       </Portal>
+
+      {/* AI Chat Modal */}
+      {hasData && conversation?.id && (
+        <ChatAiModal
+          conversationId={conversation.id}
+          visible={showAiModal}
+          onClose={() => setShowAiModal(false)}
+        />
+      )}
     </View>
   );
 }
