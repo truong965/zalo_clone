@@ -55,6 +55,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
       );
     }
 
+    // [CORS FIX] Ensure CORS headers are present even in error responses
+    const origin = request.headers.origin;
+    if (origin) {
+      response.setHeader('Access-Control-Allow-Origin', origin);
+      response.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+
     response.status(status).json(errorResponse);
   }
 }

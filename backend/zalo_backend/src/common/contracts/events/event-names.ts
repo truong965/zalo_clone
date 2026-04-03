@@ -78,6 +78,13 @@ export const InternalEventNames = {
   REMINDER_TRIGGERED: 'reminder.triggered',
   REMINDER_DELETED: 'reminder.deleted',
   REMINDER_UPDATED: 'reminder.updated',
+
+  // AI unified response contract (Phase 0 scaffold)
+  AI_RESPONSE_STARTED: 'ai.response.started',
+  AI_RESPONSE_PROGRESS: 'ai.response.progress',
+  AI_RESPONSE_DELTA: 'ai.response.delta',
+  AI_RESPONSE_COMPLETED: 'ai.response.completed',
+  AI_RESPONSE_ERROR: 'ai.response.error',
 } as const;
 
 export type InternalEventName =
