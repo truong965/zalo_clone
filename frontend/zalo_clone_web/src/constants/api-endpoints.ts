@@ -187,4 +187,15 @@ export const API_ENDPOINTS = {
       DELETE: (id: string) => `/api/v1/roles/${id}`,
     },
   },
+
+  // AI
+  AI: {
+    TRANSLATE: '/api/v1/ai/translate',
+    ASK: '/api/v1/ai/ask',
+    SUMMARY: '/api/v1/ai/summary',
+    AGENT: '/api/v1/ai/agent',
+    SESSIONS: '/api/v1/ai/sessions',
+    SESSION_DETAIL: (id: string) => `/api/v1/ai/sessions/${id}`,
+    DELETE_SESSION: (id: string) => `/api/v1/ai/sessions/${id}`,
+  },
 };

@@ -6,6 +6,7 @@ import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
 import type { MessageListItem } from '@/types/api';
 import { useAuthStore } from '@/features/auth';
+import { useTranslationStore } from '../stores/use-translation-store';
 import {
       applySendFailedToCache,
       upsertMessageToCache,
@@ -31,6 +32,16 @@ type TypingStatusPayload = {
       isTyping: boolean;
 };
 
+type AiTranslatePayload = {
+      conversationId?: string;
+      messageId?: string;
+      translatedText?: string;
+      targetLang?: string;
+      sourceLang?: string;
+      engine?: string;
+      originalText?: string;
+};
+
 export function useMessageSocket(params: {
       conversationId: string | null;
       messagesQueryKey: QueryKey;
@@ -50,6 +61,8 @@ export function useMessageSocket(params: {
       const queryClient = useQueryClient();
       const { socket, isConnected } = useSocket();
       const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+      const setTranslation = useTranslationStore((s) => s.setTranslation);
+      const finishTranslation = useTranslationStore((s) => s.finishTranslation);
 
       const currentUserIdRef = useRef(currentUserId);
       useEffect(() => {
@@ -205,6 +218,19 @@ export function useMessageSocket(params: {
                   }
             };
 
+            const onAiTranslate = (payload: AiTranslatePayload) => {
+                  try {
+                        if (!payload?.messageId || !payload?.translatedText || !payload?.targetLang) {
+                              return;
+                        }
+
+                        setTranslation(payload.messageId, payload.targetLang, payload.translatedText);
+                        finishTranslation(payload.messageId, payload.targetLang);
+                  } catch {
+                        // ignore handler errors
+                  }
+            };
+
             socket.on(SocketEvents.MESSAGE_NEW, onMessageNew);
             socket.on(SocketEvents.MESSAGES_SYNC, onMessagesSync);
             socket.on(SocketEvents.MESSAGE_SENT_ACK, onSentAck);
@@ -212,6 +238,7 @@ export function useMessageSocket(params: {
             socket.on(SocketEvents.CONVERSATION_READ, onConversationRead);
             socket.on(SocketEvents.ERROR, onSocketError);
             socket.on(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
+            socket.on(SocketEvents.AI_TRANSLATE, onAiTranslate);
 
             return () => {
                   socket.off(SocketEvents.MESSAGE_NEW, onMessageNew);
@@ -221,8 +248,9 @@ export function useMessageSocket(params: {
                   socket.off(SocketEvents.CONVERSATION_READ, onConversationRead);
                   socket.off(SocketEvents.ERROR, onSocketError);
                   socket.off(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
+                  socket.off(SocketEvents.AI_TRANSLATE, onAiTranslate);
             };
-      }, [socket, isConnected, queryClient]);
+      }, [socket, isConnected, queryClient, setTranslation, finishTranslation]);
 
       return {
             isConnected,

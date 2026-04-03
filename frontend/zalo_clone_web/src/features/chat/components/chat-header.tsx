@@ -37,6 +37,7 @@ interface ChatHeaderProps {
       lastSeenAt?: string | null;
       onToggleSearch: () => void;
       onToggleInfo: () => void;
+      onToggleAiSummary?: () => void;
       typingText?: string | null;
       /** Present for 1-to-1 conversations; used to load contact / alias info. */
       otherUserId?: string | null;
@@ -52,6 +53,7 @@ export function ChatHeader({
       lastSeenAt,
       onToggleSearch,
       onToggleInfo,
+      onToggleAiSummary,
       typingText,
       otherUserId,
       conversationId,
@@ -383,6 +385,13 @@ export function ChatHeader({
                                           onClick={() => setCallModalOpen(true)}
                                     />
                               )}
+                              <Button
+                                    type="text"
+                                    className="text-blue-600 hover:bg-blue-50 bg-blue-50/50"
+                                    title="Trợ lý AI"
+                                    icon={<span role="img" aria-label="ai">✨</span>}
+                                    onClick={onToggleAiSummary}
+                              />
                               <Button
                                     icon={<SearchOutlined />}
                                     type="text"

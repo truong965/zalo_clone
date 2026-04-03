@@ -7,6 +7,11 @@ import type { DirectReceipts } from '@/types/api';
 import { ImageAttachment, VideoAttachment, AudioAttachment, DocumentAttachment } from './attachments';
 import { ReplyQuote } from './reply-quote';
 import { useTranslation } from 'react-i18next';
+import api from '@/lib/axios';
+import React from 'react';
+import { useTranslationStore } from '../stores/use-translation-store';
+import { useChatStore } from '../stores/chat.store';
+import { API_ENDPOINTS } from '@/constants/api-endpoints';
 
 interface MessageListProps {
       messages: ChatMessage[];
@@ -345,6 +350,41 @@ export function MessageList({
       onUnpinMessage,
 }: MessageListProps) {
       const { t } = useTranslation();
+      const {
+            translations,
+            setTranslation,
+            removeTranslation,
+            hideTranslation,
+            showTranslation,
+            startTranslation,
+            finishTranslation,
+            isTranslationHidden,
+            isTranslationPending,
+      } = useTranslationStore();
+
+      const setRightSidebar = useChatStore(s => s.setRightSidebar);
+      const setAiSummaryStartMessageId = useChatStore(s => s.setAiSummaryStartMessageId);
+
+      const handleTranslate = async (msg: ChatMessage, lang: string) => {
+            startTranslation(msg.id, lang);
+            try {
+                  const res = await api.post(API_ENDPOINTS.AI.TRANSLATE, {
+                        type: 'translate',
+                        conversationId: msg.conversationId,
+                        messageId: msg.id,
+                        targetLang: lang,
+                  });
+                  const translatedText = res.data?.data?.translatedText || res.data?.translatedText;
+                  if (translatedText) {
+                        setTranslation(msg.id, lang, translatedText);
+                        finishTranslation(msg.id, lang);
+                  }
+            } catch (error) {
+                  finishTranslation(msg.id, lang);
+                  console.error('Translation failed', error);
+            }
+      };
+
       // Find the latest (newest) message sent by "me" — receipt ticks only appear on this one
       const latestMyMessageId = (() => {
             for (let i = messages.length - 1; i >= 0; i--) {
@@ -372,6 +412,17 @@ export function MessageList({
                                     const showDivider = dateLabel !== prevDateLabel;
                                     const isHighlighted = highlightedMessageId === msg.id;
                                     const isLatestMyMessage = msg.id === latestMyMessageId;
+                                    const hasViTranslation = Boolean(translations[msg.id]?.vi);
+                                    const hasEnTranslation = Boolean(translations[msg.id]?.en);
+                                    const viHidden = isTranslationHidden(msg.id, 'vi');
+                                    const enHidden = isTranslationHidden(msg.id, 'en');
+                                    const translationEntries = Object.entries(translations[msg.id] || {});
+                                    const visibleTranslationEntries = translationEntries.filter(([lang]) =>
+                                          !isTranslationHidden(msg.id, lang),
+                                    );
+                                    const hiddenTranslationEntries = translationEntries.filter(([lang]) =>
+                                          isTranslationHidden(msg.id, lang),
+                                    );
                                     return (
                                           <Fragment key={msg.id}>
                                                 {showDivider && <DateDivider label={dateLabel} />}
@@ -384,14 +435,70 @@ export function MessageList({
                                                       const menuProps: MenuProps = {
                                                             items: [
                                                                   { key: 'reply', label: t('chat.messageList.reply') },
+                                                                  {
+                                                                        key: 'translate',
+                                                                        label: t('chat.messageList.translate', 'Dịch'),
+                                                                        children: [
+                                                                              {
+                                                                                    key: 'translate_vi',
+                                                                                    label: 'Tiếng Việt',
+                                                                                    disabled: hasViTranslation,
+                                                                              },
+                                                                              {
+                                                                                    key: 'translate_en',
+                                                                                    label: 'Tiếng Anh',
+                                                                                    disabled: hasEnTranslation,
+                                                                              },
+                                                                        ]
+                                                                  },
+                                                                  {
+                                                                        key: 'translation_visibility',
+                                                                        label: 'Bản dịch',
+                                                                        children: [
+                                                                              {
+                                                                                    key: 'hide_vi',
+                                                                                    label: 'Ẩn Tiếng Việt',
+                                                                                    disabled: !hasViTranslation || viHidden,
+                                                                              },
+                                                                              {
+                                                                                    key: 'show_vi',
+                                                                                    label: 'Hiện Tiếng Việt',
+                                                                                    disabled: !hasViTranslation || !viHidden,
+                                                                              },
+                                                                              {
+                                                                                    key: 'hide_en',
+                                                                                    label: 'Ẩn Tiếng Anh',
+                                                                                    disabled: !hasEnTranslation || enHidden,
+                                                                              },
+                                                                              {
+                                                                                    key: 'show_en',
+                                                                                    label: 'Hiện Tiếng Anh',
+                                                                                    disabled: !hasEnTranslation || !enHidden,
+                                                                              },
+                                                                        ],
+                                                                  },
                                                                   pinnedMessageIds?.has(msg.id)
                                                                         ? { key: 'unpin', label: t('chat.messageList.unpinMsg') }
                                                                         : { key: 'pin', label: t('chat.messageList.pinMsg') },
+                                                                  { type: 'divider' },
+                                                                  { key: 'summary', label: 'Tóm tắt từ đây trở đi ✨' },
                                                             ],
-                                                            onClick: ({ key }) => {
+                                                            onClick: (e) => {
+                                                                  e.domEvent?.stopPropagation();
+                                                                  const { key } = e;
                                                                   if (key === 'reply') onReply?.(msg);
                                                                   if (key === 'pin') onPinMessage?.(msg.id);
                                                                   if (key === 'unpin') onUnpinMessage?.(msg.id);
+                                                                  if (key === 'translate_vi' && !hasViTranslation) handleTranslate(msg, 'vi');
+                                                                  if (key === 'translate_en' && !hasEnTranslation) handleTranslate(msg, 'en');
+                                                                  if (key === 'hide_vi' && hasViTranslation && !viHidden) hideTranslation(msg.id, 'vi');
+                                                                  if (key === 'show_vi' && hasViTranslation && viHidden) showTranslation(msg.id, 'vi');
+                                                                  if (key === 'hide_en' && hasEnTranslation && !enHidden) hideTranslation(msg.id, 'en');
+                                                                  if (key === 'show_en' && hasEnTranslation && enHidden) showTranslation(msg.id, 'en');
+                                                                  if (key === 'summary') {
+                                                                        setAiSummaryStartMessageId(msg.id);
+                                                                        setRightSidebar('ai-summary');
+                                                                  }
                                                             },
                                                       };
 
@@ -430,6 +537,67 @@ export function MessageList({
                                                                                     />
                                                                               ) : null}
                                                                               {renderMessageBody(msg)}
+                                                                              {isTranslationPending(msg.id) && (
+                                                                                    <div className="mt-2 text-[13px] italic opacity-70 flex items-center gap-2 border-t border-gray-100 pt-1.5">
+                                                                                          <Spin size="small" /> Đang dịch...
+                                                                                    </div>
+                                                                              )}
+                                                                              {!isTranslationPending(msg.id) && visibleTranslationEntries.map(([lang, text]) => (
+                                                                                    <div key={lang} className="mt-2 text-[14px] italic opacity-90 border-t border-gray-100 pt-2 flex gap-2">
+                                                                                          <div className="text-blue-500 font-bold shrink-0">✨</div>
+                                                                                          <div className="flex-1 min-w-0">
+                                                                                                <div className="flex items-center justify-between gap-2 mb-0.5">
+                                                                                                      <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">
+                                                                                                            {lang === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh'}
+                                                                                                      </div>
+                                                                                                      <div className="flex items-center gap-1">
+                                                                                                            <Button
+                                                                                                                  size="small"
+                                                                                                                  type="text"
+                                                                                                                  className="!h-5 !px-1 text-[10px] !text-gray-400 hover:!text-gray-600"
+                                                                                                                  onClick={(e) => {
+                                                                                                                        e.stopPropagation();
+                                                                                                                        hideTranslation(msg.id, lang);
+                                                                                                                  }}
+                                                                                                            >
+                                                                                                                  Ẩn
+                                                                                                            </Button>
+                                                                                                            <Button
+                                                                                                                  size="small"
+                                                                                                                  type="text"
+                                                                                                                  className="!h-5 !px-1 text-[10px] !text-red-400 hover:!text-red-600"
+                                                                                                                  onClick={(e) => {
+                                                                                                                        e.stopPropagation();
+                                                                                                                        removeTranslation(msg.id, lang);
+                                                                                                                  }}
+                                                                                                            >
+                                                                                                                  Xóa
+                                                                                                            </Button>
+                                                                                                      </div>
+                                                                                                </div>
+                                                                                                <div className="whitespace-pre-wrap">{text}</div>
+                                                                                          </div>
+                                                                                    </div>
+                                                                              ))}
+                                                                              {!isTranslationPending(msg.id) && hiddenTranslationEntries.length > 0 && (
+                                                                                    <div className="mt-2 border-t border-gray-100 pt-2 flex flex-wrap items-center gap-1.5">
+                                                                                          <span className="text-[10px] text-gray-400">Bản dịch đã ẩn:</span>
+                                                                                          {hiddenTranslationEntries.map(([lang]) => (
+                                                                                                <Button
+                                                                                                      key={`show-${lang}`}
+                                                                                                      size="small"
+                                                                                                      type="text"
+                                                                                                      className="!h-5 !px-1 text-[10px] !text-blue-500 hover:!text-blue-700"
+                                                                                                      onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            showTranslation(msg.id, lang);
+                                                                                                      }}
+                                                                                                >
+                                                                                                      Hiện {lang === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh'}
+                                                                                                </Button>
+                                                                                          ))}
+                                                                                    </div>
+                                                                              )}
                                                                               {msg.senderSide === 'me' && getSendStatus(msg.metadata) === 'FAILED' && (
                                                                                     <div className="mt-2 flex items-center justify-end gap-2">
                                                                                           <span className="text-[11px] text-red-600 opacity-90">{t('chat.messageList.sendFail')}</span>
