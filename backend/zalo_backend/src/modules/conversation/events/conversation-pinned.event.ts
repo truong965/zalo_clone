@@ -4,7 +4,7 @@ import { DomainEvent } from '@shared/events';
  * Emitted when a user pins a conversation (personal action).
  *
  * Listeners:
- * - ConversationGateway: Emit socket "conversation:pinned" to user's devices (cross-device sync)
+ * - ConversationPinSocketListener: Emit socket "conversation:pinned" to user's devices (cross-device sync)
  */
 export class ConversationPinnedEvent extends DomainEvent {
   readonly eventType = 'CONVERSATION_PINNED';
@@ -33,7 +33,7 @@ export class ConversationPinnedEvent extends DomainEvent {
  * Emitted when a user unpins a conversation (personal action).
  *
  * Listeners:
- * - ConversationGateway: Emit socket "conversation:unpinned" to user's devices (cross-device sync)
+ * - ConversationPinSocketListener: Emit socket "conversation:unpinned" to user's devices (cross-device sync)
  */
 export class ConversationUnpinnedEvent extends DomainEvent {
   readonly eventType = 'CONVERSATION_UNPINNED';
