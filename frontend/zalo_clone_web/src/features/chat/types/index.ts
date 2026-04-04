@@ -77,6 +77,7 @@ export interface AiChatMessage {
   thought?: string;
   status?: 'pending' | 'streaming' | 'completed' | 'error';
   responseType?: 'ask' | 'agent' | 'summary';
+  isThoughtVisible?: boolean;
   metadata?: Record<string, any>;
   createdAt: string;
 }
@@ -105,6 +106,7 @@ export interface AiRequestState {
   progress?: AiRequestProgress;
   thought?: string;
   content: string;
+  isThoughtVisible?: boolean;
   error?: AiRequestError;
   sessionId?: string;
 }

@@ -11,6 +11,7 @@
  */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import type {
       RightSidebarState,
@@ -120,6 +121,7 @@ interface ChatStoreActions {
       appendAiRequestThoughtDelta: (input: { conversationId: string; requestId: string; thoughtDelta: string }) => void;
       completeAiRequest: (input: CompleteAiRequestInput) => void;
       failAiRequest: (input: FailAiRequestInput) => void;
+      toggleAiThoughtVisibility: (conversationId: string, messageId: string) => void;
       resetAiChat: (conversationId?: string) => void;
 }
 
@@ -181,10 +183,13 @@ function buildAssistantPlaceholder({
             createdAt,
             status: 'streaming',
             responseType,
+            isThoughtVisible: true,
       };
 }
 
-export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => ({
+export const useChatStore = create<ChatStoreState & ChatStoreActions>()(
+      persist(
+            (set) => ({
       // ── Initial state ───────────────────────────────────────────────────────
       selectedId: sessionStorage.getItem(STORAGE_KEYS.CHAT_SELECTED_ID) ?? null,
       rightSidebar: 'none',
@@ -262,6 +267,7 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => (
                         createdAt,
                         status: 'completed',
                         responseType,
+                        isThoughtVisible: true,
                   };
 
                   const assistantMessage = buildAssistantPlaceholder({ requestId, responseType, createdAt });
@@ -284,6 +290,7 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => (
                                           userMessageId: userMessage.id,
                                           assistantMessageId: assistantMessage.id,
                                           content: '',
+                                          isThoughtVisible: true,
                                           sessionId,
                                     },
                               },
@@ -469,4 +476,38 @@ export const useChatStore = create<ChatStoreState & ChatStoreActions>((set) => (
                         aiConversations: next,
                   };
             }),
-}));
+            toggleAiThoughtVisibility: (conversationId, messageId) =>
+                  set((state) => ({
+                        aiConversations: upsertConversation(state.aiConversations, conversationId, (current) => {
+                              const request = Object.values(current.requests).find(
+                                    (r) => r.assistantMessageId === messageId || r.userMessageId === messageId,
+                              );
+
+                              const nextMessages = current.messages.map((m) =>
+                                    m.id === messageId ? { ...m, isThoughtVisible: !(m.isThoughtVisible ?? true) } : m,
+                              );
+
+                              if (!request) return { ...current, messages: nextMessages };
+
+                              return {
+                                    ...current,
+                                    messages: nextMessages,
+                                    requests: upsertRequest(current.requests, request.requestId, (r) => ({
+                                          ...r,
+                                          isThoughtVisible: !(r.isThoughtVisible ?? true),
+                                    })),
+                              };
+                        }),
+                  })),
+      }),
+            {
+                  name: 'zalo-chat-ai-storage',
+                  storage: createJSONStorage(() => sessionStorage),
+                  partialize: (state) => ({
+                        aiConversations: state.aiConversations,
+                        aiSummaryStartMessageId: state.aiSummaryStartMessageId,
+                        selectedId: state.selectedId,
+                  }),
+            },
+      ),
+);

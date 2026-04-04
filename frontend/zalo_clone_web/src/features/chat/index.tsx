@@ -236,6 +236,7 @@ export function ChatFeature() {
                   requestId?: string;
                   conversationId?: string;
                   contentDelta?: string;
+                  thoughtDelta?: string;
                   content?: string;
                   text?: string;
                   step?: string;
@@ -246,7 +247,8 @@ export function ChatFeature() {
             }) => {
                   if (!data.requestId || !data.conversationId) return;
 
-                  if (!data.contentDelta && data.step) {
+                  // Handle progress updates (if any)
+                  if (data.step) {
                         updateAiRequestProgress({
                               conversationId: data.conversationId,
                               requestId: data.requestId,
@@ -257,18 +259,27 @@ export function ChatFeature() {
                                     percent: data.percent,
                               },
                         });
-                        return;
                   }
 
-                  const contentDelta = data.contentDelta || data.content || data.text;
-                  if (!contentDelta) return;
+                  // Handle thought updates
+                  if (data.thoughtDelta) {
+                        appendAiRequestThoughtDelta({
+                              conversationId: data.conversationId,
+                              requestId: data.requestId,
+                              thoughtDelta: data.thoughtDelta,
+                        });
+                  }
 
-                  appendAiRequestDelta({
-                        conversationId: data.conversationId,
-                        requestId: data.requestId,
-                        contentDelta,
-                        sessionId: data.sessionId,
-                  });
+                  // Handle content updates
+                  const contentDelta = data.contentDelta || data.content || data.text;
+                  if (contentDelta) {
+                        appendAiRequestDelta({
+                              conversationId: data.conversationId,
+                              requestId: data.requestId,
+                              contentDelta,
+                              sessionId: data.sessionId,
+                        });
+                  }
             };
 
             const handleCompleted = (data: {

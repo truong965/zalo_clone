@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Typography, Button, Input, Empty, Tooltip, message, Modal } from 'antd';
-import { CloseOutlined, RobotOutlined, SendOutlined, ClearOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { CloseOutlined, SendOutlined, ClearOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Brain, Eye, EyeOff } from 'lucide-react';
 import { useChatStore } from '../stores/chat.store';
 import api from '@/lib/axios';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
@@ -28,6 +30,18 @@ function parseAiResponse(content: string): React.ReactNode {
 
   lines.forEach((line, idx) => {
     const trimmed = line.trim();
+
+    // Check for blockquote
+    const isBlockquote = trimmed.startsWith('>');
+    if (isBlockquote) {
+      const text = trimmed.replace(/^>\s*/, '');
+      elements.push(
+        <blockquote key={`bq-${idx}`} className="border-l-4 border-gray-200 pl-4 py-1 my-2 italic text-gray-600 bg-gray-50/50 rounded-r">
+          {formatInlineText(text)}
+        </blockquote>
+      );
+      return;
+    }
 
     // Check if this is a list item (ordered or unordered)
     const isListItem = /^[\d+\.]/.test(trimmed) || trimmed.startsWith('-') || trimmed.startsWith('•');
@@ -228,13 +242,14 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
   const activeRequest = activeRequestId ? conversationState?.requests[activeRequestId] ?? null : null;
   const isLoading = Boolean(activeRequest && activeRequest.status !== 'completed' && activeRequest.status !== 'error');
   const streamingContent = activeRequest?.content ?? '';
-  const progress = activeRequest?.progress;
+  const streamingThought = activeRequest?.thought ?? '';
   const aiSummaryStartMessageId = useChatStore((s) => s.aiSummaryStartMessageId);
   const setAiSummaryStartMessageId = useChatStore((s) => s.setAiSummaryStartMessageId);
   const hydrateAiConversation = useChatStore((s) => s.hydrateAiConversation);
   const startAiRequest = useChatStore((s) => s.startAiRequest);
   const failAiRequest = useChatStore((s) => s.failAiRequest);
   const resetAiChat = useChatStore((s) => s.resetAiChat);
+  const toggleAiThoughtVisibility = useChatStore((s) => s.toggleAiThoughtVisibility);
 
   const syncHistory = useCallback(async () => {
     try {
@@ -317,6 +332,23 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
     [conversationId, failAiRequest, isLoading, startAiRequest, setInputValue],
   );
 
+  const handleCancel = useCallback(async () => {
+    if (!activeRequestId) return;
+    try {
+      await api.post(API_ENDPOINTS.AI.CANCEL, { requestId: activeRequestId, conversationId });
+      failAiRequest({
+        conversationId,
+        requestId: activeRequestId,
+        error: {
+          code: 'CANCELLED',
+          message: 'Đã hủy yêu cầu',
+        },
+      });
+    } catch (error) {
+      console.error('Failed to cancel AI request:', error);
+    }
+  }, [activeRequestId, conversationId, failAiRequest]);
+
   useEffect(() => {
     if (!aiSummaryStartMessageId) {
       lastProcessedIdRef.current = null;
@@ -350,6 +382,9 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
+          if (activeRequestId) {
+            await handleCancel();
+          }
           if (activeSessionId) {
             await api.delete(API_ENDPOINTS.AI.DELETE_SESSION(activeSessionId));
           }
@@ -364,9 +399,7 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
     });
   };
 
-  const assistantProgressText = progress
-    ? [progress.message, progress.percent != null ? `${progress.percent}%` : null].filter(Boolean).join(' • ')
-    : '';
+
 
   return (
     <div className="w-[400px] h-full bg-white border-l border-gray-200 flex flex-col shadow-2xl shrink-0 animate-in slide-in-from-right duration-300">
@@ -405,11 +438,7 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
           />
         )}
 
-        {assistantProgressText && (
-          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-            {assistantProgressText}
-          </div>
-        )}
+
 
         {messages.map((msg) => {
           const isAssistantPending = msg.role === 'assistant' && (msg.status === 'streaming' || msg.status === 'pending') && !msg.content;
@@ -427,18 +456,80 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
 
 
                 {isAssistantPending ? (
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <div className="flex gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <div className="flex gap-1.5">
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
+                      </div>
+                      <span className="text-xs font-medium text-blue-600">AI đang xử lý...</span>
                     </div>
-                    <span className="text-xs">Đang trả lời...</span>
+                    {msg.thought && (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[10px] font-bold text-orange-600/70 uppercase tracking-widest">Suy nghĩ</span>
+                          <button 
+                            onClick={() => toggleAiThoughtVisibility(conversationId, msg.id)}
+                            className="p-1 hover:bg-orange-100 rounded-md transition-colors text-orange-600/50 hover:text-orange-600"
+                            title={msg.isThoughtVisible === false ? "Hiện suy nghĩ" : "Ẩn suy nghĩ"}
+                          >
+                            {msg.isThoughtVisible === false ? <Eye size={12} /> : <EyeOff size={12} />}
+                          </button>
+                        </div>
+                        <AnimatePresence>
+                          {msg.isThoughtVisible !== false && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="bg-orange-50/80 border border-orange-100/50 rounded-xl p-3 text-xs text-orange-800 italic leading-relaxed">
+                                {parseAiResponse(msg.thought)}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
                   </div>
                 ) : msg.role === 'user' ? (
                   <div className="text-sm leading-relaxed">{msg.content}</div>
                 ) : (
-                  <div className="text-sm leading-relaxed text-gray-800">{parseAiResponse(msg.content)}</div>
+                  <div className="space-y-3">
+                    {msg.thought && (
+                      <div className="bg-orange-50/30 border border-orange-100/50 rounded-xl p-2.5 mb-1.5">
+                        <div className="flex items-center justify-between mb-1 px-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <Brain size={10} className="text-orange-500/70" />
+                            <span className="text-[10px] font-bold text-orange-600/60 uppercase tracking-wider">Lập luận của AI</span>
+                          </div>
+                          <button 
+                            onClick={() => toggleAiThoughtVisibility(conversationId, msg.id)}
+                            className="p-1 hover:bg-orange-200/50 rounded-md transition-colors text-orange-600/40 hover:text-orange-600"
+                          >
+                            {msg.isThoughtVisible === false ? <Eye size={12} /> : <EyeOff size={12} />}
+                          </button>
+                        </div>
+                        <AnimatePresence>
+                          {msg.isThoughtVisible !== false && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="text-[11px] text-orange-800/80 italic leading-relaxed pt-1.5 border-t border-orange-100/30">
+                                {parseAiResponse(msg.thought)}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                    <div className="text-sm leading-relaxed text-gray-800">{parseAiResponse(msg.content)}</div>
+                  </div>
                 )}
                 <div className={`text-[10px] mt-1.5 opacity-50 font-medium ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
                   {dayjs(msg.createdAt).format('HH:mm')}
@@ -461,6 +552,7 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
         )}
       </div>
 
+
       {/* Unified Agent Mode - No tabs needed */}
 
       <div className="p-4 bg-white border-t border-gray-100 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
@@ -482,11 +574,16 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
           <Button
             type="primary"
             shape="circle"
-            icon={<SendOutlined className="text-xs" />}
+            icon={isLoading ? <CloseOutlined className="text-xs" /> : <SendOutlined className="text-xs" />}
             size="middle"
-            onClick={() => void handleSend()}
-            disabled={!inputValue.trim() || isLoading}
-            className={`shadow-md flex items-center justify-center transition-all ${inputValue.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-200 border-none'}`}
+            onClick={() => (isLoading ? void handleCancel() : void handleSend())}
+            disabled={!isLoading && !inputValue.trim()}
+            className={`shadow-md flex items-center justify-center transition-all ${isLoading
+              ? 'bg-red-500 hover:bg-red-600 border-none'
+              : inputValue.trim()
+                ? 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-gray-200 border-none'
+              }`}
           />
         </div>
       </div>
