@@ -50,7 +50,7 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
 
   const keyboardVerticalOffset = Platform.OS === 'ios' ? insets.top : 0;
 
-  const { sendMessage, clearHistory } = useAiChat(conversationId);
+  const { sendMessage, clearHistory, cancelAiRequest } = useAiChat(conversationId);
   const conversationState = useAiStore((state) => state.aiConversations[conversationId] ?? null);
   const messages = conversationState?.messages ?? [];
   const activeRequestId = conversationState?.activeRequestId ?? null;
@@ -59,6 +59,7 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
     : null;
   const isLoading = Boolean(activeRequest && activeRequest.status !== 'completed' && activeRequest.status !== 'error');
   const streamingContent = activeRequest?.content ?? '';
+  const streamingThought = activeRequest?.thought ?? '';
   const progress = activeRequest?.progress;
 
   const aiSummaryStartMessageId = useAiStore((s) => s.aiSummaryStartMessageId);
@@ -212,6 +213,7 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
                 >
                   <AiMessageBubble
                     content={msg.content}
+                    thought={msg.thought}
                     isUser={!isAssistant}
                     time={time}
                     error={msg.status === 'error' ? { message: 'Có lỗi xảy ra' } : undefined}
@@ -224,8 +226,9 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
               <View style={styles.messageWrapper}>
                 <AiMessageBubble
                   content={streamingContent || ''}
+                  thought={streamingThought || ''}
                   isUser={false}
-                  isLoading={!streamingContent}
+                  isLoading={!streamingContent && !streamingThought}
                 />
               </View>
             )}
@@ -249,15 +252,17 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
               <TouchableOpacity
                 style={[
                   styles.sendBtn,
-                  !inputValue.trim() || isLoading ? styles.sendBtnDisabled : { backgroundColor: 'hsl(217.2, 91.2%, 59.8%)' },
+                  isLoading 
+                    ? styles.cancelBtn 
+                    : (!inputValue.trim() ? styles.sendBtnDisabled : styles.sendBtnActive),
                 ]}
-                onPress={() => handleSend()}
-                disabled={!inputValue.trim() || isLoading}
+                onPress={() => (isLoading ? void cancelAiRequest() : void handleSend())}
+                disabled={!isLoading && !inputValue.trim()}
               >
                 <Ionicons
-                  name="send"
-                  size={18}
-                  color={!inputValue.trim() || isLoading ? '#d1d5db' : '#fff'}
+                  name={isLoading ? 'close' : 'send'}
+                  size={isLoading ? 22 : 18}
+                  color={!isLoading && !inputValue.trim() ? '#d1d5db' : '#fff'}
                 />
               </TouchableOpacity>
             </View>
@@ -404,5 +409,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     shadowOpacity: 0,
     elevation: 0,
+  },
+  sendBtnActive: {
+    backgroundColor: 'hsl(217.2, 91.2%, 59.8%)',
+  },
+  cancelBtn: {
+    backgroundColor: '#ef4444',
   },
 });

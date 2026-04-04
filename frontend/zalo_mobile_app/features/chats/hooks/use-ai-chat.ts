@@ -32,6 +32,7 @@ export function useAiChat(conversationId: string) {
     hydrateAiConversation,
     startAiRequest,
     streamAiContent,
+    appendAiRequestThoughtDelta,
     completeAiRequest,
     failAiRequest,
     resetAiChat,
@@ -81,6 +82,22 @@ export function useAiChat(conversationId: string) {
       });
     };
 
+    const handleThought = (data: {
+      requestId?: string;
+      conversationId?: string;
+      thoughtDelta?: string;
+    }) => {
+      if (!data.conversationId || data.conversationId !== conversationId) return;
+      const requestId = resolveRequestId(data);
+      if (!requestId || !data.thoughtDelta) return;
+
+      appendAiRequestThoughtDelta({
+        conversationId,
+        requestId,
+        thoughtDelta: data.thoughtDelta,
+      });
+    };
+
     const handleCompleted = (data: {
       requestId?: string;
       conversationId?: string;
@@ -123,6 +140,7 @@ export function useAiChat(conversationId: string) {
     };
 
     socket.on(SocketEvents.AI_RESPONSE_PROGRESS, handleProgress);
+    socket.on(SocketEvents.AI_RESPONSE_THOUGHT, handleThought);
     socket.on(SocketEvents.AI_RESPONSE_DELTA, handleProgress);
     socket.on(SocketEvents.AI_STREAM_CHUNK, handleProgress);
     socket.on(SocketEvents.AI_RESPONSE_COMPLETED, handleCompleted);
@@ -133,6 +151,7 @@ export function useAiChat(conversationId: string) {
 
     return () => {
       socket.off(SocketEvents.AI_RESPONSE_PROGRESS, handleProgress);
+      socket.off(SocketEvents.AI_RESPONSE_THOUGHT, handleThought);
       socket.off(SocketEvents.AI_RESPONSE_DELTA, handleProgress);
       socket.off(SocketEvents.AI_STREAM_CHUNK, handleProgress);
       socket.off(SocketEvents.AI_RESPONSE_COMPLETED, handleCompleted);
@@ -321,11 +340,35 @@ export function useAiChat(conversationId: string) {
     [conversationId, accessToken, startAiRequest, streamAiContent, completeAiRequest, failAiRequest]
   );
 
+  const cancelAiRequest = useCallback(async () => {
+    const activeId = useAiStore.getState().aiConversations[conversationId]?.activeRequestId;
+    if (!accessToken || !activeId) return;
+
+    try {
+      await mobileApi.cancelAiRequest(accessToken, activeId, conversationId);
+      failAiRequest({
+        conversationId,
+        requestId: activeId,
+        error: {
+          code: 'CANCELLED',
+          message: 'Đã hủy yêu cầu',
+          retriable: true,
+        },
+      });
+    } catch (error) {
+      console.error('[useAiChat] Failed to cancel request:', error);
+    }
+  }, [conversationId, accessToken, failAiRequest]);
+
   const clearHistory = useCallback(
     async (sessionId?: string) => {
       if (!accessToken || !sessionId) return;
 
       try {
+        const activeId = useAiStore.getState().aiConversations[conversationId]?.activeRequestId;
+        if (activeId) {
+          await cancelAiRequest();
+        }
         await mobileApi.deleteAiSession(accessToken, sessionId);
         resetAiChat(conversationId);
       } catch (error) {
@@ -333,12 +376,13 @@ export function useAiChat(conversationId: string) {
         throw error;
       }
     },
-    [conversationId, accessToken, resetAiChat]
+    [conversationId, accessToken, resetAiChat, cancelAiRequest]
   );
 
   return {
     sendMessage,
     clearHistory,
     syncHistory,
+    cancelAiRequest,
   };
 }

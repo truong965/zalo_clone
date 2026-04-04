@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Platform } from 'react-native';
 import { Text } from 'react-native-paper';
 
 /**
  * Parse AI response and format with markdown-like support
- * Supports: **bold**, numbered lists, bullet points, line breaks
+ * Supports: **bold**, numbered lists, bullet points, line breaks, blockquotes
  */
 export function parseAiResponse(content: string): React.ReactNode {
   if (!content) return null;
@@ -14,30 +14,23 @@ export function parseAiResponse(content: string): React.ReactNode {
 
   lines.forEach((line, idx) => {
     const trimmed = line.trim();
-
-    // Check for bold: **text**
-    if (trimmed.includes('**')) {
-      const parts = trimmed.split(/\*\*(.+?)\*\*/g);
-      let isBold = false;
-
-      return (
-        <Text key={`p-${idx}`} style={styles.paragraph}>
-          {parts.map((part, i) => {
-            if (i % 2 === 1) {
-              isBold = !isBold;
-              return (
-                <Text key={i} style={styles.bold}>
-                  {part}
-                </Text>
-              );
-            }
-            return <Text key={i}>{part}</Text>;
-          })}
-        </Text>
-      );
+    if (!trimmed && elements.length > 0 && idx < lines.length - 1) {
+      elements.push(<View key={`sep-${idx}`} style={styles.separator} />);
+      return;
     }
 
-    // Check for numbered list: 1. text or - text
+    // Check for blockquote: > text
+    const blockquoteMatch = trimmed.match(/^>\s*(.+)/);
+    if (blockquoteMatch) {
+      elements.push(
+        <View key={`bq-${idx}`} style={styles.blockquote}>
+          <Text style={styles.blockquoteText}>{formatInlineText(blockquoteMatch[1])}</Text>
+        </View>
+      );
+      return;
+    }
+
+    // Check for lists
     const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)/);
     const bulletMatch = trimmed.match(/^[\-•]\s+(.+)/);
 
@@ -45,26 +38,22 @@ export function parseAiResponse(content: string): React.ReactNode {
       elements.push(
         <View key={`li-${idx}`} style={styles.listItem}>
           <Text style={styles.listNumber}>{numberedMatch[1]}.</Text>
-          <Text style={styles.listContent}>{numberedMatch[2]}</Text>
+          <View style={{ flex: 1 }}>{formatInlineText(numberedMatch[2])}</View>
         </View>
       );
     } else if (bulletMatch) {
       elements.push(
         <View key={`li-${idx}`} style={styles.listItem}>
           <Text style={styles.bullet}>•</Text>
-          <Text style={styles.listContent}>{bulletMatch[1]}</Text>
+          <View style={{ flex: 1 }}>{formatInlineText(bulletMatch[1])}</View>
         </View>
       );
     } else if (trimmed.length > 0) {
-      // Regular paragraph
       elements.push(
-        <Text key={`p-${idx}`} style={styles.paragraph}>
+        <View key={`p-${idx}`} style={styles.paragraphContainer}>
           {formatInlineText(trimmed)}
-        </Text>
+        </View>
       );
-    } else if (elements.length > 0 && idx < lines.length - 1) {
-      // Empty line as separator
-      elements.push(<View key={`sep-${idx}`} style={styles.separator} />);
     }
   });
 
@@ -76,39 +65,32 @@ export function parseAiResponse(content: string): React.ReactNode {
 }
 
 /**
- * Format inline text: **bold**, *italic*, `code`
+ * Format inline text: **bold**, `code`
  */
 function formatInlineText(text: string): React.ReactNode {
-  // Simple approach: split by markers and render with styles
-  const boldRegex = /\*\*(.+?)\*\*/g;
-  const italicRegex = /\*(.+?)\*/g;
-  const codeRegex = /`(.+?)`/g;
-
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-
-  // Replace patterns in order of priority
-  const patterns = [
-    { regex: /\*\*(.+?)\*\*/g, style: styles.bold, wrap: (t: string) => t },
-    { regex: /`(.+?)`/g, style: styles.code, wrap: (t: string) => t },
-  ];
-
-  let currentText = text;
-  for (const pattern of patterns) {
-    const matches = Array.from(currentText.matchAll(pattern.regex));
-    if (matches.length > 0) {
-      let result = currentText;
-      for (const match of matches.reverse()) {
-        const before = result.slice(0, match.index);
-        const matched = match[1];
-        const after = result.slice(match.index! + match[0].length);
-        result = before + `<${pattern.style || ''}>${matched}</${pattern.style || ''}>` + after;
-      }
-      currentText = result;
-    }
-  }
-
-  return <Text style={styles.paragraph}>{currentText}</Text>;
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  
+  return (
+    <Text style={styles.paragraph}>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return (
+            <Text key={i} style={styles.bold}>
+              {part.slice(2, -2)}
+            </Text>
+          );
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return (
+            <Text key={i} style={styles.code}>
+              {part.slice(1, -1)}
+            </Text>
+          );
+        }
+        return <Text key={i}>{part}</Text>;
+      })}
+    </Text>
+  );
 }
 
 /**
@@ -170,12 +152,14 @@ function LoadingDots() {
 
 export function AiMessageBubble({
   content,
+  thought,
   isUser,
   isLoading,
   time,
   error,
 }: {
   content?: string;
+  thought?: string;
   isUser: boolean;
   isLoading?: boolean;
   time?: string;
@@ -183,6 +167,15 @@ export function AiMessageBubble({
 }) {
   return (
     <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+      {!isUser && thought && (
+        <View style={styles.thoughtSection}>
+          <Text style={styles.thoughtHeader}>SUY NGHĨ CỦA AI</Text>
+          <View style={styles.thoughtContent}>
+            {parseAiResponse(thought)}
+          </View>
+        </View>
+      )}
+      
       {isLoading ? (
         <LoadingDots />
       ) : error ? (
@@ -203,6 +196,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: '#1f2937',
+  },
+  paragraphContainer: {
     marginBottom: 4,
   },
   bold: {
@@ -218,31 +213,58 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 2,
     borderRadius: 3,
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontSize: 12,
+  },
+  blockquote: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#e5e7eb',
+    paddingLeft: 12,
+    paddingVertical: 4,
+    marginVertical: 4,
+    backgroundColor: '#f9fafb',
+    borderRadius: 2,
+  },
+  blockquoteText: {
+    fontStyle: 'italic',
+    color: '#4b5563',
+    fontSize: 13,
   },
   listItem: {
     flexDirection: 'row',
     marginVertical: 4,
-    gap: 8,
+    paddingRight: 10,
   },
   listNumber: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: 'bold',
     color: '#1f2937',
-    minWidth: 24,
+    width: 24,
   },
   bullet: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: 'bold',
     color: '#1f2937',
-    minWidth: 24,
+    width: 24,
+    textAlign: 'center',
   },
-  listContent: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#374151',
-    flex: 1,
+  thoughtSection: {
+    marginBottom: 12,
+    padding: 10,
+    backgroundColor: '#fff7ed',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  thoughtHeader: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#ea580c',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  thoughtContent: {
+    opacity: 0.9,
   },
   separator: {
     height: 8,

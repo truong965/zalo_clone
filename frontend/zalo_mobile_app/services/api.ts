@@ -305,6 +305,17 @@ export const mobileApi = {
             );
       },
 
+      cancelAiRequest(accessToken: string, requestId: string, conversationId?: string) {
+            return apiRequest<void>(
+                  '/api/v1/ai/cancel',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ requestId, conversationId }),
+                  },
+                  accessToken,
+            );
+      },
+
       translateMessage(
             accessToken: string,
             payload: { conversationId: string; messageId: string; targetLang: string },
