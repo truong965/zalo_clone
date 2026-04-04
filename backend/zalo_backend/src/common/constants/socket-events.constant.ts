@@ -53,6 +53,7 @@ export const SocketEvents = {
   AI_STREAM_ERROR: 'ai:stream-error',
   AI_RESPONSE_STARTED: 'ai.response.started',
   AI_RESPONSE_PROGRESS: 'ai.response.progress',
+  AI_RESPONSE_THOUGHT: 'ai.response.thought',
   AI_RESPONSE_DELTA: 'ai.response.delta',
   AI_RESPONSE_COMPLETED: 'ai.response.completed',
   AI_RESPONSE_ERROR: 'ai.response.error',

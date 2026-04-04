@@ -26,6 +26,7 @@ import { Type, Transform } from 'class-transformer';
 type AIUnifiedSocketEvent =
   | typeof SocketEvents.AI_RESPONSE_STARTED
   | typeof SocketEvents.AI_RESPONSE_PROGRESS
+  | typeof SocketEvents.AI_RESPONSE_THOUGHT
   | typeof SocketEvents.AI_RESPONSE_DELTA
   | typeof SocketEvents.AI_RESPONSE_COMPLETED
   | typeof SocketEvents.AI_RESPONSE_ERROR;
@@ -201,6 +202,32 @@ export class AIInternalController {
     return {
       messages: safeJSON(messagesWithSenders),
     };
+  }
+
+  @Get('messages/count')
+  async countMessages(@Query() query: GetInternalMessagesDto) {
+    this.logger.debug(`Incoming countMessages query: ${JSON.stringify(query)}`);
+    
+    const { conversationId, userId, after } = query;
+
+    // Security check: If userId is provided, verify membership
+    if (userId && conversationId) {
+      await this.validateMembership(conversationId, userId);
+    }
+    
+    const where: any = { deletedAt: null };
+    if (conversationId) {
+      where.conversationId = conversationId;
+    }
+
+    if (after) {
+      where.id = { gt: BigInt(after) };
+    }
+
+    const count = await this.prisma.message.count({ where });
+    this.logger.debug(`Counted ${count} messages`);
+
+    return { count };
   }
 
   @Get('messages/context')
@@ -423,6 +450,15 @@ export class AIInternalController {
           },
         };
       case SocketEvents.AI_RESPONSE_PROGRESS:
+        return {
+          event: SocketEvents.AI_STREAM_CHUNK,
+          data: {
+            ...data,
+            event: SocketEvents.AI_STREAM_CHUNK,
+            type: data.type,
+          },
+        };
+      case SocketEvents.AI_RESPONSE_THOUGHT:
         return {
           event: SocketEvents.AI_STREAM_CHUNK,
           data: {

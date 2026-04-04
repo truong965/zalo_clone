@@ -58,6 +58,16 @@ export class AiProxyController {
     return this.triggerAi({ ...dto, type: AiTriggerType.AGENT }, userId);
   }
 
+  @Post('cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancelAi(
+    @Body('requestId') requestId: string,
+    @Body('conversationId') conversationId: string | undefined,
+    @CurrentUserId() userId: string
+  ) {
+    return this.aiProxyService.cancelAiStream(requestId, userId, conversationId);
+  }
+
   @Get('sessions')
   async listSessions(
     @Query() query: Record<string, string>,

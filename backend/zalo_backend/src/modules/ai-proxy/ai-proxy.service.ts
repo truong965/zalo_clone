@@ -68,6 +68,14 @@ export class AiProxyService {
     return this.request('post', '/bot/trigger', { ...dto, userId }, dto.requestId);
   }
 
+  async cancelAiStream(requestId: string, userId: string, conversationId?: string) {
+    if (!requestId) {
+      throw new BadRequestException('requestId is required for cancellation');
+    }
+    this.logger.log(`User ${userId} requested AI cancellation for: ${requestId}`);
+    return this.request('post', '/bot/cancel', { requestId, userId, conversationId }, requestId);
+  }
+
   async listSessions(
     userId: string,
     query: {
@@ -118,8 +126,6 @@ export class AiProxyService {
   ) {
     const url = `${this.config.baseUrl}${path}`;
     const keyPrefix = this.config.apiKey ? `${this.config.apiKey.substring(0, 5)}***` : 'MISSING';
-    this.logger.debug(`Forwarding AI ${method.toUpperCase()} ${url} | Key=${keyPrefix}`);
-
     try {
       const response = await lastValueFrom(
         this.httpService.request({
