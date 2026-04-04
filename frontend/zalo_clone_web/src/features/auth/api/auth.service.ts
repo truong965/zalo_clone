@@ -22,7 +22,7 @@ export interface AuthResponseData {
 
 
 export interface QrStatusResponse {
-      status: 'PENDING' | 'SCANNED' | 'APPROVED' | 'EXPIRED';
+      status: 'PENDING' | 'SCANNED' | 'APPROVED' | 'CANCELLED' | 'EXPIRED';
       ticket?: string;
 }
 
