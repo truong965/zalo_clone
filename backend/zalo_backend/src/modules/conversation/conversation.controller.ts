@@ -12,7 +12,9 @@ import {
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ConversationService } from './services/conversation.service';
 import { GroupService } from './services/group.service';
+import { GroupJoinService } from './services/group-join.service';
 import { ToggleArchiveDto } from './dto/toggle-archive.dto';
+import { RequestJoinGroupDto } from './dto/request-join-group.dto';
 import {
   InteractionGuard,
   RequireInteraction,
@@ -28,7 +30,8 @@ export class ConversationController {
   constructor(
     private readonly conversationService: ConversationService,
     private readonly groupService: GroupService,
-  ) {}
+    private readonly groupJoinService: GroupJoinService,
+  ) { }
 
   @Post('direct')
   @UseGuards(InteractionGuard)
@@ -102,6 +105,15 @@ export class ConversationController {
       conversationId,
       limit ? +limit : undefined,
     );
+  }
+
+  @Get(':id/join-preview')
+  @ApiOperation({ summary: 'Get group join preview information' })
+  async getJoinPreview(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+  ) {
+    return this.groupJoinService.getJoinPreview(conversationId, user.id);
   }
 
   @Patch(':id/mute')
@@ -187,6 +199,22 @@ export class ConversationController {
     return this.groupService.unpinMessage(
       conversationId,
       BigInt(body.messageId),
+      user.id,
+    );
+  }
+
+  @Post(':id/join')
+  @ApiOperation({ summary: 'Join a group conversation' })
+  async joinGroupConversation(
+    @CurrentUser() user,
+    @Param('id') conversationId: string,
+    @Body() body: RequestJoinGroupDto,
+  ) {
+    return this.groupJoinService.requestJoin(
+      {
+        conversationId,
+        message: body.message,
+      },
       user.id,
     );
   }

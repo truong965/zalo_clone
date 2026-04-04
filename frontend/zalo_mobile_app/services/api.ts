@@ -11,7 +11,13 @@ import type {
       VerifyOtpPayload,
       ResetPasswordPayload,
 } from '@/types/auth';
-import type { Conversation, ConversationListResponse, ConversationMember } from '@/types/conversation';
+import type {
+      Conversation,
+      ConversationListResponse,
+      ConversationMember,
+      JoinGroupResponse,
+      JoinGroupPreviewResponse,
+} from '@/types/conversation';
 import type { Message, RecentMediaItemDto } from '@/types/message';
 import type { ReminderItem, CreateReminderParams, UpdateReminderParams } from '@/types/reminder';
 import type { CallHistoryItem, CursorPaginatedResult } from '@/types/call';
@@ -287,7 +293,7 @@ export const mobileApi = {
                   body: JSON.stringify(payload),
             }, accessToken);
       },
-      
+
       forgotPassword(payload: ForgotPasswordPayload) {
             return apiRequest<void>('/api/v1/auth/forgot-password', {
                   method: 'POST',
@@ -336,6 +342,25 @@ export const mobileApi = {
                         method: 'POST',
                         body: JSON.stringify({ recipientId }),
                   },
+                  accessToken,
+            );
+      },
+
+      requestJoinGroup(conversationId: string, accessToken: string, message?: string) {
+            return apiRequest<JoinGroupResponse>(
+                  `/api/v1/conversations/${conversationId}/join`,
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ message }),
+                  },
+                  accessToken,
+            );
+      },
+
+      getJoinGroupPreview(conversationId: string, accessToken: string) {
+            return apiRequest<JoinGroupPreviewResponse>(
+                  `/api/v1/conversations/${conversationId}/join-preview`,
+                  { method: 'GET' },
                   accessToken,
             );
       },

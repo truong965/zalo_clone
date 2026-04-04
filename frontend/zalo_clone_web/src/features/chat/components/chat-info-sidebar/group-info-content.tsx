@@ -14,7 +14,7 @@
  * - R4: Stale member list → refetch on reconnect
  * - R6: User kicked while sidebar open → close sidebar + navigate away
  */
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
       Collapse, Modal, Spin, Result, Button, notification,
 } from 'antd';
@@ -22,7 +22,9 @@ import {
       RightOutlined,
       ClockCircleOutlined,
       ExclamationCircleOutlined,
+      QrcodeOutlined,
 } from '@ant-design/icons';
+import { QRCodeCanvas } from 'qrcode.react';
 import type { ConversationUI } from '@/types/api';
 import apiClient from '@/lib/axios';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
@@ -75,6 +77,7 @@ export function GroupInfoContent({
       const { t } = useTranslation();
       const [showAddMembers, setShowAddMembers] = useState(false);
       const [showTransferAdmin, setShowTransferAdmin] = useState(false);
+      const [showGroupQrModal, setShowGroupQrModal] = useState(false);
 
       const { connectionNonce } = useSocket();
       const { invalidateMembers, invalidateDetail, invalidateAll } =
@@ -94,6 +97,17 @@ export function GroupInfoContent({
       const membersQuery = useConversationMembers(conversationId);
       const members = membersQuery.data ?? [];
       const isLoadingMembers = membersQuery.isLoading;
+
+      const groupJoinQrValue = useMemo(
+            () =>
+                  JSON.stringify({
+                        type: 'GROUP_JOIN',
+                        conversationId,
+                        name: conversation.name,
+                        memberCount: members.length,
+                  }),
+            [conversationId, conversation.name, members.length],
+      );
 
       // Determine current user's role
       const currentMember = members.find((m) => m.id === currentUserId);
@@ -446,7 +460,7 @@ export function GroupInfoContent({
                   <div className="flex-1 overflow-y-auto">
                         {/* Reminder List */}
                         <div
-                              className="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 border-b border-[#f4f5f7] border-b-[6px]"
+                              className="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 border-[#f4f5f7] border-b-[6px]"
                               onClick={() => setShowReminders((v) => !v)}
                         >
                               <ClockCircleOutlined className="text-gray-500 text-lg" />
@@ -459,7 +473,7 @@ export function GroupInfoContent({
                               />
                         </div>
                         {showReminders && (
-                              <div className="border-b border-[#f4f5f7] border-b-[6px]">
+                              <div className="border-[#f4f5f7] border-b-[6px]">
                                     <div className="px-3 pt-2 pb-1">
                                           <Button
                                                 type="dashed"
@@ -492,7 +506,7 @@ export function GroupInfoContent({
                         />
 
                         {/* Media Collapse */}
-                        <div className="border-b border-[#f4f5f7] border-b-[6px]">
+                        <div className="border-[#f4f5f7] border-b-[6px]">
                               <Collapse
                                     ghost
                                     expandIconPlacement="end"
@@ -506,6 +520,28 @@ export function GroupInfoContent({
                                     className="site-collapse-custom-collapse"
                               />
                         </div>
+
+                        {/* Invite via QR - Place under File and above group settings */}
+                        <button
+                              type="button"
+                              className="w-full px-4 py-3 text-left border-[#f4f5f7] border-b-[6px] hover:bg-gray-50 transition-colors"
+                              onClick={() => setShowGroupQrModal(true)}
+                        >
+                              <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-xl bg-[#e8f3ff] flex items-center justify-center">
+                                          <QrcodeOutlined className="text-[#1677ff] text-lg" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                          <div className="text-sm font-medium text-gray-900">
+                                                {t('chat.infoSidebar.groupQrItemTitle', 'Mời tham gia nhóm qua QR')}
+                                          </div>
+                                          <div className="text-xs text-gray-500 truncate">
+                                                {t('chat.infoSidebar.groupQrItemSubtitle', 'Chia sẻ mã để thành viên quét và tham gia')}
+                                          </div>
+                                    </div>
+                                    <RightOutlined className="text-xs text-gray-400" />
+                              </div>
+                        </button>
 
                         {/* Join Requests (admin only, when approval required) */}
                         <GroupJoinRequests
@@ -568,6 +604,38 @@ export function GroupInfoContent({
                         initialIndex={previewIndex}
                         onClose={() => setPreviewIndex(-1)}
                   />
+
+                  <Modal
+                        open={showGroupQrModal}
+                        title={null}
+                        footer={null}
+                        onCancel={() => setShowGroupQrModal(false)}
+                        centered
+                        width={360}
+                  >
+                        <div className="flex flex-col items-center gap-3 pt-1 pb-2">
+                              <div className="h-12 w-12 rounded-2xl bg-[#e8f3ff] flex items-center justify-center">
+                                    <QrcodeOutlined className="text-[#1677ff] text-2xl" />
+                              </div>
+
+                              <div className="text-center">
+                                    <h3 className="text-base font-semibold text-gray-900 m-0">
+                                          {t('chat.infoSidebar.groupQrModalTitle', 'Mời vào nhóm bằng mã QR')}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1 mb-0">
+                                          {conversation.name || t('chat.infoSidebar.groupDefaultName', 'Nhóm')} • {members.length} {t('chat.infoSidebar.groupMembersSuffix', 'thành viên')}
+                                    </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-gray-200 bg-[#f8fbff] p-4">
+                                    <QRCodeCanvas value={groupJoinQrValue} size={220} level="H" includeMargin />
+                              </div>
+
+                              <p className="text-center text-sm text-gray-600 mb-0">
+                                    {t('chat.infoSidebar.groupQrModalSubtitle', 'Mở Zalo trên điện thoại và quét mã để gửi yêu cầu hoặc tham gia ngay.')}
+                              </p>
+                        </div>
+                  </Modal>
             </>
       );
 }

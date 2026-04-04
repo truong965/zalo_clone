@@ -51,3 +51,17 @@ export interface ConversationListResponse {
     hasNextPage: boolean;
   };
 }
+
+export interface JoinGroupResponse {
+  status: 'PENDING' | 'APPROVED';
+  message: string;
+}
+
+export interface JoinGroupPreviewResponse {
+  conversationId: string;
+  name: string;
+  avatarUrl?: string | null;
+  memberCount: number;
+  requireApproval: boolean;
+  isMember: boolean;
+}
