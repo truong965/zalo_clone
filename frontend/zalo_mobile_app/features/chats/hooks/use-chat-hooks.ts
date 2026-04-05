@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { useSocket } from '@/providers/socket-provider';
 import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
+import { useTranslationStore } from '@/hooks/use-translation-store';
 import {
   applyConversationReadToCache,
   applyReceiptUpdateToCache,
@@ -241,6 +242,8 @@ export function useChatRealtime(
   const { user } = useAuth();
   const { socket } = useSocket();
   const queryClient = useQueryClient();
+  const setTranslation = useTranslationStore((state) => state.setTranslation);
+  const finishTranslation = useTranslationStore((state) => state.finishTranslation);
 
   useEffect(() => {
     if (!socket || !conversationId) return;
@@ -336,6 +339,40 @@ export function useChatRealtime(
       }
     };
 
+    const handleAiTranslate = (payload: any) => {
+      console.log('[Socket] AI_TRANSLATE received:', payload);
+      const msgId = payload?.messageId;
+      const targetLang = payload?.targetLang;
+      const translatedText = payload?.translatedText || payload?.data?.translatedText;
+
+      if (!msgId || !targetLang || !translatedText) {
+        console.warn('[Socket] AI_TRANSLATE missing fields', payload);
+        return;
+      }
+      if (payload.conversationId && String(payload.conversationId) !== String(conversationId)) return;
+
+      setTranslation(String(msgId), targetLang, translatedText);
+      finishTranslation(String(msgId), targetLang);
+    };
+
+    const handleAiTranslateError = (payload: any) => {
+      console.log('[Socket] AI_TRANSLATE_ERROR received:', payload);
+      const msgId = payload?.messageId;
+      const targetLang = payload?.targetLang;
+      const message = payload?.message || payload?.error || 'Đã có lỗi xảy ra khi dịch';
+
+      if (!msgId || !targetLang) return;
+      if (payload.conversationId && String(payload.conversationId) !== String(conversationId)) return;
+
+      finishTranslation(String(msgId), targetLang);
+      Toast.show({
+        type: 'error',
+        text1: 'Dịch thất bại',
+        text2: message,
+        position: 'top',
+      });
+    };
+
     const handleFriendOnline = (payload: { userId: string; timestamp: string }) => {
       queryClient.setQueryData(['conversation', conversationId], (old: any) => {
         if (!old || old.otherUserId !== payload.userId) return old;
@@ -358,6 +395,9 @@ export function useChatRealtime(
     socket.on(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
     socket.on(SocketEvents.CONVERSATION_UPDATED, handleConversationUpdated);
     socket.on(SocketEvents.GROUP_UPDATED, handleGroupUpdated);
+    socket.on(SocketEvents.AI_TRANSLATE, handleAiTranslate);
+    socket.on(SocketEvents.AI_STREAM_ERROR, handleAiTranslateError);
+    socket.on(SocketEvents.AI_RESPONSE_ERROR, handleAiTranslateError);
     socket.on(SocketEvents.ERROR, handleError);
 
     return () => {
@@ -369,9 +409,12 @@ export function useChatRealtime(
       socket.off(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
       socket.off(SocketEvents.CONVERSATION_UPDATED, handleConversationUpdated);
       socket.off(SocketEvents.GROUP_UPDATED, handleGroupUpdated);
+      socket.off(SocketEvents.AI_TRANSLATE, handleAiTranslate);
+      socket.off(SocketEvents.AI_STREAM_ERROR, handleAiTranslateError);
+      socket.off(SocketEvents.AI_RESPONSE_ERROR, handleAiTranslateError);
       socket.off(SocketEvents.ERROR, handleError);
     };
     // jumpRefs là object ref — stable reference, không cần trong deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, conversationId, queryClient, user?.id]);
+  }, [socket, conversationId, queryClient, user?.id, setTranslation, finishTranslation]);
 }

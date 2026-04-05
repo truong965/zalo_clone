@@ -7,11 +7,14 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { notification } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
+import { env } from '@/config/env';
+import { SocketEvents } from '@/constants/socket-events';
 
 // ── Feature-internal components ──────────────────────────────────────────
 import { ConversationSidebar } from './components/conversation-sidebar';
 import { ChatHeader } from './components/chat-header';
 import { ChatInput } from './components/chat-input';
+import { CloseOutlined } from '@ant-design/icons';
 import { ChatSearchSidebar } from './components/chat-search-sidebar';
 import { ChatInfoSidebar } from './components/chat-info-sidebar';
 import { ChatContent } from './components/chat-content';
@@ -19,6 +22,7 @@ import { ReplyPreviewBar } from './components/reply-preview-bar';
 import { PinnedMessagesBanner } from './components/pinned-messages-banner';
 import { MediaBrowserPanel } from './components/media-browser-panel';
 import { ActiveGroupCallBanner } from './components/ActiveGroupCallBanner';
+import { ChatAiSidebar } from './components/chat-ai-sidebar.tsx';
 
 // ── Cross-feature components (rendered by page-level host) ───────────────
 import { FriendshipSearchModal } from '@/features/contacts';
@@ -53,6 +57,22 @@ import { useChatStore } from './stores/chat.store';
 import type { MediaBrowserTab } from './stores/chat.store';
 import type { ChatMessage, ConversationFilterTab } from './types';
 
+const isUnifiedAiStreamEnabled = env.AI_UNIFIED_STREAM_ENABLED;
+
+type AiResponseType = 'ask' | 'agent' | 'summary';
+
+function resolveResponseType(data: { responseType?: unknown; type?: unknown }, fallback: AiResponseType): AiResponseType {
+      if (data.responseType === 'ask' || data.responseType === 'agent' || data.responseType === 'summary') {
+            return data.responseType;
+      }
+
+      if (data.type === 'ask' || data.type === 'agent' || data.type === 'summary') {
+            return data.type;
+      }
+
+      return fallback;
+}
+
 interface ReminderTarget {
       conversationId: string;
       messageId: string;
@@ -72,6 +92,7 @@ export function ChatFeature() {
       // ── Store selectors ──────────────────────────────────────────────────
       const rightSidebar = useChatStore((s) => s.rightSidebar);
       const setRightSidebar = useChatStore((s) => s.setRightSidebar);
+      const setAiSummaryStartMessageId = useChatStore((s) => s.setAiSummaryStartMessageId);
       const isGlobalSearchOpen = useChatStore((s) => s.isGlobalSearchOpen);
       const setIsGlobalSearchOpen = useChatStore((s) => s.setIsGlobalSearchOpen);
       const isFriendSearchOpen = useChatStore((s) => s.isFriendSearchOpen);
@@ -82,6 +103,13 @@ export function ChatFeature() {
       const setMediaBrowserTab = useChatStore((s) => s.setMediaBrowserTab);
       const replyTarget = useChatStore((s) => s.replyTarget);
       const setReplyTarget = useChatStore((s) => s.setReplyTarget);
+      const startAiRequest = useChatStore((s) => s.startAiRequest);
+      const updateAiRequestProgress = useChatStore((s) => s.updateAiRequestProgress);
+      const appendAiRequestDelta = useChatStore((s) => s.appendAiRequestDelta);
+      const appendAiRequestThoughtDelta = useChatStore((s) => s.appendAiRequestThoughtDelta);
+      const completeAiRequest = useChatStore((s) => s.completeAiRequest);
+      const failAiRequest = useChatStore((s) => s.failAiRequest);
+      const { socket } = useSocket();
 
       // ── "Xem tất cả" handler (info sidebar → media browser panel) ─────────
       const handleOpenMediaBrowser = useCallback(
@@ -95,6 +123,9 @@ export function ChatFeature() {
       // ── Reminder state ──────────────────────────────────────────────────────────
       const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
       const { createReminder, isCreating: isReminderCreating } = useReminders();
+
+      // ── AI Summary Trigger ──────────────────────────────────────────────────
+      const [aiSummaryTrigger, setAiSummaryTrigger] = useState<{count: number; startMessageId: string | undefined} | null>(null);
 
       // ── Reply handler ────────────────────────────────────────────────────
       const handleReply = (msg: ChatMessage) => {
@@ -133,6 +164,206 @@ export function ChatFeature() {
       useEffect(() => {
             setReplyTarget(null);
       }, [selectedId, setReplyTarget]);
+
+      // ── AI Socket Listeners ─────────────────────────────────────────────
+      useEffect(() => {
+            if (!socket) return;
+
+            const resolveRequestId = (conversationId?: string, requestId?: string) => {
+                  if (requestId) return requestId;
+                  if (!conversationId) return undefined;
+
+                  const conv = useChatStore.getState().aiConversations[conversationId];
+                  return conv?.activeRequestId ?? undefined;
+            };
+
+            const handleStarted = (data: {
+                  requestId?: string;
+                  conversationId?: string;
+                  type?: string;
+                  responseType?: string;
+                  sessionId?: string;
+                  message?: string;
+            }) => {
+                  if (!data.requestId || !data.conversationId) return;
+
+                  startAiRequest({
+                        conversationId: data.conversationId,
+                        requestId: data.requestId,
+                        responseType: resolveResponseType(data, 'ask'),
+                        prompt: data.message || 'Đang xử lý yêu cầu AI',
+                        sessionId: data.sessionId,
+                  });
+            };
+
+            const handleProgress = (data: {
+                  requestId?: string;
+                  conversationId?: string;
+                  step?: string;
+                  message?: string;
+                  percent?: number;
+                  sessionId?: string;
+            }) => {
+                  if (!data.requestId || !data.conversationId || !data.step) return;
+
+                  updateAiRequestProgress({
+                        conversationId: data.conversationId,
+                        requestId: data.requestId,
+                        sessionId: data.sessionId,
+                        progress: {
+                              step: data.step,
+                              message: data.message,
+                              percent: data.percent,
+                        },
+                  });
+            };
+
+            const handleThought = (data: {
+                  requestId?: string;
+                  conversationId?: string;
+                  thoughtDelta?: string;
+                  sessionId?: string;
+            }) => {
+                  if (!data.requestId || !data.conversationId || !data.thoughtDelta) return;
+                  appendAiRequestThoughtDelta({
+                        conversationId: data.conversationId,
+                        requestId: data.requestId,
+                        thoughtDelta: data.thoughtDelta,
+                  });
+            };
+
+            const handleDelta = (data: {
+                  requestId?: string;
+                  conversationId?: string;
+                  contentDelta?: string;
+                  thoughtDelta?: string;
+                  content?: string;
+                  text?: string;
+                  step?: string;
+                  message?: string;
+                  percent?: number;
+                  responseType?: string;
+                  sessionId?: string;
+            }) => {
+                  if (!data.requestId || !data.conversationId) return;
+
+                  // Handle progress updates (if any)
+                  if (data.step) {
+                        updateAiRequestProgress({
+                              conversationId: data.conversationId,
+                              requestId: data.requestId,
+                              sessionId: data.sessionId,
+                              progress: {
+                                    step: data.step,
+                                    message: data.message,
+                                    percent: data.percent,
+                              },
+                        });
+                  }
+
+                  // Handle thought updates
+                  if (data.thoughtDelta) {
+                        appendAiRequestThoughtDelta({
+                              conversationId: data.conversationId,
+                              requestId: data.requestId,
+                              thoughtDelta: data.thoughtDelta,
+                        });
+                  }
+
+                  // Handle content updates
+                  const contentDelta = data.contentDelta || data.content || data.text;
+                  if (contentDelta) {
+                        appendAiRequestDelta({
+                              conversationId: data.conversationId,
+                              requestId: data.requestId,
+                              contentDelta,
+                              sessionId: data.sessionId,
+                        });
+                  }
+            };
+
+            const handleCompleted = (data: {
+                  requestId?: string;
+                  conversationId?: string;
+                  content?: string;
+                  responseType?: string;
+                  sessionId?: string;
+                  type?: string;
+            }) => {
+                  const requestId = resolveRequestId(data.conversationId, data.requestId);
+                  if (!requestId || !data.conversationId) return;
+
+                  completeAiRequest({
+                        conversationId: data.conversationId,
+                        requestId,
+                        content: data.content || '',
+                        sessionId: data.sessionId,
+                        responseType: resolveResponseType(data, 'summary'),
+                  });
+            };
+
+            const handleError = (data: {
+                  requestId?: string;
+                  conversationId?: string;
+                  code?: string;
+                  message?: string;
+                  retriable?: boolean;
+                  sessionId?: string;
+            }) => {
+                  const requestId = resolveRequestId(data.conversationId, data.requestId);
+                  if (!requestId || !data.conversationId) return;
+
+                  failAiRequest({
+                        conversationId: data.conversationId,
+                        requestId,
+                        sessionId: data.sessionId,
+                        error: {
+                              code: data.code || 'AI_UNIFIED_ERROR',
+                              message: data.message || 'Đã có lỗi xảy ra trong quá trình xử lý.',
+                              retriable: Boolean(data.retriable),
+                        },
+                  });
+
+                  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                  notification.error({
+                        message: 'Lỗi trợ lý AI',
+                        description: data.message || 'Đã có lỗi xảy ra trong quá trình xử lý.',
+                  });
+            };
+
+            socket.on(SocketEvents.AI_RESPONSE_STARTED, handleStarted);
+            socket.on(SocketEvents.AI_RESPONSE_PROGRESS, handleProgress);
+            socket.on(SocketEvents.AI_RESPONSE_THOUGHT, handleThought);
+            socket.on(SocketEvents.AI_RESPONSE_DELTA, handleDelta);
+            socket.on(SocketEvents.AI_RESPONSE_COMPLETED, handleCompleted);
+            socket.on(SocketEvents.AI_RESPONSE_ERROR, handleError);
+
+            if (!isUnifiedAiStreamEnabled) {
+                  socket.on(SocketEvents.AI_STREAM_START, handleStarted);
+                  socket.on(SocketEvents.AI_STREAM_CHUNK, handleDelta);
+                  socket.on(SocketEvents.AI_STREAM_DONE, handleCompleted);
+                  socket.on(SocketEvents.AI_STREAM_ERROR, handleError);
+                  socket.on(SocketEvents.AI_SUMMARY, handleCompleted);
+            }
+
+            return () => {
+                  socket.off(SocketEvents.AI_RESPONSE_STARTED, handleStarted);
+                  socket.off(SocketEvents.AI_RESPONSE_PROGRESS, handleProgress);
+                  socket.off(SocketEvents.AI_RESPONSE_THOUGHT, handleThought);
+                  socket.off(SocketEvents.AI_RESPONSE_DELTA, handleDelta);
+                  socket.off(SocketEvents.AI_RESPONSE_COMPLETED, handleCompleted);
+                  socket.off(SocketEvents.AI_RESPONSE_ERROR, handleError);
+
+                  if (!isUnifiedAiStreamEnabled) {
+                        socket.off(SocketEvents.AI_STREAM_START, handleStarted);
+                        socket.off(SocketEvents.AI_STREAM_CHUNK, handleDelta);
+                        socket.off(SocketEvents.AI_STREAM_DONE, handleCompleted);
+                        socket.off(SocketEvents.AI_STREAM_ERROR, handleError);
+                        socket.off(SocketEvents.AI_SUMMARY, handleCompleted);
+                  }
+            };
+      }, [socket, startAiRequest, updateAiRequestProgress, appendAiRequestThoughtDelta, appendAiRequestDelta, completeAiRequest, failAiRequest]);
+
 
       // ── Hook: conversation list (query + cache mutations) ────────────────
       const {
@@ -335,6 +566,24 @@ export function ChatFeature() {
             prependConversation,
       });
 
+      // Capture initial unread state before useMarkAsSeen wipes it
+      useEffect(() => {
+            if (selectedId && selectedConversation) {
+                  // Only run this ONCE per selectedId change. Data is from cache before it gets cleared.
+                  if ((selectedConversation.unreadCount ?? 0) > 50) {
+                        setAiSummaryTrigger({
+                              count: selectedConversation.unreadCount!,
+                              startMessageId: selectedConversation.lastReadMessageId ?? undefined,
+                        });
+                  } else {
+                        setAiSummaryTrigger(null);
+                  }
+            } else {
+                  setAiSummaryTrigger(null);
+            }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [selectedId]); // Intentional: Only run precisely when selectedId changes
+
       // Phase 3: Sync active call on conversation change
       useEffect(() => {
             if (selectedId && selectedConversation?.type === 'GROUP') {
@@ -459,6 +708,7 @@ export function ChatFeature() {
                                                       setIsGlobalSearchOpen(false);
                                                 }}
                                                 onToggleInfo={() => setRightSidebar((prev) => prev === 'info' ? 'none' : 'info')}
+                                                onToggleAiSummary={() => setRightSidebar((prev) => prev === 'ai-assistant' ? 'none' : 'ai-assistant')}
                                           />
 
                                           <ActiveGroupCallBanner
@@ -466,6 +716,32 @@ export function ChatFeature() {
                                                 displayName={selectedConversation.name || 'Hội thoại'}
                                                 avatarUrl={selectedConversation.avatar ?? null}
                                           />
+
+                                          {aiSummaryTrigger && (
+                                                <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2.5 flex items-center justify-between text-sm shadow-md shrink-0">
+                                                      <span className="font-medium">Bạn có {aiSummaryTrigger.count} tin nhắn chưa đọc.</span>
+                                                      <div className="flex gap-2 items-center">
+                                                            <button
+                                                                  className="bg-white text-blue-600 px-3 py-1 rounded-full font-medium hover:bg-blue-50 transition-colors shadow-sm text-xs flex items-center gap-1 cursor-pointer"
+                                                                  onClick={() => {
+                                                                        setRightSidebar('ai-summary');
+                                                                        if (aiSummaryTrigger.startMessageId) {
+                                                                              setAiSummaryStartMessageId(aiSummaryTrigger.startMessageId);
+                                                                        }
+                                                                        setAiSummaryTrigger(null);
+                                                                  }}
+                                                            >
+                                                                  <span role="img" aria-label="ai">✨</span> Tóm tắt AI
+                                                            </button>
+                                                            <button 
+                                                                  className="w-6 h-6 flex items-center justify-center hover:bg-blue-700/50 rounded-full transition-colors cursor-pointer" 
+                                                                  onClick={() => setAiSummaryTrigger(null)}
+                                                            >
+                                                                  <CloseOutlined className="text-xs" />
+                                                            </button>
+                                                      </div>
+                                                </div>
+                                          )}
 
                                           <PinnedMessagesBanner
                                                 pinnedMessages={pinnedMessages ?? []}
@@ -563,6 +839,12 @@ export function ChatFeature() {
                               <MediaBrowserPanel
                                     conversationId={selectedId}
                                     initialTab={mediaBrowserTab}
+                                    onClose={() => setRightSidebar('none')}
+                              />
+                        )}
+                        {(rightSidebar === 'ai-summary' || rightSidebar === 'ai-assistant') && selectedId && (
+                              <ChatAiSidebar
+                                    conversationId={selectedId}
                                     onClose={() => setRightSidebar('none')}
                               />
                         )}

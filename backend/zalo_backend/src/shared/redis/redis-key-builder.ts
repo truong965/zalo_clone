@@ -78,6 +78,7 @@ export class RedisKeyBuilder {
     presenceOffline: 'socket:presence:offline',
     broadcast: 'socket:broadcast',
     newMessage: (conversationId: string) => `chat:msg:${conversationId}`,
+    globalNewMessage: 'chat:new_message',
     receipt: (userId: string) => `chat:receipt:${userId}`,
     typing: (conversationId: string) => `chat:typing:${conversationId}`,
   } as const;

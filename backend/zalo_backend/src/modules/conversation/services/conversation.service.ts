@@ -32,6 +32,7 @@ import {
   ConversationPinnedEvent,
   ConversationUnpinnedEvent
 } from '../events';
+import { InternalEventNames } from '@common/contracts/events/event-names';
 import { safeJSON } from 'src/common/utils/json.util';
 
 type UserProfile = {
@@ -608,7 +609,7 @@ export class ConversationService {
     });
 
     this.eventEmitter.emit(
-      'conversation.pinned',
+      InternalEventNames.CONVERSATION_PINNED,
       new ConversationPinnedEvent(conversationId, userId, now),
     );
 
@@ -640,7 +641,7 @@ export class ConversationService {
     });
 
     this.eventEmitter.emit(
-      'conversation.unpinned',
+      InternalEventNames.CONVERSATION_UNPINNED,
       new ConversationUnpinnedEvent(conversationId, userId),
     );
 

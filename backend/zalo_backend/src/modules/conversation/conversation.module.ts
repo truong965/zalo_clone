@@ -26,6 +26,7 @@ import { ConversationEventHandler } from './listeners/conversation-event.handler
 import { CallConversationListener } from './listeners/call-conversation.listener';
 import { FriendshipConversationListener } from './listeners/friendship-conversation.listener';
 import { BlockConversationListener } from './listeners/block-conversation.listener';
+import { ConversationPinSocketListener } from './listeners/conversation-pin-socket.listener';
 
 // Controller & Gateway
 import { ConversationController } from './conversation.controller';
@@ -79,6 +80,7 @@ import { ConversationGateway } from './conversation.gateway';
     CallConversationListener, // CALL PHASE 1: Update conversation on call.ended
     FriendshipConversationListener, // Auto-create conversation on friendship.accepted
     BlockConversationListener, // Sync block action to blocker's other devices
+    ConversationPinSocketListener,
 
     // Gateway
     ConversationGateway,

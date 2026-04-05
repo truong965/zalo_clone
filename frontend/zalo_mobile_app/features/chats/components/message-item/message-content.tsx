@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
+import { useTranslationStore } from '@/hooks/use-translation-store';
 import { Message, MessageType } from '@/types/message';
 import { getFullUrl, getReplyPreviewText } from './message-item.utils';
 import { styles } from './message-item.styles';
@@ -16,26 +18,32 @@ interface Props {
   onJumpToMessage?: (messageId: string) => void;
   onMediaPress?: (mediaId: string) => void;
   isHighlighted?: boolean;
+  translations?: Record<string, string>;
+  isTranslationHidden?: (messageId: string, lang: string) => boolean;
+  pendingLangs?: string[];
 }
 
-export function MessageContent({ message, isMe, theme, onJumpToMessage, onMediaPress, isHighlighted }: Props) {
+export function MessageContent({ 
+  message, 
+  isMe, 
+  theme, 
+  onJumpToMessage, 
+  onMediaPress, 
+  isHighlighted,
+  translations = {},
+  isTranslationHidden = () => false,
+  pendingLangs = [],
+}: Props) {
+  const { 
+    hideTranslation, 
+    showTranslation, 
+    clearTranslations 
+  } = useTranslationStore();
+  
+  const msgId = String(message.id);
   const attachments = message.mediaAttachments || [];
 
-  if (attachments.length === 0 && !message.parentMessage && !message.replyTo) {
-    if (message.type === MessageType.TEXT) {
-      return (
-        <Text style={styles.messageText}>
-          {message.content}
-        </Text>
-      );
-    }
-    // For non-text messages with no attachments yet (and not a reply)
-    return (
-      <Text style={[styles.messageText, { fontStyle: 'italic', color: '#9ca3af' }]}>
-        Đang tải...
-      </Text>
-    );
-  }
+  const isPendingNonText = attachments.length === 0 && !message.parentMessage && !message.replyTo && message.type !== MessageType.TEXT;
 
   const images    = attachments.filter(a => a.mediaType === 'IMAGE');
   const videos    = attachments.filter(a => a.mediaType === 'VIDEO');
@@ -74,10 +82,78 @@ export function MessageContent({ message, isMe, theme, onJumpToMessage, onMediaP
         );
       })()}
 
-      {/* Text caption */}
+      {/* Text caption or body */}
       {!!message.content && (
-        <Text style={[styles.messageText, { marginBottom: 4 }]}>{message.content}</Text>
+        <Text style={[styles.messageText, (attachments.length > 0 || message.parentMessage || message.replyTo || Object.keys(translations).length > 0) && { marginBottom: 4 }]}>
+          {message.content}
+        </Text>
       )}
+
+      {/* Pending status for non-text without attachments */}
+      {isPendingNonText && (
+        <Text style={[styles.messageText, { fontStyle: 'italic', color: '#9ca3af', marginBottom: 4 }]}>
+          Đang tải...
+        </Text>
+      )}
+
+      {/* Translations */}
+      {Object.entries(translations).map(([lang, text]) => {
+        const isHidden = isTranslationHidden?.(msgId, lang);
+        const langLabel = lang === 'vi' ? 'Tiếng Việt' : lang === 'en' ? 'Tiếng Anh' : lang;
+
+        return (
+          <View key={lang} style={localStyles.translationContainer}>
+            {/* Header with actions */}
+            <View style={localStyles.translationHeader}>
+              <Text style={localStyles.langLabel}>{langLabel}</Text>
+              
+              <View style={localStyles.actionGroup}>
+                <TouchableOpacity 
+                  onPress={() => isHidden ? showTranslation(msgId, lang) : hideTranslation(msgId, lang)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons 
+                    name={isHidden ? 'eye-outline' : 'eye-off-outline'} 
+                    size={16} 
+                    color="#9ca3af" 
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={() => clearTranslations()} // GLOBAL CLEAR as requested
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Translated Content */}
+            {!isHidden ? (
+              <Text style={[styles.messageText, localStyles.translatedText]}>
+                {text}
+              </Text>
+            ) : (
+              <Text style={localStyles.hiddenPlaceholder}>
+                Bản dịch đã ẩn
+              </Text>
+            )}
+          </View>
+        );
+      })}
+
+      {/* Pending Translations */}
+      {pendingLangs.map((lang) => {
+        const langLabel = lang === 'vi' ? 'Tiếng Việt' : lang === 'en' ? 'Tiếng Anh' : lang;
+        return (
+          <View key={`pending-${lang}`} style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <ActivityIndicator size={12} color="#007AFF" /> 
+            <Text style={{ fontSize: 13, color: '#9ca3af', fontStyle: 'italic' }}>
+              Đang dịch {langLabel}...
+            </Text>
+          </View>
+        );
+      })}
 
       {/* Images */}
       {images.length > 0 && (
@@ -127,3 +203,40 @@ export function MessageContent({ message, isMe, theme, onJumpToMessage, onMediaP
     </View>
   );
 }
+
+const localStyles = StyleSheet.create({
+  translationContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  translationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  langLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  translatedText: {
+    color: '#4b5563',
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+  hiddenPlaceholder: {
+    fontSize: 13,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+});

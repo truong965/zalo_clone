@@ -69,6 +69,55 @@ export interface TypingRequest {
 // STATE TYPES
 // ============================================================================
 
+export interface AiChatMessage {
+  id: string;
+  requestId?: string;
+  role: 'user' | 'assistant';
+  content: string;
+  thought?: string;
+  status?: 'pending' | 'streaming' | 'completed' | 'error';
+  responseType?: 'ask' | 'agent' | 'summary';
+  isThoughtVisible?: boolean;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
+
+export interface AiRequestProgress {
+  step: string;
+  message?: string;
+  percent?: number;
+}
+
+export interface AiRequestError {
+  code: string;
+  message: string;
+  retriable?: boolean;
+}
+
+export interface AiRequestState {
+  requestId: string;
+  conversationId: string;
+  responseType: 'ask' | 'agent' | 'summary';
+  status: 'started' | 'progress' | 'streaming' | 'completed' | 'error';
+  createdAt: string;
+  updatedAt: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
+  progress?: AiRequestProgress;
+  thought?: string;
+  content: string;
+  isThoughtVisible?: boolean;
+  error?: AiRequestError;
+  sessionId?: string;
+}
+
+export interface AiConversationState {
+  conversationId: string;
+  activeRequestId: string | null;
+  messages: AiChatMessage[];
+  requests: Record<string, AiRequestState>;
+}
+
 export interface ChatState {
   conversations: ConversationUI[];
   selectedConversationId: string | null;
@@ -84,5 +133,5 @@ export interface ChatState {
 // UI CONTROL TYPES
 // ============================================================================
 
-export type RightSidebarState = 'none' | 'search' | 'info' | 'media-browser';
+export type RightSidebarState = 'none' | 'search' | 'info' | 'media-browser' | 'ai-summary' | 'ai-assistant';
 export type ConversationFilterTab = 'all' | 'unread' | 'archived';

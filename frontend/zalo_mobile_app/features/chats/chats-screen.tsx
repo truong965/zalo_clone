@@ -2,7 +2,6 @@ import { FlashList } from '@shopify/flash-list';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, RefreshControl, View, Text } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ConversationItem } from './components/conversations/conversation-item';
 import { ConversationActionSheet } from './components/conversations/conversation-action-sheet';
@@ -15,7 +14,6 @@ import { Conversation } from '@/types/conversation';
 export function ChatsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [isActionSheetVisible, setIsActionSheetVisible] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -79,7 +77,7 @@ export function ChatsScreen() {
   }
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingBottom: insets.bottom }}>
+    <View className="flex-1 bg-background">
       {flattenedData.length === 0 && !isLoading ? (
         <View className="flex-1 items-center justify-center">
           <Text className="text-muted-foreground text-lg">{t('chats.empty')}</Text>

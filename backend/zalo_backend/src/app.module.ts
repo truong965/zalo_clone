@@ -19,6 +19,7 @@ import { MessageModule } from './modules/message/message.module';
 import { MediaModule } from './modules/media/media.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter'; // [CRITICAL IMPORT]
+import { BullModule } from '@nestjs/bullmq';
 
 // Shared Services & Guards (Cross-Module)
 import { SharedModule } from './shared/shared.module';
@@ -46,11 +47,16 @@ import queueConfig from './config/queue.config';
 import socialConfig from './config/social.config';
 import workerConfig from './config/worker.config';
 import mailConfig from './config/mail.config';
+import aiConfig from './config/ai.config';
 import { HealthModule } from './modules/health/health.module';
+import { InternalModule } from './modules/internal/internal.module';
+import { AiProxyModule } from './modules/ai-proxy/ai-proxy.module';
 import { RequestContextModule } from './common/context/request-context.module';
 import { RequestContextInterceptor } from './common/interceptor/request-context.interceptor';
 import { TransformInterceptor } from './common/interceptor/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters';
+
+const aiEnabled = process.env.AI_AGENT_ENABLED !== 'false';
 
 @Module({
   imports: [
@@ -69,6 +75,7 @@ import { HttpExceptionFilter } from './common/filters';
         socialConfig, // [CHECKED] Đã load config social
         workerConfig,
         mailConfig,
+        aiConfig,
       ],
       envFilePath: '.env.development.local',
     }),
@@ -88,6 +95,23 @@ import { HttpExceptionFilter } from './common/filters';
 
     // Cron Jobs
     ScheduleModule.forRoot(),
+
+    // BullMQ Infrastructure (Using AI-specific Redis instance)
+    ...(aiEnabled
+      ? [
+        BullModule.forRootAsync({
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => {
+            const aiRedis = config.get<any>('redis.ai');
+            return {
+              connection: {
+                ...aiRedis
+              },
+            };
+          },
+        }),
+      ]
+      : []),
 
     // Context Local Storage (User Session tracking)
     // middleware.mount: true automatically mounts CLS middleware to all routes
@@ -148,6 +172,9 @@ import { HttpExceptionFilter } from './common/filters';
     // Admin Panel (Phase 0: skeleton → Phase 1-2: full implementation)
     AdminModule,
 
+    // Internal inter-service integration (for AI Agent)
+    ...(aiEnabled ? [InternalModule, AiProxyModule] : []),
+
     // Utilities
     ContactModule,
     HealthModule, // [CRITICAL] Health Check Endpoint (/api/health)
@@ -186,4 +213,4 @@ import { HttpExceptionFilter } from './common/filters';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

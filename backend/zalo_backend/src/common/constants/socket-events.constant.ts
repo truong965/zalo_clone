@@ -45,6 +45,18 @@ export const SocketEvents = {
   MESSAGE_RECEIPT_UPDATE: 'message:receipt', // Delivery/seen status change
   CONVERSATION_READ: 'conversation:read', // Group member read conversation
   TYPING_STATUS: 'typing:status', // Someone is typing
+  AI_TRANSLATE: 'ai:translate',
+  AI_SUMMARY: 'ai:summary',
+  AI_STREAM_START: 'ai:stream-start',
+  AI_STREAM_CHUNK: 'ai:stream-chunk',
+  AI_STREAM_DONE: 'ai:stream-done',
+  AI_STREAM_ERROR: 'ai:stream-error',
+  AI_RESPONSE_STARTED: 'ai.response.started',
+  AI_RESPONSE_PROGRESS: 'ai.response.progress',
+  AI_RESPONSE_THOUGHT: 'ai.response.thought',
+  AI_RESPONSE_DELTA: 'ai.response.delta',
+  AI_RESPONSE_COMPLETED: 'ai.response.completed',
+  AI_RESPONSE_ERROR: 'ai.response.error',
 
   // Sync events
   MESSAGES_SYNC: 'messages:sync', // Offline message batch

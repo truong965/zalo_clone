@@ -2,5 +2,5 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('worker', () => ({
-  internalApiKey: process.env.API_INTERNAL_KEY,
+  internalApiKey: process.env.INTERNAL_API_KEY,
 }));

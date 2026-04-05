@@ -45,4 +45,19 @@ export default registerAs('redis', () => ({
     messagesPerMinute: 30,
     eventsPerTenSeconds: 100,
   },
+
+  // Dedicated config for AI Worker (Model B support)
+  ai: {
+    host: process.env.AI_REDIS_HOST || process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.AI_REDIS_PORT || process.env.REDIS_PORT!, 10) || 6379,
+    password: process.env.AI_REDIS_PASSWORD || process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.AI_REDIS_DB || '0', 10),
+    enabled: process.env.AI_AGENT_ENABLED !== 'false',
+    // Better retry strategy for AI service (slow backoff)
+    maxRetriesPerRequest: null,
+    retryStrategy: (times: number) => {
+      // Exponential backoff, capping at 30 seconds
+      return Math.min(times * 1000, 30000);
+    },
+  },
 }));

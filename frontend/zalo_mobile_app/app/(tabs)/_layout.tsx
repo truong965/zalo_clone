@@ -102,7 +102,7 @@ export default function TabLayout() {
     <View className="flex-1 bg-background">
       <Tabs
         screenOptions={({ route }) => ({
-          headerShown: true,
+          // headerShown: true,
           header: () => (
             <Appbar.Header
               style={{

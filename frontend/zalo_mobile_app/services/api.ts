@@ -29,7 +29,7 @@ import type { BlockedUser, BlockedListResponse } from '@/types/block';
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
-const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '8000';
+const API_PORT = '8000';
 const API_BASE_URL = resolveApiBaseUrl();
 const API_DEBUG = process.env.EXPO_PUBLIC_API_DEBUG === 'true';
 
@@ -185,9 +185,22 @@ function buildUrl(path: string): string {
 
 async function apiRequest<T>(
       path: string,
+      options: RequestInit,
+      accessToken?: string,
+      config?: { rawResponse?: false },
+): Promise<T>;
+async function apiRequest(
+      path: string,
+      options: RequestInit,
+      accessToken: string | undefined,
+      config: { rawResponse: true },
+): Promise<Response>;
+async function apiRequest<T>(
+      path: string,
       options: RequestInit = {},
       accessToken?: string,
-): Promise<T> {
+      config: { rawResponse?: boolean } = {},
+): Promise<T | Response> {
       const url = buildUrl(path);
       const method = options.method ?? 'GET';
       const headers: HeadersInit = {
@@ -234,6 +247,10 @@ async function apiRequest<T>(
             ok: response.ok,
       });
 
+      if (config.rawResponse) {
+            return response;
+      }
+
       const json = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
 
       if (!response.ok) {
@@ -261,6 +278,66 @@ async function apiRequest<T>(
 
 export const mobileApi = {
       baseUrl: API_BASE_URL,
+
+      getAiSessions(accessToken: string, conversationId: string, featureType = 'ASK') {
+            return apiRequest<any>(
+                  `/api/v1/ai/sessions?conversationId=${conversationId}&featureType=${featureType}&activeOnly=true`,
+                  { method: 'GET' },
+                  accessToken,
+            );
+      },
+
+      getAiSession(accessToken: string, sessionId: string) {
+            return apiRequest<any>(`/api/v1/ai/sessions/${sessionId}`, { method: 'GET' }, accessToken);
+      },
+
+      deleteAiSession(accessToken: string, sessionId: string) {
+            return apiRequest<void>(`/api/v1/ai/sessions/${sessionId}`, { method: 'DELETE' }, accessToken);
+      },
+
+      streamAiRequest(
+            accessToken: string,
+            path: '/api/v1/ai/ask' | '/api/v1/ai/summary' | '/api/v1/ai/agent',
+            body: Record<string, unknown>,
+      ) {
+            return apiRequest(
+                  path,
+                  {
+                        method: 'POST',
+                        body: JSON.stringify(body),
+                  },
+                  accessToken,
+                  { rawResponse: true },
+            );
+      },
+
+      cancelAiRequest(accessToken: string, requestId: string, conversationId?: string) {
+            return apiRequest<void>(
+                  '/api/v1/ai/cancel',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ requestId, conversationId }),
+                  },
+                  accessToken,
+            );
+      },
+
+      translateMessage(
+            accessToken: string,
+            payload: { conversationId: string; messageId: string; targetLang: string },
+      ) {
+            return apiRequest<{ translatedText: string } | { data?: { translatedText?: string } }>(
+                  '/api/v1/ai/translate',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({
+                              type: 'translate',
+                              ...payload,
+                        }),
+                  },
+                  accessToken,
+            );
+      },
 
       login(payload: LoginPayload) {
             return apiRequest<AuthResponse>('/api/v1/auth/login', {

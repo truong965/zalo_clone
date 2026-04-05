@@ -146,8 +146,8 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
             if (mediaIds.length === 0) return;
 
             // DEBUG: Log media progress subscription
-            console.log('🔄 [MediaProgress] Subscribing to media progress for:', mediaIds);
-            console.log('📊 [MediaProgress] Total media items:', mediaIds.length);
+            // console.log('🔄 [MediaProgress] Subscribing to media progress for:', mediaIds);
+            // console.log('📊 [MediaProgress] Total media items:', mediaIds.length);
 
             const handlers = new Map<string, (payload: MediaProgressPayload) => void>();
 
@@ -156,7 +156,7 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
 
                   const handler = (payload: MediaProgressPayload) => {
                         // DEBUG: Log received progress event
-                        console.log(`📡 [MediaProgress] Event for ${mediaId}:`, payload);
+                        // console.log(`📡 [MediaProgress] Event for ${mediaId}:`, payload);
 
                         queryClientRef.current.setQueryData<MessagesInfiniteData>(
                               queryKeyRef.current,
@@ -211,18 +211,18 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
 
                   const poll = () => {
                         // DEBUG: Log polling attempt
-                        console.log(`🔍 [MediaProgress] Polling media ${mediaId} (attempt ${retries + 1}/${MAX_RETRIES})`);
+                        // console.log(`🔍 [MediaProgress] Polling media ${mediaId} (attempt ${retries + 1}/${MAX_RETRIES})`);
 
                         mediaService.getMedia(mediaId)
                               .then((result) => {
                                     if (cancelled) return;
 
                                     // DEBUG: Log poll result
-                                    console.log(`📊 [MediaProgress] Media ${mediaId} result:`, {
-                                          status: result.processingStatus,
-                                          hasThumb: !!result.thumbnailUrl,
-                                          mediaType: result.mediaType,
-                                    });
+                                    // console.log(`📊 [MediaProgress] Media ${mediaId} result:`, {
+                                    //       status: result.processingStatus,
+                                    //       hasThumb: !!result.thumbnailUrl,
+                                    //       mediaType: result.mediaType,
+                                    // });
 
                                     // Bug 2 fix: for VIDEO/IMAGE, READY is only truly terminal
                                     // once thumbnailUrl is populated. The worker adds the thumbnail

@@ -48,11 +48,21 @@ export class MessageBroadcasterService implements OnModuleInit {
   ): Promise<void> {
     try {
       const channel = RedisKeyBuilder.channels.newMessage(conversationId);
+      const globalChannel = RedisKeyBuilder.channels.globalNewMessage;
 
-      await this.redisPubSub.publish(channel, payload);
+      await Promise.all([
+        this.redisPubSub.publish(channel, payload),
+        this.redisPubSub.publish(globalChannel, {
+          messageId: payload.message.id.toString(),
+          conversationId: conversationId,
+          userId: payload.senderId,
+          text: payload.message.content,
+          createdAt: new Date(payload.message.createdAt).toISOString(),
+        }),
+      ]);
 
       this.logger.debug(
-        `Broadcasted message ${payload.message.id} to conversation ${conversationId}`,
+        `Broadcasted message ${payload.message.id} to conversation ${conversationId} and global channel`,
       );
     } catch (error) {
       this.logger.error(

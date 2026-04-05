@@ -4,6 +4,11 @@
 
 const requiredEnvVars = ['VITE_BACKEND_URL', 'VITE_SOCKET_URL'] as const;
 
+function parseBooleanEnv(value: string | undefined, defaultValue = false): boolean {
+      if (value == null || value === '') return defaultValue;
+      return value.toLowerCase() === 'true';
+}
+
 function validateEnv() {
       const missing = requiredEnvVars.filter((key) => !import.meta.env[key]);
 
@@ -31,6 +36,9 @@ function validateEnv() {
 
             // VAPID key for Web Push
             VAPID_PUBLIC_KEY: import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined,
+
+            // Phase 0: Unified AI stream contract rollout flag
+            AI_UNIFIED_STREAM_ENABLED: parseBooleanEnv(import.meta.env.VITE_AI_UNIFIED_STREAM_ENABLED, false),
       };
 }
 

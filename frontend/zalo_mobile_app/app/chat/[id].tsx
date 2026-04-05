@@ -4,13 +4,13 @@ import { useTheme } from 'react-native-paper';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   View,
   StyleSheet,
   Pressable,
   Text,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { mobileApi } from '@/services/api';
@@ -36,6 +36,7 @@ import { useMarkAsSeen } from '@/features/chats/hooks/use-mark-as-seen';
 import { MediaViewerModal } from '@/features/chats/components/media-viewer-modal';
 import { useCallStore } from '@/features/calls/stores/call.store';
 import { ActiveGroupCallBanner } from '@/features/chats/components/ActiveGroupCallBanner';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 const uuidv4 = () =>
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -52,12 +53,13 @@ const ChatMessage = React.memo(
     item, isMe, isDirect, isLatestMyMessage,
     showAvatar, showSenderName, showTime, showSeparator,
     onLongPress, onJumpToMessage, onMediaPress, isHighlighted,
-    onRetry,
+    onRetry, conversationId, isPinned, onPin, onUnpin,
   }: {
     item: Message;
     isMe: boolean;
     isDirect: boolean;
     isLatestMyMessage: boolean;
+    conversationId: string;
     showAvatar: boolean;
     showSenderName: boolean;
     showTime: boolean;
@@ -67,6 +69,9 @@ const ChatMessage = React.memo(
     onMediaPress?: (mediaId: string) => void;
     isHighlighted?: boolean;
     onRetry?: (msg: Message) => void;
+    isPinned?: boolean;
+    onPin?: (msg: Message) => void;
+    onUnpin?: (msg: Message) => void;
   }) => {
     if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
     return (
@@ -77,6 +82,8 @@ const ChatMessage = React.memo(
           isMe={isMe}
           isDirect={isDirect}
           isLatestMyMessage={isLatestMyMessage}
+          conversationId={conversationId}
+          isPinned={isPinned}
           showAvatar={showAvatar}
           showSenderName={showSenderName}
           showTime={showTime}
@@ -84,6 +91,8 @@ const ChatMessage = React.memo(
           onJumpToMessage={onJumpToMessage}
           onMediaPress={onMediaPress}
           onRetry={onRetry}
+          onPin={onPin}
+          onUnpin={onUnpin}
           isHighlighted={isHighlighted}
         />
       </View>
@@ -113,7 +122,7 @@ export default function ChatDetailScreen() {
           text1: 'Lỗi',
           text2: 'Cuộc trò chuyện không tồn tại hoặc bạn không còn là thành viên',
         });
-        
+
         // Prune from list cache
         queryClient.setQueriesData({ queryKey: ['conversations'] }, (oldData: any) => {
           if (!oldData || !oldData.pages) return oldData;
@@ -168,6 +177,7 @@ export default function ChatDetailScreen() {
   const { pinnedMessages, pinMessage, unpinMessage } = usePinMessage(id);
   const { setReplyTarget, jumpToMessageId, setJumpToMessageId } = useChatStore();
   const { markAsSeen } = useMarkAsSeen();
+  const headerHeight = useHeaderHeight();
 
   const [selectedMsgForMenu, setSelectedMsgForMenu] = React.useState<Message | null>(null);
   const [viewerState, setViewerState] = React.useState({ isVisible: false, initialIndex: 0 });
@@ -224,7 +234,7 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     if (messages.length === 0) return;
     const lastMsg = messages[messages.length - 1];
-    
+
     // Mark as seen if it's from someone else
     if (lastMsg.senderId !== user?.id) {
       markAsSeen(id, lastMsg.id.toString());
@@ -260,7 +270,7 @@ export default function ChatDetailScreen() {
           console.warn('[ChatScreen] Failed to fetch active call:', err);
         }
       };
-      
+
       void syncActiveCall();
     }
   }, [id, accessToken, isGroup]);
@@ -317,8 +327,8 @@ export default function ChatDetailScreen() {
           fileName: a.originalName,
           mimeType: a.mimeType || 'application/octet-stream',
           fileSize: a.size || 0,
-          type: (a.mediaType.toLowerCase() === 'image' || a.mediaType.toLowerCase() === 'video' || a.mediaType.toLowerCase() === 'document') 
-            ? a.mediaType.toLowerCase() as any 
+          type: (a.mediaType.toLowerCase() === 'image' || a.mediaType.toLowerCase() === 'video' || a.mediaType.toLowerCase() === 'document')
+            ? a.mediaType.toLowerCase() as any
             : 'document',
         }));
 
@@ -367,6 +377,8 @@ export default function ChatDetailScreen() {
           isMe={isMe}
           isDirect={isDirect}
           isLatestMyMessage={item.id === latestMyMessageId}
+          conversationId={id}
+          isPinned={pinnedMessages.some((m) => m.id === item.id)}
           showAvatar={!isMe && isFirstInGroup}
           showSenderName={isGroup && !isMe && isFirstInGroup}
           showTime={isLastInGroup}
@@ -375,6 +387,8 @@ export default function ChatDetailScreen() {
           onJumpToMessage={jumpToMessage}
           onMediaPress={handleMediaPress}
           onRetry={handleRetry}
+          onPin={(msg) => pinMessage(msg.id)}
+          onUnpin={(msg) => unpinMessage(msg.id)}
           isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
       );
@@ -418,22 +432,22 @@ export default function ChatDetailScreen() {
 
       <ChatHeader conversation={conversation as any} />
 
-      <PinnedMessagesHeader
-        pinnedMessages={pinnedMessages}
-        onViewAllPinned={() => router.push(`/chat/${id}/pinned`)}
-      />
-
-      <ActiveGroupCallBanner
-        conversationId={id}
-        displayName={conversation?.name || 'Hội thoại'}
-        avatarUrl={conversation?.avatarUrl}
-      />
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
       >
+        <PinnedMessagesHeader
+          pinnedMessages={pinnedMessages}
+          onViewAllPinned={() => router.push(`/chat/${id}/pinned`)}
+        />
+
+        <ActiveGroupCallBanner
+          conversationId={id}
+          displayName={conversation?.name || 'Hội thoại'}
+          avatarUrl={conversation?.avatarUrl}
+        />
+
         <View style={{ flex: 1 }}>
           <FlashList
             key={flashListKey}

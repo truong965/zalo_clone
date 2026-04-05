@@ -10,6 +10,8 @@ import 'react-native-reanimated';
 import '@/lib/i18n';
 import '../global.css';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { useEffect } from 'react';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { isExpoGo } from '@/constants/platform';
 
@@ -17,6 +19,7 @@ import { AuthProvider } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { SocketProvider } from '@/providers/socket-provider';
 import { getNotificationEnabledSync } from '@/lib/notification-settings';
+import { useTranslationStore } from '@/hooks/use-translation-store';
 
 // ── Notification handler ───────────────────────────────────────────
 if (!isExpoGo) {
@@ -95,16 +98,24 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const { colorScheme } = useNativeWindColorScheme();
+  const hydrate = useTranslationStore((state) => state.hydrate);
+
+  useEffect(() => {
+    // Hydrate translation store from AsyncStorage on app start
+    hydrate();
+  }, [hydrate]);
 
   return (
     <SafeAreaProvider>
-      <QueryProvider>
-        <AuthProvider>
-          <SocketProvider>
-            <AppContent colorScheme={colorScheme} />
-          </SocketProvider>
-        </AuthProvider>
-      </QueryProvider>
+      <KeyboardProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <SocketProvider>
+              <AppContent colorScheme={colorScheme} />
+            </SocketProvider>
+          </AuthProvider>
+        </QueryProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }
