@@ -10,8 +10,8 @@ import {
   StatusBar,
   TextInput,
   Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
@@ -32,7 +32,7 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
   const [inputValue, setInputValue] = useState('');
 
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  
+
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
@@ -252,8 +252,8 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
               <TouchableOpacity
                 style={[
                   styles.sendBtn,
-                  isLoading 
-                    ? styles.cancelBtn 
+                  isLoading
+                    ? styles.cancelBtn
                     : (!inputValue.trim() ? styles.sendBtnDisabled : styles.sendBtnActive),
                 ]}
                 onPress={() => (isLoading ? void cancelAiRequest() : void handleSend())}

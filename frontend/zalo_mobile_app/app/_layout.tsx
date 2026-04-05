@@ -11,7 +11,6 @@ import '@/lib/i18n';
 import '../global.css';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useEffect } from 'react';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { isExpoGo } from '@/constants/platform';
 
@@ -107,7 +106,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <KeyboardProvider>
+      <>
         <QueryProvider>
           <AuthProvider>
             <SocketProvider>
@@ -115,7 +114,7 @@ export default function RootLayout() {
             </SocketProvider>
           </AuthProvider>
         </QueryProvider>
-      </KeyboardProvider>
+      </>
     </SafeAreaProvider>
   );
 }
