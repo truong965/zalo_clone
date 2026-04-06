@@ -34,7 +34,43 @@ export class GroupJoinService {
     private readonly displayNameResolver: DisplayNameResolver,
     @Inject(BLOCK_CHECKER)
     private readonly blockChecker: IBlockChecker,
-  ) {}
+  ) { }
+
+  async getJoinPreview(conversationId: string, userId: string) {
+    const group = await this.prisma.conversation.findUnique({
+      where: { id: conversationId, deletedAt: null },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        avatarUrl: true,
+        requireApproval: true,
+        members: {
+          where: { status: MemberStatus.ACTIVE },
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (group.type !== ConversationType.GROUP) {
+      throw new BadRequestException('Not a group conversation');
+    }
+
+    const isMember = group.members.some((member) => member.userId === userId);
+
+    return {
+      conversationId: group.id,
+      name: group.name ?? 'Nhóm',
+      avatarUrl: group.avatarUrl,
+      memberCount: group.members.length,
+      requireApproval: group.requireApproval,
+      isMember,
+    };
+  }
 
   async requestJoin(dto: CreateJoinRequestDto, userId: string) {
     const group = await this.prisma.conversation.findUnique({

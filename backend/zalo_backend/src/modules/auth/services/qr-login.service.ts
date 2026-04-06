@@ -41,7 +41,7 @@ export class QrLoginService {
     private readonly rateLimitService: RedisRateLimitService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
-  ) {}
+  ) { }
 
   // ═══════════════════════ Pha 1: Generate QR ═══════════════════════
 
@@ -268,7 +268,7 @@ export class QrLoginService {
       throw new BadRequestException('QR session missing user information');
     }
 
-    // 3. 4-factor cross-verification
+    // 3. Cross-verification
     // Factor 1 & 2: ticket + qrSessionId (verified by Redis key existence)
     // Factor 3: deviceId (body) must match session's deviceTrackingId
     if (dto.deviceId !== session.deviceTrackingId) {
@@ -277,12 +277,20 @@ export class QrLoginService {
       );
       throw new UnauthorizedException('Device verification failed');
     }
-    // Factor 4: cookie must match session's deviceTrackingId
-    if (!cookieTrackingId || cookieTrackingId !== session.deviceTrackingId) {
+
+    // Factor 4 (optional hardening): if cookie exists, it must match session.
+    // In some deployments (cross-site dev/staging), cookie may be unavailable.
+    if (cookieTrackingId && cookieTrackingId !== session.deviceTrackingId) {
       this.logger.warn(
         `[AUDIT] Exchange failed from IP ${ip} - cookie mismatch. Cookie: ${cookieTrackingId}, Session: ${session.deviceTrackingId}`,
       );
       throw new UnauthorizedException('Device verification failed');
+    }
+
+    if (!cookieTrackingId) {
+      this.logger.warn(
+        `[AUDIT] QR exchange proceeding without device_tracking_id cookie from IP ${ip} for session ${dto.qrSessionId}`,
+      );
     }
 
     // 4. Acquire distributed lock
@@ -295,21 +303,25 @@ export class QrLoginService {
     }
 
     try {
-      // 5. Consume ticket atomically (one-time use)
-      const ticket = await this.qrSession.consumeTicket(dto.qrSessionId);
-      if (!ticket) {
-        throw new BadRequestException('Ticket already used or expired');
-      }
-
-      // Verify ticket matches
-      if (ticket !== dto.ticket) {
+      // 5. Validate ticket first to avoid consuming it on mismatched requests.
+      const ticketMatched = await this.qrSession.isTicketMatch(
+        dto.qrSessionId,
+        dto.ticket,
+      );
+      if (!ticketMatched) {
         this.logger.warn(
           `[AUDIT] Exchange failed from IP ${ip} - invalid ticket for session ${dto.qrSessionId}`,
         );
         throw new UnauthorizedException('Invalid ticket');
       }
 
-      // 6. Get user from DB
+      // 6. Consume ticket atomically (one-time use)
+      const ticket = await this.qrSession.consumeTicket(dto.qrSessionId);
+      if (!ticket) {
+        throw new BadRequestException('Ticket already used or expired');
+      }
+
+      // 7. Get user from DB
       const user = await this.prisma.user.findUnique({
         where: { id: session.userId },
       });
@@ -317,7 +329,7 @@ export class QrLoginService {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      // 7. Revoke existing PC sessions (enforce 1PC rule)
+      // 8. Revoke existing PC sessions (enforce 1PC rule)
       const revokedDeviceIds = await this.tokenService.revokeExistingPCSessions(
         user.id,
         {
@@ -327,7 +339,7 @@ export class QrLoginService {
         },
       );
 
-      // 8. Create new tokens
+      // 9. Create new tokens
       const deviceInfo = this.deviceFingerprint.extractDeviceInfo(req);
       // Override deviceId with the tracking cookie ID for consistency
       deviceInfo.deviceId = session.deviceTrackingId;
@@ -345,10 +357,10 @@ export class QrLoginService {
         deviceInfo.deviceId,
       );
 
-      // 9. Set device tracking cookie if not already set
+      // 10. Set device tracking cookie if not already set
       this.deviceFingerprint.setTrackingCookie(res, session.deviceTrackingId);
 
-      // 10. Kick old PC sessions
+      // 11. Kick old PC sessions
       if (revokedDeviceIds.length > 0) {
         this.eventEmitter.emit(QR_INTERNAL_EVENTS.FORCE_LOGOUT_DEVICES, {
           userId: user.id,
@@ -357,7 +369,7 @@ export class QrLoginService {
         });
       }
 
-      // 11. Cleanup: delete QR session from Redis
+      // 12. Cleanup: delete QR session from Redis
       await this.qrSession.deleteSession(dto.qrSessionId);
 
       this.logger.log(

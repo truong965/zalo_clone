@@ -77,7 +77,7 @@ async function bootstrap() {
   });
   // --- CẤU HÌNH SOCKET ADAPTER ---
   const redisIoAdapter = new RedisIoAdapter(app);
-  app.useWebSocketAdapter(redisIoAdapter);
+  app.useWebSocketAdapter(redisIoAdapter as any);
 
   //Swagger documentation
   if (process.env.NODE_ENV !== 'production') {

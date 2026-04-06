@@ -40,7 +40,7 @@ const QR_TICKET_TTL = 15; // 15 seconds
 export class QrSessionRedisService {
   private readonly logger = new Logger(QrSessionRedisService.name);
 
-  constructor(private readonly redis: RedisService) {}
+  constructor(private readonly redis: RedisService) { }
 
   // ────────────── Session CRUD ──────────────
 
@@ -86,6 +86,7 @@ export class QrSessionRedisService {
     extra?: Partial<QrSessionData>,
   ): Promise<void> {
     const key = RedisKeyBuilder.qrSession(qrSessionId);
+    const client = this.redis.getClient();
     const raw = await this.redis.get(key);
     if (!raw) {
       this.logger.warn(`QR session not found for update: ${qrSessionId}`);
@@ -95,10 +96,38 @@ export class QrSessionRedisService {
     const session = JSON.parse(raw) as QrSessionData;
     const updated: QrSessionData = { ...session, status, ...extra };
 
-    // When setting APPROVED status, we use a shorter TTL for the ticket
+    // Preserve remaining TTL to avoid extending session lifetime after scan/cancel.
+    // For APPROVED, keep the shorter of remaining TTL and ticket TTL.
+    const remainingTtl = await client.ttl(key);
+    const hasExpiry = remainingTtl > 0;
     const ttl =
-      status === QrSessionStatus.APPROVED ? QR_TICKET_TTL : QR_SESSION_TTL;
+      status === QrSessionStatus.APPROVED
+        ? hasExpiry
+          ? Math.min(remainingTtl, QR_TICKET_TTL)
+          : QR_TICKET_TTL
+        : hasExpiry
+          ? remainingTtl
+          : QR_SESSION_TTL;
+
+    if (ttl <= 0) {
+      this.logger.warn(`QR session expired during update: ${qrSessionId}`);
+      return;
+    }
+
     await this.redis.setex(key, ttl, JSON.stringify(updated));
+  }
+
+  /**
+   * Compare ticket without consuming it.
+   * Caller should hold distributed lock to avoid races.
+   */
+  async isTicketMatch(
+    qrSessionId: string,
+    expectedTicket: string,
+  ): Promise<boolean> {
+    const session = await this.getSession(qrSessionId);
+    if (!session?.ticket) return false;
+    return session.ticket === expectedTicket;
   }
 
   /**

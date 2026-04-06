@@ -17,22 +17,32 @@ interface QrLoginViewProps {
 
 type QrState = 'LOADING' | 'PENDING' | 'SCANNED' | 'EXPIRED';
 
-const QR_TIMEOUT_MS = 60 * 1000; // 1 minute
+const QR_TIMEOUT_MS = 180 * 1000; // 3 minutes (match backend session TTL)
+const QR_POLL_INTERVAL_MS = 2500;
 
 export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onError }) => {
   const [qrState, setQrState] = useState<QrState>('LOADING');
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { t } = useTranslation();
 
   // ── Refs to avoid stale closures in socket event handlers ──
   const qrSessionIdRef = useRef<string | null>(null);
   const deviceTrackingIdRef = useRef<string | null>(null);
+  const isExchangingRef = useRef(false);
 
   const clearTimer = useCallback(() => {
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
+    }
+  }, []);
+
+  const clearPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
   }, []);
 
@@ -57,6 +67,7 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
       const remaining = endTime - Date.now();
       if (remaining <= 0) {
         clearTimer();
+        clearPolling();
         setQrState('EXPIRED');
         const socket = socketManager.getSocket();
         if (socket) {
@@ -67,7 +78,63 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
         }
       }
     }, 1000);
-  }, [clearTimer]);
+  }, [clearPolling, clearTimer]);
+
+  const exchangeAndLogin = useCallback(
+    async (ticket: string, sessionId: string) => {
+      if (isExchangingRef.current) {
+        return;
+      }
+
+      isExchangingRef.current = true;
+      try {
+        const deviceId = deviceTrackingIdRef.current ?? undefined;
+        await authService.exchangeQrTicket(ticket, sessionId, deviceId);
+        clearTimer();
+        clearPolling();
+        onLoginSuccess();
+      } catch (err) {
+        onError(ApiError.from(err).message || t('auth.qr.authFail'));
+        setQrState('EXPIRED');
+      } finally {
+        isExchangingRef.current = false;
+      }
+    },
+    [clearPolling, clearTimer, onError, onLoginSuccess, t],
+  );
+
+  const startStatusPolling = useCallback(() => {
+    clearPolling();
+
+    pollingIntervalRef.current = setInterval(async () => {
+      const sessionId = qrSessionIdRef.current;
+      if (!sessionId || isExchangingRef.current) {
+        return;
+      }
+
+      try {
+        const status = await authService.getQrStatus(sessionId);
+
+        if (status.status === 'SCANNED') {
+          setQrState('SCANNED');
+          return;
+        }
+
+        if (status.status === 'APPROVED' && status.ticket) {
+          await exchangeAndLogin(status.ticket, sessionId);
+          return;
+        }
+
+        if (status.status === 'EXPIRED' || status.status === 'CANCELLED') {
+          clearTimer();
+          clearPolling();
+          setQrState('EXPIRED');
+        }
+      } catch {
+        // Ignore transient polling errors; socket path may still succeed.
+      }
+    }, QR_POLL_INTERVAL_MS);
+  }, [clearPolling, clearTimer, exchangeAndLogin]);
 
   /**
    * Remove all QR-related socket listeners before (re-)registering.
@@ -88,8 +155,14 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
       setQrState('LOADING');
       clearTimer();
 
-      // Clean up old listeners before adding new ones (prevents listener leak)
+      // Clean up old listeners and polling before adding new ones.
       cleanupSocketListeners();
+      clearPolling();
+
+      // Reset flow refs for a fresh session
+      qrSessionIdRef.current = null;
+      deviceTrackingIdRef.current = null;
+      isExchangingRef.current = false;
 
       // 1. Connect unauthenticated socket
       const socket = socketManager.connectUnauthenticated();
@@ -107,6 +180,7 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
 
           setQrState('PENDING');
           startExpirationTimer();
+          startStatusPolling();
         } catch (err) {
           onError(ApiError.from(err).message || t('auth.qr.qrError'));
           setQrState('EXPIRED');
@@ -126,42 +200,51 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
 
       socket.on(SocketEvents.QR_CANCELLED, () => {
         clearTimer();
+        clearPolling();
         // Automatically reload a new QR code
         generateAndConnect();
       });
 
       socket.on(SocketEvents.QR_APPROVED, async (data: { ticket: string; qrSessionId: string }) => {
-        try {
-          // Use qrSessionId from event data (avoids stale closure)
-          // Fall back to ref if event doesn't include it
-          const sessionId = data.qrSessionId || qrSessionIdRef.current;
-          const deviceId = deviceTrackingIdRef.current;
-          if (!sessionId) return;
+        // Use qrSessionId from event data (avoids stale closure)
+        // Fall back to ref if event doesn't include it
+        const sessionId = data.qrSessionId || qrSessionIdRef.current;
+        if (!sessionId) return;
 
-          await authService.exchangeQrTicket(data.ticket, sessionId, deviceId ?? undefined);
-          clearTimer();
-          onLoginSuccess();
-        } catch (err) {
-          onError(ApiError.from(err).message || t('auth.qr.authFail'));
-          setQrState('EXPIRED');
-        }
+        await exchangeAndLogin(data.ticket, sessionId);
       });
 
     } catch (err) {
       onError(ApiError.from(err).message);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    cleanupSocketListeners,
+    clearPolling,
+    clearTimer,
+    exchangeAndLogin,
+    onError,
+    startExpirationTimer,
+    startStatusPolling,
+    t,
+  ]);
 
   useEffect(() => {
     generateAndConnect();
 
     return () => {
       clearTimer();
+      clearPolling();
       cleanupSocketListeners();
       disconnectPublicSocketIfConnected();
     };
-  }, [clearTimer, cleanupSocketListeners, disconnectPublicSocketIfConnected, generateAndConnect]);
+  }, [
+    clearPolling,
+    clearTimer,
+    cleanupSocketListeners,
+    disconnectPublicSocketIfConnected,
+    generateAndConnect,
+  ]);
 
   const renderContent = () => {
     if (qrState === 'LOADING') {
