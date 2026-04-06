@@ -24,7 +24,7 @@ import { LoginDto } from './dto/login.dto';
 import { DeviceInfo } from './interfaces/device-info.interface';
 import jwtConfig from '../../config/jwt.config';
 import { UserEntity } from '../users/entities/user.entity';
-import { DeviceType, LoginMethod, UserStatus } from '@prisma/client';
+import { DeviceType, LoginMethod, UserStatus, TokenRevocationReason } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
 import { RedisRegistryService } from 'src/shared/redis/services/redis-registry.service';
@@ -326,14 +326,24 @@ export class AuthService {
       },
     });
 
+    // Clear auth cache to invalidate stale passwordVersion
+    await this.redis.del(RedisKeyBuilder.authUserProfile(userId));
+
+    // Revoke ALL existing sessions in DB (tokens become invalid)
+    await this.tokenService.revokeAllUserSessions(
+      userId,
+      TokenRevocationReason.PASSWORD_CHANGED,
+    );
+
     // Revoke other devices if requested
     const shouldLogoutAll = dto.logoutAllDevices !== false; // Default to true if not provided
 
     if (shouldLogoutAll) {
       this.eventEmitter.emit(QR_INTERNAL_EVENTS.FORCE_LOGOUT_DEVICES, {
         userId,
-        deviceIds: [], // All devices
+        deviceIds: [], // All devices 
         reason: 'Password was changed',
+        excludeDeviceId: deviceInfo.deviceId, // Exclude current device from force logout
       });
     }
 

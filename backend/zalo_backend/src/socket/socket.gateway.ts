@@ -145,6 +145,7 @@ export class SocketGateway
     userId: string;
     deviceIds: string[];
     reason: string;
+    excludeDeviceId?: string;
   }) {
     this.logger.debug(
       `[SocketGateway] Internal command: Force disconnecting ${payload.deviceIds?.length} devices for ${payload.userId}`,
@@ -153,6 +154,7 @@ export class SocketGateway
       payload.userId,
       payload.deviceIds,
       payload.reason,
+      payload.excludeDeviceId,
     );
   }
 
@@ -539,14 +541,18 @@ export class SocketGateway
     userId: string,
     deviceIds: string[],
     reason: string = 'Forced logout',
+    excludeDeviceId?: string,
   ): Promise<void> {
     const socketIds = await this.socketState.getUserSockets(userId);
+    const disconnectAllDevices = !deviceIds || deviceIds.length === 0;
 
     for (const socketId of socketIds) {
       // Get metadata to check the deviceId of this socket
       const metadata = await this.socketState.getSocketMetadata(socketId);
 
-      if (metadata && deviceIds.includes(metadata.deviceId)) {
+      if (metadata && (disconnectAllDevices || deviceIds.includes(metadata.deviceId))) {
+        if (excludeDeviceId && metadata.deviceId === excludeDeviceId) continue;
+        
         this.server.to(socketId).emit(SocketEvents.AUTH_FORCE_LOGOUT, {
           reason,
         });

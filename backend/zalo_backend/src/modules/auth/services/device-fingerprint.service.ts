@@ -54,7 +54,7 @@ export class DeviceFingerprintService {
     res.cookie(DEVICE_TRACKING_COOKIE, trackingId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax', // strict
       maxAge: DEVICE_TRACKING_MAX_AGE,
       path: '/',
     });

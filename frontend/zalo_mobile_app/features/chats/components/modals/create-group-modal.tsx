@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { AvatarOptionsModal } from './avatar-options-modal';
 import { AvatarConfirmModal } from './avatar-confirm-modal';
+import type { PickedAvatar } from '../../hooks/use-avatar-picker';
 
 interface CreateGroupModalProps {
   visible: boolean;
@@ -26,8 +27,8 @@ export function CreateGroupModal({ visible, onDismiss }: CreateGroupModalProps) 
   const { pickImage, uploadAvatar } = useAvatarPicker();
   const [groupName, setGroupName] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [pickedAvatar, setPickedAvatar] = useState<any | null>(null);
-  const [tempPickedAvatar, setTempPickedAvatar] = useState<any | null>(null);
+  const [pickedAvatar, setPickedAvatar] = useState<PickedAvatar | null>(null);
+  const [tempPickedAvatar, setTempPickedAvatar] = useState<PickedAvatar | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [avatarOptionsVisible, setAvatarOptionsVisible] = useState(false);
   const [avatarConfirmVisible, setAvatarConfirmVisible] = useState(false);
@@ -231,6 +232,7 @@ export function CreateGroupModal({ visible, onDismiss }: CreateGroupModalProps) 
         }}
         onConfirm={handleConfirmAvatar}
         imageUri={tempPickedAvatar?.uri || null}
+        description="Bạn có muốn sử dụng ảnh này làm ảnh đại diện nhóm không?"
       />
     </Portal>
   );

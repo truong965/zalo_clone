@@ -5,6 +5,7 @@ import { Appbar, TextInput, Button, HelperText, RadioButton, Text, Portal, useTh
 import { useAuth } from '@/providers/auth-provider';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAvatarPicker } from '@/features/chats/hooks/use-avatar-picker';
+import type { PickedAvatar } from '@/features/chats/hooks/use-avatar-picker';
 import { AvatarOptionsModal } from '@/features/chats/components/modals/avatar-options-modal';
 import { AvatarConfirmModal } from '@/features/chats/components/modals/avatar-confirm-modal';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -27,7 +28,7 @@ export default function AccountScreen() {
   const [avatarOptionsVisible, setAvatarOptionsVisible] = useState(false);
   const [avatarConfirmVisible, setAvatarConfirmVisible] = useState(false);
   const { pickImage, uploadAvatar, isUploading } = useAvatarPicker();
-  const [pickedImage, setPickedImage] = useState<any | null>(null);
+  const [pickedImage, setPickedImage] = useState<PickedAvatar | null>(null);
   const theme = useTheme();
   // Validation
   const isEmailValid = useMemo(() => {
@@ -41,7 +42,7 @@ export default function AccountScreen() {
     return email.toLowerCase().endsWith('@gmail.com');
   }, [email]);
 
-  const canSave = displayName.trim() && isEmailValid && isGmail;
+  const canSave = displayName.trim().length > 0 && isEmailValid && isGmail;
 
   const handlePickImage = async (source: 'camera' | 'library') => {
     const picked = await pickImage(source);
