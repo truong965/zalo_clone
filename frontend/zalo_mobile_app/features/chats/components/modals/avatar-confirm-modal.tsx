@@ -53,7 +53,7 @@ export const AvatarConfirmModal = ({
       </View>
 
       <Text className="text-center text-muted-foreground mb-8 px-4">
-        Bạn có muốn sử dụng ảnh này làm ảnh đại diện nhóm không?
+        {description}
       </Text>
 
       <View className="flex-row w-full gap-4">

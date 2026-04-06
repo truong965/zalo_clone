@@ -20,7 +20,7 @@ export default registerAs('jwt', () => ({
     cookieOptions: {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-      sameSite: 'strict' as const,
+      sameSite: 'lax' as const, // strict
       path: '/api/v1/auth/refresh', // Only send cookie to refresh endpoint
       maxAge: ms(7 * 24 * 60 * 60), // 7 days in milliseconds
     },

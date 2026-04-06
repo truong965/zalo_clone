@@ -230,6 +230,13 @@ export const authService = {
        * Change password
        */
       async changePassword(payload: ChangePasswordRequest) {
-            await api.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, payload);
+            const response = await api.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, payload);
+            const data = response.data.data as { accessToken: string; expiresIn: number; message: string };
+            // Save new tokens so the current device continues to work
+            if (data.accessToken) {
+                  localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.accessToken);
+                  localStorage.setItem(STORAGE_KEYS.EXPIRES_IN, data.expiresIn.toString());
+            }
+            return data;
       },
 };

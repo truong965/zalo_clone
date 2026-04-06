@@ -7,6 +7,7 @@ export const SocketEvents = {
   // Auth
   AUTHENTICATED: 'authenticated',
   AUTH_FAILED: 'auth_failed',
+  AUTH_FORCE_LOGOUT: 'auth.force_logout',
 
   // Conversation
   CONVERSATION_UPDATED: 'conversation:updated',

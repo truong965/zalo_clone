@@ -42,6 +42,7 @@ export class QrLoginSocketListener {
     userId: string;
     deviceIds: string[];
     reason: string;
+    excludeDeviceId?: string;
   }) {
     this.logger.debug(
       `Received internal event to force logout ${payload.deviceIds.length} devices for user ${payload.userId}`,

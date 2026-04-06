@@ -350,13 +350,19 @@ function SecuritySection() {
       const [passwordForm] = Form.useForm();
       const [emailForm] = Form.useForm();
 
-      const handleChangePassword = async (values: any) => {
+      const handleChangePassword = async (values: {
+            oldPassword: string;
+            newPassword: string;
+            logoutAllDevices?: boolean;
+      }) => {
             try {
                   setIsSubmitting(true);
                   await authService.changePassword({
                         oldPassword: values.oldPassword,
                         newPassword: values.newPassword,
+                        logoutAllDevices: values.logoutAllDevices ?? true,
                   });
+              
                   api.success({
                         message: t('settings.security.passwordSuccess') || 'Thành công',
                         description: t('settings.security.passwordSuccessDesc') || 'Mật khẩu đã được thay đổi.',
