@@ -2,6 +2,7 @@ import { registerAs } from '@nestjs/config';
 
 export default registerAs('s3', () => ({
   endpoint: process.env.S3_ENDPOINT || undefined,
+  internalEndpoint: process.env.S3_INTERNAL_URL || process.env.S3_ENDPOINT || undefined,
   bucketName: process.env.S3_BUCKET_NAME || 'zalo-clone-media-dev',
   region: process.env.AWS_REGION || 'ap-southeast-1',
   // When running on EC2 with an IAM Instance Profile, leave both vars unset

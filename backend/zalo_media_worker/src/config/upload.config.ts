@@ -25,8 +25,8 @@ export default registerAs('upload', () => ({
   retry: {
     dbFetchMaxAttempts: parseInt(process.env.RETRY_DB_MAX_ATTEMPTS || '5', 10),
     dbFetchBaseDelayMs: parseInt(process.env.RETRY_DB_BASE_DELAY_MS || '500', 10),
-    s3CheckMaxAttempts: parseInt(process.env.RETRY_S3_MAX_ATTEMPTS || '5', 10),
-    s3CheckRetryDelayMs: parseInt(process.env.RETRY_S3_RETRY_DELAY_MS || '300', 10),
+    s3CheckMaxAttempts: parseInt(process.env.RETRY_S3_MAX_ATTEMPTS || '3', 10),
+    s3CheckRetryDelayMs: parseInt(process.env.RETRY_S3_RETRY_DELAY_MS || '2000', 10),
   },
   cleanup: {
     tempFileMaxAgeHours: parseInt(process.env.CLEANUP_TEMP_MAX_AGE_HOURS || '24', 10),
