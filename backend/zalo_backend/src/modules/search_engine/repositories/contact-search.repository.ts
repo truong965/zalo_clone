@@ -188,38 +188,9 @@ export class ContactSearchRepository {
         --    → applies to ALL users (friends, contacts, strangers)
         -- 2) Name search: ONLY for friends & contacts (NOT strangers)
         AND (
-          -- Branch A: Phone number match
-          -- Case 1: 10 digits starting with 0 (e.g. "0901234567")
-          -- Case 2: +84 + 9 digits (e.g. "+84901234567")
+          -- Branch A: Phone number match (Standardized E.164)
           (
-            (
-              length(regexp_replace($2::text, '[^0-9]', '', 'g')) = 10
-              AND regexp_replace($2::text, '[^0-9]', '', 'g') ~ '^0[0-9]{9}$'
-              AND (
-                u.phone_number = regexp_replace($2::text, '[^0-9]', '', 'g')
-                OR u.phone_number_normalized = regexp_replace($2::text, '[^0-9]', '', 'g')
-                OR u.phone_number_normalized = concat(
-                  '+84',
-                  substring(regexp_replace($2::text, '[^0-9]', '', 'g') from 2)
-                )
-              )
-            )
-            OR
-            (
-              length(regexp_replace($2::text, '[^0-9]', '', 'g')) = 11
-              AND regexp_replace($2::text, '[^0-9]', '', 'g') ~ '^84[0-9]{9}$'
-              AND (
-                u.phone_number_normalized = concat(
-                  '+',
-                  regexp_replace($2::text, '[^0-9]', '', 'g')
-                )
-                OR u.phone_number_normalized = regexp_replace($2::text, '[^0-9]', '', 'g')
-                OR u.phone_number = concat(
-                  '0',
-                  substring(regexp_replace($2::text, '[^0-9]', '', 'g') from 3)
-                )
-              )
-            )
+            u.phone_number = $2::text
           )
           -- Branch B: Name search — restricted to friends & contacts only
           OR (

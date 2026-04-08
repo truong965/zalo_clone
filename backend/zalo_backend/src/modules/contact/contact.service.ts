@@ -40,6 +40,7 @@ import type { ConfigType } from '@nestjs/config';
 import { CursorPaginatedResult } from 'src/common/interfaces/paginated-result.interface';
 import { ContactResponseDto } from './dto/contact.dto';
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
+import { PhoneNumberUtil } from '@common/utils/phone-number.util';
 type MatchedUser = {
   id: string;
   displayName: string;
@@ -250,8 +251,8 @@ export class ContactService {
   private processInputContacts(contacts: ContactItemDto[]) {
     const phoneBookNameMap = new Map<string, string>();
     const phoneHashes = contacts.map((c) => {
-      const normalized = this.normalizePhoneNumber(c.phoneNumber);
-      const hash = this.hashPhoneNumber(normalized);
+      // c.phoneNumber is already normalized via @NormalizePhone decorator in DTO
+      const hash = PhoneNumberUtil.hash(c.phoneNumber);
       if (c.phoneBookName) phoneBookNameMap.set(hash, c.phoneBookName);
       return hash;
     });
@@ -551,30 +552,6 @@ export class ContactService {
       );
     }
   }
-  /**
-   * Normalize phone number to E.164 format
-   */
-  private normalizePhoneNumber(phoneNumber: string): string {
-    // Remove all non-digit characters
-    let normalized = phoneNumber.replace(/\D/g, '');
-
-    // Add + prefix if not present
-    if (!normalized.startsWith('+')) {
-      normalized = '+' + normalized;
-    }
-
-    return normalized;
-  }
-
-  /**
-   * Hash phone number using SHA-256
-   *
-   * Note: In production, client should do this to prevent sending raw numbers
-   */
-  private hashPhoneNumber(phoneNumber: string): string {
-    return crypto.createHash('sha256').update(phoneNumber).digest('hex');
-  }
-
   /**
    * Find users by phone hash
    */

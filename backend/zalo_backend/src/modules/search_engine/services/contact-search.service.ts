@@ -10,6 +10,7 @@ import { ContactSearchRepository } from '../repositories/contact-search.reposito
 import { SearchValidationService } from './search-validation.service';
 import { SearchCacheService } from './search-cache.service';
 import { SearchAnalyticsService } from './search-analytics.service';
+import { PhoneNumberUtil } from 'src/common/utils/phone-number.util';
 
 /**
  * Contact Search Service
@@ -39,11 +40,14 @@ export class ContactSearchService {
       this.validationService.validateKeyword(request.keyword);
       await this.validationService.validateUserExists(userId);
 
+      // Normalize keyword if it looks like a phone number to ensure consistent DB matching
+      const normalizedKeyword = PhoneNumberUtil.normalize(request.keyword);
+
       // Cache key (include cursor and conversationId for paginated/scoped requests)
       const excludeStr = (request.excludeIds || []).sort().join(',');
       const cursorStr = request.cursor || 'initial';
       const convId = request.conversationId || 'global';
-      const cacheKey = `search:contacts:${userId}:${request.keyword}:${request.limit || 50}:${request.hasAlias ? 'alias' : 'all'}:${excludeStr}:${convId}:${cursorStr}`;
+      const cacheKey = `search:contacts:${userId}:${normalizedKeyword}:${request.limit || 50}:${request.hasAlias ? 'alias' : 'all'}:${excludeStr}:${convId}:${cursorStr}`;
 
       // Check cache
       const cached =
@@ -59,7 +63,7 @@ export class ContactSearchService {
       // Execute search (fetches limit+1 rows for hasNextPage detection)
       const rawContacts = await this.contactSearchRepository.searchContacts(
         userId,
-        request.keyword,
+        normalizedKeyword,
         requestedLimit,
         request.excludeIds,
         request.conversationId,

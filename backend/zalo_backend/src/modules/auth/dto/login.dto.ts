@@ -1,16 +1,14 @@
-import { IsString, IsNotEmpty, MinLength, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, IsPhoneNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { NormalizePhone } from 'src/common/decorator/normalize-phone.decorator';
 
 export class LoginDto {
   @ApiProperty({
-    example: '+84987654321',
-    description: 'Phone number with country code',
+    example: '0987654321',
+    description: 'Phone number (VN)',
   })
-  @IsString()
-  @IsNotEmpty()
-  @Matches(/(84|0[3|5|7|8|9])+([0-9]{8})\b/g, {
-    message: 'Số điện thoại không đúng định dạng Việt Nam',
-  })
+  @NormalizePhone()
+  @IsPhoneNumber('VN')
   phoneNumber: string;
 
   @ApiProperty({

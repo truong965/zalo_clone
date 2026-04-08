@@ -12,11 +12,13 @@ import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ContactSource } from '@prisma/client';
 import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
+import { NormalizePhone } from 'src/common/decorator/normalize-phone.decorator';
 
 export class ContactItemDto {
   @ApiProperty({ description: 'Số điện thoại từ danh bạ (Raw)' })
   @IsString()
   @IsNotEmpty()
+  @NormalizePhone()
   @IsPhoneNumber('VN', {
     message: 'phoneNumber must be a valid phone number (e.g. 09xxx or +849xxx)',
   })
