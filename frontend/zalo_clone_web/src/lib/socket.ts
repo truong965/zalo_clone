@@ -92,6 +92,11 @@ class SocketManager {
     this.socket.on(SocketEvents.AUTH_FAILED, () => {
       void this.refreshAuthAndReconnect();
     });
+ 
+    this.socket.on(SocketEvents.SERVER_SHUTDOWN, () => {
+      console.warn('⚠️ Server is shutting down. Disconnecting gracefully...');
+      this.disconnect();
+    });
 
     this.socket.on('error', (error) => {
       console.error('❌ Socket transport error:', error);

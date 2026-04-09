@@ -24,50 +24,76 @@ interface TwoFactorViewProps {
 export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
       const { t } = useTranslation();
       const { twoFactorData, verify2fa, clear2fa } = useAuth();
+      
+      const availableMethods = twoFactorData?.availableMethods || [];
+      const hasPush = availableMethods.includes('PUSH');
+
       const [method, setMethod] = useState<TwoFactorMethod>(
-            twoFactorData?.autoTriggered ? 'PUSH' : (twoFactorData?.preferredMethod || 'TOTP')
+            (twoFactorData?.autoTriggered && hasPush) 
+                  ? 'PUSH' 
+                  : (twoFactorData?.preferredMethod || availableMethods[0] || 'TOTP')
       );
+      
+      const [pushStatus, setPushStatus] = useState<'IDLE' | 'WAITING' | 'REJECTED' | 'TIMEOUT' | 'VERIFYING'>(
+            (twoFactorData?.autoTriggered && (twoFactorData?.preferredMethod === 'PUSH' || (!twoFactorData?.preferredMethod && hasPush))) 
+                  ? 'WAITING' 
+                  : 'IDLE'
+      );
+
       const [code, setCode] = useState('');
       const [isLoading, setIsLoading] = useState(false);
       const [timer, setTimer] = useState(90); // 90s PUSH/OTP timeout
       const [resendCooldown, setResendCooldown] = useState(twoFactorData?.autoTriggered ? 45 : 0); // 45s anti-spam
-      const [isSocketConnected, setIsSocketConnected] = useState(false);
       const timerRef = useRef<any>(null);
       const cooldownRef = useRef<any>(null);
 
-      // Cooldown ticker
+      const startTimer = () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+            setTimer(90); // Reset to 90s
+            timerRef.current = setInterval(() => {
+                  setTimer((prev) => {
+                        if (prev <= 1) {
+                              if (timerRef.current) clearInterval(timerRef.current);
+                              setPushStatus('TIMEOUT');
+                              return 0;
+                        }
+                        return prev - 1;
+                  });
+            }, 1000);
+      };
+
+      // Handle Cooldown Timer (1s ticks)
       useEffect(() => {
             if (resendCooldown > 0) {
                   cooldownRef.current = setInterval(() => {
-                        setResendCooldown((prev) => {
-                              if (prev <= 1) {
-                                    if (cooldownRef.current) clearInterval(cooldownRef.current);
-                                    return 0;
-                              }
-                              return prev - 1;
-                        });
+                        setResendCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
                   }, 1000);
             }
             return () => {
                   if (cooldownRef.current) clearInterval(cooldownRef.current);
             };
-      }, [resendCooldown]);
+      }, [resendCooldown > 0]);
+
+      // Initialize timer for auto-triggered events on mount
+      useEffect(() => {
+            if (twoFactorData?.autoTriggered) {
+                  startTimer();
+            }
+            return () => {
+                  if (timerRef.current) clearInterval(timerRef.current);
+            };
+      }, []);
 
       // Socket setup for PUSH
       useEffect(() => {
-            if (method !== 'PUSH' || !twoFactorData?.pendingToken) return;
+            if (method !== 'PUSH' || pushStatus !== 'WAITING' || !twoFactorData?.pendingToken) return;
 
             const socket = socketManager.connectUnauthenticated();
 
-            socket.on(SocketEvents.CONNECT, () => {
-                  setIsSocketConnected(true);
-                  socket.emit(SocketEvents.TWO_FACTOR_SUBSCRIBE, {
-                        pendingToken: twoFactorData.pendingToken,
-                  });
-            });
-
             socket.on(SocketEvents.TWO_FACTOR_APPROVED, async (data: any) => {
                   if (data.pendingToken === twoFactorData.pendingToken) {
+                        if (timerRef.current) clearInterval(timerRef.current);
+                        setPushStatus('VERIFYING');
                         setIsLoading(true);
                         try {
                               const result = await verify2fa({
@@ -79,6 +105,7 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
                               }
                         } catch (error) {
                               Alert.alert(t('common.error'), error instanceof Error ? error.message : t('auth.verifyFailed'));
+                              setPushStatus('TIMEOUT');
                         } finally {
                               setIsLoading(false);
                         }
@@ -86,32 +113,19 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
             });
 
             socket.on(SocketEvents.TWO_FACTOR_REJECTED, () => {
+                  if (timerRef.current) clearInterval(timerRef.current);
+                  setPushStatus('REJECTED');
                   Alert.alert(t('auth.denied'), t('auth.pushRejected'));
-                  // Don't auto-switch if cooldown is active, let the user wait
-                  if (resendCooldown === 0) {
-                        setMethod('TOTP');
-                  }
             });
 
             return () => {
                   socketManager.disconnect();
+                  if (method !== 'PUSH') {
+                        setPushStatus('IDLE');
+                        if (timerRef.current) clearInterval(timerRef.current);
+                  }
             };
-      }, [method, twoFactorData?.pendingToken, verify2fa, t, resendCooldown]);
-
-      // Timer for PUSH
-      useEffect(() => {
-            if (method === 'PUSH' && timer > 0) {
-                  timerRef.current = setInterval(() => {
-                        setTimer((prev) => prev - 1);
-                  }, 1000);
-            } else if (timer === 0) {
-                  if (timerRef.current) clearInterval(timerRef.current);
-            }
-
-            return () => {
-                  if (timerRef.current) clearInterval(timerRef.current);
-            };
-      }, [method, timer]);
+      }, [method, pushStatus, twoFactorData?.pendingToken, verify2fa, t]);
 
       const handleVerify = async () => {
             if (!twoFactorData?.pendingToken) return;
@@ -138,6 +152,18 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
             }
       };
 
+      const handlePushWait = async () => {
+            setPushStatus('WAITING');
+            setResendCooldown(45);
+            startTimer();
+            try {
+                  await mobileApi.sendPushChallenge(twoFactorData!.pendingToken);
+            } catch (error) {
+                  Alert.alert(t('common.error'), error instanceof Error ? error.message : t('auth.verifyFailed'));
+                  setPushStatus('IDLE');
+            }
+      };
+
       const triggerChallenge = async (selectedMethod: TwoFactorMethod) => {
             if (!twoFactorData?.pendingToken || resendCooldown > 0) return;
             setIsLoading(true);
@@ -149,14 +175,19 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
                         await mobileApi.sendEmailChallenge(twoFactorData.pendingToken);
                         Alert.alert(t('auth.otpSent'), t('auth.otpSentToEmail', { email: twoFactorData.maskedEmail }));
                   } else if (selectedMethod === 'PUSH') {
-                        await mobileApi.sendPushChallenge(twoFactorData.pendingToken);
-                        setTimer(90);
+                        await handlePushWait();
                   } else if (selectedMethod === 'TOTP') {
                         await mobileApi.sendTotpChallenge(twoFactorData.pendingToken);
                   }
-                  setMethod(selectedMethod);
-                  setCode('');
-                  setResendCooldown(45); // Trigger 45s cooldown
+                  
+                  if (selectedMethod !== 'PUSH') {
+                        setMethod(selectedMethod);
+                        setCode('');
+                        setResendCooldown(45);
+                        startTimer();
+                  } else {
+                        setMethod('PUSH');
+                  }
             } catch (error) {
                   Alert.alert(t('common.error'), error instanceof Error ? error.message : t('common.error'));
             } finally {
@@ -169,8 +200,6 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
             const secs = seconds % 60;
             return `${mins}:${secs.toString().padStart(2, '0')}`;
       };
-
-      const availableMethods = twoFactorData?.availableMethods || [];
 
       return (
             <ScrollView className="flex-1 bg-background" contentContainerStyle={{ flexGrow: 1 }}>
@@ -232,35 +261,72 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
                         <View className="gap-4 rounded-2xl bg-secondary p-6 border border-border mt-2 shadow-sm">
                               {method === 'PUSH' ? (
                                     <View className="items-center py-6 gap-6">
-                                          <View className="h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                                                <Ionicons name="notifications" size={40} color="#007AFF" />
-                                          </View>
-                                          <View className="gap-2">
-                                                <Text className="text-center text-xl font-bold text-foreground">
-                                                      {twoFactorData?.autoTriggered ? 'Xác nhận đăng nhập trên máy tính' : t('auth.waitingForPush')}
-                                                </Text>
-                                                <Text className="text-center text-gray-700 font-medium px-4 leading-5">
-                                                      {twoFactorData?.autoTriggered
-                                                            ? 'Chúng tôi đã gửi yêu cầu phê duyệt tới thiết bị này. Vui lòng kiểm tra thông báo hoặc chọn phương thức khác bên dưới.'
-                                                            : t('auth.pushSentInstructions')}
-                                                </Text>
-                                          </View>
-                                          <View className="items-center gap-1">
-                                                <Text className="text-3xl font-mono font-bold text-primary">
-                                                      {formatTime(timer)}
-                                                </Text>
-                                                <Text className="text-xs text-muted">
-                                                      {isSocketConnected ? t('auth.socketOnline') : t('auth.socketConnecting')}
-                                                </Text>
-                                          </View>
-                                          <TouchableOpacity
-                                                onPress={() => triggerChallenge('PUSH')}
-                                                disabled={resendCooldown > 0 || isLoading}
-                                                className={`mt-2 rounded-xl bg-primary px-8 py-4 ${resendCooldown > 0 ? 'opacity-50' : ''}`}>
-                                                <Text className="font-bold text-primary-foreground text-lg">
-                                                      {resendCooldown > 0 ? `${t('auth.resendPush')} (${resendCooldown}s)` : t('auth.resendPush')}
-                                                </Text>
-                                          </TouchableOpacity>
+                                          {['WAITING', 'VERIFYING'].includes(pushStatus) ? (
+                                                <>
+                                                      <View className="h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+                                                            <ActivityIndicator size="large" color="#007AFF" />
+                                                      </View>
+                                                      <View className="gap-2">
+                                                            <Text className="text-center text-xl font-bold text-foreground">
+                                                                  {pushStatus === 'VERIFYING' ? 'Đang xác thực phê duyệt...' : t('auth.waitingForPush')}
+                                                            </Text>
+                                                            <Text className="text-center text-gray-700 font-medium px-4 leading-5">
+                                                                  {t('auth.pushSentInstructions')}
+                                                            </Text>
+                                                      </View>
+                                                </>
+                                          ) : pushStatus === 'REJECTED' ? (
+                                                <>
+                                                      <View className="h-20 w-20 items-center justify-center rounded-full bg-red-100">
+                                                            <Ionicons name="close-circle" size={48} color="#FF3B30" />
+                                                      </View>
+                                                      <View className="gap-1">
+                                                            <Text className="text-center text-xl font-bold text-foreground">{t('auth.denied')}</Text>
+                                                            <Text className="text-center text-gray-600 font-medium px-4">{t('auth.pushRejected')}</Text>
+                                                      </View>
+                                                </>
+                                          ) : pushStatus === 'TIMEOUT' ? (
+                                                <>
+                                                      <View className="h-20 w-20 items-center justify-center rounded-full bg-gray-100">
+                                                            <Ionicons name="time" size={48} color="#8E8E93" />
+                                                      </View>
+                                                      <View className="gap-1">
+                                                            <Text className="text-center text-xl font-bold text-foreground">Hết thời gian chờ</Text>
+                                                            <Text className="text-center text-gray-600 font-medium px-4">Yêu cầu xác thực đã hết hạn. Vui lòng gửi lại yêu cầu.</Text>
+                                                      </View>
+                                                </>
+                                          ) : (
+                                                <>
+                                                      <View className="h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+                                                            <Ionicons name="notifications" size={40} color="#007AFF" />
+                                                      </View>
+                                                      <View className="gap-1">
+                                                            <Text className="text-center text-xl font-bold text-foreground">Sẵn sàng gửi yêu cầu</Text>
+                                                            <Text className="text-center text-gray-600 font-medium px-4">Nhấn nút bên dưới để gửi thông báo phê duyệt tới thiết bị của bạn.</Text>
+                                                      </View>
+                                                </>
+                                          )}
+
+                                          {pushStatus !== 'VERIFYING' && (
+                                                <View className="w-full items-center gap-4">
+                                                      <View className="bg-blue-50 px-4 py-2 rounded-lg items-center">
+                                                            <Text className="text-blue-600 font-mono font-bold text-lg">
+                                                                  {timer > 0 ? `Hiệu lực còn: ${formatTime(timer)}` : 'Hết thời gian chờ'}
+                                                            </Text>
+                                                      </View>
+                                                      
+                                                      <TouchableOpacity
+                                                            onPress={handlePushWait}
+                                                            disabled={resendCooldown > 0 || isLoading}
+                                                            className={`w-full rounded-xl bg-primary py-4 items-center ${resendCooldown > 0 || isLoading ? 'opacity-50' : ''}`}>
+                                                            <Text className="font-bold text-primary-foreground text-lg">
+                                                                  {resendCooldown > 0 
+                                                                        ? `Gửi lại yêu cầu (${resendCooldown}s)` 
+                                                                        : (pushStatus === 'IDLE' ? 'Gửi yêu cầu phê duyệt' : 'Gửi lại yêu cầu phê duyệt')}
+                                                            </Text>
+                                                      </TouchableOpacity>
+                                                </View>
+                                          )}
                                     </View>
                               ) : (
                                     <View className="gap-5">

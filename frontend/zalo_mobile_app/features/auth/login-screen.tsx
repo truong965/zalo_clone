@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
 
@@ -15,7 +15,7 @@ export function LoginScreen() {
 
       const [isSubmitting, setIsSubmitting] = useState(false);
 
-      const submitLogin = async (payload: LoginFormData) => {
+      const submitLogin = useCallback(async (payload: LoginFormData) => {
             setIsSubmitting(true);
             try {
                   await login({ phoneNumber: payload.phoneNumber.trim(), password: payload.password });
@@ -26,7 +26,7 @@ export function LoginScreen() {
             } finally {
                   setIsSubmitting(false);
             }
-      };
+      }, [login, t]);
 
       // Redirect to main app only if authenticated AND not in 2FA flow
       useEffect(() => {

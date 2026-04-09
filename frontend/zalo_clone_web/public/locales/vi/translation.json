@@ -122,6 +122,7 @@
     }
   },
   "common": {
+    "unknown": "Không xác định",
     "errorBoundary": {
       "message": "Đã xảy ra lỗi không mong muốn",
       "retry": "Thử lại"
@@ -551,17 +552,32 @@
     "revokeOk": "Đăng xuất",
     "revokeCancel": "Hủy",
     "revokeBtn": "Đăng xuất",
+    "revokeCurrentWarning": "Cảnh báo: Bạn đang chọn đăng xuất khỏi thiết bị hiện tại. Bạn sẽ bị ngắt kết nối ngay lập tức.",
     "revokeSuccess": "Thành công",
     "revokeSuccessDesc": "Đã đăng xuất thiết bị thành công.",
     "revokeError": "Lỗi",
     "revokeErrorDesc": "Lỗi khi đăng xuất thiết bị",
     "online": "Đang hoạt động",
+    "offline": "Không hoạt động",
+    "currentDevice": "Thiết bị này",
+    "detailsTitle": "Chi tiết thiết bị",
+    "systemInfo": "Hệ thống",
+    "activityInfo": "Hoạt động",
+    "securityInfo": "Bảo mật",
     "platform": "Nền tảng",
+    "os": "Hệ điều hành",
+    "browser": "Trình duyệt",
+    "location": "Vị trí",
     "loginMethod": "Phương thức",
     "qrCode": "Mã QR",
     "password": "Mật khẩu",
     "ip": "IP",
-    "loginAt": "Đăng nhập lúc"
+    "loginAt": "Đăng nhập lúc",
+    "lastActive": "Hoạt động cuối",
+    "registeredAt": "Đăng ký lúc",
+    "trusted": "Đã tin cậy",
+    "untrusted": "Chưa xác minh",
+    "trustedAt": "Tin cậy lúc"
   },
   "search": {
     "placeholder": "Tìm kiếm tin nhắn, liên hệ...",

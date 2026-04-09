@@ -1,24 +1,22 @@
+import '@/lib/i18n';
 import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme as useNativeWindColorScheme } from 'nativewind';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import Toast from 'react-native-toast-message';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native-paper';
 import 'react-native-reanimated';
-import '@/lib/i18n';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import '../global.css';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { useEffect } from 'react';
 
 import { isExpoGo } from '@/constants/platform';
 
+import { useTranslationStore } from '@/hooks/use-translation-store';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { SocketProvider } from '@/providers/socket-provider';
-import { getNotificationEnabledSync } from '@/lib/notification-settings';
-import { useTranslationStore } from '@/hooks/use-translation-store';
 
 // ── Notification handler ───────────────────────────────────────────
 if (!isExpoGo) {
@@ -119,15 +117,15 @@ export default function RootLayout() {
   );
 }
 
-import { useReminderNotifications } from '@/features/chats/hooks/use-reminder-notifications';
-import { ReminderAlertOverlay } from '@/features/chats/components/reminder/reminder-alert-overlay';
-import { useConversationRealtime } from '@/features/chats/hooks/use-conversation-realtime';
+import { LoginApprovalModal } from '@/features/auth/components/login-approval-modal';
+import { useLoginApprovalSocket } from '@/features/auth/hooks/use-login-approval-socket';
 import { IncomingCallModal } from '@/features/calls/components/incoming-call-modal';
 import { useCallSocket } from '@/features/calls/hooks/use-call-socket';
-import { usePushNotifications } from '@/hooks/use-push-notifications';
-import { useLoginApprovalSocket } from '@/features/auth/hooks/use-login-approval-socket';
-import { LoginApprovalModal } from '@/features/auth/components/login-approval-modal';
+import { ReminderAlertOverlay } from '@/features/chats/components/reminder/reminder-alert-overlay';
+import { useConversationRealtime } from '@/features/chats/hooks/use-conversation-realtime';
+import { useReminderNotifications } from '@/features/chats/hooks/use-reminder-notifications';
 import { useContactSyncListener } from '@/features/contacts/hooks/use-contact-sync-listener';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 import { ContactSyncModal } from '@/features/contacts/components/contact-sync-modal';
 
@@ -141,7 +139,7 @@ function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | un
   usePushNotifications();
   useLoginApprovalSocket();
   useContactSyncListener();
-  
+
   if (!isExpoGo) {
     useCallSocket();
   }
@@ -150,7 +148,7 @@ function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | un
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
-    
+
     if (!isAuthenticated && !inAuthGroup && segments[0] !== undefined) {
       // Not authenticated and not in auth group, redirect to login
       router.replace('/(auth)/login');

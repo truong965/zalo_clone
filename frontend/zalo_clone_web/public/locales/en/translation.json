@@ -122,6 +122,7 @@
     }
   },
   "common": {
+    "unknown": "Unknown",
     "errorBoundary": {
       "message": "An unexpected error occurred",
       "retry": "Retry"

@@ -203,8 +203,8 @@ export function LoginPage() {
               />
             </>
           ) : (
-            <TwoFactorView 
-              data={twoFactorData} 
+            <TwoFactorView
+              data={twoFactorData}
               onSuccess={() => {
                 api.success({
                   message: t('auth.login.successTitle'),

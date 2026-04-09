@@ -293,8 +293,8 @@ export const useAuthStore = create<AuthState>()(
                               getSessions: async () => {
                                     try {
                                           set({ isLoading: true, error: null });
-                                          const sessions = await authService.getSessions();
-                                          set({ sessions, isLoading: false });
+                                          const result = await authService.getSessions();
+                                          set({ sessions: result.sessions, isLoading: false });
                                     } catch (error: unknown) {
                                           const errorMsg = ApiError.from(error).message || 'Failed to fetch sessions';
                                           set({ error: errorMsg, isLoading: false });
@@ -308,8 +308,8 @@ export const useAuthStore = create<AuthState>()(
                               revokeSession: async (deviceId: string) => {
                                     try {
                                           await authService.revokeSession(deviceId);
-                                          const sessions = await authService.getSessions();
-                                          set({ sessions });
+                                          const result = await authService.getSessions();
+                                          set({ sessions: result.sessions });
                                     } catch (error: unknown) {
                                           const errorMsg = ApiError.from(error).message || 'Failed to revoke session';
                                           set({ error: errorMsg });

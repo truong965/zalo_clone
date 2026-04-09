@@ -40,11 +40,27 @@ export interface QrStatusResponse {
 export interface DeviceSession {
       deviceId: string;
       deviceName: string;
+      deviceType: 'MOBILE' | 'DESKTOP' | 'WEB' | 'UNKNOWN';
       platform: string;
-      loginMethod: string;
-      lastUsedAt: string;
-      ipAddress: string;
+      browserName?: string;
+      browserVersion?: string;
+      osName?: string;
+      osVersion?: string;
+      lastIp: string;
+      ipAddress?: string; // Add this for consistency with backend DTO
+      lastLocation?: string;
+      isTrusted: boolean;
+      trustedAt?: string;
+      lastActiveAt: string;
+      registeredAt?: string;
+      hasActiveSession: boolean;
       isOnline: boolean;
+      loginMethod?: string;
+}
+
+export interface SessionsResponse {
+      currentDeviceId?: string;
+      sessions: DeviceSession[];
 }
 
 // ============================================================================
@@ -203,9 +219,9 @@ export const authService = {
       /**
        * Get all active sessions for current user
        */
-      async getSessions() {
+      async getSessions(): Promise<SessionsResponse> {
             const response = await api.get(API_ENDPOINTS.AUTH.SESSIONS);
-            return response.data.data as DeviceSession[];
+            return response.data.data as SessionsResponse;
       },
 
       /**

@@ -83,11 +83,22 @@ export type QrScanResponse = {
 export type DeviceSession = {
       deviceId: string;
       deviceName: string;
+      deviceType: string;
       platform: string;
+      browserName?: string;
+      browserVersion?: string;
+      osName?: string;
+      osVersion?: string;
       loginMethod: string;
       lastUsedAt?: string | Date;
+      lastActiveAt?: string | Date;
       ipAddress: string;
+      lastIp?: string;
+      lastLocation?: string;
       isOnline: boolean;
+      isTrusted: boolean;
+      attestationVerified?: boolean;
+      registeredAt?: string | Date;
 };
 
 export type UpdateUserPayload = {

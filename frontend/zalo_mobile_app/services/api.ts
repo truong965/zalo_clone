@@ -79,7 +79,11 @@ function resolveTimezone(): string {
       }
 }
 
+import { getDevicePublicKey, getDeviceKeyAlgorithm } from '../utils/device-crypto';
+
 async function getDeviceHeaders(): Promise<Record<string, string>> {
+      const publicKey = await getDevicePublicKey();
+      
       return {
             'X-Device-Type': resolveDeviceTypeHeader(),
             'X-Platform': resolvePlatformHeader(),
@@ -87,6 +91,12 @@ async function getDeviceHeaders(): Promise<Record<string, string>> {
             'X-Screen-Resolution': resolveScreenResolution(),
             'X-Timezone': resolveTimezone(),
             'X-Device-Id': await getStableDeviceId(),
+            'X-OS-Name': Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Unknown',
+            'X-OS-Version': String(Platform.Version ?? ''),
+            ...(publicKey ? {
+              'X-Public-Key': publicKey,
+              'X-Key-Algorithm': getDeviceKeyAlgorithm(),
+            } : {}),
       };
 }
 
@@ -409,12 +419,12 @@ export const mobileApi = {
             });
       },
 
-      acknowledgePush(pendingToken: string, approved: boolean, accessToken?: string) {
+      acknowledgePush(pendingToken: string, approved: boolean, accessToken?: string, signature?: string) {
             return apiRequest<void>(
                   '/api/v1/auth/2fa/acknowledge',
                   {
                         method: 'POST',
-                        body: JSON.stringify({ pendingToken, approved }),
+                        body: JSON.stringify({ pendingToken, approved, signature }),
                   },
                   accessToken,
             );
@@ -618,7 +628,21 @@ export const mobileApi = {
       },
 
       getSessions(accessToken: string) {
-            return apiRequest<DeviceSession[]>('/api/v1/auth/sessions', { method: 'GET' }, accessToken);
+            return apiRequest<{
+                  currentDeviceId?: string;
+                  sessions: DeviceSession[];
+            }>('/api/v1/auth/sessions', { method: 'GET' }, accessToken);
+      },
+
+      generateAttestChallenge(accessToken: string) {
+            return apiRequest<{ challenge: string }>('/api/v1/auth/devices/attest/challenge', { method: 'POST' }, accessToken);
+      },
+
+      verifyAttest(deviceId: string, payload: { challenge: string; signature: string }, accessToken: string) {
+            return apiRequest<{ verified: boolean }>(`/api/v1/auth/devices/${deviceId}/attest/verify`, {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            }, accessToken);
       },
 
       revokeSession(deviceId: string, accessToken: string) {

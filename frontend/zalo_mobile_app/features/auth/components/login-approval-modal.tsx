@@ -5,6 +5,7 @@ import { mobileApi } from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/providers/auth-provider';
+import { signWithDeviceKey } from '@/utils/device-crypto';
 
 export function LoginApprovalModal() {
   const { t } = useTranslation();
@@ -17,7 +18,18 @@ export function LoginApprovalModal() {
   const handleApprove = async () => {
     setIsLoading(true);
     try {
-      await mobileApi.acknowledgePush(activeRequest.pendingToken, true, accessToken || undefined);
+      // Security Hardening: Sign the challenge (pendingToken) with the device's private key
+      const signature = await signWithDeviceKey(activeRequest.pendingToken);
+      if (!signature) {
+        throw new Error('Không thể tạo chữ ký xác thực thiết bị. Vui lòng thử lại.');
+      }
+
+      await mobileApi.acknowledgePush(
+        activeRequest.pendingToken, 
+        true, 
+        accessToken || undefined,
+        signature
+      );
       dismissRequest();
     } catch (error) {
       Alert.alert(t('common.error'), error instanceof Error ? error.message : t('common.error'));

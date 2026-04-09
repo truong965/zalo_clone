@@ -81,6 +81,7 @@ class SocketManager {
     this.socket = io(socketUrl, {
       path: '/socket.io',
       transports: ['websocket'],
+      query: { type: 'public' }, // Báo cho Backend đây là kết nối công khai hợp lệ
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,

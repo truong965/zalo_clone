@@ -3,6 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { PropsWithChildren } from 'react';
 
 import { mobileApi } from '@/services/api';
+import { signWithDeviceKey } from '@/utils/device-crypto';
+import { getStableDeviceId } from '@/utils/device-identity';
 import type {
       LoginPayload,
       RegisterPayload,
@@ -55,6 +57,35 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const [isLoading, setIsLoading] = useState(true);
       const [twoFactorData, setTwoFactorData] = useState<TwoFactorRequiredResponse | null>(null);
 
+      /**
+       * Silent Attestation: Verify device identity with ECDSA signature
+       * automatically after login/2fa success.
+       */
+      const performSilentAttestation = useCallback(async (token: string) => {
+            try {
+                  const deviceId = await getStableDeviceId();
+                  const { sessions } = await mobileApi.getSessions(token);
+                  const currentSession = sessions.find(s => s.deviceId === deviceId);
+
+                  if (currentSession && !currentSession.attestationVerified) {
+                        console.log('[Attestation] Starting silent verify for device:', deviceId);
+                        const { challenge } = await mobileApi.generateAttestChallenge(token);
+                        const signature = await signWithDeviceKey(challenge);
+                        
+                        if (signature) {
+                              const result = await mobileApi.verifyAttest(deviceId, { challenge, signature }, token);
+                              if (result.verified) {
+                                    console.log('[Attestation] Device verified successfully');
+                              } else {
+                                    console.error('[Attestation] Signature verification failed on server');
+                              }
+                        }
+                  }
+            } catch (error) {
+                  console.error('[Attestation] Silent verification failed:', error);
+            }
+      }, []);
+
       const hydrateAuth = useCallback(async () => {
             try {
                   const token = await getAccessToken();
@@ -67,6 +98,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
                   setAccessToken(token);
                   const profile = await mobileApi.getProfile(token);
                   setUser(profile);
+                  
+                  // Trigger silent attestation check even on hydrate
+                  void performSilentAttestation(token);
             } catch {
                   await clearAccessTokenInStorage();
                   setAccessToken(null);
@@ -74,7 +108,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             } finally {
                   setIsLoading(false);
             }
-      }, []);
+      }, [performSilentAttestation]);
 
       useEffect(() => {
             void hydrateAuth();
@@ -94,12 +128,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
             if (authResponse.user) {
                   setUser(authResponse.user);
-                  return;
+            } else {
+                  const profile = await mobileApi.getProfile(authResponse.accessToken);
+                  setUser(profile);
             }
 
-            const profile = await mobileApi.getProfile(authResponse.accessToken);
-            setUser(profile);
-      }, []);
+            // Trigger silent attestation
+            void performSilentAttestation(authResponse.accessToken);
+      }, [performSilentAttestation]);
 
       const verify2fa = useCallback(async (payload: VerifyTwoFactorRequest) => {
             const response = await mobileApi.verify2fa(payload);
@@ -115,10 +151,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
                         const profile = await mobileApi.getProfile(response.accessToken);
                         setUser(profile);
                   }
+
+                  // Trigger silent attestation
+                  void performSilentAttestation(response.accessToken);
             }
 
             return response;
-      }, []);
+      }, [performSilentAttestation]);
 
       const clear2fa = useCallback(() => {
             setTwoFactorData(null);
