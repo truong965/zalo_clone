@@ -1,5 +1,5 @@
 import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme as useNativeWindColorScheme } from 'nativewind';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { useEffect } from 'react';
 
 import { isExpoGo } from '@/constants/platform';
 
-import { AuthProvider } from '@/providers/auth-provider';
+import { AuthProvider, useAuth } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { SocketProvider } from '@/providers/socket-provider';
 import { getNotificationEnabledSync } from '@/lib/notification-settings';
@@ -125,14 +125,40 @@ import { useConversationRealtime } from '@/features/chats/hooks/use-conversation
 import { IncomingCallModal } from '@/features/calls/components/incoming-call-modal';
 import { useCallSocket } from '@/features/calls/hooks/use-call-socket';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { useLoginApprovalSocket } from '@/features/auth/hooks/use-login-approval-socket';
+import { LoginApprovalModal } from '@/features/auth/components/login-approval-modal';
+import { useContactSyncListener } from '@/features/contacts/hooks/use-contact-sync-listener';
+
+import { ContactSyncModal } from '@/features/contacts/components/contact-sync-modal';
 
 function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {
   const { alerts, dismissAlert, acknowledgeAlert } = useReminderNotifications();
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
   useConversationRealtime();
   usePushNotifications();
+  useLoginApprovalSocket();
+  useContactSyncListener();
+  
   if (!isExpoGo) {
     useCallSocket();
   }
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === '(auth)';
+    
+    if (!isAuthenticated && !inAuthGroup && segments[0] !== undefined) {
+      // Not authenticated and not in auth group, redirect to login
+      router.replace('/(auth)/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      // Authenticated but in auth group, redirect to home
+      router.replace('/(tabs)');
+    }
+  }, [isAuthenticated, isLoading, segments]);
 
   return (
     <PaperProvider theme={colorScheme === 'dark' ? PaperDarkTheme : PaperLightTheme}>
@@ -153,7 +179,10 @@ function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | un
         onAcknowledge={acknowledgeAlert}
       />
       {!isExpoGo && <IncomingCallModal />}
+      <LoginApprovalModal />
+      <ContactSyncModal />
       <Toast />
     </PaperProvider>
   );
 }
+

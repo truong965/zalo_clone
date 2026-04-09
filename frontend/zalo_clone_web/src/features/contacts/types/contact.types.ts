@@ -23,6 +23,8 @@ export interface ContactResponseDto {
       source: ContactSource;
       avatarUrl: string | null;
       isFriend: boolean;
+      /** Whether both users have each other's numbers */
+      isMutual: boolean;
       lastSeenAt: string | null;
 }
 

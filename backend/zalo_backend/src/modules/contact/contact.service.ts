@@ -18,7 +18,13 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisService } from 'src/shared/redis/redis.service';
 import { EventPublisher } from '@shared/events';
-import { ContactSource, Prisma, UserContact, UserStatus } from '@prisma/client';
+import {
+  ContactSource,
+  FriendshipStatus,
+  Prisma,
+  UserContact,
+  UserStatus,
+} from '@prisma/client';
 import {
   ContactAliasUpdatedEvent,
   ContactRemovedEvent,
@@ -48,6 +54,10 @@ type MatchedUser = {
   phoneNumberHash: string | null;
   lastSeenAt: Date | null;
 };
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { CONTACT_SYNC_QUEUE, CONTACT_SYNC_JOB } from './contact.constants';
+
 @Injectable()
 export class ContactService {
   private readonly logger = new Logger(ContactService.name);
@@ -60,6 +70,8 @@ export class ContactService {
     private readonly privacyRead: IPrivacyReadPort,
     @Inject(socialConfig.KEY)
     private readonly config: ConfigType<typeof socialConfig>,
+    @InjectQueue(CONTACT_SYNC_QUEUE)
+    private readonly contactSyncQueue: Queue,
   ) {}
 
   /**
@@ -73,42 +85,70 @@ export class ContactService {
    * 5. Save/update UserContact records
    * 6. Return matched users
    */
+  /**
+   * Sync contacts from phone (Main API entry - Asynchronous)
+   */
   async syncContacts(
     ownerId: string,
     dto: SyncContactsDto,
-  ): Promise<ContactResponseDto[]> {
-    const startTime = Date.now();
-    // Validation 1: Rate limiting
-    // Thực hiện tăng counter trước, nếu vượt quá thì chặn ngay lập tức.
-    // Điều này ngăn chặn race condition khi nhiều request đến cùng lúc
+  ): Promise<{ jobId: string }> {
+    // 1. Rate Limiting (24-hour window) - Fail fast if limited
     await this.checkAndIncrementRateLimit(ownerId);
 
-    // Validation 2: Max contacts per request
-    const maxSize = this.config.limits.contactSync.maxPerRequest;
-    if (dto.contacts.length > maxSize) {
+    // 2. Cap Check (Total limit from config)
+    const MAX_CONTACTS = this.config.limits.contactSync.maxPerRequest;
+    if (dto.contacts.length > MAX_CONTACTS) {
       throw new RateLimitException(
-        `Cannot sync more than ${maxSize} contacts at once`,
+        `Cannot sync more than ${MAX_CONTACTS} contacts. Please clean up your address book.`,
       );
     }
 
-    // 3. Hash & Normalize (Prepare Data)
-    const { phoneHashes, phoneBookNameMap } = this.processInputContacts(
-      dto.contacts,
-    ); // Extract phone numbers and hash them
+    // 3. Queue the background job with deduplication ID
+    const job = await this.contactSyncQueue.add(
+      CONTACT_SYNC_JOB,
+      {
+        ownerId,
+        contacts: dto.contacts,
+      },
+      {
+        jobId: `sync-${ownerId}`, // Deduplication: ignore if a sync is already waiting/active
+        removeOnComplete: true,
+        removeOnFail: { age: this.config.limits.contactSync.windowSeconds },
+      },
+    );
 
-    // Find matching users (active only)
+    this.logger.log(`Sync job queued for user ${ownerId}: JobID=${job.id}`);
+
+    return { jobId: job.id as string };
+  }
+
+  /**
+   * Core logic executed by the Background Worker
+   */
+  async processSyncInBackground(
+    ownerId: string,
+    contacts: ContactItemDto[],
+  ): Promise<void> {
+    const startTime = Date.now();
+    this.logger.debug(`Background processing ${contacts.length} contacts for ${ownerId}`);
+
+    // 1. Process Input (Supports both Raw Phone and Hash)
+    const { phoneHashes, phoneBookNameMap } = this.processInputContacts(contacts);
+
+    // 2. Match against existing active users
     const matchedUsers = await this.findUsersByPhoneHash(phoneHashes, ownerId);
 
-    // Filter by privacy settings (who can find me)
+    // 3. Privacy Filter (Who can find me by phone?)
     const visibleUsers = await this.filterByPrivacy(ownerId, matchedUsers);
 
-    // [ACTION 5.1] Thay thế Transaction lớn bằng Bulk Insert + Batch Update
-    const contactInfoMap = await this.bulkSaveContacts(
+    // 4. Mirror Sync (Add/Update/Delete)
+    const contactInfoMap = await this.bulkMirrorSyncContacts(
       ownerId,
       visibleUsers,
       phoneBookNameMap,
     );
-    // Build response with friendship status
+
+    // 5. Build response (needed for event payload)
     const response = await this.buildContactResponse(
       ownerId,
       visibleUsers,
@@ -116,11 +156,11 @@ export class ContactService {
       contactInfoMap,
     );
 
-    //Publish event — typed, follows project convention
+    // 6. Publish event (This will be caught by notification listener and sent via Socket)
     await this.eventPublisher.publish(
       new ContactsSyncedEvent(
         ownerId,
-        dto.contacts.length,
+        contacts.length,
         response.length,
         Date.now() - startTime,
       ),
@@ -128,10 +168,8 @@ export class ContactService {
     );
 
     this.logger.log(
-      `Contacts synced for ${ownerId}: ${response.length}/${dto.contacts.length} matched`,
+      `Background sync completed for ${ownerId}: ${response.length} matches found.`,
     );
-
-    return response;
   }
 
   /**
@@ -142,13 +180,16 @@ export class ContactService {
    * - New contacts: source=PHONE_SYNC, phoneBookName set, aliasName empty
    * - Existing contacts: only phoneBookName updated, aliasName untouched
    */
-  private async bulkSaveContacts(
+  /**
+   * Bulk Mirror Sync Strategy:
+   * 1. Add/Update visible users
+   * 2. Delete contacts that are no longer in the matched list (Mirror Mode)
+   */
+  private async bulkMirrorSyncContacts(
     ownerId: string,
     visibleUsers: MatchedUser[],
     phoneBookNameMap: Map<string, string>,
   ): Promise<Map<string, { id: string; source: ContactSource }>> {
-    if (visibleUsers.length === 0) return new Map();
-
     const visibleUserIds = visibleUsers.map((u) => u.id);
 
     // Build hash → userId lookup for resolving phoneBookName by userId
@@ -157,28 +198,30 @@ export class ContactService {
       if (u.phoneNumberHash) hashByUserId.set(u.id, u.phoneNumberHash);
     });
 
-    // STEP 1: Fetch Existing Contacts (phân loại Insert vs Update)
-    const existingContacts = await this.prisma.userContact.findMany({
-      where: { ownerId, contactUserId: { in: visibleUserIds } },
+    // STEP 1: Find all current contacts for this owner to identify Deletions
+    const currentContacts = await this.prisma.userContact.findMany({
+      where: { ownerId },
       select: { contactUserId: true, phoneBookName: true },
     });
 
-    // contactUserId → current phoneBookName
-    const existingMap = new Map<string, string | null>();
-    existingContacts.forEach((c) =>
-      existingMap.set(c.contactUserId, c.phoneBookName),
-    );
+    const currentMap = new Map(currentContacts.map((c) => [c.contactUserId, c]));
 
-    // STEP 2: Phân loại Data
+    // STEP 2: Sort into Create, Update, and Delete buckets
     const toCreate: Prisma.UserContactCreateManyInput[] = [];
     const toUpdate: { contactUserId: string; newPhoneBookName: string }[] = [];
+    const matchedSet = new Set(visibleUserIds);
+
+    // Identification for Deletions: In DB but NOT in current matched list
+    const toDeleteIds = currentContacts
+      .filter((c) => !matchedSet.has(c.contactUserId))
+      .map((c) => c.contactUserId);
 
     for (const user of visibleUsers) {
       const hash = hashByUserId.get(user.id) ?? '';
       const newPhoneBookName = phoneBookNameMap.get(hash);
 
-      if (!existingMap.has(user.id)) {
-        // NEW contact from phone sync — set phoneBookName + source; aliasName stays empty
+      if (!currentMap.has(user.id)) {
+        // NEW matched contact
         toCreate.push({
           ownerId,
           contactUserId: user.id,
@@ -186,56 +229,58 @@ export class ContactService {
           source: ContactSource.PHONE_SYNC,
         });
       } else {
-        // EXISTING contact — only update phoneBookName if changed; NEVER touch aliasName
-        const currentPhoneBookName = existingMap.get(user.id);
+        // EXISTING contact — update phoneBookName if it changed in phonebook
+        const currentRef = currentMap.get(user.id);
         if (
           newPhoneBookName !== undefined &&
-          newPhoneBookName !== currentPhoneBookName
+          newPhoneBookName !== currentRef?.phoneBookName
         ) {
           toUpdate.push({ contactUserId: user.id, newPhoneBookName });
         }
       }
     }
 
-    // STEP 3: Execute CREATE MANY (1 Query)
-    if (toCreate.length > 0) {
-      await this.prisma.userContact.createMany({
-        data: toCreate,
-        skipDuplicates: true,
-      });
-      this.logger.debug(`[Sync] Created ${toCreate.length} new contacts`);
-    }
-
-    // STEP 4: Execute UPDATE phoneBookName in batches
-    if (toUpdate.length > 0) {
-      const BATCH_SIZE = 50;
-      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
-        const batch = toUpdate.slice(i, i + BATCH_SIZE);
-        await this.prisma.$transaction(
-          batch.map((item) =>
-            this.prisma.userContact.update({
-              where: {
-                ownerId_contactUserId: {
-                  ownerId,
-                  contactUserId: item.contactUserId,
-                },
-              },
-              data: { phoneBookName: item.newPhoneBookName },
-            }),
-          ),
-        );
+    // STEP 3: Execute DB operations via Transaction for atomicity where possible
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Delete removed contacts
+      if (toDeleteIds.length > 0) {
+        await tx.userContact.deleteMany({
+          where: { ownerId, contactUserId: { in: toDeleteIds } },
+        });
       }
-      this.logger.debug(
-        `[Sync] Updated phoneBookName for ${toUpdate.length} contacts`,
-      );
 
-      // Invalidate display-name cache for updated contacts
-      await Promise.all(
-        toUpdate.map((u) => this.invalidateNameCache(ownerId, u.contactUserId)),
-      );
+      // 2. Insert new contacts
+      if (toCreate.length > 0) {
+        await tx.userContact.createMany({
+          data: toCreate,
+          skipDuplicates: true,
+        });
+      }
+
+      // 3. Batch Update changed names
+      for (const item of toUpdate) {
+        await tx.userContact.update({
+          where: {
+            ownerId_contactUserId: {
+              ownerId,
+              contactUserId: item.contactUserId,
+            },
+          },
+          data: { phoneBookName: item.newPhoneBookName },
+        });
+      }
+    });
+
+    // STEP 4: Invalidate caches (Batch DEL)
+    const affectedUserIds = [
+      ...toUpdate.map((u) => u.contactUserId),
+      ...toDeleteIds,
+    ];
+    if (affectedUserIds.length > 0) {
+      await this.invalidateNameCacheBatch(ownerId, affectedUserIds);
     }
 
-    // Return contactUserId → { id, source } map (needed for cursor-based responses + correct source)
+    // Return mapping for building response
     const savedContacts = await this.prisma.userContact.findMany({
       where: { ownerId, contactUserId: { in: visibleUserIds } },
       select: { id: true, contactUserId: true, source: true },
@@ -250,14 +295,23 @@ export class ContactService {
 
   private processInputContacts(contacts: ContactItemDto[]) {
     const phoneBookNameMap = new Map<string, string>();
-    const phoneHashes = contacts.map((c) => {
-      // c.phoneNumber is already normalized via @NormalizePhone decorator in DTO
-      const hash = PhoneNumberUtil.hash(c.phoneNumber);
-      if (c.phoneBookName) phoneBookNameMap.set(hash, c.phoneBookName);
-      return hash;
-    });
+    const phoneHashes = contacts
+      .map((c) => {
+        const hash = c.phoneHash?.toLowerCase();
+        if (c.phoneBookName && hash) phoneBookNameMap.set(hash, c.phoneBookName);
+        return hash;
+      })
+      .filter((h): h is string => !!h);
+
+    if (phoneHashes.length > 0) {
+      this.logger.debug(
+        `Received ${phoneHashes.length} phone hashes. First 3: ${phoneHashes.slice(0, 3).join(', ')}`,
+      );
+    }
+
     return { phoneHashes, phoneBookNameMap };
   }
+
   /**
    * Remove contact
    */
@@ -289,7 +343,7 @@ export class ContactService {
     ownerId: string,
     query: GetContactsQueryDto,
   ): Promise<CursorPaginatedResult<ContactResponseDto>> {
-    const { cursor, limit = 50, search, excludeFriends } = query;
+    const { cursor, limit = 50, search, excludeFriends = true } = query;
 
     // --- Build dynamic WHERE ---
     const where: Prisma.UserContactWhereInput = { ownerId };
@@ -313,6 +367,7 @@ export class ContactService {
         await this.friendshipService.getFriendIdsForPresence(ownerId);
       if (friendIds.length > 0) {
         where.contactUserId = { notIn: friendIds };
+        this.logger.debug(`Excluding ${friendIds.length} friend/pending IDs from contact list for user ${ownerId}`);
       }
     }
 
@@ -347,7 +402,17 @@ export class ContactService {
       contactUserIds,
     );
 
-    // 3. buildResult handles slice & nextCursor extraction
+    // 3. Batch Mutual Check
+    const mutualContacts = await this.prisma.userContact.findMany({
+      where: {
+        ownerId: { in: contactUserIds },
+        contactUserId: ownerId,
+      },
+      select: { ownerId: true },
+    });
+    const mutualSet = new Set(mutualContacts.map((c) => c.ownerId));
+
+    // 4. buildResult handles slice & nextCursor extraction
     return CursorPaginationHelper.buildResult({
       items: contacts,
       limit,
@@ -370,6 +435,7 @@ export class ContactService {
           avatarUrl: u?.avatarUrl ?? undefined,
           lastSeenAt: u?.lastSeenAt ?? undefined,
           isFriend: friendSet.has(contact.contactUserId),
+          isMutual: mutualSet.has(contact.contactUserId),
         };
       },
     });
@@ -552,6 +618,21 @@ export class ContactService {
       );
     }
   }
+
+  /**
+   * Fast fail check before hashing contacts
+   */
+  async preCheckSyncRateLimit(userId: string): Promise<void> {
+    const key = RedisKeyBuilder.rateLimitContactSync(userId);
+    const client = this.redis.getClient();
+    const count = await client.get(key);
+
+    if (count && parseInt(count) >= this.config.limits.contactSync.maxPerDay) {
+      throw new RateLimitException(
+        `Limit reached: ${this.config.limits.contactSync.maxPerDay} syncs/day. Retry tomorrow.`,
+      );
+    }
+  }
   /**
    * Find users by phone hash
    */
@@ -575,12 +656,18 @@ export class ContactService {
     });
   }
 
+
   /**
-   * Helper: Filter users based on Privacy Settings
+   * Helper: Filter users based on Block status (Privacy settings are ignored for phone discovery)
    * Logic:
-   * 1. Check Block (2 chiều)
-   * 2. Check Privacy Setting (Ai tìm được tôi?)
-   * 3. Check Friendship (Nếu setting là CONTACTS)
+   * 1. Check Block (Bi-directional)
+   */
+  /**
+   * Helper: Filter users based on Block status and Relationship (Privacy settings are ignored for discovery)
+   * Rules:
+   * 1. Check Block (Bi-directional) -> Hide if blocked
+   * 2. Check Friendship -> Hide if status is DECLINED
+   * 3. Discovery -> Allow if status is PENDING, ACCEPTED, or NO RELATIONSHIP exists
    */
   private async filterByPrivacy(
     requesterId: string,
@@ -590,8 +677,7 @@ export class ContactService {
 
     const userIds = users.map((u) => u.id);
 
-    // 1. Batch Check Block (Direct Prisma for performance)
-    // Check xem requester có chặn họ HOẶC họ có chặn requester không
+    // 1. Batch Check Block (Bi-directional)
     const blocks = await this.prisma.block.findMany({
       where: {
         OR: [
@@ -602,7 +688,6 @@ export class ContactService {
       select: { blockerId: true, blockedId: true },
     });
 
-    // Tạo Set chứa ID những người bị chặn hoặc chặn mình
     const blockedUserIds = new Set<string>();
     blocks.forEach((b) => {
       blockedUserIds.add(
@@ -610,74 +695,47 @@ export class ContactService {
       );
     });
 
-    // 2. Batch Get Privacy Settings
-    // Gọi PrivacyService để lấy settings của danh sách user này
-    const privacyMap = await this.privacyRead.getManySettings(userIds);
+    // 2. Batch Check Friendships (To exclude DECLINED status)
+    const friendships = await this.prisma.friendship.findMany({
+      where: {
+        OR: [
+          { user1Id: requesterId, user2Id: { in: userIds } },
+          { user1Id: { in: userIds }, user2Id: requesterId },
+        ],
+        deletedAt: null,
+      },
+      select: { user1Id: true, user2Id: true, status: true },
+    });
 
-    // 3. Phân loại: Ai yêu cầu phải là bạn bè mới tìm thấy?
-    // Mặc định Zalo: Tìm bằng SĐT thì ai cũng tìm được (EVERYONE),
-    // trừ khi user chỉnh "Nguồn tìm kiếm" (Feature này scope lớn, ở đây ta giả định dùng field showProfile hoặc showPhoneNumber)
-    const usersRequiringFriendship: string[] = [];
+    // Map: targetUserId -> status
+    const friendshipMap = new Map<string, FriendshipStatus>();
+    friendships.forEach((f) => {
+      const targetId = f.user1Id === requesterId ? f.user2Id : f.user1Id;
+      friendshipMap.set(targetId, f.status);
+    });
 
-    // Lọc sơ bộ
-    const candidates = users.filter((user) => {
-      // Loại bỏ user bị block
+    // 3. Final Filter
+    const filteredUsers = users.filter((user) => {
+      // Rule 1: Not Blocked
       if (blockedUserIds.has(user.id)) return false;
+
+      // Rule 2: Not Declined
+      const status = friendshipMap.get(user.id);
+      if (status === FriendshipStatus.DECLINED) return false;
+
+      // Rule 3: Allow discovery (ACCEPTED, PENDING, or NULL)
       return true;
     });
 
-    for (const user of candidates) {
-      const settings = privacyMap.get(user.id);
-
-      // Logic Zalo: "Ai có thể tìm thấy tôi qua số điện thoại?"
-      // Nếu ta map nó vào field `showPhoneNumber` hoặc `showProfile`
-      // Giả sử dùng showProfile cho đơn giản:
-      const privacyLevel = settings?.showProfile || 'EVERYONE';
-
-      if (privacyLevel === 'CONTACTS') {
-        usersRequiringFriendship.push(user.id);
-      }
+    if (filteredUsers.length < users.length) {
+      this.logger.debug(
+        `[Sync] Filtered out ${users.length - filteredUsers.length} users (blocked or declined).`,
+      );
     }
 
-    // 4. Batch Check Friendships (Chỉ check cho những người yêu cầu)
-    const friendIds = new Set<string>();
-    if (usersRequiringFriendship.length > 0) {
-      // Query bảng Friendship: Chỉ lấy những mối quan hệ ACCEPTED
-      const friendships = await this.prisma.friendship.findMany({
-        where: {
-          status: 'ACCEPTED',
-          OR: [
-            {
-              user1Id: requesterId,
-              user2Id: { in: usersRequiringFriendship },
-            },
-            {
-              user1Id: { in: usersRequiringFriendship },
-              user2Id: requesterId,
-            },
-          ],
-        },
-        select: { user1Id: true, user2Id: true },
-      });
-
-      friendships.forEach((f) => {
-        friendIds.add(f.user1Id === requesterId ? f.user2Id : f.user1Id);
-      });
-    }
-
-    // 5. Final Filter
-    return candidates.filter((user) => {
-      const settings = privacyMap.get(user.id);
-      const privacyLevel = settings?.showProfile || 'EVERYONE';
-
-      // Nếu yêu cầu bạn bè -> Check trong set friendIds
-      if (privacyLevel === 'CONTACTS') {
-        return friendIds.has(user.id);
-      }
-
-      return true; // Default allow (EVERYONE)
-    });
+    return filteredUsers;
   }
+
 
   /**
    * Build contact response with friendship status.
@@ -691,12 +749,24 @@ export class ContactService {
   ): Promise<ContactResponseDto[]> {
     if (users.length === 0) return [];
 
-    // CT-R1 FIX: Batch friendship check to prevent N+1 queries
     const userIds = users.map((u) => u.id);
+
+    // 1. Batch friendship check
     const friendSet = await this.friendshipService.getFriendIdsFromList(
       ownerId,
       userIds,
     );
+
+    // 2. Batch Mutual Contact check (B also has A in their UserContact)
+    // We check existence of back-references in one query
+    const mutualContacts = await this.prisma.userContact.findMany({
+      where: {
+        ownerId: { in: userIds },
+        contactUserId: ownerId,
+      },
+      select: { ownerId: true },
+    });
+    const mutualSet = new Set(mutualContacts.map((c) => c.ownerId));
 
     return users.map((user) => {
       const hash = user.phoneNumberHash || '';
@@ -705,14 +775,28 @@ export class ContactService {
       return {
         id: info?.id ?? user.id,
         contactUserId: user.id,
-        // L6 fix: 3-level fallback (no aliasName on fresh sync response)
+        // Name resolution Hierarchy: PhoneBookName > DisplayName
+        // (aliasName is not returned here as it's a fresh sync, but would be handled in getContacts)
         displayName: phoneBookName ?? user.displayName,
         avatarUrl: user.avatarUrl ?? undefined,
         phoneBookName,
         source: info?.source ?? ContactSource.PHONE_SYNC,
         isFriend: friendSet.has(user.id),
+        isMutual: mutualSet.has(user.id),
       };
     });
+  }
+
+  /**
+   * Batch Invalidate name resolution cache
+   */
+  private async invalidateNameCacheBatch(
+    ownerId: string,
+    targetUserIds: string[],
+  ): Promise<void> {
+    if (targetUserIds.length === 0) return;
+    const keys = targetUserIds.map((id) => this.getNameCacheKey(ownerId, id));
+    await this.redis.del(...keys);
   }
 
   /**

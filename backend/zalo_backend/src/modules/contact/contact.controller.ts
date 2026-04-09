@@ -9,6 +9,8 @@ import {
   Param,
   ParseUUIDPipe,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ContactService } from './contact.service';
@@ -29,8 +31,19 @@ export class ContactController {
 
   @Post('sync')
   @ApiOperation({ summary: 'Sync phone contacts from mobile device' })
-  async syncContacts(@CurrentUser() user: User, @Body() dto: SyncContactsDto) {
-    return this.contactService.syncContacts(user.id, dto);
+  @HttpCode(HttpStatus.ACCEPTED)
+  async syncContacts(
+    @CurrentUser('id') userId: string,
+    @Body() dto: SyncContactsDto,
+  ) {
+    return this.contactService.syncContacts(userId, dto);
+  }
+  
+  @Get('sync/check')
+  @ApiOperation({ summary: 'Check if user is allowed to sync contacts right now' })
+  async checkSyncRateLimit(@CurrentUser('id') userId: string) {
+    await this.contactService.preCheckSyncRateLimit(userId);
+    return { canSync: true };
   }
 
   @Get()

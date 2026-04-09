@@ -15,23 +15,22 @@ import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
 import { NormalizePhone } from 'src/common/decorator/normalize-phone.decorator';
 
 export class ContactItemDto {
-  @ApiProperty({ description: 'Số điện thoại từ danh bạ (Raw)' })
-  @IsString()
-  @IsNotEmpty()
-  @NormalizePhone()
-  @IsPhoneNumber('VN', {
-    message: 'phoneNumber must be a valid phone number (e.g. 09xxx or +849xxx)',
+  @ApiPropertyOptional({
+    description: 'Phone number hash (SHA-256) - Recommended for privacy',
   })
-  phoneNumber: string;
+  @IsOptional()
+  @IsString()
+  phoneHash?: string;
 
   @ApiPropertyOptional({
     description: 'Tên hiển thị từ danh bạ điện thoại (phone book name)',
   })
-  @IsString()
   @IsOptional()
+  @IsString()
   @MaxLength(100)
   phoneBookName?: string;
 }
+
 
 export class SyncContactsDto {
   @ApiProperty({ type: [ContactItemDto] })
@@ -73,6 +72,9 @@ export class ContactResponseDto {
   @ApiProperty()
   isFriend: boolean;
 
+  @ApiProperty({ description: 'Cả hai cùng lưu số của nhau' })
+  isMutual: boolean;
+
   @ApiPropertyOptional()
   lastSeenAt?: Date;
 }
@@ -101,10 +103,10 @@ export class GetContactsQueryDto extends CursorPaginationDto {
   @ApiPropertyOptional({
     description:
       'Khi true: chỉ trả về contacts chưa phải bạn bè (loại bỏ overlap)',
-    default: false,
+    default: true,
   })
   @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
+  @Transform(({ value }) => value === 'true' || value === true || value === undefined)
   @IsBoolean()
-  excludeFriends?: boolean;
+  excludeFriends?: boolean = true;
 }
