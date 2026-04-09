@@ -22,6 +22,18 @@ export class DeviceListItemDto {
   @ApiProperty({ description: 'IP address used during login' })
   ipAddress: string;
 
+  @ApiPropertyOptional({ description: 'Resolved location (e.g., City, Country)' })
+  location?: string;
+
+  @ApiPropertyOptional({ description: 'Browser name' })
+  browser?: string;
+
+  @ApiPropertyOptional({ description: 'Operating System' })
+  os?: string;
+
+  @ApiProperty({ description: 'Whether the device is a trusted device for 2FA bypass' })
+  isTrusted: boolean;
+
   @ApiProperty({ description: 'Whether the device is currently online' })
   isOnline: boolean;
 }

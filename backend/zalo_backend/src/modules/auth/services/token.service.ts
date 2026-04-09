@@ -75,7 +75,12 @@ export class TokenService {
         deviceName: deviceInfo.deviceName,
         deviceType: deviceInfo.deviceType,
         platform: deviceInfo.platform,
+        browserName: deviceInfo.browserName,
+        browserVersion: deviceInfo.browserVersion,
+        osName: deviceInfo.osName,
+        osVersion: deviceInfo.osVersion,
         ipAddress: deviceInfo.ipAddress,
+        location: deviceInfo.location,
         userAgent: deviceInfo.userAgent,
         expiresAt,
         parentTokenId,
@@ -293,34 +298,34 @@ export class TokenService {
   }
 
   /**
-   * Revoke all existing PC/Desktop sessions for a user (enforce 1PC rule).
-   * Used by both Password login and QR login flows.
+   * Revoke existing sessions by device type(s) for a user.
    * Returns list of revoked deviceIds for force-logout notification.
    */
-  async revokeExistingPCSessions(
+  async revokeExistingSessionsByType(
     userId: string,
+    deviceTypes: DeviceType[],
     options?: { excludeDeviceIds?: string[] },
   ): Promise<string[]> {
     const excludeDeviceIds = options?.excludeDeviceIds ?? [];
     const whereClause = {
       userId,
-      deviceType: { in: [DeviceType.WEB, DeviceType.DESKTOP] },
+      deviceType: { in: deviceTypes },
       isRevoked: false,
       ...(excludeDeviceIds.length > 0
         ? { deviceId: { notIn: excludeDeviceIds } }
         : {}),
     };
 
-    // Find active PC sessions to get their deviceIds before revoking
-    const activePCSessions = await this.prisma.userToken.findMany({
+    // Find active sessions to get their deviceIds before revoking
+    const activeSessions = await this.prisma.userToken.findMany({
       where: whereClause,
       select: { deviceId: true },
       distinct: ['deviceId'],
     });
 
-    if (activePCSessions.length === 0) return [];
+    if (activeSessions.length === 0) return [];
 
-    // Revoke all PC sessions
+    // Revoke all sessions matching criteria
     await this.prisma.userToken.updateMany({
       where: whereClause,
       data: {
@@ -330,7 +335,23 @@ export class TokenService {
       },
     });
 
-    return activePCSessions.map((s) => s.deviceId);
+    return activeSessions.map((s) => s.deviceId);
+  }
+
+  /**
+   * Revoke all existing PC/Desktop sessions for a user (enforce 1PC rule).
+   * Used by both Password login and QR login flows.
+   * Returns list of revoked deviceIds for force-logout notification.
+   */
+  async revokeExistingPCSessions(
+    userId: string,
+    options?: { excludeDeviceIds?: string[] },
+  ): Promise<string[]> {
+    return this.revokeExistingSessionsByType(
+      userId,
+      [DeviceType.WEB, DeviceType.DESKTOP],
+      options,
+    );
   }
 
   /**
@@ -371,6 +392,11 @@ export class TokenService {
         platform: true,
         loginMethod: true,
         ipAddress: true,
+        location: true,
+        browserName: true,
+        browserVersion: true,
+        osName: true,
+        osVersion: true,
         lastUsedAt: true,
       },
       orderBy: {

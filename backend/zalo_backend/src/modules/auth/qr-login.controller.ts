@@ -140,9 +140,7 @@ export class QrLoginController {
     // Set refresh token cookie (same logic as normal login)
     const cookieOptions = {
       ...this.jwtConfiguration.refreshToken.cookieOptions,
-      maxAge: ms(
-        this.jwtConfiguration.refreshToken.cookieOptions.maxAge as StringValue,
-      ),
+      maxAge: this.jwtConfiguration.refreshToken.cookieOptions.maxAge as number,
     };
 
     res.cookie(

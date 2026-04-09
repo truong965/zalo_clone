@@ -96,10 +96,32 @@ const aiEnabled = process.env.AI_AGENT_ENABLED !== 'false';
     // Cron Jobs
     ScheduleModule.forRoot(),
 
+    // Main BullMQ Infrastructure
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redis = config.get<any>('redis');
+        return {
+          connection: {
+            host: redis.host,
+            port: redis.port,
+            password: redis.password,
+            db: redis.db,
+          },
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 1000 },
+            removeOnComplete: 100,
+            removeOnFail: 1000,
+          },
+        };
+      },
+    }),
+
     // BullMQ Infrastructure (Using AI-specific Redis instance)
     ...(aiEnabled
       ? [
-        BullModule.forRootAsync({
+        BullModule.forRootAsync('ai', {
           inject: [ConfigService],
           useFactory: (config: ConfigService) => {
             const aiRedis = config.get<any>('redis.ai');

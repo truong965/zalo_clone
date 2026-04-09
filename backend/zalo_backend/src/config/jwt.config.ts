@@ -1,5 +1,5 @@
 import { registerAs } from '@nestjs/config';
-import ms from 'ms';
+import ms, { StringValue } from 'ms';
 
 export default registerAs('jwt', () => ({
   // Access Token Configuration
@@ -19,10 +19,10 @@ export default registerAs('jwt', () => ({
     cookieName: 'refresh_token',
     cookieOptions: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-      sameSite: 'lax' as const, // strict
-      path: '/api/v1/auth/refresh', // Only send cookie to refresh endpoint
-      maxAge: ms(7 * 24 * 60 * 60), // 7 days in milliseconds
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
+      path: '/', // Broaden path for reliability
+      maxAge: ms((process.env.JWT_REFRESH_EXPIRES_IN || '7d') as StringValue), // Returns milliseconds as number
     },
   },
 }));

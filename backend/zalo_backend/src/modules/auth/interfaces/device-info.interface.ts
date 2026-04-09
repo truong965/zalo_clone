@@ -7,4 +7,13 @@ export interface DeviceInfo {
   platform: Platform; // IOS, ANDROID, WEB, etc.
   ipAddress: string;
   userAgent: string;
+  
+  // Extended fields parsed by ua-parser-js
+  browserName?: string;
+  browserVersion?: string;
+  osName?: string;
+  osVersion?: string;
+  
+  // Location resolved by GeoIP
+  location?: string;
 }

@@ -69,6 +69,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
           'Password changed. Please login again.',
         );
       }
+      // Attach the current device context specifically for this token's runtime
+      user.currentDeviceId = payload.deviceId;
+      user.currentSessionId = payload.sid;
       return user;
     }
 

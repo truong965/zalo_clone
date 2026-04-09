@@ -40,8 +40,13 @@ export class ContactSearchService {
       this.validationService.validateKeyword(request.keyword);
       await this.validationService.validateUserExists(userId);
 
-      // Normalize keyword if it looks like a phone number to ensure consistent DB matching
-      const normalizedKeyword = PhoneNumberUtil.normalize(request.keyword);
+      // Only normalize if keyword looks like a phone number (strictly digits/symbols and no letters)
+      const hasLetters = /[a-zA-Z]/.test(request.keyword);
+      const isPhoneLike = /^[+\d\s\-.()]*$/.test(request.keyword) && request.keyword.replace(/\D/g, '').length >= 3;
+      
+      const normalizedKeyword = (!hasLetters && isPhoneLike)
+        ? PhoneNumberUtil.normalize(request.keyword)
+        : request.keyword;
 
       // Cache key (include cursor and conversationId for paginated/scoped requests)
       const excludeStr = (request.excludeIds || []).sort().join(',');

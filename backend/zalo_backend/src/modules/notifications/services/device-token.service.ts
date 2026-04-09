@@ -5,7 +5,7 @@
  * Called by DeviceTokenController (REST) and internally by PushNotificationService.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
 
 @Injectable()
@@ -25,10 +25,11 @@ export class DeviceTokenService {
   async registerToken(params: {
     userId: string;
     deviceId: string;
+    deviceName: string;
     fcmToken: string;
     platform?: string;
   }): Promise<void> {
-    const { userId, deviceId, fcmToken, platform } = params;
+    const { userId, deviceId, deviceName, fcmToken, platform } = params;
 
     await this.prisma.$transaction(async (tx) => {
       // Policy A de-duplication:
@@ -41,20 +42,29 @@ export class DeviceTokenService {
         },
       });
 
-      await tx.userDevice.upsert({
-        where: { userId_deviceId: { userId, deviceId } },
-        update: {
-          fcmToken,
-          platform: platform ?? undefined,
-          lastActiveAt: new Date(),
-        },
-        create: {
-          userId,
-          deviceId,
-          fcmToken,
-          platform: platform ?? null,
-        },
-      });
+      try {
+        await tx.userDevice.upsert({
+          where: { userId_deviceId: { userId, deviceId } },
+          create: {
+            userId,
+            deviceId,
+            deviceName,
+            fcmToken,
+            platform: platform ?? undefined,
+            lastActiveAt: new Date(),
+          },
+          update: {
+            deviceName,
+            fcmToken,
+            platform: platform ?? undefined,
+            lastActiveAt: new Date(),
+          },
+        });
+      } catch (error) {
+        throw new BadRequestException(
+          `Không thể đăng ký thiết bị (ID: ${deviceId.slice(0, 8)}...). Vui lòng thử lại.`,
+        );
+      }
 
       if (removed.count > 0) {
         this.logger.log(

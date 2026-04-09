@@ -41,7 +41,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
 
   /**
    * When User A sends a friend request to User B,
-   * notify User B in real-time.
+   * notify User B (request received) AND User A (sync across devices).
    */
   @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_SENT, { async: true })
   async handleFriendRequestSent(event: FriendRequestSentEvent): Promise<void> {
@@ -50,16 +50,25 @@ export class FriendshipNotificationListener extends IdempotentListener {
         `[FriendshipNotif] Friend request sent: ${event.fromUserId} → ${event.toUserId}`,
       );
 
-      const socketEvent: ISocketEmitEvent = {
+      const payload = {
+        friendshipId: event.requestId,
+        fromUserId: event.fromUserId,
+        toUserId: event.toUserId,
+      };
+
+      // Notify recipient
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
         event: SocketEvents.FRIEND_REQUEST_RECEIVED as any,
         userId: event.toUserId,
-        data: {
-          friendshipId: event.requestId,
-          fromUserId: event.fromUserId,
-          toUserId: event.toUserId,
-        },
-      };
-      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
+        data: payload,
+      });
+
+      // Notify sender (Cross-device sync)
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+        event: SocketEvents.FRIEND_REQUEST_RECEIVED as any,
+        userId: event.fromUserId,
+        data: payload,
+      });
     } catch (error) {
       this.logger.error(
         `[FriendshipNotif] Failed to emit friendship.request.sent socket event`,
@@ -70,7 +79,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
 
   /**
    * When User B accepts friend request from User A,
-   * notify User A (the original requester).
+   * notify User A (the original requester) AND User B (accepter sync).
    */
   @OnEvent(InternalEventNames.FRIENDSHIP_ACCEPTED, { async: true })
   async handleFriendRequestAccepted(
@@ -81,16 +90,25 @@ export class FriendshipNotificationListener extends IdempotentListener {
         `[FriendshipNotif] Friend request accepted: ${event.acceptedBy} accepted ${event.requesterId}'s request`,
       );
 
-      const socketEvent: ISocketEmitEvent = {
+      const payload = {
+        friendshipId: event.friendshipId,
+        acceptedBy: event.acceptedBy,
+        requesterId: event.requesterId,
+      };
+
+      // Notify original requester
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
         event: SocketEvents.FRIEND_REQUEST_ACCEPTED as any,
         userId: event.requesterId,
-        data: {
-          friendshipId: event.friendshipId,
-          acceptedBy: event.acceptedBy,
-          requesterId: event.requesterId,
-        },
-      };
-      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
+        data: payload,
+      });
+
+      // Notify accepter (Cross-device sync)
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+        event: SocketEvents.FRIEND_REQUEST_ACCEPTED as any,
+        userId: event.acceptedBy,
+        data: payload,
+      });
     } catch (error) {
       this.logger.error(
         `[FriendshipNotif] Failed to emit friendship.accepted socket event`,
@@ -101,7 +119,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
 
   /**
    * When User A cancels their sent friend request,
-   * notify the target user (User B).
+   * notify the target user (User B) AND User A (canceller sync).
    */
   @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_CANCELLED, { async: true })
   async handleFriendRequestCancelled(
@@ -112,17 +130,26 @@ export class FriendshipNotificationListener extends IdempotentListener {
         `[FriendshipNotif] Friend request cancelled: ${event.cancelledBy} cancelled request to ${event.targetUserId}`,
       );
 
-      const socketEvent: ISocketEmitEvent = {
+      const payload = {
+        friendshipId: event.friendshipId,
+        cancelledBy: event.cancelledBy,
+        targetUserId: event.targetUserId,
+        eventType: event.eventType,
+      };
+
+      // Notify target user
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
         event: SocketEvents.FRIEND_REQUEST_CANCELLED as any,
         userId: event.targetUserId,
-        data: {
-          friendshipId: event.friendshipId,
-          cancelledBy: event.cancelledBy,
-          targetUserId: event.targetUserId,
-          eventType: event.eventType,
-        },
-      };
-      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
+        data: payload,
+      });
+
+      // Notify canceller (Cross-device sync)
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+        event: SocketEvents.FRIEND_REQUEST_CANCELLED as any,
+        userId: event.cancelledBy,
+        data: payload,
+      });
     } catch (error) {
       this.logger.error(
         `[FriendshipNotif] Failed to emit friendship.request.cancelled socket event`,
@@ -133,7 +160,7 @@ export class FriendshipNotificationListener extends IdempotentListener {
 
   /**
    * When User B declines friend request from User A,
-   * notify User A (the requester).
+   * notify User A (the requester) AND User B (decliner sync).
    */
   @OnEvent(InternalEventNames.FRIENDSHIP_REQUEST_DECLINED, { async: true })
   async handleFriendRequestDeclined(
@@ -144,16 +171,25 @@ export class FriendshipNotificationListener extends IdempotentListener {
         `[FriendshipNotif] Friend request declined: ${event.toUserId} declined ${event.fromUserId}'s request`,
       );
 
-      const socketEvent: ISocketEmitEvent = {
+      const payload = {
+        friendshipId: event.requestId,
+        declinedBy: event.toUserId,
+        requesterId: event.fromUserId,
+      };
+
+      // Notify requester
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
         event: SocketEvents.FRIEND_REQUEST_DECLINED as any,
         userId: event.fromUserId,
-        data: {
-          friendshipId: event.requestId,
-          declinedBy: event.toUserId,
-          requesterId: event.fromUserId,
-        },
-      };
-      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
+        data: payload,
+      });
+
+      // Notify decliner (Cross-device sync)
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+        event: SocketEvents.FRIEND_REQUEST_DECLINED as any,
+        userId: event.toUserId,
+        data: payload,
+      });
     } catch (error) {
       this.logger.error(
         `[FriendshipNotif] Failed to emit friendship.request.declined socket event`,
@@ -164,30 +200,33 @@ export class FriendshipNotificationListener extends IdempotentListener {
 
   /**
    * When User A unfriends User B,
-   * notify User B.
+   * notify both participants.
    */
   @OnEvent(InternalEventNames.FRIENDSHIP_UNFRIENDED, { async: true })
   async handleUnfriended(event: UnfriendedEvent): Promise<void> {
     try {
-      // The other user is whichever is NOT the initiator
-      const otherUserId =
-        event.initiatedBy === event.user1Id ? event.user2Id : event.user1Id;
-
       this.logger.debug(
-        `[FriendshipNotif] Unfriended: ${event.initiatedBy} unfriended ${otherUserId}`,
+        `[FriendshipNotif] Unfriended: ${event.initiatedBy} unfriended user in ${event.friendshipId}`,
       );
 
-      const socketEvent: ISocketEmitEvent = {
-        event: SocketEvents.FRIEND_UNFRIENDED as any,
-        userId: otherUserId,
-        data: {
-          friendshipId: event.friendshipId,
-          initiatedBy: event.initiatedBy,
-          userId: otherUserId,
-          eventType: event.eventType,
-        },
+      const payload = {
+        friendshipId: event.friendshipId,
+        initiatedBy: event.initiatedBy,
+        eventType: event.eventType,
       };
-      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, socketEvent);
+
+      // Notify both participants
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+        event: SocketEvents.FRIEND_UNFRIENDED as any,
+        userId: event.user1Id,
+        data: payload,
+      });
+
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+        event: SocketEvents.FRIEND_UNFRIENDED as any,
+        userId: event.user2Id,
+        data: payload,
+      });
     } catch (error) {
       this.logger.error(
         `[FriendshipNotif] Failed to emit friendship.unfriended socket event`,

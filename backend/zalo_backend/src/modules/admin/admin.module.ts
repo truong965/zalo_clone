@@ -1,5 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '@modules/auth/auth.module';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ACCOUNT_PURGE_QUEUE } from '@modules/users/constants/purge-queue.constant';
+import { UsersModule } from '@modules/users/users.module';
+import { InternalModule } from '@modules/internal/internal.module';
+
+const aiEnabled = process.env.AI_AGENT_ENABLED !== 'false';
 
 // Controllers
 import { AdminStatsController } from './controllers/admin-stats.controller';
@@ -38,7 +46,38 @@ import { DailyStatsCron } from './cron/daily-stats.cron';
  * - AuthModule → TokenService (for session revocation in suspend/force-logout)
  */
 @Module({
-  imports: [AuthModule],
+  imports: [
+    AuthModule,
+    UsersModule,
+    ...(aiEnabled ? [InternalModule] : []),
+    // Bull Board UI for monitoring queues
+    BullBoardModule.forRoot({
+      route: '/admin/queues',
+      adapter: ExpressAdapter,
+    }),
+    BullBoardModule.forFeature(
+      {
+        name: ACCOUNT_PURGE_QUEUE,
+        adapter: BullMQAdapter,
+      },
+      ...(aiEnabled
+        ? [
+          {
+            name: 'embed',
+            adapter: BullMQAdapter,
+          },
+          {
+            name: 'automod',
+            adapter: BullMQAdapter,
+          },
+          {
+            name: 'ai-job',
+            adapter: BullMQAdapter,
+          },
+        ]
+        : []),
+    ),
+  ],
   controllers: [
     AdminStatsController,
     AdminUsersController,

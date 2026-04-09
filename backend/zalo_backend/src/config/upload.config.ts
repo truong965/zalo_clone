@@ -28,9 +28,9 @@ export default registerAs('upload', () => ({
       process.env.RETRY_DB_BASE_DELAY_MS || '500',
       10,
     ),
-    s3CheckMaxAttempts: parseInt(process.env.RETRY_S3_MAX_ATTEMPTS || '5', 10),
+    s3CheckMaxAttempts: parseInt(process.env.RETRY_S3_MAX_ATTEMPTS || '3', 10),
     s3CheckRetryDelayMs: parseInt(
-      process.env.RETRY_S3_RETRY_DELAY_MS || '300',
+      process.env.RETRY_S3_RETRY_DELAY_MS || '2000',
       10,
     ),
   },

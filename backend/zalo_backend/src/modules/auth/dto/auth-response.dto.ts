@@ -40,6 +40,13 @@ export class RefreshTokenResponseDto {
   accessToken: string;
 
   @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'New JWT refresh token (returned in body only for Mobile clients)',
+    required: false,
+  })
+  refreshToken?: string;
+
+  @ApiProperty({
     example: 900,
     description: 'Access token expiration time in seconds',
   })

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { BlockModule } from '@modules/block/block.module';
 import { PrivacyModule } from '@modules/privacy/privacy.module';
 import { FriendshipModule } from '@modules/friendship/friendship.module';
+import { UsersModule } from '@modules/users/users.module';
 import { InteractionAuthorizationService } from './services/interaction-authorization.service';
 import { InteractionGuard } from './guards/interaction.guard';
 import { NotBlockedGuard } from '@common/guards/not-blocked.guard';
@@ -27,7 +28,7 @@ import { InteractionReadAdapter } from './internal-api/interaction-read.adapter'
  *   SharedModule ← BlockModule/FriendshipModule ← AuthorizationModule ← SharedModule (cycle broken)
  */
 @Module({
-  imports: [ConfigModule, BlockModule, PrivacyModule, FriendshipModule],
+  imports: [ConfigModule, BlockModule, PrivacyModule, FriendshipModule, UsersModule],
   providers: [
     InteractionAuthorizationService,
     InteractionReadAdapter,

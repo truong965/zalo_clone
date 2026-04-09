@@ -24,11 +24,14 @@ import {
   CanInteractResult,
   FRIENDSHIP_READ_PORT,
   PRIVACY_READ_PORT,
+  USER_READ_PORT,
 } from '@common/contracts/internal-api';
 import type {
   IFriendshipReadPort,
   IPrivacyReadPort,
+  IUserReadPort,
 } from '@common/contracts/internal-api';
+import { UserStatus } from '@prisma/client';
 
 @Injectable()
 export class InteractionAuthorizationService {
@@ -39,6 +42,8 @@ export class InteractionAuthorizationService {
     private readonly privacyRead: IPrivacyReadPort,
     @Inject(FRIENDSHIP_READ_PORT)
     private readonly friendshipRead: IFriendshipReadPort,
+    @Inject(USER_READ_PORT)
+    private readonly userRead: IUserReadPort,
   ) {}
 
   /**
@@ -56,6 +61,30 @@ export class InteractionAuthorizationService {
 
     if (requesterId === targetId) {
       return { allowed: true };
+    }
+
+    // 1. Status Check (Both users must be ACTIVE)
+    const [requesterStatus, targetStatus] = await Promise.all([
+      this.userRead.getUserStatus(requesterId),
+      this.userRead.getUserStatus(targetId),
+    ]);
+
+    if (requesterStatus !== UserStatus.ACTIVE) {
+      return {
+        allowed: false,
+        reason: requesterStatus
+          ? `Account is ${requesterStatus.toLowerCase()}`
+          : 'Requester account not found',
+      };
+    }
+
+    if (targetStatus !== UserStatus.ACTIVE) {
+      return {
+        allowed: false,
+        reason: targetStatus
+          ? `Target user is ${targetStatus.toLowerCase()}`
+          : 'Target user not found',
+      };
     }
 
     const isBlocked = await this.blockChecker.isBlocked(requesterId, targetId);

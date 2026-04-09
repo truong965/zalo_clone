@@ -12,8 +12,8 @@ export class PhoneNumberUtil {
   static normalize(phoneNumber: string, defaultRegion: CountryCode = 'VN'): string {
     if (!phoneNumber) return '';
 
-    // If it looks like an email, don't normalize it as a phone number
-    if (phoneNumber.includes('@')) {
+    // If it looks like an email or contains letters, don't normalize it as a phone number
+    if (phoneNumber.includes('@') || /[a-zA-Z]/.test(phoneNumber)) {
       return phoneNumber.trim();
     }
 
