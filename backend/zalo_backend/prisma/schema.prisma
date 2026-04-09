@@ -447,6 +447,8 @@ model UserDevice {
   // Device Type (để phân biệt Web vs Mobile trong device list)
   deviceType   DeviceType? @map("device_type")
 
+  fingerprint  String?   @map("fingerprint") @db.VarChar(64) // SHA-256 hash, 64 hex chars
+
   // Phase 2 — ECDSA Key Pair (nullable: Phase 1 dùng UUID, Phase 2 dùng key pair)
   publicKey      String?   @map("public_key") @db.Text        // PEM ECDSA P-256
   keyAlgorithm   String?   @map("key_algorithm") @db.VarChar(20) // "EC-P256"
@@ -464,6 +466,7 @@ model UserDevice {
   @@index([userId, isTrusted])
   @@index([userId, deviceType])         // [NEW] Query by type
   @@index([userId, lastActiveAt(sort: Desc)]) // [NEW] Sort by activity
+   @@index([userId, fingerprint])  // [NEW] Lookup by fingerprint
   @@map("user_devices")
 }
 

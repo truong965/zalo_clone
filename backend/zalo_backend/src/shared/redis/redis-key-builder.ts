@@ -230,6 +230,11 @@ export class RedisKeyBuilder {
     return `${this.DOMAIN_AUTH}:QR_RATE_LIMIT:${qrSessionId}`;
   }
 
+  /** Device Attestation Challenge: AUTH:ATTEST_CHALLENGE:{userId} (TTL: 60s) */
+  static deviceAttestChallenge(userId: string): string {
+    return `${this.DOMAIN_AUTH}:ATTEST_CHALLENGE:${userId}`;
+  }
+
   // ============ RATE LIMIT (legacy format) ============
 
   static rateLimitContactSync(userId: string): string {

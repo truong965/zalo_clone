@@ -14,10 +14,16 @@ export class DeviceRegistryItemDto {
   platform: string;
 
   @ApiPropertyOptional()
-  browser?: string;
+  browserName?: string;
 
   @ApiPropertyOptional()
-  os?: string;
+  browserVersion?: string;
+
+  @ApiPropertyOptional()
+  osName?: string;
+
+  @ApiPropertyOptional()
+  osVersion?: string;
 
   @ApiPropertyOptional()
   lastIp?: string;
@@ -34,8 +40,8 @@ export class DeviceRegistryItemDto {
   @ApiProperty({ description: 'Last active timestamp' })
   lastActiveAt: Date;
 
-  @ApiProperty({ description: 'First registration timestamp' })
-  registeredAt: Date;
+  @ApiPropertyOptional()
+  registeredAt?: Date;
 
   @ApiProperty({ description: 'Whether it has an active access token session currently' })
   hasActiveSession: boolean;

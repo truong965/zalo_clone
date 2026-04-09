@@ -52,6 +52,8 @@ import {
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RequestRegisterOtpDto, VerifyRegisterOtpDto } from './dto/register-otp.dto';
 
+import { DeviceAttestGuard } from './guards/device-attest.guard';
+
 @ApiTags('Authentication')
 @Controller('auth')
 @UseInterceptors(DeviceFingerprintInterceptor)
@@ -203,10 +205,14 @@ export class AuthController {
   @Get('sessions')
   @ApiOperation({ summary: 'Get all active sessions' })
   @ApiBearerAuth()
-  async getSessions(@CurrentUser() user: User): Promise<DeviceListItemDto[]> {
-    return this.authService.getSessions(user.id);
+  async getSessions(
+    @CurrentUser() user: User,
+    @GetDeviceInfo() deviceInfo: DeviceInfo,
+  ) {
+    return this.authService.getSessions(user.id, deviceInfo.deviceId);
   }
 
+  @UseGuards(DeviceAttestGuard)
   @Delete('sessions/:deviceId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke session for specific device' })
@@ -246,6 +252,7 @@ export class AuthController {
     return this.authService.resetPassword(resetPasswordDto);
   }
 
+  @UseGuards(DeviceAttestGuard)
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change password for authenticated user' })

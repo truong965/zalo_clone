@@ -14,9 +14,11 @@ export class DeviceFingerprintService {
   constructor(private readonly geoIpService: GeoIpService) {}
 
   /**
-   * Generate unique device ID from request fingerprint
+   * Generate a stable browser/device fingerprint from request headers.
+   * Used for deduplication when cookies are lost.
+   * Returns full 64-char SHA-256 hex string.
    */
-  generateDeviceId(req: Request): string {
+  generateFingerprint(req: Request): string {
     const userAgent = req.headers['user-agent'] || '';
     const acceptLanguage = req.headers['accept-language'] || '';
     const acceptEncoding = req.headers['accept-encoding'] || '';
@@ -26,7 +28,7 @@ export class DeviceFingerprintService {
     const timezone = req.headers['x-timezone'] || '';
     const platform = req.headers['x-platform'] || '';
 
-    const fingerprint = [
+    const raw = [
       userAgent,
       acceptLanguage,
       acceptEncoding,
@@ -37,9 +39,8 @@ export class DeviceFingerprintService {
 
     return crypto
       .createHash('sha256')
-      .update(fingerprint)
-      .digest('hex')
-      .substring(0, 32);
+      .update(raw)
+      .digest('hex');
   }
 
   /**
@@ -82,7 +83,7 @@ export class DeviceFingerprintService {
   extractDeviceInfo(req: Request): DeviceInfo {
     const appDeviceId = req.headers['x-device-id'] as string | undefined;
     const trackingId = req.cookies?.[DEVICE_TRACKING_COOKIE] as string | undefined;
-    const deviceId = appDeviceId || trackingId || this.generateDeviceId(req);
+    const deviceId = appDeviceId || trackingId || crypto.randomUUID();
 
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const ipAddress = this.extractIpAddress(req);
@@ -95,8 +96,12 @@ export class DeviceFingerprintService {
 
     const browserName = browser.name;
     const browserVersion = browser.version;
-    const osName = os.name;
-    const osVersion = os.version;
+    
+    // Mobile OS headers take priority over UA parsing (React Native UA is unreliable)
+    const headerOsName = req.headers['x-os-name'] as string | undefined;
+    const headerOsVersion = req.headers['x-os-version'] as string | undefined;
+    const osName = headerOsName || os.name;
+    const osVersion = headerOsVersion || os.version;
     
     // Fallbacks and smart defaults
     const headerDeviceType = req.headers['x-device-type'] as string;
@@ -122,6 +127,13 @@ export class DeviceFingerprintService {
 
     // Resolve location
     const locationInfo = this.geoIpService.lookupIp(ipAddress);
+    
+    // Generate browser fingerprint for deduplication
+    const fingerprint = this.generateFingerprint(req);
+
+    // Phase 2: Extract device identity keys
+    const publicKey = req.headers['x-public-key'] as string | undefined;
+    const keyAlgorithm = req.headers['x-key-algorithm'] as string | undefined;
 
     return {
       deviceId,
@@ -135,6 +147,9 @@ export class DeviceFingerprintService {
       osName,
       osVersion,
       location: locationInfo.fullLocation,
+      fingerprint,
+      publicKey,
+      keyAlgorithm,
     };
   }
 

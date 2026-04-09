@@ -19,17 +19,29 @@ export class DeviceListItemDto {
   @ApiPropertyOptional({ description: 'Last activity timestamp' })
   lastUsedAt?: Date;
 
+  @ApiPropertyOptional({ description: 'Effective last active timestamp from registry' })
+  lastActiveAt?: Date;
+
+  @ApiPropertyOptional({ description: 'Registration timestamp' })
+  registeredAt?: Date;
+
   @ApiProperty({ description: 'IP address used during login' })
   ipAddress: string;
 
   @ApiPropertyOptional({ description: 'Resolved location (e.g., City, Country)' })
-  location?: string;
+  lastLocation?: string;
 
-  @ApiPropertyOptional({ description: 'Browser name' })
-  browser?: string;
+  @ApiPropertyOptional({ description: 'Browser Name' })
+  browserName?: string;
 
-  @ApiPropertyOptional({ description: 'Operating System' })
-  os?: string;
+  @ApiPropertyOptional({ description: 'Browser Version' })
+  browserVersion?: string;
+
+  @ApiPropertyOptional({ description: 'OS Name' })
+  osName?: string;
+
+  @ApiPropertyOptional({ description: 'OS Version' })
+  osVersion?: string;
 
   @ApiProperty({ description: 'Whether the device is a trusted device for 2FA bypass' })
   isTrusted: boolean;

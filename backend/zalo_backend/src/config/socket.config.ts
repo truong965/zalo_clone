@@ -38,5 +38,5 @@ export default registerAs('socket', () => ({
   maxConnections: parseInt(process.env.MAX_SOCKET_CONNECTIONS!, 10) || 10000,
 
   // Graceful shutdown
-  gracefulShutdownTimeout: 30000, // 30 seconds
+  gracefulShutdownTimeout: process.env.NODE_ENV === 'production' ? 30000 : 2000,
 }));

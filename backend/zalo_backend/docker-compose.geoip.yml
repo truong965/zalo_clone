@@ -2,6 +2,7 @@ services:
   geoipupdate:
     image: maxmindinc/geoipupdate
     container_name: zalo-geoip-update
+    restart: unless-stopped
     env_file: 
       - .env.development.local
     environment:

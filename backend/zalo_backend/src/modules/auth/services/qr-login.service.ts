@@ -27,6 +27,7 @@ import { SocketEvents } from 'src/common/constants/socket-events.constant';
 import { LoginMethod, UserStatus } from '@prisma/client';
 import { DEVICE_TRACKING_COOKIE } from './device-fingerprint.service';
 import { QR_INTERNAL_EVENTS } from 'src/common/constants/internal-events.constant';
+import { DeviceService } from './device.service';
 
 @Injectable()
 export class QrLoginService {
@@ -39,6 +40,7 @@ export class QrLoginService {
     private readonly qrSession: QrSessionRedisService,
     private readonly eventEmitter: EventEmitter2,
     private readonly rateLimitService: RedisRateLimitService,
+    private readonly deviceService: DeviceService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
   ) { }
@@ -369,7 +371,10 @@ export class QrLoginService {
         });
       }
 
-      // 12. Cleanup: delete QR session from Redis
+      // 12. Register/Update Device in Registry
+      await this.deviceService.upsertDevice(user.id, deviceInfo);
+
+      // 13. Cleanup: delete QR session from Redis
       await this.qrSession.deleteSession(dto.qrSessionId);
 
       this.logger.log(

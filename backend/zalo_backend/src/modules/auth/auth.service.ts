@@ -271,15 +271,14 @@ export class AuthService {
   /**
    * Get all active sessions mapped to DeviceListItemDto
    */
-  async getSessions(userId: string): Promise<DeviceListItemDto[]> {
+  async getSessions(userId: string, currentDeviceId?: string): Promise<{ currentDeviceId?: string; sessions: DeviceListItemDto[] }> {
     const sessions = await this.tokenService.getUserSessions(userId);
 
-    // Fetch trust status from UserDevice registry
+    // Fetch trust and detail info from UserDevice registry
     const devices = await this.prisma.userDevice.findMany({
       where: { userId },
-      select: { deviceId: true, isTrusted: true },
     });
-    const trustMap = new Map(devices.map(d => [d.deviceId, d.isTrusted]));
+    const deviceMap = new Map(devices.map((d) => [d.deviceId, d]));
 
     // Get all socket metadata to check which devices are currently connected
     const socketIds = await this.redisRegistry.getUserSockets(userId);
@@ -292,19 +291,29 @@ export class AuthService {
       }
     }
 
-    return sessions.map((session) => ({
-      deviceId: session.deviceId,
-      deviceName: session.deviceName || 'Unknown Device',
-      platform: session.platform || 'UNKNOWN',
-      browser: session.browserName ? `${session.browserName} ${session.browserVersion || ''}`.trim() : undefined,
-      os: session.osName ? `${session.osName} ${session.osVersion || ''}`.trim() : undefined,
-      location: session.location || undefined,
-      loginMethod: session.loginMethod,
-      lastUsedAt: session.lastUsedAt,
-      ipAddress: session.ipAddress || 'Unknown IP',
-      isTrusted: trustMap.get(session.deviceId) ?? false,
-      isOnline: connectedDeviceIds.has(session.deviceId),
-    }));
+    const sessionList = sessions.map((session) => {
+      const registry = deviceMap.get(session.deviceId);
+      
+      return {
+        deviceId: session.deviceId,
+        deviceName: registry?.deviceName || session.deviceName || 'Unknown Device',
+        platform: registry?.platform || session.platform || 'UNKNOWN',
+        browserName: registry?.browserName || session.browserName || undefined,
+        browserVersion: registry?.browserVersion || session.browserVersion || undefined,
+        osName: registry?.osName || session.osName || undefined,
+        osVersion: registry?.osVersion || session.osVersion || undefined,
+        lastLocation: registry?.lastLocation || session.location || undefined,
+        loginMethod: session.loginMethod,
+        lastUsedAt: session.lastUsedAt,
+        lastActiveAt: registry?.lastActiveAt || session.lastUsedAt,
+        registeredAt: registry?.registeredAt || undefined,
+        ipAddress: registry?.lastIp || session.ipAddress || 'Unknown IP',
+        isTrusted: registry?.isTrusted ?? false,
+        isOnline: connectedDeviceIds.has(session.deviceId),
+      };
+    });
+
+    return { currentDeviceId, sessions: sessionList };
   }
 
   /**

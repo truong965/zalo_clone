@@ -16,4 +16,11 @@ export interface DeviceInfo {
   
   // Location resolved by GeoIP
   location?: string;
+  
+  // Browser Fingerprint (SHA-256 hash for deduplication)
+  fingerprint?: string;
+
+  // Device Identity Keys (Phase 2)
+  publicKey?: string;
+  keyAlgorithm?: string;
 }

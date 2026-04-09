@@ -11,7 +11,8 @@ import {
   Get,
   Query,
   UseInterceptors,
-  Logger
+  Logger,
+  UseGuards
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
@@ -28,6 +29,7 @@ import type {ConfigType}  from '@nestjs/config';
 import jwtConfig from 'src/config/jwt.config';
 import securityConfig from 'src/config/security.config';
 import ms, { StringValue } from 'ms';
+import { DeviceAttestGuard } from './guards/device-attest.guard';
 import { DeviceType, TwoFactorMethod } from '@prisma/client';
 import { EmailChangeConfirmDto, EmailChangeRequestDto } from './dto/email-change.dto';
 import { UsersService } from '../users/users.service';
@@ -294,8 +296,8 @@ export class TwoFactorController {
 
     const { userId, deviceInfo } = verifyResult;
 
-    // If user requested trust, mark device as trusted
-    if (trustDevice) {
+    // If user requested trust, mark device as trusted (Defer for mobile until attestation)
+    if (trustDevice && deviceInfo.deviceType !== DeviceType.MOBILE) {
       await this.deviceService.trustDevice(userId, deviceInfo.deviceId);
     }
 
@@ -344,6 +346,7 @@ export class TwoFactorController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(DeviceAttestGuard)
   @Post('acknowledge')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve or Reject a login from a Mobile device' })
@@ -352,6 +355,7 @@ export class TwoFactorController {
       properties: {
         pendingToken: { type: 'string' },
         approved: { type: 'boolean' },
+        signature: { type: 'string', description: 'ECDSA signature of pendingToken (required for approval)' },
       },
     },
   })
@@ -360,21 +364,17 @@ export class TwoFactorController {
     @GetDeviceInfo() deviceInfo: DeviceInfo,
     @Body('pendingToken') pendingToken: string,
     @Body('approved') approved: boolean,
+    @Body('signature') signature?: string,
   ) {
     if (!pendingToken) throw new BadRequestException('pendingToken is required');
 
-    // Security: Only trusted mobile devices can approve PUSH login requests
+    // Security: Only mobile devices can approve PUSH login requests
     if (deviceInfo.deviceType !== DeviceType.MOBILE) {
       throw new BadRequestException('Chỉ thiết bị di động mới có quyền phê duyệt yêu cầu này');
     }
 
-    const isTrusted = await this.deviceService.isDeviceTrusted(userId, deviceInfo.deviceId);
-    if (!isTrusted) {
-      throw new BadRequestException('Thiết bị di động của bạn chưa được xác thực tin cậy');
-    }
-
-    await this.twoFactorService.acknowledgePush(userId, pendingToken, approved);
-    return { message: approved ? 'Login approved' : 'Login rejected' };
+    await this.twoFactorService.acknowledgePush(userId, deviceInfo.deviceId, pendingToken, approved, signature);
+    return { success: true };
   }
 
 

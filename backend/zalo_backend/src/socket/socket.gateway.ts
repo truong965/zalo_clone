@@ -250,17 +250,17 @@ export class SocketGateway
       const user = await this.socketAuth.authenticateSocket(client);
 
       if (!user) {
-        // Allow unauthenticated connection for specific use cases (like QR login)
+        // Allow unauthenticated connection for specific use cases (like QR login or 2FA polling)
         if (client.handshake?.query?.type === 'public') {
-          this.logger.log(
-            `Socket connecting as public (unauthenticated): ${client.id}`,
+          this.logger.debug(
+            `Socket connected as public (unauthenticated): ${client.id}`,
           );
           client.authenticated = false;
           await this.socketState.handleConnection(client);
           return;
         }
 
-        this.logger.warn(`Socket ${client.id}: Authentication failed`);
+        this.logger.debug(`Socket ${client.id}: Anonymous authentication attempted`);
         client.emit(SocketEvents.AUTH_FAILED, {
           message: 'Authentication failed',
         });

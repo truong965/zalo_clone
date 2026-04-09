@@ -495,8 +495,10 @@ export class TwoFactorService {
    */
   async acknowledgePush(
     userId: string,
+    deviceId: string,
     pendingToken: string,
     approved: boolean,
+    signature?: string,
   ): Promise<void> {
     const pendingKey = RedisKeyBuilder.twoFactorPending(pendingToken);
     const raw = await this.redis.get(pendingKey);
@@ -505,11 +507,24 @@ export class TwoFactorService {
     const data = JSON.parse(raw);
     if (data.userId !== userId) throw new UnauthorizedException('Invalid user');
 
+    // Security Hardening: If approved, must provide a valid ECDSA signature of the pendingToken
+    if (approved) {
+      if (!signature) {
+        throw new BadRequestException('Phê duyệt đăng nhập yêu cầu chữ ký số xác thực thiết bị.');
+      }
+
+      const isVerified = await this.deviceService.verifySignature(userId, deviceId, pendingToken, signature);
+      if (!isVerified) {
+        this.logger.warn(`Push approval failed: Invalid signature from device ${deviceId} for user ${userId}`);
+        throw new UnauthorizedException('Chữ ký xác thực thiết bị không hợp lệ.');
+      }
+    }
+
     // Update session state in Redis
     data.pushVerified = approved;
     await this.redis.setex(pendingKey, this.securityConfiguration.session2faTtl, JSON.stringify(data));
 
-    // [PHASE 4] Emit socket event to Web client waiting in the room
+    // Emit socket event to Web client waiting in the room
     this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
       event: approved
         ? SocketEvents.TWO_FACTOR_APPROVED
