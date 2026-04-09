@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notification } from 'antd';
 import { SocketEvents } from '@/constants/socket-events';
-import { authService } from '@/features/auth/api/auth.service';
 import { ROUTES } from '@/config/routes';
 import { useSocket } from '@/hooks/use-socket';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 export function useAuthForceLogout() {
   const navigate = useNavigate();
@@ -15,7 +15,7 @@ export function useAuthForceLogout() {
 
     const handleForceLogout = (data: { reason?: string }) => {
       // 1. Clear local auth data immediately to prevent further API calls
-      authService.clearAuthData();
+      useAuthStore.getState().reset();
 
       // 2. Stop realtime channel to avoid stale events
       socket.disconnect();

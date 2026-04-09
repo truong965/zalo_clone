@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Form, Input, Button, Card, Space, Typography, Steps, notification, Result } from 'antd';
-import { MailOutlined, KeyOutlined, LockOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '@/features/auth/api/auth.service';
 import { ROUTES } from '@/config/routes';
 import { ApiError } from '@/lib/api-error';
+import { TwoFactorView } from '@/features/auth/components/two-factor-view';
+import type { TwoFactorRequiredResponse } from '@/types/api';
 
 const { Title, Text } = Typography;
 
@@ -14,25 +16,33 @@ export function ForgotPasswordPage() {
   
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [twoFactorData, setTwoFactorData] = useState<TwoFactorRequiredResponse | null>(null);
+  const [resetToken, setResetToken] = useState('');
 
-  // Step 1: Request OTP
-  const onEmailSubmit = async (values: { email: string }) => {
+  // Step 0: Request identity verification (Initiate 2FA)
+  const onIdentifierSubmit = async (values: { identifier: string }) => {
     try {
       setIsLoading(true);
-      await authService.forgotPassword({ email: values.email });
-      setEmail(values.email);
-      setCurrentStep(1);
-      api.success({
-        message: 'Thành công',
-        description: 'Mã OTP đã được gửi đến email của bạn.',
-        placement: 'bottomRight',
-      });
+      const result = await authService.forgotPassword({ identifier: values.identifier });
+      
+      setIdentifier(values.identifier);
+      
+      if (result && 'status' in result && result.status === '2FA_REQUIRED') {
+        setTwoFactorData(result);
+        setCurrentStep(1);
+      } else {
+        // Unexpected success without 2FA (shouldn't happen with new logic)
+        api.warning({
+          message: 'Thông báo',
+          description: 'Hệ thống không yêu cầu xác thực 2 lớp cho tài khoản này.',
+          placement: 'bottomRight',
+        });
+      }
     } catch (err) {
       api.error({
         message: 'Lỗi',
-        description: ApiError.from(err).message || 'Không thể gửi yêu cầu. Vui lòng thử lại.',
+        description: ApiError.from(err).message || 'Không tìm thấy tài khoản hoặc có lỗi xảy ra.',
         placement: 'bottomRight',
       });
     } finally {
@@ -40,34 +50,30 @@ export function ForgotPasswordPage() {
     }
   };
 
-  // Step 2: Verify OTP
-  const onOtpSubmit = async (values: { otp: string }) => {
-    try {
-      setIsLoading(true);
-      await authService.verifyOtp({ email, otp: values.otp });
-      setOtp(values.otp);
+  // Step 1: Handling 2FA Success
+  const handleTwoFactorSuccess = (result: any) => {
+    if (result.status === 'RESET_TOKEN_ISSUED' && result.resetToken) {
+      setResetToken(result.resetToken);
       setCurrentStep(2);
       api.success({
-        message: 'Thành công',
-        description: 'Mã OTP chính xác. Vui lòng đặt mật khẩu mới.',
+        message: 'Xác thực thành công',
+        description: 'Vui lòng thiết lập mật khẩu mới cho tài khoản của bạn.',
         placement: 'bottomRight',
       });
-    } catch (err) {
+    } else {
       api.error({
         message: 'Lỗi',
-        description: ApiError.from(err).message || 'Mã OTP không hợp lệ.',
+        description: 'Dữ liệu xác thực không hợp lệ. Vui lòng thử lại.',
         placement: 'bottomRight',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Step 3: Reset Password
+  // Step 2: Final Reset Submit
   const onResetSubmit = async (values: { password: string }) => {
     try {
       setIsLoading(true);
-      await authService.resetPassword({ email, otp, newPassword: values.password });
+      await authService.resetPassword({ resetToken, newPassword: values.password });
       setCurrentStep(3);
       api.success({
         message: 'Thành công',
@@ -89,50 +95,39 @@ export function ForgotPasswordPage() {
     switch (currentStep) {
       case 0:
         return (
-          <Form layout="vertical" onFinish={onEmailSubmit} size="large">
+          <Form layout="vertical" onFinish={onIdentifierSubmit} size="large">
+            <Text type="secondary" className="block mb-4">
+              Nhập số điện thoại hoặc email liên kết với tài khoản để bắt đầu quá trình khôi phục.
+            </Text>
             <Form.Item
-              label="Email"
-              name="email"
+              label="Số điện thoại hoặc Email"
+              name="identifier"
               rules={[
-                { required: true, message: 'Vui lòng nhập email' },
-                { type: 'email', message: 'Email không hợp lệ' },
+                { required: true, message: 'Vui lòng nhập thông tin tài khoản' },
               ]}
             >
-              <Input prefix={<MailOutlined />} placeholder="example@gmail.com" />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" block loading={isLoading}>
-              Gửi mã xác nhận
-            </Button>
-          </Form>
-        );
-      case 1:
-        return (
-          <Form layout="vertical" onFinish={onOtpSubmit} size="large">
-            <div className="mb-4 text-center">
-              <Text type="secondary">Mã xác nhận đã được gửi đến: </Text>
-              <Text strong>{email}</Text>
-            </div>
-            <Form.Item
-              label="Mã OTP (6 chữ số)"
-              name="otp"
-              rules={[
-                { required: true, message: 'Vui lòng nhập mã OTP' },
-                { len: 6, message: 'Mã OTP phải có 6 chữ số' },
-              ]}
-            >
-              <Input prefix={<KeyOutlined />} placeholder="000000" />
+              <Input prefix={<UserOutlined />} placeholder="0xxxxxxxxx hoặc email@example.com" />
             </Form.Item>
             <Button type="primary" htmlType="submit" block loading={isLoading}>
               Tiếp tục
             </Button>
-            <Button type="link" block className="mt-2" onClick={() => setCurrentStep(0)}>
-              Thay đổi email
-            </Button>
           </Form>
         );
+      case 1:
+        return twoFactorData ? (
+          <TwoFactorView 
+            data={twoFactorData} 
+            onSuccess={handleTwoFactorSuccess}
+            onCancel={() => setCurrentStep(0)}
+          />
+        ) : null;
       case 2:
         return (
           <Form layout="vertical" onFinish={onResetSubmit} size="large">
+             <div className="mb-4 text-center">
+              <Text type="secondary">Đang khôi phục tài khoản: </Text>
+              <Text strong>{identifier}</Text>
+            </div>
             <Form.Item
               label="Mật khẩu mới"
               name="password"
@@ -187,7 +182,7 @@ export function ForgotPasswordPage() {
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4 py-12">
       {contextHolder}
-      <Card className="w-full max-w-md shadow-lg">
+      <Card className="w-full max-w-lg shadow-lg">
         <Space direction="vertical" className="w-full" size="middle">
           <div className="flex items-center mb-2">
             <Button 
@@ -205,9 +200,10 @@ export function ForgotPasswordPage() {
             size="small" 
             className="mb-6"
             items={[
-              { title: 'Email' },
-              { title: 'OTP' },
-              { title: 'Mật khẩu' },
+              { title: 'Nhập thông tin' },
+              { title: 'Xác thực' },
+              { title: 'Đặt mật khẩu' },
+              { title: 'Hoàn tất' }
             ]}
           />
 

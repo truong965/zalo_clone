@@ -2,7 +2,6 @@
 import { env } from '@/config/env';
 import { io, Socket } from 'socket.io-client';
 import { SocketEvents } from '@/constants/socket-events';
-import { STORAGE_KEYS } from '@/constants/storage-keys';
 
 interface SocketAuthCallbacks {
   getToken: () => string | null;
@@ -22,7 +21,7 @@ class SocketManager {
   private refreshedOnceForThisSocket = false;
 
   // DI callbacks — set via init() before first connect()
-  private getTokenFn: () => string | null = () => localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+  private getTokenFn: () => string | null = () => null;
   private refreshTokenFn: () => Promise<void> = async () => { };
   private onLogoutFn: () => Promise<void> = async () => { };
   private onResetFn: () => void = () => { };

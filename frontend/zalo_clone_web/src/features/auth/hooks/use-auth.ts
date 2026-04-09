@@ -28,6 +28,8 @@ export function useAuth() {
             revokeSession,
             refreshToken,
             updateProfile,
+            requestRegisterOtp: storeRequestRegisterOtp,
+            verifyRegisterOtp: storeVerifyRegisterOtp,
       } = useAuthStore();
 
       // ============================================================================
@@ -41,7 +43,13 @@ export function useAuth() {
       const login = useCallback(
             async (payload: LoginRequest) => {
                   try {
-                        await storeLogin(payload);
+                        const result = await storeLogin(payload);
+                        
+                        // If 2FA is required, return result to component
+                        if ('status' in result && result.status === '2FA_REQUIRED') {
+                              return result;
+                        }
+
                         // Navigate after successful login — admins go to dashboard
                         const loggedInUser = useAuthStore.getState().user;
                         if (loggedInUser?.role === 'ADMIN') {
@@ -49,11 +57,13 @@ export function useAuth() {
                         } else {
                               navigate(ROUTES.CHAT);
                         }
+                        return result;
                   } catch (error: any) {
                         // Error is already set in store
                         throw error;
                   }
             },
+
             [storeLogin, navigate],
       );
 
@@ -112,6 +122,14 @@ export function useAuth() {
             revokeSession,
             refreshToken,
             updateProfile,
+            requestRegisterOtp: storeRequestRegisterOtp,
+            verifyRegisterOtp: storeVerifyRegisterOtp,
+            verify2fa: useAuthStore((state) => state.verify2fa),
+            send2faSmsChallenge: useAuthStore((state) => state.send2faSmsChallenge),
+            send2faEmailChallenge: useAuthStore((state) => state.send2faEmailChallenge),
+            send2faTotpChallenge: useAuthStore((state) => state.send2faTotpChallenge),
+            send2faPushChallenge: useAuthStore((state) => state.send2faPushChallenge),
+
 
             // Utilities
             clearError,

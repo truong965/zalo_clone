@@ -2,13 +2,12 @@
 import { useEffect, useState } from 'react';
 import { socketManager, type Socket } from '@/lib/socket';
 import { authService, useAuthStore } from '@/features/auth';
-import { STORAGE_KEYS } from '@/constants/storage-keys';
 import { notification } from 'antd';
 
 // Inject auth callbacks once at module load so SocketManager never imports feature modules.
 socketManager.init({
-      getToken: () => localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN),
-      refreshToken: async () => { await authService.refresh(); },
+      getToken: () => useAuthStore.getState().accessToken,
+      refreshToken: async () => { await useAuthStore.getState().refreshToken(); },
       onLogout: () => useAuthStore.getState().logout(),
       onReset: () => useAuthStore.getState().reset(),
       onError: (message: string) => {
@@ -28,9 +27,9 @@ export function useSocket() {
       const [isConnected, setIsConnected] = useState(false);
       const [connectionNonce, setConnectionNonce] = useState(0);
       const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+      const accessToken = useAuthStore((s) => s.accessToken);
 
       useEffect(() => {
-            const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
             if (!isAuthenticated || !accessToken) {
                   socketManager.disconnect();
                   queueMicrotask(() => {
@@ -62,7 +61,7 @@ export function useSocket() {
                   socketInstance.off('connect', handleConnect);
                   socketInstance.off('disconnect', handleDisconnect);
             };
-      }, [isAuthenticated]);
+      }, [isAuthenticated, accessToken]);
 
       return { socket, isConnected, connectionNonce };
 }

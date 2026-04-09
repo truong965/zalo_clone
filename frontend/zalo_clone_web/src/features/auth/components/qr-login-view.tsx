@@ -7,6 +7,7 @@ import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
 import { ApiError } from '@/lib/api-error';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '../stores/auth.store';
 
 const { Text, Title } = Typography;
 
@@ -89,7 +90,13 @@ export const QrLoginView: React.FC<QrLoginViewProps> = ({ onLoginSuccess, onErro
       isExchangingRef.current = true;
       try {
         const deviceId = deviceTrackingIdRef.current ?? undefined;
-        await authService.exchangeQrTicket(ticket, sessionId, deviceId);
+        // 1. Exchange ticket for raw data
+        const res = await authService.exchangeQrTicket(ticket, sessionId, deviceId);
+        
+        // 2. CRITICAL: Inject auth data into store BEFORE calling onLoginSuccess
+        // This prevents race conditions where initializeAuth() is called without tokens.
+        useAuthStore.getState().setAuthData(res);
+        
         clearTimer();
         clearPolling();
         onLoginSuccess();

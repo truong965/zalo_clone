@@ -1,19 +1,28 @@
-/**
- * Cấu hình Axios với Interceptor tự động refresh token
- * Tích hợp với JWT Auth flow của backend:
- * ✅ Access token được lưu trữ trong localStorage
- * ✅ Refresh token được lưu trữ trong httpOnly cookie (quản lý bởi browser)
- * ✅ Tự động refresh token khi 401 Unauthorized
- * ✅ Token rotation: refresh endpoint trả về refresh token mới
- */
-
 import axios from 'axios';
 import type { AxiosError } from 'axios';
 import { env } from '@/config/env';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
-import { STORAGE_KEYS } from '@/constants/storage-keys';
-import { ROUTES } from '@/config/routes';
 import { ApiError } from './api-error';
+
+// ============================================================================
+// AUTH CALLBACKS (Breaking Circular Dependency)
+// ============================================================================
+
+interface AuthCallbacks {
+  getAccessToken: () => string | null;
+  setAccessToken: (token: string) => void;
+  onLogout: () => void;
+}
+
+let authCallbacks: AuthCallbacks | null = null;
+
+/**
+ * Inject auth logic from the store into the axios instance.
+ * This prevents axios.ts <-> auth.store.ts circular dependency.
+ */
+export const injectAuthCallbacks = (callbacks: AuthCallbacks) => {
+  authCallbacks = callbacks;
+};
 
 // ============================================================================
 // AXIOS INSTANCE CONFIGURATION
@@ -22,32 +31,47 @@ import { ApiError } from './api-error';
 const api = axios.create({
   baseURL: env.BACKEND_URL,
   timeout: 10000,
-  withCredentials: true, // ✅ Gửi cookies cùng request (cần cho httpOnly cookie)
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 // ============================================================================
-// REQUEST INTERCEPTOR - Thêm Access Token vào header
+// REQUEST INTERCEPTOR
 // ============================================================================
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const token = authCallbacks?.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    try {
+      config.headers['X-Device-Type'] = 'WEB';
+      let platform = 'WEB';
+      if (typeof navigator !== 'undefined' && navigator.platform) {
+        const plat = navigator.platform.toLowerCase();
+        if (plat.includes('win')) platform = 'WINDOWS';
+        else if (plat.includes('mac')) platform = 'MACOS';
+        else if (plat.includes('linux')) platform = 'LINUX';
+      }
+      config.headers['X-Platform'] = platform;
+      config.headers['X-Device-Name'] = 'Web Browser';
+    } catch (e) {
+      // Ignore SSR
+    }
+
     return config;
   },
   (error) => Promise.reject(error),
 );
 
 // ============================================================================
-// RESPONSE INTERCEPTOR - Tự động refresh token nếu hết hạn
+// RESPONSE INTERCEPTOR - Silent Refresh Logic
 // ============================================================================
 
-// Locking mechanism để tránh multiple refresh requests
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
 
@@ -63,34 +87,27 @@ const addRefreshSubscriber = (callback: (token: string) => void) => {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as Record<string, any>;
+    const originalRequest = error.config as any;
 
-    // ✅ Chỉ retry một lần (tránh infinite loop)
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // console.log(`[Axios] 401 Detected on ${originalRequest.url}. Starting refresh flow...`);
       originalRequest._retry = true;
 
-      // Skip refresh for auth endpoints (login, register)
-      // These are handled by the page logic, don't redirect/reload
-      if (
-        originalRequest.url?.includes('/auth/login') ||
-        originalRequest.url?.includes('/auth/register')
-      ) {
+      // Skip refresh for login/register
+      if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/register')) {
         return Promise.reject(ApiError.from(error));
       }
 
-      // If refresh itself fails with 401, redirect to login
+      // If refresh failed itself
       if (originalRequest.url?.includes('/auth/refresh')) {
-        redirectToLogin();
+        console.warn('[Axios] Refresh token invalid/expired. Redirecting to login.');
+        authCallbacks?.onLogout();
         return Promise.reject(ApiError.from(error));
       }
 
       try {
-        // ============================================
-        // REFRESH TOKEN LOGIC
-        // ============================================
-
-        // Nếu đang refresh, chờ kết quả rồi retry
         if (isRefreshing) {
+          // console.log('[Axios] Already refreshing... queuing request.');
           return new Promise((resolve) => {
             addRefreshSubscriber((token: string) => {
               originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -99,47 +116,23 @@ api.interceptors.response.use(
           });
         }
 
-        // Đánh dấu đang refresh
         isRefreshing = true;
+        // console.log('[Axios] Calling /auth/refresh...');
 
-        // Gọi refresh endpoint
-        // ✅ Refresh token được gửi tự động qua httpOnly cookie
-        // ⚠️ Dùng URL tuyệt đối tránh relative URL resolve về frontend origin (Vercel)
-        const response = await axios.post(
-          `${env.BACKEND_URL}${API_ENDPOINTS.AUTH.REFRESH}`,
-          {},
-          {
-            withCredentials: true, // Gửi httpOnly cookie
-          },
-        );
+        // IMPORTANT: Must use the same instance but avoid infinite loops
+        const response = await api.post(API_ENDPOINTS.AUTH.REFRESH, {});
 
-        const { accessToken, expiresIn } = response.data.data;
+        const { accessToken } = response.data.data;
+        // console.log('[Axios] Refresh successful. New access token received.');
 
-        // Cập nhật access token
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-        localStorage.setItem(STORAGE_KEYS.EXPIRES_IN, expiresIn.toString());
-
-        // ✅ Refresh token mới được set như httpOnly cookie bởi server
-        // (không cần xử lý ở client)
-
-        // Thực thi các request đang chờ
+        authCallbacks?.setAccessToken(accessToken);
         onRefreshed(accessToken);
 
-        // Retry original request với token mới
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
-      } catch (refreshError: unknown) {
-        // ============================================
-        // REFRESH FAILED - CẦN LOGIN LẠI
-        // ============================================
-
-        // Clear tokens
-        localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-        localStorage.removeItem(STORAGE_KEYS.EXPIRES_IN);
-
-        // Redirect to login
-        redirectToLogin();
-
+      } catch (refreshError) {
+        console.error('[Axios] Silent refresh failed:', refreshError);
+        authCallbacks?.onLogout();
         return Promise.reject(ApiError.from(refreshError));
       } finally {
         isRefreshing = false;
@@ -149,21 +142,5 @@ api.interceptors.response.use(
     return Promise.reject(ApiError.from(error));
   },
 );
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Redirect to login page (xóa tokens trước)
- */
-const redirectToLogin = () => {
-  // Clear auth data
-  localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.EXPIRES_IN);
-
-  // Redirect
-  window.location.href = ROUTES.LOGIN;
-};
 
 export default api;

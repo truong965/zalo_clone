@@ -62,6 +62,14 @@ export const TokenRevocationReason = {
 export type TokenRevocationReason =
       (typeof TokenRevocationReason)[keyof typeof TokenRevocationReason];
 
+export const TwoFactorMethod = {
+      TOTP: 'TOTP',
+      SMS: 'SMS',
+      EMAIL: 'EMAIL',
+} as const;
+
+export type TwoFactorMethod = (typeof TwoFactorMethod)[keyof typeof TwoFactorMethod];
+
 // ============================================================================
 // ENTITIES
 // ============================================================================
@@ -82,6 +90,11 @@ export interface User {
       passwordVersion?: number;
       lastSeenAt?: string;
       roleId?: string;
+
+      twoFactorEnabled: boolean;
+      twoFactorMethod?: TwoFactorMethod;
+      twoFactorSecret?: string;
+      twoFactorSetupAt?: string;
 
       role?: string;
       permissions?: Permission[];
@@ -183,18 +196,20 @@ export interface AuthResponse {
       user: User;
 }
 
-export interface ForgotPasswordRequest {
-      email: string;
+export interface AuthResponseData {
+  accessToken: string;
+  expiresIn: number;
+  tokenType: string;
+  user: User;
 }
 
-export interface VerifyOtpRequest {
-      email: string;
-      otp: string;
+
+export interface ForgotPasswordRequest {
+      identifier: string;
 }
 
 export interface ResetPasswordRequest {
-      email: string;
-      otp: string;
+      resetToken: string;
       newPassword: string;
 }
 
@@ -203,3 +218,36 @@ export interface ChangePasswordRequest {
       newPassword: string;
       logoutAllDevices?: boolean;
 }
+
+
+export interface RequestRegisterOtpRequest {
+      phoneNumber: string;
+}
+
+export interface VerifyRegisterOtpRequest {
+      phoneNumber: string;
+      otp: string;
+}
+
+// ============================================================================
+// 2FA Types
+// ============================================================================
+
+export interface TwoFactorRequiredResponse {
+  status: '2FA_REQUIRED';
+  pendingToken: string;
+  availableMethods: ('TOTP' | 'SMS' | 'EMAIL' | 'PUSH')[];
+  preferredMethod?: 'TOTP' | 'SMS' | 'EMAIL' | 'PUSH';
+  maskedPhone?: string;
+  maskedEmail?: string;
+  isReactivation?: boolean;
+  isForgotPassword?: boolean;
+  autoTriggered?: boolean;
+}
+
+export interface VerifyTwoFactorRequest {
+  pendingToken: string;
+  code?: string; // OTP code (for totp, sms, email)
+  method: 'TOTP' | 'SMS' | 'EMAIL' | 'PUSH';
+}
+
