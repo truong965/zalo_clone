@@ -20,7 +20,6 @@ export default function AccountScreen() {
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [gender, setGender] = useState<Gender>(user?.gender || 'MALE');
   const [dateOfBirth, setDateOfBirth] = useState<Date>(user?.dateOfBirth ? new Date(user.dateOfBirth) : new Date());
-  const [email, setEmail] = useState(user?.email || '');
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,18 +30,7 @@ export default function AccountScreen() {
   const [pickedImage, setPickedImage] = useState<PickedAvatar | null>(null);
   const theme = useTheme();
   // Validation
-  const isEmailValid = useMemo(() => {
-    if (!email) return true; // Optional
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }, [email]);
-
-  const isGmail = useMemo(() => {
-    if (!email) return true;
-    return email.toLowerCase().endsWith('@gmail.com');
-  }, [email]);
-
-  const canSave = displayName.trim().length > 0 && isEmailValid && isGmail;
+  const canSave = displayName.trim().length > 0;
 
   const handlePickImage = async (source: 'camera' | 'library') => {
     const picked = await pickImage(source);
@@ -90,7 +78,6 @@ export default function AccountScreen() {
                 displayName,
                 gender,
                 dateOfBirth: dateOfBirth.toISOString(),
-                email: email || undefined
               });
               Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã cập nhật thông tin' });
               router.back();
@@ -191,28 +178,6 @@ export default function AccountScreen() {
           />
         )}
 
-        <TextInput
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          mode="outlined"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          className="mb-1"
-          outlineColor="#e0e0e0"
-          activeOutlineColor="#1E88E5"
-          error={!isEmailValid || !isGmail}
-        />
-        {!isEmailValid && (
-          <HelperText type="error" visible={!isEmailValid}>
-            Email không hợp lệ
-          </HelperText>
-        )}
-        {!isGmail && isEmailValid && email !== '' && (
-          <HelperText type="error" visible={!isGmail}>
-            Chỉ chấp nhận địa chỉ @gmail.com
-          </HelperText>
-        )}
 
         <Button
           mode="contained"

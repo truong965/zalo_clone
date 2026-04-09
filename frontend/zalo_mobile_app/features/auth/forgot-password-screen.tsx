@@ -1,32 +1,46 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, ActivityIndicator } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, ActivityIndicator, ScrollView } from 'react-native';
 import { mobileApi } from '@/services/api';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { TwoFactorView } from './components/two-factor-view';
+import { useAuth } from '@/providers/auth-provider';
+import type { TwoFactorRequiredResponse } from '@/types/auth';
 
 export function ForgotPasswordScreen() {
       const router = useRouter();
       const { t } = useTranslation();
+      const { setTwoFactorData, clear2fa } = useAuth() as any; // Access internal setters if needed, or just manage local state
 
       const [currentStep, setCurrentStep] = useState(0);
       const [isLoading, setIsLoading] = useState(false);
-      const [email, setEmail] = useState('');
-      const [otp, setOtp] = useState('');
+      const [identifier, setIdentifier] = useState('');
+      const [localTwoFactorData, setLocalTwoFactorData] = useState<TwoFactorRequiredResponse | null>(null);
+      const [resetToken, setResetToken] = useState('');
       const [newPassword, setNewPassword] = useState('');
       const [confirmPassword, setConfirmPassword] = useState('');
 
-      const handleEmailSubmit = async () => {
-            if (!email || !email.includes('@')) {
-                  Alert.alert(t('common.error'), t('auth.validation.invalidEmail'));
+      const handleIdentifierSubmit = async () => {
+            if (!identifier) {
+                  Alert.alert(t('common.error'), t('auth.validation.required'));
                   return;
             }
 
             setIsLoading(true);
             try {
-                  await mobileApi.forgotPassword({ email });
-                  setCurrentStep(1);
-                  Alert.alert(t('common.success'), t('auth.otpSent'));
+                  const result = await mobileApi.forgotPassword({ identifier });
+                  
+                  if (result && 'status' in result && result.status === '2FA_REQUIRED') {
+                        setLocalTwoFactorData(result);
+                        // We also need to set it in AuthProvider because TwoFactorView reads from there
+                        if (setTwoFactorData) {
+                              setTwoFactorData(result);
+                        }
+                        setCurrentStep(1);
+                  } else {
+                        Alert.alert(t('common.error'), 'Hệ thống không yêu cầu xác thực cho tài khoản này.');
+                  }
             } catch (error: any) {
                   Alert.alert(t('common.error'), error.message || t('common.error'));
             } finally {
@@ -34,21 +48,13 @@ export function ForgotPasswordScreen() {
             }
       };
 
-      const handleOtpSubmit = async () => {
-            if (otp.length !== 6) {
-                  Alert.alert(t('common.error'), t('auth.validation.invalidOtp'));
-                  return;
-            }
-
-            setIsLoading(true);
-            try {
-                  await mobileApi.verifyOtp({ email, otp });
+      const handleTwoFactorSuccess = (result: any) => {
+            if (result.status === 'RESET_TOKEN_ISSUED' && result.resetToken) {
+                  setResetToken(result.resetToken);
                   setCurrentStep(2);
-                  Alert.alert(t('common.success'), t('auth.otpCorrect'));
-            } catch (error: any) {
-                  Alert.alert(t('common.error'), error.message || t('common.error'));
-            } finally {
-                  setIsLoading(false);
+                  clear2fa(); // Cleanup global 2FA state
+            } else {
+                  Alert.alert(t('common.error'), 'Xác thực không hợp lệ');
             }
       };
 
@@ -64,9 +70,9 @@ export function ForgotPasswordScreen() {
 
             setIsLoading(true);
             try {
-                  await mobileApi.resetPassword({ email, otp, newPassword });
+                  await mobileApi.resetPassword({ resetToken, newPassword });
                   Alert.alert(t('common.success'), t('auth.resetSuccess'));
-                  router.replace('/login');
+                  setCurrentStep(3);
             } catch (error: any) {
                   Alert.alert(t('common.error'), error.message || t('common.error'));
             } finally {
@@ -80,54 +86,32 @@ export function ForgotPasswordScreen() {
                         return (
                               <View className="gap-4">
                                     <View className="items-center mb-2">
-                                          <MaterialCommunityIcons name="email-outline" size={64} color="hsl(217.2 91.2% 59.8%)" />
+                                          <MaterialCommunityIcons name="account-search-outline" size={64} color="hsl(217.2 91.2% 59.8%)" />
                                           <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.forgotPasswordTitle')}</Text>
-                                          <Text className="text-center text-muted mt-1 px-4">{t('auth.forgotPasswordSubtitle')}</Text>
+                                          <Text className="text-center text-muted mt-1 px-4">Nhập số điện thoại hoặc email để khôi phục mật khẩu</Text>
                                     </View>
                                     <TextInput
-                                          value={email}
-                                          onChangeText={setEmail}
-                                          placeholder={t('auth.email')}
-                                          keyboardType="email-address"
+                                          value={identifier}
+                                          onChangeText={setIdentifier}
+                                          placeholder="Số điện thoại hoặc Email"
                                           autoCapitalize="none"
                                           className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
                                     />
                                     <Pressable
-                                          onPress={handleEmailSubmit}
+                                          onPress={handleIdentifierSubmit}
                                           className="items-center rounded-xl bg-primary py-3 active:opacity-80"
                                           disabled={isLoading}>
-                                          {isLoading ? <ActivityIndicator color="#ffffff" /> : <Text className="text-base font-bold text-primary-foreground">{t('auth.sendOtp')}</Text>}
+                                          {isLoading ? <ActivityIndicator color="#ffffff" /> : <Text className="text-base font-bold text-primary-foreground">{t('common.continue')}</Text>}
                                     </Pressable>
                               </View>
                         );
                   case 1:
                         return (
-                              <View className="gap-4">
-                                    <View className="items-center mb-2">
-                                          <MaterialCommunityIcons name="numeric-6-box-outline" size={64} color="hsl(217.2 91.2% 59.8%)" />
-                                          <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.otpCode')}</Text>
-                                          <Text className="text-center text-muted mt-1">
-                                                {t('auth.otpSent')} {"\n"}
-                                                <Text className="font-bold text-foreground">{email}</Text>
-                                          </Text>
-                                    </View>
-                                    <TextInput
-                                          value={otp}
-                                          onChangeText={setOtp}
-                                          placeholder="000000"
-                                          keyboardType="number-pad"
-                                          maxLength={6}
-                                          className="rounded-xl border border-border bg-background px-4 py-3 text-center text-2xl font-bold tracking-[10px] text-foreground"
+                              <View className="min-h-[400px]">
+                                    <TwoFactorView 
+                                          onSuccess={handleTwoFactorSuccess}
+                                          onCancel={() => setCurrentStep(0)}
                                     />
-                                    <Pressable
-                                          onPress={handleOtpSubmit}
-                                          className="items-center rounded-xl bg-primary py-3 active:opacity-80"
-                                          disabled={isLoading}>
-                                          {isLoading ? <ActivityIndicator color="#ffffff" /> : <Text className="text-base font-bold text-primary-foreground">{t('auth.verifyOtp')}</Text>}
-                                    </Pressable>
-                                    <Pressable onPress={() => setCurrentStep(0)} className="items-center">
-                                          <Text className="text-primary font-semibold">Thay đổi email</Text>
-                                    </Pressable>
                               </View>
                         );
                   case 2:
@@ -136,7 +120,7 @@ export function ForgotPasswordScreen() {
                                     <View className="items-center mb-2">
                                           <MaterialCommunityIcons name="lock-reset" size={64} color="hsl(217.2 91.2% 59.8%)" />
                                           <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.newPassword')}</Text>
-                                          <Text className="text-center text-muted mt-1">{t('auth.otpCorrect')}</Text>
+                                          <Text className="text-center text-muted mt-1">Xác thực thành công. Vui lòng đặt mật khẩu mới.</Text>
                                     </View>
                                     <TextInput
                                           value={newPassword}
@@ -160,6 +144,21 @@ export function ForgotPasswordScreen() {
                                     </Pressable>
                               </View>
                         );
+                  case 3:
+                        return (
+                              <View className="items-center gap-6 py-6">
+                                    <MaterialCommunityIcons name="check-circle-outline" size={80} color="#10b981" />
+                                    <View className="items-center gap-2">
+                                          <Text className="text-2xl font-bold text-foreground">Thành công!</Text>
+                                          <Text className="text-center text-muted px-6">Mật khẩu của bạn đã được thay đổi. Bạn có thể đăng nhập ngay bây giờ.</Text>
+                                    </View>
+                                    <Pressable
+                                          onPress={() => router.replace('/login')}
+                                          className="w-full items-center rounded-xl bg-primary py-4 active:opacity-80">
+                                          <Text className="text-lg font-bold text-primary-foreground">Quay lại đăng nhập</Text>
+                                    </Pressable>
+                              </View>
+                        )
                   default:
                         return null;
             }
@@ -168,25 +167,27 @@ export function ForgotPasswordScreen() {
       return (
             <KeyboardAvoidingView
                   behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                  className="flex-1 justify-center bg-background p-6">
-                  <View className="rounded-3xl bg-secondary p-6 shadow-sm border border-border">
-                        <Pressable 
-                            onPress={() => currentStep > 0 ? setCurrentStep(currentStep - 1) : router.back()}
-                            className="absolute left-4 top-4 z-10 p-2"
-                        >
-                            <MaterialCommunityIcons name="arrow-left" size={24} color="hsl(240 3.8% 46.1%)" />
-                        </Pressable>
-                        
-                        <View className="mt-8">
-                            {renderStep()}
-                        </View>
-
-                        {currentStep === 0 && (
-                              <Pressable onPress={() => router.back()} className="mt-6 items-center">
-                                    <Text className="text-muted">{t('auth.backToLogin')}</Text>
+                  className="flex-1 bg-background">
+                  <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
+                        <View className="rounded-3xl bg-secondary p-6 shadow-sm border border-border">
+                              <Pressable 
+                                  onPress={() => currentStep > 0 && currentStep < 3 ? setCurrentStep(currentStep - 1) : router.back()}
+                                  className="absolute left-4 top-4 z-10 p-2"
+                              >
+                                  <MaterialCommunityIcons name="arrow-left" size={24} color="hsl(240 3.8% 46.1%)" />
                               </Pressable>
-                        )}
-                  </View>
+                              
+                              <View className={currentStep === 1 ? "" : "mt-8"}>
+                                  {renderStep()}
+                              </View>
+
+                              {currentStep === 0 && (
+                                    <Pressable onPress={() => router.back()} className="mt-6 items-center">
+                                          <Text className="text-muted">{t('auth.backToLogin')}</Text>
+                                    </Pressable>
+                              )}
+                        </View>
+                  </ScrollView>
             </KeyboardAvoidingView>
       );
 }

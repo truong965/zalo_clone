@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Redirect, useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Image, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -150,6 +150,9 @@ export function QrScannerScreen() {
       const [groupPreview, setGroupPreview] = useState<JoinGroupPreviewResponse | null>(null);
       const [qrSessionId, setQrSessionId] = useState<string | null>(null);
       const [hasScanned, setHasScanned] = useState(false);
+      
+      // Synchronous lock to prevent double scan race condition and double ticket issues
+      const processingLockRef = useRef(false);
 
       // When group QR is scanned, unmount camera to stop preview and focus on confirmation UI.
       const shouldHideCamera = hasScanned && qrSessionId === null;
@@ -190,13 +193,15 @@ export function QrScannerScreen() {
       }
 
       const onScanned = async (data: string) => {
-            if (!canScan) {
+            if (!canScan || processingLockRef.current) {
                   return;
             }
+            processingLockRef.current = true;
 
             const payload = parseQrPayload(data);
             if (!payload) {
                   Alert.alert(t('qr.invalidQrTitle'), t('qr.unsupportedQrMessage'));
+                  processingLockRef.current = false;
                   return;
             }
 
@@ -235,6 +240,7 @@ export function QrScannerScreen() {
                               Alert.alert(t('qr.scanErrorTitle'), message);
                               setHasScanned(false);
                               setQrSessionId(null);
+                              processingLockRef.current = false;
                         }
                   } finally {
                         setIsProcessing(false);
@@ -252,10 +258,15 @@ export function QrScannerScreen() {
                   setIsProcessing(false);
 
                   if (!result.requireConfirm) {
-                        router.back();
+                        if (router.canGoBack()) {
+                              router.back();
+                        } else {
+                              router.replace('/');
+                        }
                         return;
                   }
             } catch (error) {
+                  processingLockRef.current = false;
                   if (error instanceof ApiRequestError && error.status === 400) {
                         let statusText = '';
 
@@ -324,7 +335,11 @@ export function QrScannerScreen() {
             setIsProcessing(true);
             try {
                   await mobileApi.confirmQr(qrSessionId, accessToken);
-                  router.back();
+                  if (router.canGoBack()) {
+                        router.back();
+                  } else {
+                        router.replace('/');
+                  }
                   return;
             } catch (error) {
                   const message = error instanceof Error ? error.message : t('qr.confirmFailed');
@@ -344,6 +359,7 @@ export function QrScannerScreen() {
             }
             setHasScanned(false);
             setIsProcessing(false);
+            processingLockRef.current = false;
             setScanResult(null);
             setGroupPreview(null);
             setQrSessionId(null);

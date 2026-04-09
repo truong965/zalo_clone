@@ -123,4 +123,14 @@ export const SocketEvents = {
   AI_RESPONSE_DELTA: 'ai.response.delta',
   AI_RESPONSE_COMPLETED: 'ai.response.completed',
   AI_RESPONSE_ERROR: 'ai.response.error',
+
+  // 2FA
+  TWO_FACTOR_SUBSCRIBE: '2fa:subscribe',
+  TWO_FACTOR_APPROVED: '2fa:approved',
+  TWO_FACTOR_REJECTED: '2fa:rejected',
+  LOGIN_APPROVAL_REQUEST: 'auth.login_approval_request',
+
+  // Contacts
+  CONTACT_ALIAS_UPDATED: 'contact:aliasUpdated',
+  CONTACTS_SYNCED: 'contact:synced',
 } as const;

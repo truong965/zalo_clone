@@ -160,6 +160,8 @@ export function useSendFriendRequest(
                         queryKey: friendshipKeys.all,
                         exact: false,
                   });
+                  // P1-D: Cross-invalidate contacts (user moved to PENDING, should be excluded from contacts list)
+                  queryClient.invalidateQueries({ queryKey: ['contacts'] });
                   options?.onSuccess?.(...args);
             },
             ...options,

@@ -4,7 +4,9 @@
             "success": "Success",
             "error": "Error",
             "unknown": "Unknown",
-            "loading": "Processing..."
+            "loading": "Processing...",
+            "back": "Back",
+            "verify": "Verify"
       },
       "auth": {
             "loginTitle": "Sign in to Zalo Clone",
@@ -53,8 +55,25 @@
             "resetPassword": "Update Password",
             "resetSuccess": "Your password has been updated.",
             "backToLogin": "Back to login",
-            "otpSent": "OTP has been sent to your email.",
-            "otpCorrect": "OTP verified. Please set a new password."
+            "otpSent": "OTP code has been sent to your email.",
+            "otpCorrect": "OTP code correct. Please set a new password.",
+            "twoFactorTitle": "Two-Factor Authentication",
+            "twoFactorSubtitle": "Your account is protected. Please verify to continue.",
+            "enterTotp": "Enter code from authenticator app (Google Authenticator)",
+            "enterSmsOtp": "Enter OTP code sent to your phone",
+            "enterEmailOtp": "Enter OTP code sent to your email",
+            "waitingForPush": "Waiting for approval...",
+            "pushSentInstructions": "A login approval request has been sent to your trusted devices. Please open Zalo on those devices to confirm.",
+            "resendPush": "Resend approval request",
+            "resendCode": "Resend code",
+            "codeRequired": "Verification code is required",
+            "verifyFailed": "Verification failed. Please check the code.",
+            "pushRejected": "Login request was rejected.",
+            "denied": "Denied",
+            "socketOnline": "Connected to auth server",
+            "socketConnecting": "Connecting to server...",
+            "otpSentToPhone": "OTP sent to phone {{phone}}",
+            "otpSentToEmail": "OTP sent to email {{email}}"
       },
       "tabs": {
             "chats": "Chats",
