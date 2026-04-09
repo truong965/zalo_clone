@@ -34,6 +34,8 @@ interface ChatContentProps {
       onPinMessage?: (messageId: string) => void;
       /** Called when user clicks "Bỏ ghim" */
       onUnpinMessage?: (messageId: string) => void;
+      /** Called when user clicks "Thu hồi" */
+      onRecallMessage?: (msg: ChatMessage) => void;
 
 }
 
@@ -60,6 +62,7 @@ export function ChatContent({
       pinnedMessageIds,
       onPinMessage,
       onUnpinMessage,
+      onRecallMessage,
 }: ChatContentProps) {
       // Unified bottom indicator:
       // 1. isJumpedAway → "Quay về tin nhắn mới nhất" button
@@ -92,6 +95,7 @@ export function ChatContent({
                         pinnedMessageIds={pinnedMessageIds}
                         onPinMessage={onPinMessage}
                         onUnpinMessage={onUnpinMessage}
+                        onRecallMessage={onRecallMessage}
                   />
                   {showReturnToLatest && (
                         <div className="sticky bottom-4 ml-auto mr-4 w-fit z-10">

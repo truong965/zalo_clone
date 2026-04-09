@@ -27,6 +27,7 @@ export interface MessageItemProps {
   onRetry?: (message: Message) => void;
   onPin?: (message: Message) => void;
   onUnpin?: (message: Message) => void;
+  onRecall?: (message: Message) => void;
   isHighlighted?: boolean;
 }
 
@@ -45,6 +46,7 @@ export function MessageItem({
   onRetry,
   onPin,
   onUnpin,
+  onRecall,
   isHighlighted,
 }: MessageItemProps) {
   const theme = useTheme();
@@ -75,6 +77,11 @@ export function MessageItem({
   const enPending = isTranslationPending(msgId, 'en');
   const viHidden = isTranslationHidden(msgId, 'vi');
   const enHidden = isTranslationHidden(msgId, 'en');
+  const isRecalled = Boolean(
+    message.metadata &&
+      typeof message.metadata === 'object' &&
+      (message.metadata as Record<string, unknown>).recalled === true,
+  );
 
   const menuOptions: (MenuOption | { divider: boolean })[] = [
     {
@@ -97,6 +104,15 @@ export function MessageItem({
       icon: 'arrow-undo',
       color: '#007AFF',
       onPress: () => onLongPress?.(message),
+    },
+    {
+      id: 'recall',
+      label: isRecalled ? 'Đã thu hồi' : 'Thu hồi',
+      icon: 'trash-outline',
+      color: '#ef4444',
+      onPress: () => onRecall?.(message),
+      disabled: !isMe || isRecalled,
+      hidden: !onRecall,
     },
     {
       divider: true,

@@ -41,6 +41,13 @@ export type ConversationReadPayload = {
       timestamp: string;
 };
 
+export type MessageRecalledPayload = {
+      messageId: string;
+      conversationId: string;
+      recalledBy: string;
+      recalledAt: string;
+};
+
 export type SocketErrorPayload = {
       event?: string;
       clientMessageId?: string;
@@ -48,6 +55,15 @@ export type SocketErrorPayload = {
       message?: string | object;
       code?: string;
 };
+
+const RECALLED_PLACEHOLDER = 'Tin nhắn đã được thu hồi';
+
+function getMetadataRecord(metadata: unknown): Record<string, unknown> {
+      if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+            return {};
+      }
+      return metadata as Record<string, unknown>;
+}
 
 // ============================================================================
 // CACHE HELPERS
@@ -296,6 +312,79 @@ export function applyConversationReadToCache(
                               ...m,
                               seenCount: nextSeen,
                         };
+                  });
+
+                  if (!pageChanged) return p;
+                  anyChange = true;
+                  return { ...p, data };
+            });
+
+            if (!anyChange) return prev;
+            return { ...prev, pages };
+      });
+}
+
+/**
+ * Mark a message as recalled while keeping it in cache so it persists after reload.
+ */
+export function applyMessageRecalledToCache(
+      queryClient: QueryClient,
+      queryKey: QueryKey,
+      payload: MessageRecalledPayload,
+) {
+      queryClient.setQueryData<MessagesInfiniteData>(queryKey, (prev) => {
+            if (!prev) return prev;
+
+            let anyChange = false;
+
+            const pages = prev.pages.map((p) => {
+                  let pageChanged = false;
+
+                  const data = p.data.map((m) => {
+                        let nextMessage = m;
+
+                        if (m.id === payload.messageId) {
+                              const metadata = getMetadataRecord(m.metadata);
+                              const alreadyRecalled = metadata.recalled === true;
+
+                              if (!alreadyRecalled || m.content !== RECALLED_PLACEHOLDER || (m.mediaAttachments?.length ?? 0) > 0) {
+                                    pageChanged = true;
+                                    nextMessage = {
+                                          ...m,
+                                          content: RECALLED_PLACEHOLDER,
+                                          updatedAt: payload.recalledAt,
+                                          mediaAttachments: [],
+                                          metadata: {
+                                                ...metadata,
+                                                recalled: true,
+                                                recalledAt: payload.recalledAt,
+                                                recalledBy: payload.recalledBy,
+                                          },
+                                    };
+                              }
+                        }
+
+                        if (nextMessage.parentMessage?.id === payload.messageId) {
+                              const parentMeta = getMetadataRecord(nextMessage.parentMessage.metadata);
+                              pageChanged = true;
+                              nextMessage = {
+                                    ...nextMessage,
+                                    parentMessage: {
+                                          ...nextMessage.parentMessage,
+                                          content: RECALLED_PLACEHOLDER,
+                                          deletedAt: payload.recalledAt,
+                                          mediaAttachments: [],
+                                          metadata: {
+                                                ...parentMeta,
+                                                recalled: true,
+                                                recalledAt: payload.recalledAt,
+                                                recalledBy: payload.recalledBy,
+                                          },
+                                    },
+                              };
+                        }
+
+                        return nextMessage;
                   });
 
                   if (!pageChanged) return p;

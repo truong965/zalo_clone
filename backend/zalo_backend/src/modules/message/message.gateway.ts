@@ -191,6 +191,24 @@ export class MessageGateway extends BaseGateway implements OnGatewayInit {
     return { messageId: message.id.toString() };
   }
 
+  @SubscribeMessage(SocketEvents.MESSAGE_RECALL)
+  async handleRecallMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() dto: { conversationId: string; messageId: string },
+  ) {
+    const userId = client.userId;
+
+    if (!userId) {
+      throw new Error('Unauthenticated');
+    }
+
+    return this.realtime.recallMessageAndBroadcast(
+      dto,
+      userId,
+      (uid, event, data) => this.emitToUser(uid, event, data),
+    );
+  }
+
   @SubscribeMessage(SocketEvents.MESSAGE_DELIVERED_ACK)
   async handleMessageDelivered(
     @ConnectedSocket() client: AuthenticatedSocket,

@@ -13,11 +13,13 @@ import {
       applySentAckToCache,
       applyReceiptUpdateToCache,
       applyConversationReadToCache,
+      applyMessageRecalledToCache,
 } from '../utils/message-cache-helpers';
 import type {
       MessageSentAckPayload,
       ReceiptUpdatePayload,
       ConversationReadPayload,
+      MessageRecalledPayload,
       SocketErrorPayload,
 } from '../utils/message-cache-helpers';
 
@@ -190,6 +192,18 @@ export function useMessageSocket(params: {
                   }
             };
 
+            const onMessageRecalled = (payload: MessageRecalledPayload) => {
+                  try {
+                        const factory = buildMessagesQueryKeyRef.current;
+                        const targetKey = factory && payload.conversationId
+                              ? factory(payload.conversationId)
+                              : messagesQueryKeyRef.current;
+                        applyMessageRecalledToCache(queryClient, targetKey, payload);
+                  } catch {
+                        // ignore handler errors
+                  }
+            };
+
             const onSocketError = (payload: SocketErrorPayload) => {
                   try {
                         if (payload.event !== SocketEvents.MESSAGE_SEND) return;
@@ -236,6 +250,7 @@ export function useMessageSocket(params: {
             socket.on(SocketEvents.MESSAGE_SENT_ACK, onSentAck);
             socket.on(SocketEvents.MESSAGE_RECEIPT_UPDATE, onReceiptUpdate);
             socket.on(SocketEvents.CONVERSATION_READ, onConversationRead);
+            socket.on(SocketEvents.MESSAGE_RECALLED, onMessageRecalled);
             socket.on(SocketEvents.ERROR, onSocketError);
             socket.on(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
             socket.on(SocketEvents.AI_TRANSLATE, onAiTranslate);
@@ -246,6 +261,7 @@ export function useMessageSocket(params: {
                   socket.off(SocketEvents.MESSAGE_SENT_ACK, onSentAck);
                   socket.off(SocketEvents.MESSAGE_RECEIPT_UPDATE, onReceiptUpdate);
                   socket.off(SocketEvents.CONVERSATION_READ, onConversationRead);
+                  socket.off(SocketEvents.MESSAGE_RECALLED, onMessageRecalled);
                   socket.off(SocketEvents.ERROR, onSocketError);
                   socket.off(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
                   socket.off(SocketEvents.AI_TRANSLATE, onAiTranslate);
@@ -264,6 +280,14 @@ export function useMessageSocket(params: {
             },
             emitSendMessage: <T extends Record<string, unknown>>(dto: T) => {
                   return socketManager.emitWithAck<{ messageId: string }>(SocketEvents.MESSAGE_SEND, dto);
+            },
+            emitRecallMessage: (dto: { conversationId: string; messageId: string }) => {
+                  return socketManager.emitWithAck<{
+                        messageId: string;
+                        conversationId: string;
+                        recalledBy: string;
+                        recalledAt: string;
+                  }>(SocketEvents.MESSAGE_RECALL, dto);
             },
             emitTypingStart: (dto: { conversationId: string }) => {
                   if (!socket) return;

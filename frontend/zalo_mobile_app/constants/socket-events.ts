@@ -21,6 +21,8 @@ export const SocketEvents = {
   MESSAGE_SENT: 'message:sent',
   MESSAGE_RECEIPT: 'message:receipt',
   MESSAGE_SEND: 'message:send',
+  MESSAGE_RECALL: 'message:recall',
+  MESSAGE_RECALLED: 'message:recalled',
   MESSAGE_SENT_ACK: 'message:sent', // The backend uses 'message:sent' for ack
   MESSAGE_DELIVERED_ACK: 'message:delivered',
   MESSAGE_DELIVERED_CLIENT_ACK: 'message:delivered:ack',

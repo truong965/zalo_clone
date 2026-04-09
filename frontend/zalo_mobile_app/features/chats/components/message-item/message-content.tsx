@@ -41,6 +41,11 @@ export function MessageContent({
   } = useTranslationStore();
   
   const msgId = String(message.id);
+  const recalled = Boolean(
+    message.metadata &&
+    typeof message.metadata === 'object' &&
+    (message.metadata as Record<string, unknown>).recalled === true,
+  );
   const attachments = message.mediaAttachments || [];
 
   const isPendingNonText = attachments.length === 0 && !message.parentMessage && !message.replyTo && message.type !== MessageType.TEXT;
@@ -49,6 +54,16 @@ export function MessageContent({
   const videos    = attachments.filter(a => a.mediaType === 'VIDEO');
   const audios    = attachments.filter(a => a.mediaType === 'AUDIO');
   const documents = attachments.filter(a => a.mediaType === 'DOCUMENT');
+
+  if (recalled) {
+    return (
+      <View style={{ flexDirection: 'column', gap: 4 }}>
+        <Text style={[styles.messageText, { fontStyle: 'italic', color: '#9ca3af' }]}>
+          Tin nhắn đã được thu hồi
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flexDirection: 'column', gap: 4 }}>

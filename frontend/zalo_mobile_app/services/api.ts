@@ -556,6 +556,16 @@ export const mobileApi = {
             );
       },
 
+      recallMessage(messageId: string, accessToken: string) {
+            return apiRequest<void>(
+                  `/api/v1/messages/${messageId}?deleteForEveryone=true`,
+                  {
+                        method: 'DELETE',
+                  },
+                  accessToken,
+            );
+      },
+
       updateConversation(id: string, accessToken: string, data: { name?: string; avatarUrl?: string; requireApproval?: boolean }) {
             return apiRequest<Conversation>(
                   `/api/v1/conversations/${id}`,

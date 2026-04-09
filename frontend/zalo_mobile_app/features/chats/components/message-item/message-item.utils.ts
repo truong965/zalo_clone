@@ -87,10 +87,14 @@ export function getMessagePreviewText(
   msg: { 
     content?: string | null; 
     deletedAt?: string | null; 
+    metadata?: Record<string, unknown> | null;
     type?: string;
     mediaAttachments?: Array<{ mediaType: string; originalName: string }> | null 
   }
 ): string {
+  if (msg.metadata && msg.metadata.recalled === true) {
+    return 'Tin nhắn đã được thu hồi';
+  }
   if (msg.deletedAt) return 'Tin nhắn đã bị xóa';
   if (msg.content) return msg.content;
   
@@ -117,6 +121,7 @@ export function getReplyPreviewText(
   msg: { 
     content?: string | null; 
     deletedAt?: string | null; 
+    metadata?: Record<string, unknown> | null;
     type?: string;
     mediaAttachments?: Array<{ mediaType: string; originalName: string }> | null 
   }

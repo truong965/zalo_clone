@@ -39,6 +39,7 @@ export const SocketEvents = {
 
       //Client → Server
       MESSAGE_SEND: 'message:send',
+      MESSAGE_RECALL: 'message:recall',
       MESSAGE_DELIVERED_ACK: 'message:delivered',
       MESSAGE_DELIVERED_CLIENT_ACK: 'message:delivered:ack',
       MESSAGE_SEEN: 'message:seen',
@@ -47,6 +48,7 @@ export const SocketEvents = {
 
       // Server → Client
       MESSAGE_NEW: 'message:new', // New incoming message
+      MESSAGE_RECALLED: 'message:recalled',
       MESSAGE_SENT_ACK: 'message:sent', // Server confirms send
       MESSAGE_RECEIPT_UPDATE: 'message:receipt', // Delivery/seen status change
       CONVERSATION_READ: 'conversation:read', // Group member read conversation

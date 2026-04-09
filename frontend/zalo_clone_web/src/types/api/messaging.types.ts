@@ -65,6 +65,7 @@ export interface MessageParentMessage {
       content?: string | null;
       senderId?: string | null;
       type?: MessageType;
+      metadata?: Record<string, unknown> | null;
       deletedAt?: string | null;
       sender?: MessageSender | null;
       mediaAttachments?: Pick<MessageMediaAttachmentItem, 'id' | 'mediaType' | 'originalName' | 'thumbnailUrl'>[];

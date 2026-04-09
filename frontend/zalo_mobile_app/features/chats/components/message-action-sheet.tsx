@@ -7,25 +7,35 @@ import { Ionicons } from '@expo/vector-icons';
 interface MessageActionSheetProps {
   visible: boolean;
   message: Message | null;
+  isMe: boolean;
   isPinned: boolean;
   onDismiss: () => void;
   onReply: (message: Message) => void;
   onPin: (message: Message) => void;
   onUnpin: (message: Message) => void;
+  onRecall: (message: Message) => void;
 }
 
 export function MessageActionSheet({
   visible,
   message,
+  isMe,
   isPinned,
   onDismiss,
   onReply,
   onPin,
   onUnpin,
+  onRecall,
 }: MessageActionSheetProps) {
   const theme = useTheme();
 
   if (!message) return null;
+
+  const isRecalled = Boolean(
+    message.metadata &&
+      typeof message.metadata === 'object' &&
+      (message.metadata as Record<string, unknown>).recalled === true,
+  );
 
   return (
     <Portal>
@@ -67,8 +77,11 @@ export function MessageActionSheet({
             title="Thu hồi"
             left={(props) => <List.Icon {...props} icon="delete-outline" color={theme.colors.error} />}
             titleStyle={{ color: theme.colors.error }}
-            onPress={onDismiss}
-            disabled
+            onPress={() => {
+              onRecall(message);
+              onDismiss();
+            }}
+            disabled={!isMe || isRecalled}
           />
         </View>
       </Modal>

@@ -42,6 +42,7 @@ const PARENT_MESSAGE_PREVIEW_SELECT = {
   content: true,
   senderId: true,
   type: true,
+  metadata: true,
   deletedAt: true,
 } as const;
 
@@ -72,6 +73,13 @@ type RecentMediaMessageRow = {
   id: bigint;
   type: MessageType;
   createdAt: Date;
+};
+
+type MessageRecallMetadata = {
+  recalled?: boolean;
+  recalledAt?: string;
+  recalledBy?: string;
+  [key: string]: unknown;
 };
 
 @Injectable()
@@ -889,12 +897,32 @@ export class MessageService {
     userId: string,
     deleteForEveryone: boolean = false,
   ): Promise<void> {
+    if (deleteForEveryone) {
+      await this.recallMessage(messageId, userId);
+    } else {
+      this.logger.warn('Delete for me not implemented yet');
+      throw new BadRequestException('Delete for me not yet supported');
+    }
+  }
+
+  private extractMetadata(
+    metadata: Prisma.JsonValue | null,
+  ): MessageRecallMetadata {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      return {};
+    }
+    return metadata as MessageRecallMetadata;
+  }
+
+  async recallMessage(messageId: bigint, userId: string): Promise<Message> {
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {
+        id: true,
         senderId: true,
         createdAt: true,
         conversationId: true,
+        metadata: true,
       },
     });
 
@@ -902,46 +930,55 @@ export class MessageService {
       throw new BadRequestException('Message not found');
     }
 
-    if (deleteForEveryone) {
-      if (message.senderId !== userId) {
-        throw new ForbiddenException('Only sender can delete for everyone');
-      }
+    if (message.senderId !== userId) {
+      throw new ForbiddenException('Only sender can recall this message');
+    }
 
-      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-      if (message.createdAt < fifteenMinutesAgo) {
-        throw new ForbiddenException(
-          'Can only delete for everyone within 15 minutes',
-        );
-      }
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (message.createdAt < twentyFourHoursAgo) {
+      throw new ForbiddenException('Can only recall message within 24 hours');
+    }
 
-      await this.prisma.message.update({
+    const metadata = this.extractMetadata(message.metadata as Prisma.JsonValue);
+    if (metadata.recalled === true) {
+      const existing = await this.prisma.message.findUniqueOrThrow({
         where: { id: messageId },
-        data: {
-          deletedAt: new Date(),
-          deletedById: userId,
+      });
+      return safeJSON(existing);
+    }
+
+    const recalledAt = new Date().toISOString();
+    const recalledMessage = await this.prisma.message.update({
+      where: { id: messageId },
+      data: {
+        content: 'Tin nhắn đã được thu hồi',
+        deletedAt: null,
+        deletedById: null,
+        metadata: {
+          ...metadata,
+          recalled: true,
+          recalledAt,
+          recalledBy: userId,
         },
+        updatedById: userId,
+      },
+    });
+
+    await this.eventPublisher
+      .publish(
+        new MessageDeletedEvent(
+          messageId.toString(),
+          message.conversationId,
+          userId,
+        ),
+        { fireAndForget: true },
+      )
+      .catch((err) => {
+        this.logger.warn(`Failed to emit MessageDeletedEvent: ${err.message}`);
       });
 
-      await this.eventPublisher
-        .publish(
-          new MessageDeletedEvent(
-            messageId.toString(),
-            message.conversationId,
-            userId,
-          ),
-          { fireAndForget: true },
-        )
-        .catch((err) => {
-          this.logger.warn(
-            `Failed to emit MessageDeletedEvent: ${err.message}`,
-          );
-        });
-
-      this.logger.log(`Message ${messageId} deleted for everyone by ${userId}`);
-    } else {
-      this.logger.warn('Delete for me not implemented yet');
-      throw new BadRequestException('Delete for me not yet supported');
-    }
+    this.logger.log(`Message ${messageId} recalled by ${userId}`);
+    return safeJSON(recalledMessage);
   }
 
   // ============================================================================

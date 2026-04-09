@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { ConversationType, MemberStatus, Message } from '@prisma/client';
 import type { AuthenticatedSocket } from 'src/common/interfaces/socket-client.interface';
 import { SocketEvents } from 'src/common/constants/socket-events.constant';
@@ -205,6 +210,96 @@ export class MessageRealtimeService {
     ]);
 
     return message;
+  }
+
+  async recallMessageAndBroadcast(
+    dto: { conversationId: string; messageId: string },
+    recallerId: string,
+    emitToUser: EmitToUserFn,
+  ): Promise<{
+    messageId: string;
+    conversationId: string;
+    recalledBy: string;
+    recalledAt: string;
+  }> {
+    const isMember = await this.isMember(dto.conversationId, recallerId);
+    if (!isMember) {
+      throw new ForbiddenException('Not a member of conversation');
+    }
+
+    let messageId: bigint;
+    try {
+      messageId = BigInt(dto.messageId);
+    } catch {
+      throw new BadRequestException('Invalid message ID');
+    }
+
+    const recalledMessage = await this.messageService.recallMessage(
+      messageId,
+      recallerId,
+    );
+
+    const members = await this.getActiveMembers(dto.conversationId);
+    const recalledAt = new Date(recalledMessage.updatedAt).toISOString();
+
+    const recalledPayload = {
+      messageId: recalledMessage.id.toString(),
+      conversationId: dto.conversationId,
+      recalledBy: recallerId,
+      recalledAt,
+    };
+
+    await Promise.all(
+      members.map((m) =>
+        Promise.resolve(
+          emitToUser(m.userId, SocketEvents.MESSAGE_RECALLED, recalledPayload),
+        ).catch(() => undefined),
+      ),
+    );
+
+    const latestMessage = await this.prisma.message.findFirst({
+      where: {
+        conversationId: dto.conversationId,
+        deletedAt: null,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        content: true,
+        type: true,
+        senderId: true,
+        createdAt: true,
+        metadata: true,
+      },
+    });
+
+    if (latestMessage && latestMessage.id === recalledMessage.id) {
+      const lastMessageContent = this.toConversationLastMessageContent(
+        latestMessage.content,
+        latestMessage.metadata,
+      );
+
+      await Promise.all(
+        members.map((m) =>
+          Promise.resolve(
+            emitToUser(m.userId, SocketEvents.CONVERSATION_LIST_ITEM_UPDATED, {
+              conversationId: dto.conversationId,
+              lastMessage: {
+                id: latestMessage.id.toString(),
+                content: lastMessageContent,
+                type: latestMessage.type,
+                senderId: latestMessage.senderId ?? null,
+                createdAt: new Date(latestMessage.createdAt).toISOString(),
+              },
+              lastMessageAt: new Date(latestMessage.createdAt).toISOString(),
+              unreadCountDelta: 0,
+            }),
+          ).catch(() => undefined),
+        ),
+      );
+    }
+
+    return recalledPayload;
   }
 
   async markAsSeen(
@@ -554,6 +649,24 @@ export class MessageRealtimeService {
       where: { conversationId_userId: { conversationId, userId } },
       data: { unreadCount: 0 },
     });
+  }
+
+  private toConversationLastMessageContent(
+    content: string | null,
+    metadata: unknown,
+  ): string | null {
+    if (this.isRecalled(metadata)) {
+      return 'Tin nhắn đã được thu hồi';
+    }
+    return content;
+  }
+
+  private isRecalled(metadata: unknown): boolean {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      return false;
+    }
+    const recalled = (metadata as Record<string, unknown>).recalled;
+    return recalled === true;
   }
 
   /**

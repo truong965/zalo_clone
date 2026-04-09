@@ -25,6 +25,7 @@ import { MessageSeparator } from '@/features/chats/components/message-item/messa
 import {
   useChatRealtime,
   useMessagesList,
+  useRecallMessage,
   useSendMessage,
 } from '@/features/chats/hooks/use-chat-hooks';
 import { useJumpToMessage } from '@/features/chats/hooks/use-jump-to-message';
@@ -54,6 +55,7 @@ const ChatMessage = React.memo(
     showAvatar, showSenderName, showTime, showSeparator,
     onLongPress, onJumpToMessage, onMediaPress, isHighlighted,
     onRetry, conversationId, isPinned, onPin, onUnpin,
+    onRecall,
   }: {
     item: Message;
     isMe: boolean;
@@ -72,6 +74,7 @@ const ChatMessage = React.memo(
     isPinned?: boolean;
     onPin?: (msg: Message) => void;
     onUnpin?: (msg: Message) => void;
+    onRecall?: (msg: Message) => void;
   }) => {
     if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
     return (
@@ -93,6 +96,7 @@ const ChatMessage = React.memo(
           onRetry={onRetry}
           onPin={onPin}
           onUnpin={onUnpin}
+          onRecall={onRecall}
           isHighlighted={isHighlighted}
         />
       </View>
@@ -147,6 +151,17 @@ export default function ChatDetailScreen() {
     useMessagesList(id, 'older');
 
   const sendMessageMutation = useSendMessage();
+  const recallMessageMutation = useRecallMessage();
+
+  const handleRecall = useCallback(
+    (msg: Message) => {
+      recallMessageMutation.mutate({
+        conversationId: id,
+        messageId: msg.id,
+      });
+    },
+    [id, recallMessageMutation],
+  );
 
   const {
     jumpToMessage,
@@ -389,12 +404,13 @@ export default function ChatDetailScreen() {
           onRetry={handleRetry}
           onPin={(msg) => pinMessage(msg.id)}
           onUnpin={(msg) => unpinMessage(msg.id)}
+          onRecall={handleRecall}
           isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
       );
     },
     [user?.id, messages, isGroup, isDirect, latestMyMessageId,
-      setSelectedMsgForMenu, jumpToMessage, handleMediaPress, handleRetry, highlightedId],
+      setSelectedMsgForMenu, jumpToMessage, handleMediaPress, handleRetry, handleRecall, highlightedId],
   );
 
   const handleSend = useCallback(
@@ -502,6 +518,7 @@ export default function ChatDetailScreen() {
       <MessageActionSheet
         visible={!!selectedMsgForMenu}
         message={selectedMsgForMenu}
+        isMe={selectedMsgForMenu?.senderId === user?.id}
         isPinned={!!selectedMsgForMenu && pinnedMessages.some(m => m.id === selectedMsgForMenu.id)}
         onDismiss={() => setSelectedMsgForMenu(null)}
         onReply={(msg) => {
@@ -518,6 +535,12 @@ export default function ChatDetailScreen() {
         }}
         onPin={(msg) => pinMessage(msg.id)}
         onUnpin={(msg) => unpinMessage(msg.id)}
+        onRecall={(msg) => {
+          recallMessageMutation.mutate({
+            conversationId: id,
+            messageId: msg.id,
+          });
+        }}
       />
 
       <MediaViewerModal

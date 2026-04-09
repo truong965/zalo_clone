@@ -47,6 +47,7 @@ interface FileExistenceResult {
 export class S3Service {
   private readonly logger = new Logger(S3Service.name);
   private readonly s3Client: S3Client;
+  private readonly publicS3Client: S3Client;
   private readonly bucketName: string;
   private readonly cloudFrontDomain: string;
 
@@ -55,22 +56,31 @@ export class S3Service {
     private readonly config: ConfigType<typeof s3Config>,
   ) {
     const { accessKeyId, secretAccessKey } = this.config.credentials;
-    this.s3Client = new S3Client({
+    const commonConfig = {
       region: this.config.region,
-      endpoint: this.config.endpoint,
       forcePathStyle: this.config.forcePathStyle,
-      // Omit credentials when both vars are empty so the AWS SDK resolves them
-      // automatically via the EC2 IAM Instance Profile / instance metadata service.
       ...(accessKeyId && secretAccessKey
         ? { credentials: { accessKeyId, secretAccessKey } }
         : {}),
+    };
+
+    // Main client for server-side commands (bypasses Cloudflare if S3_INTERNAL_URL is set)
+    this.s3Client = new S3Client({
+      ...commonConfig,
+      endpoint: this.config.internalEndpoint as string,
+    });
+
+    // Public client for generating presigned URLs (uses S3_ENDPOINT)
+    this.publicS3Client = new S3Client({
+      ...commonConfig,
+      endpoint: this.config.endpoint as string,
     });
 
     this.bucketName = this.config.bucketName;
     this.cloudFrontDomain = this.config.cloudFront.domain;
 
     this.logger.log(
-      `S3 Service initialized - Bucket: ${this.bucketName}, Endpoint: ${this.config.endpoint || 'AWS S3'}`,
+      `S3 Service initialized - Bucket: ${this.bucketName}, Internal Endpoint: ${this.config.internalEndpoint || 'AWS S3'}, Public Endpoint: ${this.config.endpoint || 'AWS S3'}`,
     );
   }
 
@@ -95,7 +105,7 @@ export class S3Service {
       ContentType: params.contentType,
     });
 
-    const url = await getSignedUrl(this.s3Client, command, {
+    const url = await getSignedUrl(this.publicS3Client, command, {
       expiresIn: params.expiresIn,
     });
 
@@ -120,7 +130,7 @@ export class S3Service {
       Key: key,
     });
 
-    const url = await getSignedUrl(this.s3Client, command, { expiresIn });
+    const url = await getSignedUrl(this.publicS3Client, command, { expiresIn });
 
     this.logger.debug('Presigned GET URL generated', {
       key,
@@ -364,7 +374,7 @@ export class S3Service {
 
       // 3. Verify copy succeeded
       const destExists = await this.verifyFileExists(destKey, {
-        maxRetries: 5,
+        maxRetries: 3,
         checkMultipart: false,
       });
 

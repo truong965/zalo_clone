@@ -47,6 +47,7 @@ import { useMarkAsSeen } from './hooks/use-mark-as-seen';
 import { useTypingIndicator, useHandleTypingChange } from './hooks/use-typing-indicator';
 import { useConversationListMutations } from './hooks/use-conversation-list-mutations';
 import { useConversationLoader } from './hooks/use-conversation-loader';
+import { messageService } from './api/message.api';
 
 // ── Call feature ─────────────────────────────────────────────────────────
 import { getActiveCall } from '@/features/call/api/call.api';
@@ -498,6 +499,7 @@ export function ChatFeature() {
       const {
             isConnected: isMsgSocketConnected,
             emitSendMessage,
+            emitRecallMessage,
             emitMarkAsSeen,
             emitTypingStart,
             emitTypingStop,
@@ -526,6 +528,32 @@ export function ChatFeature() {
             isMsgSocketConnected,
             emitSendMessage,
       });
+
+      const handleRecallMessage = useCallback(async (msg: ChatMessage) => {
+            if (!selectedId) return;
+            if (msg.senderSide !== 'me') return;
+
+            try {
+                  if (isMsgSocketConnected) {
+                        await emitRecallMessage({
+                              conversationId: selectedId,
+                              messageId: msg.id,
+                        });
+                        return;
+                  }
+
+                  await messageService.recallMessage(msg.id);
+                  await queryClient.invalidateQueries({ queryKey: messagesQueryKey });
+            } catch (error) {
+                  const message = error instanceof Error
+                        ? error.message
+                        : 'Không thể thu hồi tin nhắn';
+                  notification.error({
+                        message: 'Thu hồi thất bại',
+                        description: message,
+                  });
+            }
+      }, [selectedId, isMsgSocketConnected, emitRecallMessage, queryClient, messagesQueryKey]);
 
       // ── Hook: mark as seen ───────────────────────────────────────────────
       useMarkAsSeen({
@@ -775,6 +803,7 @@ export function ChatFeature() {
                                                 pinnedMessageIds={pinnedMessageIds}
                                                 onPinMessage={pinMessage}
                                                 onUnpinMessage={unpinMessage}
+                                                onRecallMessage={handleRecallMessage}
                                           />
 
                                           {replyTarget && (

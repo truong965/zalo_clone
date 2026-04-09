@@ -10,10 +10,12 @@ import { SocketEvents } from '@/constants/socket-events';
 import { useTranslationStore } from '@/hooks/use-translation-store';
 import {
   applyConversationReadToCache,
+  applyMessageRecalledToCache,
   applyReceiptUpdateToCache,
   applySendFailedToCache,
   applySentAckToCache,
   upsertMessageToCache,
+  MessageRecalledPayload,
   MessageSentAckPayload,
   ReceiptUpdatePayload,
   ConversationReadPayload,
@@ -223,6 +225,65 @@ export function useSendMessage() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// useRecallMessage
+// ─────────────────────────────────────────────────────────────
+export function useRecallMessage() {
+  const { accessToken, user } = useAuth();
+  const { socket, isConnected } = useSocket();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (variables: { conversationId: string; messageId: string }) => {
+      if (isConnected && socket) {
+        return socketManager.emitWithAck<MessageRecalledPayload>(
+          SocketEvents.MESSAGE_RECALL,
+          {
+            conversationId: variables.conversationId,
+            messageId: variables.messageId,
+          },
+        );
+      }
+
+      if (!accessToken) {
+        throw new Error('Bạn cần đăng nhập lại để thu hồi tin nhắn');
+      }
+
+      await mobileApi.recallMessage(variables.messageId, accessToken);
+      return {
+        messageId: variables.messageId,
+        conversationId: variables.conversationId,
+        recalledBy: user?.id ?? '',
+        recalledAt: new Date().toISOString(),
+      } satisfies MessageRecalledPayload;
+    },
+    onSuccess: (payload, variables) => {
+      const normalizedPayload: MessageRecalledPayload = {
+        messageId: payload.messageId ?? variables.messageId,
+        conversationId: payload.conversationId ?? variables.conversationId,
+        recalledBy: payload.recalledBy ?? (user?.id ?? ''),
+        recalledAt: payload.recalledAt ?? new Date().toISOString(),
+      };
+
+      applyMessageRecalledToCache(
+        queryClient,
+        messagesQueryKey(variables.conversationId, 'older'),
+        normalizedPayload,
+      );
+
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+    onError: (error) => {
+      Toast.show({
+        type: 'error',
+        text1: 'Thu hồi thất bại',
+        text2: error instanceof Error ? error.message : 'Đã có lỗi xảy ra',
+        position: 'top',
+      });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // useChatRealtime
 // ─────────────────────────────────────────────────────────────
 export function useChatRealtime(
@@ -317,6 +378,15 @@ export function useChatRealtime(
       );
     };
 
+    const handleMessageRecalled = (payload: MessageRecalledPayload) => {
+      if (payload.conversationId !== conversationId) return;
+      applyMessageRecalledToCache(
+        queryClient,
+        messagesQueryKey(conversationId, 'older'),
+        payload,
+      );
+    };
+
     const handleError = (payload: SocketErrorPayload) => {
       applySendFailedToCache(
         queryClient,
@@ -391,6 +461,7 @@ export function useChatRealtime(
     socket.on(SocketEvents.MESSAGE_SENT_ACK, handleSentAck);
     socket.on(SocketEvents.MESSAGE_RECEIPT_UPDATE, handleReceiptUpdate);
     socket.on(SocketEvents.CONVERSATION_READ, handleConversationRead);
+    socket.on(SocketEvents.MESSAGE_RECALLED, handleMessageRecalled);
     socket.on(SocketEvents.FRIEND_ONLINE, handleFriendOnline);
     socket.on(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
     socket.on(SocketEvents.CONVERSATION_UPDATED, handleConversationUpdated);
@@ -405,6 +476,7 @@ export function useChatRealtime(
       socket.off(SocketEvents.MESSAGE_SENT_ACK, handleSentAck);
       socket.off(SocketEvents.MESSAGE_RECEIPT_UPDATE, handleReceiptUpdate);
       socket.off(SocketEvents.CONVERSATION_READ, handleConversationRead);
+      socket.off(SocketEvents.MESSAGE_RECALLED, handleMessageRecalled);
       socket.off(SocketEvents.FRIEND_ONLINE, handleFriendOnline);
       socket.off(SocketEvents.FRIEND_OFFLINE, handleFriendOffline);
       socket.off(SocketEvents.CONVERSATION_UPDATED, handleConversationUpdated);

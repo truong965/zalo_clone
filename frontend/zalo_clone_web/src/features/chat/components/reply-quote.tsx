@@ -39,7 +39,10 @@ function MediaIcon({ mediaType }: { mediaType: string }) {
 
 export function ReplyQuote({ parentMessage, onJumpToMessage }: ReplyQuoteProps) {
       const { t } = useTranslation();
-      const isDeleted = !!parentMessage.deletedAt;
+      const recalled = parentMessage.metadata && typeof parentMessage.metadata === 'object'
+            ? (parentMessage.metadata as Record<string, unknown>).recalled === true
+            : false;
+      const isDeleted = !!parentMessage.deletedAt || recalled;
       const senderName = parentMessage.sender?.resolvedDisplayName
             ?? parentMessage.sender?.displayName
             ?? t('layout.client.defaultUser');

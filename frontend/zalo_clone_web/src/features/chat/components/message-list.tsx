@@ -40,6 +40,8 @@ interface MessageListProps {
       onPinMessage?: (messageId: string) => void;
       /** Called when user clicks "Bỏ ghim" */
       onUnpinMessage?: (messageId: string) => void;
+      /** Called when user clicks "Thu hồi" */
+      onRecallMessage?: (msg: ChatMessage) => void;
 
 }
 
@@ -146,7 +148,16 @@ function CallLogEntry({ msg, t }: { msg: ChatMessage, t: any }) {
       );
 }
 
+function isMessageRecalled(metadata: ChatMessage['metadata']): boolean {
+      if (!metadata || typeof metadata !== 'object') return false;
+      return (metadata as Record<string, unknown>).recalled === true;
+}
+
 function renderMessageBody(msg: ChatMessage) {
+      if (isMessageRecalled(msg.metadata)) {
+            return <div className="whitespace-pre-wrap italic text-gray-400">Tin nhắn đã được thu hồi</div>;
+      }
+
       const attachments = msg.mediaAttachments ?? [];
 
       if (attachments.length > 0) {
@@ -348,6 +359,7 @@ export function MessageList({
       pinnedMessageIds,
       onPinMessage,
       onUnpinMessage,
+      onRecallMessage,
 }: MessageListProps) {
       const { t } = useTranslation();
       const {
@@ -416,6 +428,7 @@ export function MessageList({
                                     const hasEnTranslation = Boolean(translations[msg.id]?.en);
                                     const viHidden = isTranslationHidden(msg.id, 'vi');
                                     const enHidden = isTranslationHidden(msg.id, 'en');
+                                    const recalled = isMessageRecalled(msg.metadata);
                                     const translationEntries = Object.entries(translations[msg.id] || {});
                                     const visibleTranslationEntries = translationEntries.filter(([lang]) =>
                                           !isTranslationHidden(msg.id, lang),
@@ -480,6 +493,12 @@ export function MessageList({
                                                                   pinnedMessageIds?.has(msg.id)
                                                                         ? { key: 'unpin', label: t('chat.messageList.unpinMsg') }
                                                                         : { key: 'pin', label: t('chat.messageList.pinMsg') },
+                                                                  {
+                                                                        key: 'recall',
+                                                                        label: 'Thu hồi',
+                                                                        disabled: msg.senderSide !== 'me' || recalled,
+                                                                        danger: true,
+                                                                  },
                                                                   { type: 'divider' },
                                                                   { key: 'summary', label: 'Tóm tắt từ đây trở đi ✨' },
                                                             ],
@@ -489,6 +508,7 @@ export function MessageList({
                                                                   if (key === 'reply') onReply?.(msg);
                                                                   if (key === 'pin') onPinMessage?.(msg.id);
                                                                   if (key === 'unpin') onUnpinMessage?.(msg.id);
+                                                                  if (key === 'recall') onRecallMessage?.(msg);
                                                                   if (key === 'translate_vi' && !hasViTranslation) handleTranslate(msg, 'vi');
                                                                   if (key === 'translate_en' && !hasEnTranslation) handleTranslate(msg, 'en');
                                                                   if (key === 'hide_vi' && hasViTranslation && !viHidden) hideTranslation(msg.id, 'vi');
