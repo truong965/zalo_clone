@@ -47,6 +47,10 @@ export const messageService = {
             });
       },
 
+      async deleteMessageForMe(messageId: string): Promise<void> {
+            await apiClient.delete(API_ENDPOINTS.MESSAGES.DELETE(messageId));
+      },
+
       /**
        * Get messages around a target message (for jump-to-message from search).
        * Returns messages in the same MessageListItem shape as getMessages().

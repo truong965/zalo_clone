@@ -42,6 +42,8 @@ interface MessageListProps {
       onUnpinMessage?: (messageId: string) => void;
       /** Called when user clicks "Thu hồi" */
       onRecallMessage?: (msg: ChatMessage) => void;
+      /** Called when user clicks "Xóa ở phía bạn" */
+      onDeleteForMeMessage?: (msg: ChatMessage) => void;
 
 }
 
@@ -360,6 +362,7 @@ export function MessageList({
       onPinMessage,
       onUnpinMessage,
       onRecallMessage,
+      onDeleteForMeMessage,
 }: MessageListProps) {
       const { t } = useTranslation();
       const {
@@ -499,6 +502,11 @@ export function MessageList({
                                                                         disabled: msg.senderSide !== 'me' || recalled,
                                                                         danger: true,
                                                                   },
+                                                                  {
+                                                                        key: 'delete_for_me',
+                                                                        label: 'Xóa ở phía bạn',
+                                                                        danger: true,
+                                                                  },
                                                                   { type: 'divider' },
                                                                   { key: 'summary', label: 'Tóm tắt từ đây trở đi ✨' },
                                                             ],
@@ -509,6 +517,7 @@ export function MessageList({
                                                                   if (key === 'pin') onPinMessage?.(msg.id);
                                                                   if (key === 'unpin') onUnpinMessage?.(msg.id);
                                                                   if (key === 'recall') onRecallMessage?.(msg);
+                                                                  if (key === 'delete_for_me') onDeleteForMeMessage?.(msg);
                                                                   if (key === 'translate_vi' && !hasViTranslation) handleTranslate(msg, 'vi');
                                                                   if (key === 'translate_en' && !hasEnTranslation) handleTranslate(msg, 'en');
                                                                   if (key === 'hide_vi' && hasViTranslation && !viHidden) hideTranslation(msg.id, 'vi');

@@ -24,6 +24,7 @@ import { SystemMessage } from '@/features/chats/components/message-item/system-m
 import { MessageSeparator } from '@/features/chats/components/message-item/message-separator';
 import {
   useChatRealtime,
+  useDeleteMessageForMe,
   useMessagesList,
   useRecallMessage,
   useSendMessage,
@@ -55,7 +56,7 @@ const ChatMessage = React.memo(
     showAvatar, showSenderName, showTime, showSeparator,
     onLongPress, onJumpToMessage, onMediaPress, isHighlighted,
     onRetry, conversationId, isPinned, onPin, onUnpin,
-    onRecall,
+    onRecall, onDeleteForMe,
   }: {
     item: Message;
     isMe: boolean;
@@ -75,6 +76,7 @@ const ChatMessage = React.memo(
     onPin?: (msg: Message) => void;
     onUnpin?: (msg: Message) => void;
     onRecall?: (msg: Message) => void;
+    onDeleteForMe?: (msg: Message) => void;
   }) => {
     if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
     return (
@@ -97,6 +99,7 @@ const ChatMessage = React.memo(
           onPin={onPin}
           onUnpin={onUnpin}
           onRecall={onRecall}
+          onDeleteForMe={onDeleteForMe}
           isHighlighted={isHighlighted}
         />
       </View>
@@ -152,6 +155,7 @@ export default function ChatDetailScreen() {
 
   const sendMessageMutation = useSendMessage();
   const recallMessageMutation = useRecallMessage();
+  const deleteMessageForMeMutation = useDeleteMessageForMe();
 
   const handleRecall = useCallback(
     (msg: Message) => {
@@ -161,6 +165,16 @@ export default function ChatDetailScreen() {
       });
     },
     [id, recallMessageMutation],
+  );
+
+  const handleDeleteForMe = useCallback(
+    (msg: Message) => {
+      deleteMessageForMeMutation.mutate({
+        conversationId: id,
+        messageId: msg.id,
+      });
+    },
+    [id, deleteMessageForMeMutation],
   );
 
   const {
@@ -217,9 +231,18 @@ export default function ChatDetailScreen() {
     const raw: Message[] = [];
     for (const page of data.pages)
       for (const msg of page.data) raw.push(msg);
-    raw.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    return raw;
-  }, [data?.pages]);
+    const visible = raw.filter((msg) => {
+      const metadata = msg.metadata as Record<string, unknown> | undefined;
+      const deletedForUserIds = metadata?.deletedForUserIds;
+      return !(
+        Array.isArray(deletedForUserIds) &&
+        user?.id &&
+        deletedForUserIds.includes(user.id)
+      );
+    });
+    visible.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return visible;
+  }, [data?.pages, user?.id]);
 
   const allMediaItems = useMemo(() => {
     const media: any[] = [];
@@ -405,12 +428,14 @@ export default function ChatDetailScreen() {
           onPin={(msg) => pinMessage(msg.id)}
           onUnpin={(msg) => unpinMessage(msg.id)}
           onRecall={handleRecall}
+          onDeleteForMe={handleDeleteForMe}
           isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
       );
     },
     [user?.id, messages, isGroup, isDirect, latestMyMessageId,
-      setSelectedMsgForMenu, jumpToMessage, handleMediaPress, handleRetry, handleRecall, highlightedId],
+      setSelectedMsgForMenu, jumpToMessage, handleMediaPress, handleRetry,
+      handleRecall, handleDeleteForMe, highlightedId],
   );
 
   const handleSend = useCallback(
@@ -537,6 +562,12 @@ export default function ChatDetailScreen() {
         onUnpin={(msg) => unpinMessage(msg.id)}
         onRecall={(msg) => {
           recallMessageMutation.mutate({
+            conversationId: id,
+            messageId: msg.id,
+          });
+        }}
+        onDeleteForMe={(msg) => {
+          deleteMessageForMeMutation.mutate({
             conversationId: id,
             messageId: msg.id,
           });

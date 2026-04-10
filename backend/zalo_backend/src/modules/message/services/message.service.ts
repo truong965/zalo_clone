@@ -79,7 +79,8 @@ type MessageRecallMetadata = {
   recalled?: boolean;
   recalledAt?: string;
   recalledBy?: string;
-  [key: string]: unknown;
+  deletedForUserIds?: string[];
+  [key: string]: Prisma.JsonValue | undefined;
 };
 
 @Injectable()
@@ -745,20 +746,50 @@ export class MessageService {
 
     const isNewer = direction === 'newer';
 
-    const _messages = await this.prisma.message.findMany({
-      where: {
-        conversationId: dto.conversationId,
-        deletedAt: null,
-        ...(cursorId && { id: isNewer ? { gt: cursorId } : { lt: cursorId } }),
-      },
-      take: limit + 1,
-      orderBy: {
-        createdAt: isNewer ? 'asc' : 'desc',
-      },
-      include: {
-        parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
-      },
-    });
+    const targetCount = limit + 1;
+    const batchTake = Math.max(targetCount * 2, 50);
+    const visibleMessages: any[] = [];
+
+    let movingCursorId = cursorId;
+    let exhausted = false;
+
+    while (visibleMessages.length < targetCount && !exhausted) {
+      const batch = await this.prisma.message.findMany({
+        where: {
+          conversationId: dto.conversationId,
+          deletedAt: null,
+          ...(movingCursorId && {
+            id: isNewer ? { gt: movingCursorId } : { lt: movingCursorId },
+          }),
+        },
+        take: batchTake,
+        orderBy: {
+          createdAt: isNewer ? 'asc' : 'desc',
+        },
+        include: {
+          parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
+        },
+      });
+
+      if (batch.length === 0) {
+        exhausted = true;
+        break;
+      }
+
+      const filteredBatch = batch
+        .filter((message) => !this.isMessageDeletedForUser(message.metadata, userId))
+        .map((message) => this.sanitizeParentMessageForViewer(message, userId));
+
+      visibleMessages.push(...filteredBatch);
+
+      if (batch.length < batchTake) {
+        exhausted = true;
+      }
+
+      movingCursorId = batch[batch.length - 1].id;
+    }
+
+    const _messages = visibleMessages.slice(0, targetCount);
     const messagesWithMedia = await this.enrichMessagesWithMedia(_messages);
     const messages = await this.hydrateMessagesWithSenders(
       messagesWithMedia,
@@ -813,10 +844,14 @@ export class MessageService {
         conversationId,
         deletedAt: null,
       },
-      select: { id: true, createdAt: true },
+      select: { id: true, createdAt: true, metadata: true },
     });
 
     if (!target) {
+      throw new BadRequestException('Message not found in this conversation');
+    }
+
+    if (this.isMessageDeletedForUser(target.metadata, userId)) {
       throw new BadRequestException('Message not found in this conversation');
     }
 
@@ -864,8 +899,12 @@ export class MessageService {
       ...(targetMsg ? [targetMsg] : []),
       ...beforeMsgs, // already DESC order from query
     ];
+    const visibleMessages = allMessagesRaw
+      .filter((message) => !this.isMessageDeletedForUser(message.metadata, userId))
+      .map((message) => this.sanitizeParentMessageForViewer(message, userId));
+
     const allMessagesWithMedia =
-      await this.enrichMessagesWithMedia(allMessagesRaw);
+      await this.enrichMessagesWithMedia(visibleMessages);
     const allMessages = await this.hydrateMessagesWithSenders(
       allMessagesWithMedia,
       userId,
@@ -900,8 +939,45 @@ export class MessageService {
     if (deleteForEveryone) {
       await this.recallMessage(messageId, userId);
     } else {
-      this.logger.warn('Delete for me not implemented yet');
-      throw new BadRequestException('Delete for me not yet supported');
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: {
+          id: true,
+          conversationId: true,
+          metadata: true,
+        },
+      });
+
+      if (!message) {
+        throw new BadRequestException('Message not found');
+      }
+
+      const isMember = await this.isMember(message.conversationId, userId);
+      if (!isMember) {
+        throw new ForbiddenException('Not a member of this conversation');
+      }
+
+      const metadata = this.extractMetadata(message.metadata as Prisma.JsonValue);
+      const deletedForUserIds = this.extractDeletedForUserIds(
+        message.metadata as Prisma.JsonValue,
+      );
+
+      if (deletedForUserIds.includes(userId)) {
+        return;
+      }
+
+      await this.prisma.message.update({
+        where: { id: messageId },
+        data: {
+          metadata: {
+            ...metadata,
+            deletedForUserIds: [...deletedForUserIds, userId],
+          },
+          updatedById: userId,
+        },
+      });
+
+      this.logger.log(`Message ${messageId} deleted for user ${userId}`);
     }
   }
 
@@ -912,6 +988,47 @@ export class MessageService {
       return {};
     }
     return metadata as MessageRecallMetadata;
+  }
+
+  private extractDeletedForUserIds(metadata: Prisma.JsonValue | null): string[] {
+    const data = this.extractMetadata(metadata);
+    if (!Array.isArray(data.deletedForUserIds)) {
+      return [];
+    }
+
+    return data.deletedForUserIds.filter(
+      (item): item is string => typeof item === 'string' && item.length > 0,
+    );
+  }
+
+  private isMessageDeletedForUser(
+    metadata: Prisma.JsonValue | null,
+    userId: string,
+  ): boolean {
+    const deletedForUserIds = this.extractDeletedForUserIds(metadata);
+    return deletedForUserIds.includes(userId);
+  }
+
+  private sanitizeParentMessageForViewer<T extends { parentMessage?: any | null }>(
+    message: T,
+    userId: string,
+  ): T {
+    if (!message.parentMessage) {
+      return message;
+    }
+
+    if (!this.isMessageDeletedForUser(message.parentMessage.metadata ?? null, userId)) {
+      return message;
+    }
+
+    return {
+      ...message,
+      parentMessage: {
+        ...message.parentMessage,
+        content: 'Tin nhắn đã bị xóa',
+        deletedAt: message.parentMessage.deletedAt ?? new Date(),
+      },
+    };
   }
 
   async recallMessage(messageId: bigint, userId: string): Promise<Message> {

@@ -48,6 +48,13 @@ export type MessageRecalledPayload = {
       recalledAt: string;
 };
 
+export type MessageDeletedForMePayload = {
+      messageId: string;
+      conversationId: string;
+      userId: string;
+      deletedAt: string;
+};
+
 export type SocketErrorPayload = {
       event?: string;
       clientMessageId?: string;
@@ -386,6 +393,56 @@ export function applyMessageRecalledToCache(
 
                         return nextMessage;
                   });
+
+                  if (!pageChanged) return p;
+                  anyChange = true;
+                  return { ...p, data };
+            });
+
+            if (!anyChange) return prev;
+            return { ...prev, pages };
+      });
+}
+
+/**
+ * Remove a message from the current viewer cache only (delete for me).
+ */
+export function applyMessageDeletedForMeToCache(
+      queryClient: QueryClient,
+      queryKey: QueryKey,
+      payload: MessageDeletedForMePayload,
+) {
+      queryClient.setQueryData<MessagesInfiniteData>(queryKey, (prev) => {
+            if (!prev) return prev;
+
+            let anyChange = false;
+
+            const pages = prev.pages.map((p) => {
+                  let pageChanged = false;
+
+                  const data = p.data
+                        .filter((m) => {
+                              const shouldRemove = m.id === payload.messageId;
+                              if (shouldRemove) {
+                                    pageChanged = true;
+                              }
+                              return !shouldRemove;
+                        })
+                        .map((m) => {
+                              if (m.parentMessage?.id !== payload.messageId) {
+                                    return m;
+                              }
+
+                              pageChanged = true;
+                              return {
+                                    ...m,
+                                    parentMessage: {
+                                          ...m.parentMessage,
+                                          content: 'Tin nhắn đã bị xóa',
+                                          deletedAt: payload.deletedAt,
+                                    },
+                              };
+                        });
 
                   if (!pageChanged) return p;
                   anyChange = true;

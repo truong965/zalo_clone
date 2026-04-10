@@ -10,11 +10,13 @@ import { SocketEvents } from '@/constants/socket-events';
 import { useTranslationStore } from '@/hooks/use-translation-store';
 import {
   applyConversationReadToCache,
+  applyMessageDeletedForMeToCache,
   applyMessageRecalledToCache,
   applyReceiptUpdateToCache,
   applySendFailedToCache,
   applySentAckToCache,
   upsertMessageToCache,
+  MessageDeletedForMePayload,
   MessageRecalledPayload,
   MessageSentAckPayload,
   ReceiptUpdatePayload,
@@ -279,6 +281,67 @@ export function useRecallMessage() {
         text2: error instanceof Error ? error.message : 'Đã có lỗi xảy ra',
         position: 'top',
       });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// useDeleteMessageForMe
+// ─────────────────────────────────────────────────────────────
+export function useDeleteMessageForMe() {
+  const { accessToken, user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    onMutate: async (variables: { conversationId: string; messageId: string }) => {
+      const queryKey = messagesQueryKey(variables.conversationId, 'older');
+      await queryClient.cancelQueries({ queryKey });
+
+      const previousMessages = queryClient.getQueryData(queryKey);
+
+      const optimisticPayload: MessageDeletedForMePayload = {
+        conversationId: variables.conversationId,
+        messageId: variables.messageId,
+        userId: user?.id ?? '',
+        deletedAt: new Date().toISOString(),
+      };
+
+      applyMessageDeletedForMeToCache(queryClient, queryKey, optimisticPayload);
+
+      return { previousMessages, queryKey };
+    },
+    mutationFn: async (variables: { conversationId: string; messageId: string }) => {
+      if (!accessToken) {
+        throw new Error('Bạn cần đăng nhập lại để xóa tin nhắn');
+      }
+
+      await mobileApi.deleteMessageForMe(variables.messageId, accessToken);
+      return {
+        conversationId: variables.conversationId,
+        messageId: variables.messageId,
+        userId: user?.id ?? '',
+        deletedAt: new Date().toISOString(),
+      } satisfies MessageDeletedForMePayload;
+    },
+    onError: (error, _variables, context: any) => {
+      if (context?.queryKey) {
+        queryClient.setQueryData(context.queryKey, context.previousMessages);
+      }
+
+      Toast.show({
+        type: 'error',
+        text1: 'Xóa tin nhắn thất bại',
+        text2: error instanceof Error ? error.message : 'Đã có lỗi xảy ra',
+        position: 'top',
+      });
+    },
+    onSuccess: (payload, variables) => {
+      applyMessageDeletedForMeToCache(
+        queryClient,
+        messagesQueryKey(variables.conversationId, 'older'),
+        payload,
+      );
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
 }

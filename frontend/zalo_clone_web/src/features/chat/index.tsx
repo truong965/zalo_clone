@@ -48,6 +48,7 @@ import { useTypingIndicator, useHandleTypingChange } from './hooks/use-typing-in
 import { useConversationListMutations } from './hooks/use-conversation-list-mutations';
 import { useConversationLoader } from './hooks/use-conversation-loader';
 import { messageService } from './api/message.api';
+import { applyMessageDeletedForMeToCache } from './utils/message-cache-helpers';
 
 // ── Call feature ─────────────────────────────────────────────────────────
 import { getActiveCall } from '@/features/call/api/call.api';
@@ -555,6 +556,34 @@ export function ChatFeature() {
             }
       }, [selectedId, isMsgSocketConnected, emitRecallMessage, queryClient, messagesQueryKey]);
 
+      const handleDeleteForMeMessage = useCallback(async (msg: ChatMessage) => {
+            if (!selectedId || !currentUserId) return;
+
+            const previousMessages = queryClient.getQueryData(messagesQueryKey);
+            const optimisticPayload = {
+                  conversationId: selectedId,
+                  messageId: msg.id,
+                  userId: currentUserId,
+                  deletedAt: new Date().toISOString(),
+            };
+
+            applyMessageDeletedForMeToCache(queryClient, messagesQueryKey, optimisticPayload);
+
+            try {
+                  await messageService.deleteMessageForMe(msg.id);
+                  await queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            } catch (error) {
+                  queryClient.setQueryData(messagesQueryKey, previousMessages);
+                  const message = error instanceof Error
+                        ? error.message
+                        : 'Không thể xóa tin nhắn ở phía bạn';
+                  notification.error({
+                        message: 'Xóa tin nhắn thất bại',
+                        description: message,
+                  });
+            }
+      }, [selectedId, currentUserId, queryClient, messagesQueryKey]);
+
       // ── Hook: mark as seen ───────────────────────────────────────────────
       useMarkAsSeen({
             selectedId,
@@ -804,6 +833,7 @@ export function ChatFeature() {
                                                 onPinMessage={pinMessage}
                                                 onUnpinMessage={unpinMessage}
                                                 onRecallMessage={handleRecallMessage}
+                                                onDeleteForMeMessage={handleDeleteForMeMessage}
                                           />
 
                                           {replyTarget && (

@@ -5,6 +5,30 @@ class SocketManager {
   private socket: Socket | null = null;
   private baseUrl: string = '';
 
+  private shouldForcePolling(): boolean {
+    return process.env.EXPO_PUBLIC_SOCKET_FORCE_POLLING === 'true';
+  }
+
+  private getTransportOptions() {
+    const forcePolling = this.shouldForcePolling();
+
+    return {
+      transports: forcePolling ? ['polling'] : ['polling', 'websocket'],
+      upgrade: !forcePolling,
+      tryAllTransports: true,
+      rememberUpgrade: false,
+    };
+  }
+
+  private resolveSocketBaseUrl(): string {
+    const envSocketBaseUrl = process.env.EXPO_PUBLIC_SOCKET_BASE_URL?.trim();
+    const rawBaseUrl = envSocketBaseUrl || this.baseUrl;
+
+    return rawBaseUrl
+      .replace('/api/v1', '')
+      .replace(/\/$/, '');
+  }
+
   setBaseUrl(url: string) {
     this.baseUrl = url;
   }
@@ -14,7 +38,7 @@ class SocketManager {
       this.socket.disconnect();
     }
 
-    const baseUrl = this.baseUrl.replace('/api/v1', '');
+    const baseUrl = this.resolveSocketBaseUrl();
     if (!baseUrl) {
       throw new Error('Socket base URL not configured');
     }
@@ -23,19 +47,29 @@ class SocketManager {
     this.socket = io(socketUrl, {
       path: '/socket.io',
       auth: { token },
-      transports: ['websocket'],
+      ...this.getTransportOptions(),
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,        // Đợi 1s trước khi thử lại
       reconnectionDelayMax: 5000,
+      reconnectionAttempts: 10,
+      timeout: 20000,
     });
 
     this.socket.on(SocketEvents.CONNECT, () => {
-      console.log('✅ Socket connected:', this.socket?.id);
+      console.log('✅ Socket connected:', {
+        id: this.socket?.id,
+        transport: this.socket?.io.engine?.transport?.name,
+      });
     });
 
-    this.socket.on(SocketEvents.CONNECT_ERROR, (error) => {
-      console.error('❌ Socket connection error:', error.message);
+    this.socket.on(SocketEvents.CONNECT_ERROR, (error: any) => {
+      console.error('❌ Socket connection error:', {
+        message: error?.message,
+        description: error?.description,
+        context: error?.context,
+        transport: this.socket?.io.engine?.transport?.name,
+      });
     });
 
     this.socket.on('error', (error) => {
@@ -72,7 +106,7 @@ class SocketManager {
       this.socket.disconnect();
     }
 
-    const baseUrl = this.baseUrl.replace('/api/v1', '');
+    const baseUrl = this.resolveSocketBaseUrl();
     if (!baseUrl) {
       throw new Error('Socket base URL not configured');
     }
@@ -80,20 +114,30 @@ class SocketManager {
 
     this.socket = io(socketUrl, {
       path: '/socket.io',
-      transports: ['websocket'],
+      ...this.getTransportOptions(),
       query: { type: 'public' }, // Báo cho Backend đây là kết nối công khai hợp lệ
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+      reconnectionAttempts: 10,
+      timeout: 20000,
     });
 
     this.socket.on(SocketEvents.CONNECT, () => {
-      console.log('✅ Socket connected (Unauthenticated):', this.socket?.id);
+      console.log('✅ Socket connected (Unauthenticated):', {
+        id: this.socket?.id,
+        transport: this.socket?.io.engine?.transport?.name,
+      });
     });
 
-    this.socket.on(SocketEvents.CONNECT_ERROR, (error) => {
-      console.error('❌ Socket connection error (Unauthenticated):', error.message);
+    this.socket.on(SocketEvents.CONNECT_ERROR, (error: any) => {
+      console.error('❌ Socket connection error (Unauthenticated):', {
+        message: error?.message,
+        description: error?.description,
+        context: error?.context,
+        transport: this.socket?.io.engine?.transport?.name,
+      });
     });
 
     return this.socket;

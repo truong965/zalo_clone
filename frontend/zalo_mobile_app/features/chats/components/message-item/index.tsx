@@ -28,6 +28,7 @@ export interface MessageItemProps {
   onPin?: (message: Message) => void;
   onUnpin?: (message: Message) => void;
   onRecall?: (message: Message) => void;
+  onDeleteForMe?: (message: Message) => void;
   isHighlighted?: boolean;
 }
 
@@ -47,6 +48,7 @@ export function MessageItem({
   onPin,
   onUnpin,
   onRecall,
+  onDeleteForMe,
   isHighlighted,
 }: MessageItemProps) {
   const theme = useTheme();
@@ -113,6 +115,14 @@ export function MessageItem({
       onPress: () => onRecall?.(message),
       disabled: !isMe || isRecalled,
       hidden: !onRecall,
+    },
+    {
+      id: 'delete_for_me',
+      label: 'Xóa ở phía bạn',
+      icon: 'trash',
+      color: '#ef4444',
+      onPress: () => onDeleteForMe?.(message),
+      hidden: !onDeleteForMe,
     },
     {
       divider: true,

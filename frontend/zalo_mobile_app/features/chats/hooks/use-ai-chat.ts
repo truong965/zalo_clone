@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/providers/auth-provider';
 import { useSocket } from '@/providers/socket-provider';
 import { SocketEvents } from '@/constants/socket-events';
-import { mobileApi } from '@/services/api';
+import { ApiRequestError, mobileApi } from '@/services/api';
 import { useAiStore, type AiChatMessage } from '../stores/ai.store';
 
 function createRequestId() {
@@ -75,9 +75,9 @@ export function useAiChat(conversationId: string) {
         content: contentDelta ? `${currentContent}${contentDelta}` : currentContent,
         progress: data.step
           ? {
-              message: data.message || data.step,
-              percent: data.percent,
-            }
+            message: data.message || data.step,
+            percent: data.percent,
+          }
           : undefined,
       });
     };
@@ -170,7 +170,7 @@ export function useAiChat(conversationId: string) {
       const data = await mobileApi.getAiSessions(accessToken, conversationId, 'ASK');
 
       const sessions = data?.data?.sessions || data?.sessions || [];
-      
+
       if (!sessions.length) {
         hydrateAiConversation({ conversationId, messages: [] });
         return;
@@ -190,7 +190,14 @@ export function useAiChat(conversationId: string) {
         sessionId: sessions[0].id,
       });
     } catch (error) {
-      console.error('[useAiChat] Failed to fetch history:', error);
+      if (
+        error instanceof ApiRequestError &&
+        (error.status >= 500 || String(error.message).includes('Internal AI Service Error'))
+      ) {
+        console.warn('[useAiChat] AI history unavailable, fallback to empty history');
+      } else {
+        console.error('[useAiChat] Failed to fetch history:', error);
+      }
       hydrateAiConversation({ conversationId, messages: [] });
     }
   }, [conversationId, accessToken, hydrateAiConversation]);

@@ -14,6 +14,7 @@ interface MessageActionSheetProps {
   onPin: (message: Message) => void;
   onUnpin: (message: Message) => void;
   onRecall: (message: Message) => void;
+  onDeleteForMe: (message: Message) => void;
 }
 
 export function MessageActionSheet({
@@ -26,6 +27,7 @@ export function MessageActionSheet({
   onPin,
   onUnpin,
   onRecall,
+  onDeleteForMe,
 }: MessageActionSheetProps) {
   const theme = useTheme();
 
@@ -82,6 +84,17 @@ export function MessageActionSheet({
               onDismiss();
             }}
             disabled={!isMe || isRecalled}
+          />
+
+          <Divider />
+          <List.Item
+            title="Xóa ở phía bạn"
+            left={(props) => <List.Icon {...props} icon="trash-can-outline" color={theme.colors.error} />}
+            titleStyle={{ color: theme.colors.error }}
+            onPress={() => {
+              onDeleteForMe(message);
+              onDismiss();
+            }}
           />
         </View>
       </Modal>
