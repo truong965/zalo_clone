@@ -38,13 +38,14 @@ export type {
 } from './types';
 
 export { SEARCH_TAB_TO_TYPE, EMPTY_SEARCH_RESULTS } from './types';
+export { MAX_SEARCH_LENGTH } from './constants';
 
 // Store
 export { useGlobalSearchStore, useConversationSearchStore, useFriendSearchStore, useSearchStore } from './stores/search.store';
 export type { SearchState, SearchStoreApi } from './stores/search.store';
 
 // Hooks
-export { useSearch } from './hooks/use-search';
+export { useSearch, MAX_KEYWORD_LENGTH } from './hooks/use-search';
 export type { UseSearchOptions } from './hooks/use-search';
 
 export { useSearchSocket } from './hooks/use-search-socket';

@@ -393,6 +393,13 @@ export class AuthService {
       // 3. Revoke all existing sessions for security
       await this.tokenService.revokeAllUserSessions(user.id, TokenRevocationReason.PASSWORD_CHANGED);
       
+      // Emit force logout to all live sockets
+      this.eventEmitter.emit(QR_INTERNAL_EVENTS.FORCE_LOGOUT_DEVICES, {
+        userId: user.id,
+        deviceIds: [], // All devices
+        reason: 'Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại.',
+      });
+
       // 4. Consume the reset token
       await this.redis.del(redisKey);
 
@@ -453,20 +460,13 @@ export class AuthService {
         this.eventEmitter.emit(QR_INTERNAL_EVENTS.FORCE_LOGOUT_DEVICES, {
           userId,
           deviceIds: [], // All devices 
-          reason: 'Password was changed',
-          excludeDeviceId: deviceInfo.deviceId, // Exclude current device from force logout
+          reason: 'Mật khẩu đã được thay đổi. Vui lòng đăng nhập lại trên tất cả thiết bị.',
         });
       }
 
-      // Generate NEW tokens for the CURRENT device so it stays logged in
-      const tokens = await this.tokenService.generateTokens(
-        updatedUser,
-        deviceInfo,
-      );
-
       return {
-        message: 'Đổi mật khẩu thành công',
-        data: tokens,
+        message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.',
+        data: null, // Force logout on current device by not providing new tokens
       };
     });
   }

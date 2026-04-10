@@ -310,15 +310,23 @@ export class SearchValidationService {
   }
 
   /**
-   * Sanitize search keyword (prevent SQL injection via raw SQL)
-   * Note: Should use parameterized queries, but this is extra safety
+   * Sanitize search keyword (prevent SQL injection and FTS syntax errors)
+   * Designed to be safe with websearch_to_tsquery and ILIKE.
    */
   sanitizeKeyword(keyword: string): string {
+    if (!keyword) return '';
+
     return keyword
-      .toLowerCase()
       .trim()
-      .replace(/[;'"\\]/g, '') // Remove dangerous characters
-      .substring(0, 255); // Limit length
+      .substring(0, 255)
+      // Remove characters that could break SQL structure if parameterization failed (Safety in depth)
+      // and characters that might be interpreted as path traversals or control chars
+      .replace(/[\u0000\u001f\u007f\u00ad]/g, '')
+      // Escape characters that have special meaning in PostgreSQL ILIKE
+      // %, _ and \ are special in LIKE patterns
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
   }
 
   /**

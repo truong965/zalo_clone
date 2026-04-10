@@ -337,6 +337,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   }
                   return {
                         ...initialState,
+                        error: state.error, // Preserve error message across reset
                         activeGroupCalls: state.activeGroupCalls, // Preserve active calls map
                   };
             }),

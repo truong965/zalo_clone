@@ -61,6 +61,7 @@ export const SocketEvents = {
   // Sync events
   MESSAGES_SYNC: 'messages:sync', // Offline message batch
   CONVERSATION_UPDATED: 'conversation:updated', // Last message changed
+  ACCOUNT_EMAIL_UPDATED: 'account:email_updated', // Self-sync email update
 
   CONVERSATION_LIST_ITEM_UPDATED: 'conversation:list:itemUpdated',
 

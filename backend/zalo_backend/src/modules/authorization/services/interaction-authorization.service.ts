@@ -12,6 +12,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
 import {
@@ -42,9 +43,12 @@ export class InteractionAuthorizationService {
     private readonly privacyRead: IPrivacyReadPort,
     @Inject(FRIENDSHIP_READ_PORT)
     private readonly friendshipRead: IFriendshipReadPort,
-    @Inject(USER_READ_PORT)
-    private readonly userRead: IUserReadPort,
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  private get userRead(): IUserReadPort {
+    return this.moduleRef.get(USER_READ_PORT, { strict: false });
+  }
 
   /**
    * Check if requester can perform action on target.
@@ -220,5 +224,11 @@ export class InteractionAuthorizationService {
    */
   async isBlocked(userId1: string, userId2: string): Promise<boolean> {
     return this.blockChecker.isBlocked(userId1, userId2);
+  }
+  /**
+   * Check if two users are friends.
+   */
+  async areFriends(userId1: string, userId2: string): Promise<boolean> {
+    return this.friendshipRead.areFriends(userId1, userId2);
   }
 }

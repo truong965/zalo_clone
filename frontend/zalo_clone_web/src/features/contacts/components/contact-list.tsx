@@ -46,6 +46,7 @@ import type { ContactResponseDto } from '../types/contact.types';
 import { conversationApi } from '@/features/conversation';
 import { handleInteractionError } from '@/utils/interaction-error';
 import { useQueryClient } from '@tanstack/react-query';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 
 const { Text } = Typography;
 
@@ -79,7 +80,7 @@ export function ContactList({
       const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
       const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-            const value = e.target.value;
+            const value = e.target.value.slice(0, MAX_SEARCH_LENGTH);
             setSearch(value);
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => setDebouncedSearch(value.trim()), 350);
@@ -190,6 +191,7 @@ export function ContactList({
                               value={search}
                               onChange={handleSearchChange}
                               allowClear
+                              maxLength={MAX_SEARCH_LENGTH}
                         />
                   </div>
 

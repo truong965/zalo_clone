@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
   USERS: {
     GET_BY_ID: (id: string) => `/api/v1/users/${id}`,
     GET_PROFILE: '/api/v1/users/profile',
+    GET_PUBLIC_PROFILE: (id: string) => `/api/v1/users/${id}/public-profile`,
     UPDATE_PROFILE: (id: string) => `/api/v1/users/${id}`,
     UPLOAD_AVATAR: '/api/v1/users/avatar',
     SEARCH: '/api/v1/users/search',

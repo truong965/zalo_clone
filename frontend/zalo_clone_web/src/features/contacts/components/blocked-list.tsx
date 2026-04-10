@@ -14,6 +14,7 @@ import { useBlockedList, useUnblockUser } from '../hooks/use-block';
 import { useDebounce } from '@/hooks';
 import type { BlockedUserItem } from '@/types/api';
 import { useTranslation } from 'react-i18next';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 
 const { Text } = Typography;
 
@@ -151,9 +152,10 @@ export function BlockedList() {
                               prefix={<SearchOutlined className="text-gray-400" />}
                               placeholder={t('contacts.blocked.searchPlaceholder')}
                               value={search}
-                              onChange={(e) => setSearch(e.target.value)}
+                              onChange={(e) => setSearch(e.target.value.slice(0, MAX_SEARCH_LENGTH))}
                               allowClear
                               size="small"
+                              maxLength={MAX_SEARCH_LENGTH}
                         />
                   </div>
 

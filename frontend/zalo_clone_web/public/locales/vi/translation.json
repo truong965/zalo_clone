@@ -53,7 +53,9 @@
       "passwordMismatch": "Mật khẩu xác nhận không khớp",
       "updatePassword": "Cập nhật mật khẩu",
       "passwordSuccess": "Thành công",
-      "passwordSuccessDesc": "Mật khẩu đã được thay đổi.",
+      "passwordSuccessDesc": "Mật khẩu đã được thay đổi. Bạn sẽ được đăng xuất ngay bây giờ.",
+      "confirmPasswordChangeTitle": "Xác nhận đổi mật khẩu",
+      "confirmPasswordChangeDesc": "Việc đổi mật khẩu sẽ đăng xuất bạn khỏi tất cả các thiết bị đang sử dụng (bao gồm cả trình duyệt này). Bạn có chắc chắn muốn tiếp tục?",
       "passwordError": "Lỗi",
       "updateEmailTitle": "Cập nhật Email",
       "emailRequired": "Vui lòng nhập email",
@@ -65,7 +67,8 @@
       "emailError": "Lỗi",
       "twoFactor": "Xác thực 2 lớp",
       "enabled": "Đang bảo vệ",
-      "logoutAllDevices": "Đăng xuất khỏi các thiết bị khác sau khi đổi mật khẩu",
+      "disabled": "Chưa bật",
+      "identityEmail": "Email định danh",
       "logoutInfo": "Lưu ý: Mọi phiên đăng nhập cũ trên các thiết bị khác sẽ bị vô hiệu hóa để bảo mật.",
       "accountActions": "Tùy chọn tài khoản",
       "deactivateAccount": "Khóa tài khoản",
@@ -83,7 +86,6 @@
       "deleteWarning": "CẢNH BÁO: Thao tác này sẽ xóa vĩnh viễn tài khoản và toàn bộ dữ liệu tin nhắn, danh bạ của bạn. Hành động này không thể hoàn tác.",
       "verifyPasswordDelete": "Nhập mật khẩu để xác nhận xóa vĩnh viễn",
       "confirmDelete": "Xác nhận xóa vĩnh viễn",
-      "emailGmailOnly": "Hệ thống chỉ hỗ trợ địa chỉ @gmail.com",
       "error": "Lỗi",
       "deactivateError": "Không thể khóa tài khoản",
       "deleteError": "Không thể xóa tài khoản"
@@ -126,7 +128,9 @@
     "errorBoundary": {
       "message": "Đã xảy ra lỗi không mong muốn",
       "retry": "Thử lại"
-    }
+    },
+    "confirm": "Xác nhận",
+    "cancel": "Hủy"
   },
   "auth": {
     "login": {
@@ -501,7 +505,7 @@
     "dobEmpty": "Chưa cập nhật",
     "phone": "Điện thoại:",
     "phoneEmpty": "Chưa cập nhật",
-    "phonePrivacyNote": "Chỉ bạn bè có lưu số của bạn trong danh bạ máy xem được số này.",
+    "phonePrivacyNote": "Chỉ bạn bè mới xem được số này.",
     "editBtn": "Cập nhật",
     "modalViewTitle": "Thông tin tài khoản",
     "modalEditTitle": "Cập nhật thông tin",
@@ -516,7 +520,6 @@
     "formEmailPlaceholder": "Nhập địa chỉ Gmail",
     "formEmailRequired": "Vui lòng nhập email",
     "formEmailInvalid": "Email không hợp lệ",
-    "formEmailGmailOnly": "Chỉ chấp nhận địa chỉ @gmail.com",
     "formPersonalInfo": "Thông tin cá nhân",
     "formDob": "Ngày sinh",
     "formDobPlaceholder": "Chọn ngày sinh",

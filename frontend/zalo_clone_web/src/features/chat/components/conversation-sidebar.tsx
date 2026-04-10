@@ -7,6 +7,7 @@ import {
 import { ConversationItem } from './conversation-item';
 import type { ConversationUI, ConversationFilterTab } from '../types';
 import { useTranslation } from 'react-i18next';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 
 interface ConversationSidebarProps {
       conversations: ConversationUI[];
@@ -81,6 +82,7 @@ export function ConversationSidebar({
                               className="bg-gray-100 border-none rounded-lg"
                               readOnly={!!onSearchClick}
                               onClick={onSearchClick}
+                              maxLength={MAX_SEARCH_LENGTH}
                               onFocus={(e) => {
                                     if (onSearchClick) {
                                           e.target.blur();

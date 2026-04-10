@@ -27,7 +27,6 @@ import {
       Button,
       Modal,
       Divider,
-      Checkbox,
 } from 'antd';
 import {
       BgColorsOutlined,
@@ -53,6 +52,7 @@ import { useAuth } from '@/features/auth/hooks/use-auth';
 import { authService } from '@/features/auth/api/auth.service';
 import { Form, Input, notification } from 'antd';
 import { ApiError } from '@/lib/api-error';
+import { useAuthStore } from '@/features/auth';
 
 const { Sider, Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -376,27 +376,42 @@ function SecuritySection() {
             newPassword: string;
             logoutAllDevices?: boolean;
       }) => {
-            try {
-                  setIsSubmitting(true);
-                  await authService.changePassword({
-                        oldPassword: values.oldPassword,
-                        newPassword: values.newPassword,
-                        logoutAllDevices: values.logoutAllDevices ?? true,
-                  });
+            Modal.confirm({
+                  title: t('settings.security.confirmPasswordChangeTitle') || 'Xác nhận đổi mật khẩu',
+                  content: t('settings.security.confirmPasswordChangeDesc') || 'Việc đổi mật khẩu sẽ đăng xuất bạn khỏi tất cả các thiết bị đang sử dụng (bao gồm cả trình duyệt này). Bạn có chắc chắn muốn tiếp tục?',
+                  okText: t('common.confirm') || 'Tiếp tục',
+                  cancelText: t('common.cancel') || 'Hủy',
+                  onOk: async () => {
+                        try {
+                              setIsSubmitting(true);
+                              await authService.changePassword({
+                                    oldPassword: values.oldPassword,
+                                    newPassword: values.newPassword,
+                                    logoutAllDevices: true,
+                              });
 
-                  api.success({
-                        message: t('settings.security.passwordSuccess') || 'Thành công',
-                        description: t('settings.security.passwordSuccessDesc') || 'Mật khẩu đã được thay đổi.',
-                  });
-                  passwordForm.resetFields();
-            } catch (err) {
-                  api.error({
-                        message: t('settings.security.passwordError') || 'Lỗi',
-                        description: ApiError.from(err).message || 'Không thể đổi mật khẩu.',
-                  });
-            } finally {
-                  setIsSubmitting(false);
-            }
+                              api.success({
+                                    message: t('settings.security.passwordSuccess') || 'Thành công',
+                                    description: t('settings.security.passwordSuccessDesc') || 'Mật khẩu đã được thay đổi. Bạn sẽ được đăng xuất ngay bây giờ.',
+                              });
+                              passwordForm.resetFields();
+
+                              // Clear local auth state immediately and redirect to login
+                              // We wait 1.5s so user can read the success notification
+                              setTimeout(() => {
+                                    useAuthStore.getState().reset();
+                                    window.location.href = '/login';
+                              }, 1500);
+                        } catch (err) {
+                              api.error({
+                                    message: t('settings.security.passwordError') || 'Lỗi',
+                                    description: ApiError.from(err).message || 'Không thể đổi mật khẩu.',
+                              });
+                        } finally {
+                              setIsSubmitting(false);
+                        }
+                  }
+            });
       };
 
       // --- EMAIL CHANGE FLOW ---
@@ -744,15 +759,10 @@ function SecuritySection() {
                                           >
                                                 <Input.Password prefix={<LockOutlined />} placeholder="******" />
                                           </Form.Item>
-                                          <Form.Item
-                                                name="logoutAllDevices"
-                                                valuePropName="checked"
-                                                initialValue={true}
-                                                className="mb-4"
-                                          >
-                                                <Checkbox>
-                                                      {t('settings.security.logoutAllDevices') || 'Đăng xuất khỏi tất cả các thiết bị khác'}
-                                                </Checkbox>
+                                          <Form.Item className="!mb-6">
+                                                <Paragraph className="!text-gray-400 !text-xs italic !mb-0">
+                                                      {t('settings.security.logoutInfo')}
+                                                </Paragraph>
                                           </Form.Item>
                                           <Button type="primary" htmlType="submit" loading={isSubmitting} block>
                                                 {t('settings.security.updatePassword') || 'Cập nhật mật khẩu'}
@@ -846,7 +856,7 @@ function SecuritySection() {
                                                 { type: 'email', message: 'Email không hợp lệ' }
                                           ]}
                                     >
-                                          <Input prefix={<MailOutlined />} placeholder="new-email@gmail.com" />
+                                          <Input prefix={<MailOutlined />} placeholder="example@email.com" />
                                     </Form.Item>
                                     <Form.Item
                                           label="Mật khẩu hiện tại"

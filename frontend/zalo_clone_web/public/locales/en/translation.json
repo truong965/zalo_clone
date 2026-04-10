@@ -53,7 +53,9 @@
       "passwordMismatch": "Confirm password does not match",
       "updatePassword": "Update Password",
       "passwordSuccess": "Success",
-      "passwordSuccessDesc": "Password has been changed.",
+      "passwordSuccessDesc": "Your password has been changed. You will be logged out now.",
+      "confirmPasswordChangeTitle": "Confirm Password Change",
+      "confirmPasswordChangeDesc": "Changing your password will log you out of all active devices (including this browser). Are you sure you want to continue?",
       "passwordError": "Error",
       "updateEmailTitle": "Update Email",
       "emailRequired": "Please enter an email",
@@ -65,7 +67,8 @@
       "emailError": "Error",
       "twoFactor": "Two-Factor Auth",
       "enabled": "Enabled",
-      "logoutAllDevices": "Log out from all other devices after password change",
+      "disabled": "Disabled",
+      "identityEmail": "Identity Email",
       "logoutInfo": "Note: All active sessions on other devices will be invalidated for security.",
       "accountActions": "Account Options",
       "deactivateAccount": "Deactivate Account",
@@ -83,7 +86,6 @@
       "deleteWarning": "WARNING: This will permanently delete your account and all associated data (messages, contacts). This action cannot be undone.",
       "verifyPasswordDelete": "Enter password to confirm permanent deletion",
       "confirmDelete": "Confirm Permanent Deletion",
-      "emailGmailOnly": "System only supports @gmail.com addresses",
       "error": "Error",
       "deactivateError": "Could not deactivate account",
       "deleteError": "Could not delete account"
@@ -126,7 +128,9 @@
     "errorBoundary": {
       "message": "An unexpected error occurred",
       "retry": "Retry"
-    }
+    },
+    "confirm": "Confirm",
+    "cancel": "Cancel"
   },
   "auth": {
     "login": {
@@ -501,7 +505,7 @@
     "dobEmpty": "Not set",
     "phone": "Phone:",
     "phoneEmpty": "Not set",
-    "phonePrivacyNote": "Only friends who saved your number in their contacts can see it.",
+    "phonePrivacyNote": "Only friends can see it.",
     "editBtn": "Update",
     "modalViewTitle": "Account info",
     "modalEditTitle": "Update info",
@@ -516,7 +520,6 @@
     "formEmailPlaceholder": "Enter Gmail address",
     "formEmailRequired": "Please enter an email",
     "formEmailInvalid": "Invalid email format",
-    "formEmailGmailOnly": "Only @gmail.com addresses are accepted",
     "formPersonalInfo": "Personal info",
     "formDob": "Date of birth",
     "formDobPlaceholder": "Select date of birth",

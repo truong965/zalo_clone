@@ -11,6 +11,7 @@ export const SocketEvents = {
 
   // Conversation
   CONVERSATION_UPDATED: 'conversation:updated',
+  ACCOUNT_EMAIL_UPDATED: 'account:email_updated',
   CONVERSATION_MUTED: 'conversation:muted',
   CONVERSATION_PINNED: 'conversation:pinned',
   CONVERSATION_UNPINNED: 'conversation:unpinned',

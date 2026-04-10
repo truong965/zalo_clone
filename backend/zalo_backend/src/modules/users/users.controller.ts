@@ -24,6 +24,8 @@ import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Roles } from '@common/decorator/roles.decorator';
 import { RolesGuard } from '@common/guards/roles.guard';
 import type { User } from '@prisma/client';
+import { InteractionGuard, RequireInteraction } from '@modules/authorization/guards/interaction.guard';
+import { PermissionAction } from '@common/constants/permission-actions.constant';
 
 //swagger
 @ApiTags('users')
@@ -56,6 +58,17 @@ export class UsersController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
+  }
+
+  @Get(':targetUserId/public-profile')
+  @UseGuards(InteractionGuard)
+  @RequireInteraction(PermissionAction.PROFILE)
+  @ResponseMessage('Fetch public profile of another user')
+  async getPublicProfile(
+    @Param('targetUserId') targetUserId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.getPublicProfile(targetUserId, currentUser.id);
   }
 
   @Patch(':id')

@@ -37,6 +37,8 @@ export function UserInfoView({
       showAvatarActions,
 }: UserInfoViewProps) {
       const { t } = useTranslation();
+      if (!user) return null; // Defensive check for missing user data/loading state
+
       const canEdit = showEdit && Boolean(onEdit);
       const shouldShowAvatarActions = showAvatarActions ?? canEdit;
 

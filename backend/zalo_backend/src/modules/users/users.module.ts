@@ -8,6 +8,7 @@ import { ACCOUNT_PURGE_QUEUE } from './constants/purge-queue.constant';
 import { AccountPurgeWorker } from './workers/account-purge.worker';
 import { USER_READ_PORT } from '@common/contracts/internal-api';
 import { UserReadAdapter } from './internal-api/user-read.adapter';
+import { AuthorizationModule } from '@modules/authorization/authorization.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { UserReadAdapter } from './internal-api/user-read.adapter';
     BullModule.registerQueue({
       name: ACCOUNT_PURGE_QUEUE,
     }),
+    AuthorizationModule,
   ],
   controllers: [UsersController],
   providers: [

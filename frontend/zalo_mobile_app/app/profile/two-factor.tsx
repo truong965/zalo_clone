@@ -58,12 +58,12 @@ export default function TwoFactorScreen() {
 
       const handleRequestEmailChange = async () => {
             if (!password || !newEmail || !accessToken) return;
+
             setLoading(true);
             try {
                   await mobileApi.requestEmailChange(accessToken, { password, newEmail });
                   setEmailStep('VERIFY');
                   Toast.show({ type: 'info', text1: 'Bắt đầu', text2: 'Vui lòng kiểm tra mã xác thực gửi đến email mới' });
-                  // Don't clear password yet, might be needed if user goes back
             } catch (error: any) {
                   Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Yêu cầu thay đổi email thất bại' });
             } finally {
@@ -325,7 +325,7 @@ export default function TwoFactorScreen() {
                                                 keyboardType="email-address"
                                                 autoCapitalize="none"
                                                 mode="outlined"
-                                                className="mb-4"
+                                                className="mb-8"
                                           />
                                           <TextInput
                                                 label="Mật khẩu xác nhận"

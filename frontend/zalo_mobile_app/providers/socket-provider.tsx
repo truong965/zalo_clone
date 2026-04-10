@@ -18,7 +18,7 @@ const SocketContext = createContext<SocketContextType>({
 export const useSocket = () => useContext(SocketContext);
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const { accessToken, isAuthenticated, logout } = useAuth();
+  const { accessToken, isAuthenticated, logout, refreshProfile } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -37,17 +37,24 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       const onAuthForceLogout = async () => {
         await logout();
       };
+      
+      const onAccountEmailUpdated = async (data: any) => {
+        console.log('[SocketSync] Account email updated elsewhere. Refreshing...', data);
+        await refreshProfile();
+      };
 
       s.on('connect', onConnect);
       s.on('disconnect', onDisconnect);
       s.on(SocketEvents.AUTH_FAILED, onAuthFailed);
       s.on(SocketEvents.AUTH_FORCE_LOGOUT, onAuthForceLogout);
+      s.on(SocketEvents.ACCOUNT_EMAIL_UPDATED, onAccountEmailUpdated);
 
       return () => {
         s.off('connect', onConnect);
         s.off('disconnect', onDisconnect);
         s.off(SocketEvents.AUTH_FAILED, onAuthFailed);
         s.off(SocketEvents.AUTH_FORCE_LOGOUT, onAuthForceLogout);
+        s.off(SocketEvents.ACCOUNT_EMAIL_UPDATED, onAccountEmailUpdated);
         socketManager.disconnect();
       };
     } else {

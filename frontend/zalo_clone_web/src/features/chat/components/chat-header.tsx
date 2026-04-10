@@ -24,6 +24,7 @@ import { conversationApi } from '@/features/conversation';
 import { useAuthStore } from '@/features/auth';
 import { useTranslation } from 'react-i18next';
 import { useFriendRequestStatus } from '@/features/contacts/hooks/use-friend-request-status';
+import { OtherUserProfileModal } from '@/features/profile/components/other-user-profile-modal';
 
 import { getActiveCall } from '@/features/call/api/call.api';
 
@@ -59,10 +60,13 @@ export function ChatHeader({
       conversationId,
 }: ChatHeaderProps) {
       const [aliasModalOpen, setAliasModalOpen] = useState(false);
+      const [profileModalOpen, setProfileModalOpen] = useState(false);
       const [callLoading, setCallLoading] = useState(false);
       const [callModalOpen, setCallModalOpen] = useState(false);
       const [popoverOpen, setPopoverOpen] = useState(false);
       const user = useAuthStore((s) => s.user);
+      const callStatus = useCallStore((s) => s.callStatus);
+      const callError = useCallStore((s) => s.error);
       const { t } = useTranslation();
 
       const {
@@ -138,6 +142,8 @@ export function ChatHeader({
 
                   if (isDirect) {
                         if (!otherUserId) return;
+
+                        setCallLoading(true);
                         window.dispatchEvent(
                               new CustomEvent('call:initiate', {
                                     detail: {
@@ -215,6 +221,13 @@ export function ChatHeader({
       useEffect(() => {
             setPopoverOpen(showFriendAction ?? false);
       }, [showFriendAction]);
+
+      // ── Sync local loading state with global call store ──────────────────
+      useEffect(() => {
+            if (callStatus !== 'IDLE' || callError) {
+                  setCallLoading(false);
+            }
+      }, [callStatus, callError]);
 
       const handleSendRequest = () => {
             if (!otherUserId) return;
@@ -339,7 +352,13 @@ export function ChatHeader({
             <>
                   <div className="h-16 px-4 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm z-10 flex-none">
                         <div className="flex items-center gap-3">
-                              <Avatar size="large" src={avatarUrl ?? undefined} icon={isDirect ? <UserOutlined /> : <TeamOutlined />} />
+                              <Avatar
+                                    size="large"
+                                    src={avatarUrl ?? undefined}
+                                    icon={isDirect ? <UserOutlined /> : <TeamOutlined />}
+                                    className={isDirect ? 'cursor-pointer active:opacity-80 transition-opacity' : ''}
+                                    onClick={() => isDirect && setProfileModalOpen(true)}
+                              />
                               <div>
                                     <Title level={5} className="mb-0">{conversationName}</Title>
                                     {typingText ? (
@@ -461,6 +480,14 @@ export function ChatHeader({
                               contactDisplayName={conversationName}
                               currentAlias={contactInfo?.aliasName ?? null}
                               onClose={() => setAliasModalOpen(false)}
+                        />
+                  )}
+
+                  {isDirect && otherUserId && (
+                        <OtherUserProfileModal
+                              open={profileModalOpen}
+                              userId={otherUserId}
+                              onClose={() => setProfileModalOpen(false)}
                         />
                   )}
             </>

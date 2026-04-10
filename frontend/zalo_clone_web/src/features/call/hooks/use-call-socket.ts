@@ -340,10 +340,12 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
                                dbg('emitInitiateCall ACK success', { callId: ack.callId });
                                useCallStore.getState().setCallId(ack.callId);
                         }
+                        return ack;
                   } catch (err: any) {
                         dbg('emitInitiateCall ERROR', err.message);
                         useCallStore.getState().setError(err.message);
                         useCallStore.getState().resetCallState();
+                        throw err;
                   }
             },
             [],

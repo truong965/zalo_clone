@@ -35,6 +35,9 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  paramsSerializer: {
+    indexes: null, // use 'id=1&id=2' instead of 'id[]=1&id[]=2'
+  },
 });
 
 // ============================================================================

@@ -22,6 +22,7 @@ export const InternalEventNames = {
   // Identity / auth
   USER_REGISTERED: 'user.registered',
   USER_PROFILE_UPDATED: 'user.profile.updated',
+  USER_EMAIL_UPDATED: 'user.email.updated',
   USER_LOGGED_OUT: 'user.logged_out',
   AUTH_SECURITY_REVOKED: 'auth.security.revoked',
 

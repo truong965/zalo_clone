@@ -22,7 +22,7 @@ import { UserProfileEntity } from './entities/user-profile.entity';
 import { PermissionEntity } from '../permissions/entity/permission.entity';
 import { EventPublisher } from '@shared/events';
 import { UserRegisteredEvent } from '@modules/auth/events';
-import { UserProfileUpdatedEvent } from './events/user.events';
+import { UserProfileUpdatedEvent, UserEmailUpdatedEvent } from './events/user.events';
 import { RedisService } from '@shared/redis/redis.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { UserSecurityLockService } from 'src/shared/redis/services/user-security-lock.service';
@@ -32,6 +32,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InternalEventNames } from 'src/common/contracts/events';
 import type { AuthSecurityRevokedEvent } from '@modules/auth/listeners/security-event.handler';
 import { PhoneNumberUtil } from 'src/common/utils/phone-number.util';
+import { InteractionAuthorizationService } from '../authorization/services/interaction-authorization.service';
 
 @Injectable()
 export class UsersService extends BaseService<User> {
@@ -44,6 +45,7 @@ export class UsersService extends BaseService<User> {
     private readonly securityLock: UserSecurityLockService,
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(ACCOUNT_PURGE_QUEUE) private readonly purgeQueue: Queue,
+    private readonly interactionAuth: InteractionAuthorizationService,
   ) {
     super(prisma.extended.user as unknown as PrismaDelegate<User>);
   }
@@ -130,6 +132,25 @@ export class UsersService extends BaseService<User> {
       permissions: permissions, // Danh sách object permission đầy đủ
     });
   }
+
+  async getPublicProfile(id: string, requesterId: string) {
+    const profile = await this.getProfile(id);
+    const areFriends = await this.interactionAuth.areFriends(requesterId, id);
+    const isSelf = requesterId === id;
+    
+    return {
+      user: {
+        id: profile.id,
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+        phoneNumber: profile.phoneNumber,
+        gender: profile.gender,
+        dateOfBirth: profile.dateOfBirth,
+      },
+      showSensitive: isSelf || areFriends,
+    };
+  }
+
   async isValidPassword(password: string, hash: string): Promise<boolean> {
     return bcrypt.compare(password, hash);
   }
@@ -480,10 +501,7 @@ export class UsersService extends BaseService<User> {
     await this.redis.del(RedisKeyBuilder.authUserProfile(id));
 
     // Emit event
-    this.eventEmitter.emit(InternalEventNames.USER_PROFILE_UPDATED, {
-      userId: id,
-      email: newEmail,
-    });
+    this.eventPublisher.publish(new UserEmailUpdatedEvent(id, newEmail));
 
     return updatedUser;
   }

@@ -42,6 +42,10 @@ export class MessageSearchService {
       const hasTypeFilter = !!request.messageType;
 
       // Validate keyword when provided, or when no type filter (reject empty browse)
+      const sanitizedKeyword = trimmedKeyword 
+        ? this.validationService.sanitizeKeyword(request.keyword)
+        : '';
+
       if (trimmedKeyword || !hasTypeFilter) {
         this.validationService.validateKeyword(request.keyword);
       }
@@ -79,7 +83,7 @@ export class MessageSearchService {
         ? await this.messageSearchRepository.searchInConversation(
             userId,
             conversationId,
-            request.keyword,
+            sanitizedKeyword,
             request.limit,
             request.cursor,
             request.messageType,
@@ -112,7 +116,7 @@ export class MessageSearchService {
       const results = await this.messageSearchRepository.mapToDto(
         items,
         userId,
-        request.keyword,
+        sanitizedKeyword,
       );
 
       const executionTimeMs = Date.now() - startTime;
@@ -205,6 +209,7 @@ export class MessageSearchService {
   ): Promise<CursorPaginatedResult<MessageSearchResultDto>> {
     try {
       // Validation
+      const sanitizedKeyword = this.validationService.sanitizeKeyword(keyword);
       this.validationService.validateKeyword(keyword);
       await this.validationService.validateUserExists(userId);
 
@@ -239,7 +244,7 @@ export class MessageSearchService {
 
       const rawMessages = await this.messageSearchRepository.searchGlobal(
         userId,
-        keyword,
+        sanitizedKeyword,
         limit,
         activeConversations,
       );
@@ -248,7 +253,7 @@ export class MessageSearchService {
       const results = await this.messageSearchRepository.mapToDto(
         rawMessages,
         userId,
-        keyword,
+        sanitizedKeyword,
       );
 
       const executionTimeMs = Date.now() - startTime;
@@ -288,6 +293,7 @@ export class MessageSearchService {
   ): Promise<ConversationGroupedMessageDto[]> {
     try {
       // Validation
+      const sanitizedKeyword = this.validationService.sanitizeKeyword(keyword);
       this.validationService.validateKeyword(keyword);
       await this.validationService.validateUserExists(userId);
 
@@ -313,7 +319,7 @@ export class MessageSearchService {
       const rawRows =
         await this.messageSearchRepository.searchGlobalGroupedByConversation(
           userId,
-          keyword,
+          sanitizedKeyword,
           limit,
           activeConversations,
         );
@@ -321,7 +327,7 @@ export class MessageSearchService {
       // Map to DTOs
       const results = this.messageSearchRepository.mapToGroupedDto(
         rawRows,
-        keyword,
+        sanitizedKeyword,
       );
 
       // Sort by matchCount desc, then by latest message time desc

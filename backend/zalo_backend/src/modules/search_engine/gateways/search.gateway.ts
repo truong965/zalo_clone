@@ -116,7 +116,7 @@ export class SearchGateway extends BaseGateway {
     }
 
     this.logger.log(
-      `User ${userId} subscribing to search: "${payload.keyword}" (socket: ${client.id})`,
+      `User ${userId} subscribing to search: "${payload.keyword.substring(0, 50)}${payload.keyword.length > 50 ? '...' : ''}" (socket: ${client.id})`,
     );
 
     // Subscribe and get initial results

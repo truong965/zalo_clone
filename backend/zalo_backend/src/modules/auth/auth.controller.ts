@@ -265,20 +265,13 @@ export class AuthController {
   ) {
     const result = await this.authService.changePassword(user.id, changePasswordDto, deviceInfo);
 
-    const cookieOptions = {
-      ...this.jwtConfiguration.refreshToken.cookieOptions,
-      maxAge: this.jwtConfiguration.refreshToken.cookieOptions.maxAge as number,
-    };
-    res.cookie(
-      this.jwtConfiguration.refreshToken.cookieName,
-      result.data.refreshToken,
-      cookieOptions,
-    );
+    // After password change, we always force logout by clearing cookie and not returning tokens
+    res.clearCookie(this.jwtConfiguration.refreshToken.cookieName, {
+      path: '/',
+    });
 
     return {
       message: result.message,
-      accessToken: result.data.accessToken,
-      expiresIn: result.data.expiresIn,
     };
   }
 }
