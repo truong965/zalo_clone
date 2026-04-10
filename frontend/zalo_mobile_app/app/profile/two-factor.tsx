@@ -2,9 +2,10 @@ import { OtpInput } from '@/components/ui/otp-input';
 import { useAuth } from '@/providers/auth-provider';
 import { mobileApi } from '@/services/api';
 import { TwoFactorMethod, TwoFactorSetupResponse } from '@/types/auth';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Appbar, Button, Divider, List, Modal, Portal, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
 import Toast from 'react-native-toast-message';
 
@@ -41,8 +42,8 @@ export default function TwoFactorScreen() {
                         Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã cập nhật phương thức bảo mật' });
                         setPasswordModalVisible(false);
                   } else if (pendingAction?.type === 'TOTP_INIT') {
-                        const data = await mobileApi.init2faSetup(accessToken, password);
-                        setTotpData(data);
+                        const response = await mobileApi.init2faSetup(accessToken, password) as any;
+                        setTotpData(response.data);
                         setTotpSetupVisible(true);
                         setPasswordModalVisible(false);
                   }
@@ -141,13 +142,14 @@ export default function TwoFactorScreen() {
 
       const handleOpenAuthenticator = async () => {
             if (!totpData?.otpAuthUri) return;
+
             try {
-                  // Direct open is more robust; will throw or return false if not handled
+                  // Direct open is more resilient on Android 11+ than canOpenURL
                   await Linking.openURL(totpData.otpAuthUri);
-            } catch (error) {
+            } catch (error: any) {
                   Alert.alert(
-                        'Không tìm thấy ứng dụng',
-                        'Ứng dụng Authenticator (Google Authenticator, Authy...) chưa được cài đặt trên thiết bị. Vui lòng cài đặt để tiếp tục.',
+                        'Không thể mở ứng dụng',
+                        'Chúng tôi không thể tự động mở Google Authenticator. Hãy đảm bảo bạn đã cài đặt ứng dụng này, hoặc thử copy mã cài đặt thủ công.',
                         [{ text: 'Đóng', style: 'default' }]
                   );
             }
@@ -279,9 +281,9 @@ export default function TwoFactorScreen() {
 
                         {/* TOTP Setup Modal */}
                         <Modal visible={totpSetupVisible} onDismiss={() => setTotpSetupVisible(false)} contentContainerStyle={styles.modalLarge}>
-                              <Text className="text-xl font-bold mb-3 text-center">Thiết lập Authenticator</Text>
-                              <Text className="text-gray-500 text-center text-xs mb-8">
-                                    Mở ứng dụng xác thực (Google Authenticator, Authy...) để thêm tài khoản này.
+                              <Text className="text-xl font-bold mb-3 text-center">Liên kết Authenticator</Text>
+                              <Text className="text-gray-500 text-center text-xs mb-8 px-4">
+                                    Nhấn nút bên dưới để tự động thêm tài khoản vào ứng dụng xác thực.
                               </Text>
 
                               <View className="items-center mb-10">
@@ -294,9 +296,6 @@ export default function TwoFactorScreen() {
                                     >
                                           Mở ứng dụng Authenticator
                                     </Button>
-                                    <Text className="text-gray-400 text-[10px] mt-4 text-center leading-4">
-                                          Sau khi nhấn, ứng dụng Authenticator sẽ tự động mở và thêm tài khoản Zalo Clone của bạn.
-                                    </Text>
                               </View>
 
                               <Divider className="mb-8" />

@@ -21,6 +21,7 @@ import {
   CurrentUser,
   GetDeviceInfo,
   Public,
+  ResponseMessage,
 } from 'src/common/decorator/customize';
 import type { DeviceInfo } from './interfaces/device-info.interface';
 import { AuthService } from './auth.service';
@@ -56,6 +57,7 @@ export class TwoFactorController {
   @ApiBearerAuth()
   @Post('setup/init')
   @ApiOperation({ summary: 'Initiate 2FA setup and get QR code' })
+  @ResponseMessage('Scan the QR Code with Google Authenticator')
   async initSetup(
     @CurrentUser('id') userId: string,
     @GetDeviceInfo() deviceInfo: DeviceInfo,

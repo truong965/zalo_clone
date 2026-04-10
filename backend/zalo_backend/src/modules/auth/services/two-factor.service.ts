@@ -109,7 +109,7 @@ export class TwoFactorService {
     const { secret, otpAuthUri, qrCodeDataUrl } =
       await this.totpProvider.generateSecret(
         user.email || user.phoneNumber,
-        'Zalo Clone',
+        'ZaloClone',
       );
 
     // Temp save secret in Redis for verification before enabling

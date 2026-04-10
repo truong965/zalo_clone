@@ -452,12 +452,12 @@ export const mobileApi = {
             );
       },
 
-      confirm2faSetup(accessToken: string, code: string) {
+      confirm2faSetup(accessToken: string, token: string) {
             return apiRequest<UserProfile>(
                   '/api/v1/auth/2fa/setup/confirm',
                   {
                         method: 'POST',
-                        body: JSON.stringify({ code }),
+                        body: JSON.stringify({ token }),
                   },
                   accessToken,
             );
