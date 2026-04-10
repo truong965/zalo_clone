@@ -5,7 +5,10 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   ConnectedSocket,
+  SubscribeMessage,
+  MessageBody,
 } from '@nestjs/websockets';
+
 import { Server } from 'socket.io';
 import { Logger, Inject, UseGuards, UsePipes } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
@@ -247,17 +250,17 @@ export class SocketGateway
       const user = await this.socketAuth.authenticateSocket(client);
 
       if (!user) {
-        // Allow unauthenticated connection for specific use cases (like QR login)
+        // Allow unauthenticated connection for specific use cases (like QR login or 2FA polling)
         if (client.handshake?.query?.type === 'public') {
-          this.logger.log(
-            `Socket connecting as public (unauthenticated): ${client.id}`,
+          this.logger.debug(
+            `Socket connected as public (unauthenticated): ${client.id}`,
           );
           client.authenticated = false;
           await this.socketState.handleConnection(client);
           return;
         }
 
-        this.logger.warn(`Socket ${client.id}: Authentication failed`);
+        this.logger.debug(`Socket ${client.id}: Anonymous authentication attempted`);
         client.emit(SocketEvents.AUTH_FAILED, {
           message: 'Authentication failed',
         });
@@ -390,9 +393,6 @@ export class SocketGateway
       this.logger.warn(`⚠️  ${signal} received. Starting graceful shutdown...`);
 
       try {
-        // Stop accepting new connections
-        void this.server.close();
-
         // Notify all connected clients
         this.server.emit(SocketEvents.SERVER_SHUTDOWN, {
           message: 'Server is shutting down. Please reconnect.',
@@ -601,4 +601,24 @@ export class SocketGateway
       this.server.in(socketId).socketsJoin(roomName);
     });
   }
+
+  // =========================================================================
+  // D. 2FA PUSH AUTHENTICATION (PUBLIC)
+  // =========================================================================
+
+  /**
+   * Web client subscribes to 2FA updates for a pending token
+   */
+  @SubscribeMessage('2fa:subscribe')
+  handle2faSubscribe(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody('pendingToken') pendingToken: string,
+  ) {
+    if (!pendingToken) return { event: 'error', data: 'pendingToken is required' };
+    
+    this.logger.log(`Socket ${client.id} subscribing to 2FA room: 2fa:${pendingToken}`);
+    void client.join(`2fa:${pendingToken}`);
+    return { event: '2fa:subscribed', data: { pendingToken } };
+  }
 }
+

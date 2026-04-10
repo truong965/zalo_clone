@@ -1,5 +1,5 @@
 import { Exclude } from 'class-transformer';
-import { Gender, User, UserStatus } from '@prisma/client';
+import { Gender, User, UserStatus, TwoFactorMethod } from '@prisma/client';
 
 export class UserEntity implements User {
   constructor(partial: Partial<UserEntity>) {
@@ -16,11 +16,8 @@ export class UserEntity implements User {
 
   phoneCode: string; // Mặc định +84 từ DB, nhưng entity nhận value thực tế
 
-  // 🔒 BẢO MẬT: Hash này dùng để sync danh bạ phía server.
-  // Không nên trả về client để tránh lộ vector tấn công brute-force số điện thoại.
   @Exclude()
   phoneNumberHash: string | null;
-  phoneNumberNormalized: string | null;
   // ==============================
   // 2. Public Profile
   // ==============================
@@ -72,6 +69,23 @@ export class UserEntity implements User {
   createdAt: Date;
   updatedAt: Date | null;
   deletedAt: Date | null;
+
+  // ==============================
+  // 7. 2FA (Phase 4)
+  // ==============================
+  twoFactorEnabled: boolean;
+
+  @Exclude()
+  twoFactorSecret: string | null;
+
+  @Exclude()
+  twoFactorBackupCodes: string[];
+
+  twoFactorSetupAt: Date | null;
+
+  twoFactorMethod: TwoFactorMethod | null;
+
+  hasTotpSecret: boolean;
 
   /**
    * ⚠️ LƯU Ý VỀ RELATIONSHIPS:

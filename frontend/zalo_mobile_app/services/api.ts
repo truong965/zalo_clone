@@ -1,33 +1,39 @@
+import type { ConversationSearchMember } from '@/features/chats/search.types';
+import type { ContactSearchResult, SearchHistoryItem, SearchSuggestion, TrendingKeyword } from '@/features/search/types';
 import type {
       AuthResponse,
+      ChangePasswordPayload,
       DeviceSession,
+      ForgotPasswordPayload,
       LoginPayload,
       QrScanResponse,
       RegisterPayload,
-      UpdateUserPayload,
-      ChangePasswordPayload,
-      UserProfile,
-      ForgotPasswordPayload,
-      VerifyOtpPayload,
+      RequestRegisterOtpPayload,
       ResetPasswordPayload,
+      TwoFactorMethod,
+      TwoFactorRequiredResponse,
+      TwoFactorSetupResponse,
+      UpdateUserPayload,
+      UserProfile,
+      VerifyRegisterOtpPayload,
+      VerifyTwoFactorRequest,
 } from '@/types/auth';
+import type { BlockedListResponse } from '@/types/block';
+import type { CallHistoryItem, CursorPaginatedResult } from '@/types/call';
+import type { ContactItemDto, ContactResponseDto } from '@/types/contact';
 import type {
       Conversation,
       ConversationListResponse,
-      ConversationMember,
-      JoinGroupResponse,
       JoinGroupPreviewResponse,
+      JoinGroupResponse
 } from '@/types/conversation';
 import type { Message, RecentMediaItemDto } from '@/types/message';
-import type { ReminderItem, CreateReminderParams, UpdateReminderParams } from '@/types/reminder';
-import type { CallHistoryItem, CursorPaginatedResult } from '@/types/call';
-import type { ConversationSearchMember } from '@/features/chats/search.types';
-import type { SearchHistoryItem, SearchSuggestion, TrendingKeyword } from '@/features/search/types';
 import type { PrivacySettings, UpdatePrivacySettingsPayload } from '@/types/privacy';
-import type { ContactSearchResult } from '@/features/search/types';
-import type { BlockedUser, BlockedListResponse } from '@/types/block';
+import type { CreateReminderParams, ReminderItem, UpdateReminderParams } from '@/types/reminder';
+import { getStableDeviceId } from '@/utils/device-identity';
 import Constants from 'expo-constants';
-import { NativeModules, Platform } from 'react-native';
+import * as Device from 'expo-device';
+import { Dimensions, NativeModules, Platform } from 'react-native';
 
 const API_PORT = '8000';
 const API_BASE_URL = resolveApiBaseUrl();
@@ -51,17 +57,48 @@ function resolveDeviceTypeHeader(): 'MOBILE' | 'WEB' {
 
 function resolveDeviceNameHeader(): string {
       return (
+            Device.modelName ||
+            Device.deviceName ||
             Constants.expoConfig?.name ||
             Constants.expoConfig?.slug ||
             (Platform.OS === 'ios' ? 'iOS App' : Platform.OS === 'android' ? 'Android App' : 'Web App')
       );
 }
 
-const DEVICE_HEADERS: Record<string, string> = {
-      'X-Device-Type': resolveDeviceTypeHeader(),
-      'X-Platform': resolvePlatformHeader(),
-      'X-Device-Name': resolveDeviceNameHeader(),
-};
+function resolveScreenResolution(): string {
+      const { width, height } = Dimensions.get('window');
+      return `${Math.round(width)}x${Math.round(height)}`;
+}
+
+function resolveTimezone(): string {
+      // Intended for modern environments, fallback for older ones
+      try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      } catch {
+            return '';
+      }
+}
+
+import { getDevicePublicKey, getDeviceKeyAlgorithm } from '../utils/device-crypto';
+
+async function getDeviceHeaders(): Promise<Record<string, string>> {
+      const publicKey = await getDevicePublicKey();
+      
+      return {
+            'X-Device-Type': resolveDeviceTypeHeader(),
+            'X-Platform': resolvePlatformHeader(),
+            'X-Device-Name': resolveDeviceNameHeader(),
+            'X-Screen-Resolution': resolveScreenResolution(),
+            'X-Timezone': resolveTimezone(),
+            'X-Device-Id': await getStableDeviceId(),
+            'X-OS-Name': Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Unknown',
+            'X-OS-Version': String(Platform.Version ?? ''),
+            ...(publicKey ? {
+              'X-Public-Key': publicKey,
+              'X-Key-Algorithm': getDeviceKeyAlgorithm(),
+            } : {}),
+      };
+}
 
 type ApiEnvelope<T> = {
       data: T;
@@ -203,9 +240,10 @@ async function apiRequest<T>(
 ): Promise<T | Response> {
       const url = buildUrl(path);
       const method = options.method ?? 'GET';
+      const deviceHeaders = await getDeviceHeaders();
       const headers: HeadersInit = {
             'Content-Type': 'application/json',
-            ...DEVICE_HEADERS,
+            ...deviceHeaders,
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
             ...(options.headers ?? {}),
       };
@@ -340,14 +378,129 @@ export const mobileApi = {
       },
 
       login(payload: LoginPayload) {
-            return apiRequest<AuthResponse>('/api/v1/auth/login', {
+            return apiRequest<AuthResponse | TwoFactorRequiredResponse>('/api/v1/auth/login', {
                   method: 'POST',
                   body: JSON.stringify(payload),
             });
       },
 
+      verify2fa(payload: VerifyTwoFactorRequest) {
+            return apiRequest<AuthResponse>('/api/v1/auth/2fa/verify', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            });
+      },
+
+      sendSmsChallenge(pendingToken: string) {
+            return apiRequest<{ maskedPhone: string }>('/api/v1/auth/2fa/challenge/sms', {
+                  method: 'POST',
+                  body: JSON.stringify({ pendingToken }),
+            });
+      },
+
+      sendEmailChallenge(pendingToken: string) {
+            return apiRequest<{ maskedEmail: string }>('/api/v1/auth/2fa/challenge/email', {
+                  method: 'POST',
+                  body: JSON.stringify({ pendingToken }),
+            });
+      },
+
+      sendTotpChallenge(pendingToken: string) {
+            return apiRequest<void>('/api/v1/auth/2fa/challenge/totp', {
+                  method: 'POST',
+                  body: JSON.stringify({ pendingToken }),
+            });
+      },
+
+      sendPushChallenge(pendingToken: string) {
+            return apiRequest<void>('/api/v1/auth/2fa/challenge/push', {
+                  method: 'POST',
+                  body: JSON.stringify({ pendingToken }),
+            });
+      },
+
+      acknowledgePush(pendingToken: string, approved: boolean, accessToken?: string, signature?: string) {
+            return apiRequest<void>(
+                  '/api/v1/auth/2fa/acknowledge',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ pendingToken, approved, signature }),
+                  },
+                  accessToken,
+            );
+      },
+
+      updateTwoFactorMethod(method: TwoFactorMethod, accessToken: string, password?: string) {
+            return apiRequest<UserProfile>(
+                  '/api/v1/auth/2fa/method',
+                  {
+                        method: 'PATCH',
+                        body: JSON.stringify({ method, password }),
+                  },
+                  accessToken,
+            );
+      },
+
+      init2faSetup(accessToken: string, password: string) {
+            return apiRequest<TwoFactorSetupResponse>(
+                  '/api/v1/auth/2fa/setup/init',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ password }),
+                  },
+                  accessToken,
+            );
+      },
+
+      confirm2faSetup(accessToken: string, token: string) {
+            return apiRequest<UserProfile>(
+                  '/api/v1/auth/2fa/setup/confirm',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ token }),
+                  },
+                  accessToken,
+            );
+      },
+
+      requestEmailChange(accessToken: string, payload: { password: string; newEmail: string }) {
+            return apiRequest<void>(
+                  '/api/v1/auth/2fa/email/change-request',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                  },
+                  accessToken,
+            );
+      },
+
+      confirmEmailChange(accessToken: string, otp: string) {
+            return apiRequest<void>(
+                  '/api/v1/auth/2fa/email/change-confirm',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ otp }),
+                  },
+                  accessToken,
+            );
+      },
+
       register(payload: RegisterPayload) {
             return apiRequest<UserProfile>('/api/v1/auth/register', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            });
+      },
+
+      requestRegisterOtp(payload: RequestRegisterOtpPayload) {
+            return apiRequest<void>('/api/v1/auth/register-otp/request', {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            });
+      },
+
+      verifyRegisterOtp(payload: VerifyRegisterOtpPayload) {
+            return apiRequest<void>('/api/v1/auth/register-otp/verify', {
                   method: 'POST',
                   body: JSON.stringify(payload),
             });
@@ -372,14 +525,7 @@ export const mobileApi = {
       },
 
       forgotPassword(payload: ForgotPasswordPayload) {
-            return apiRequest<void>('/api/v1/auth/forgot-password', {
-                  method: 'POST',
-                  body: JSON.stringify(payload),
-            });
-      },
-
-      verifyOtp(payload: VerifyOtpPayload) {
-            return apiRequest<void>('/api/v1/auth/verify-otp', {
+            return apiRequest<void | TwoFactorRequiredResponse>('/api/v1/auth/forgot-password', {
                   method: 'POST',
                   body: JSON.stringify(payload),
             });
@@ -482,7 +628,21 @@ export const mobileApi = {
       },
 
       getSessions(accessToken: string) {
-            return apiRequest<DeviceSession[]>('/api/v1/auth/sessions', { method: 'GET' }, accessToken);
+            return apiRequest<{
+                  currentDeviceId?: string;
+                  sessions: DeviceSession[];
+            }>('/api/v1/auth/sessions', { method: 'GET' }, accessToken);
+      },
+
+      generateAttestChallenge(accessToken: string) {
+            return apiRequest<{ challenge: string }>('/api/v1/auth/devices/attest/challenge', { method: 'POST' }, accessToken);
+      },
+
+      verifyAttest(deviceId: string, payload: { challenge: string; signature: string }, accessToken: string) {
+            return apiRequest<{ verified: boolean }>(`/api/v1/auth/devices/${deviceId}/attest/verify`, {
+                  method: 'POST',
+                  body: JSON.stringify(payload),
+            }, accessToken);
       },
 
       revokeSession(deviceId: string, accessToken: string) {
@@ -648,6 +808,25 @@ export const mobileApi = {
                         body: JSON.stringify({ targetUserId }),
                   },
                   accessToken,
+            );
+      },
+
+      syncContacts(contacts: ContactItemDto[], accessToken: string) {
+            return apiRequest<{ jobId: string }>(
+                  '/api/v1/contacts/sync',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ contacts }),
+                  },
+                  accessToken
+            );
+      },
+
+      checkSyncRateLimit(accessToken: string) {
+            return apiRequest<{ canSync: boolean }>(
+                  '/api/v1/contacts/sync/check',
+                  { method: 'GET' },
+                  accessToken
             );
       },
 
@@ -917,6 +1096,47 @@ export const mobileApi = {
                   { method: 'GET' },
                   accessToken,
             );
+      },
+
+      deactivateAccount(password: string, accessToken: string) {
+            return apiRequest<void>(
+                  '/api/v1/users/deactivate',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify({ password }),
+                  },
+                  accessToken,
+            );
+      },
+
+      deleteAccount(userId: string, password: string, accessToken: string) {
+            return apiRequest<void>(
+                  `/api/v1/users/${userId}`,
+                  {
+                        method: 'DELETE',
+                        body: JSON.stringify({ password }),
+                  },
+                  accessToken,
+            );
+      },
+
+      getSyncedContacts(accessToken: string, params: { cursor?: string; limit?: number; search?: string; excludeFriends?: boolean } = {}) {
+            const query = new URLSearchParams();
+            if (params.cursor) query.append('cursor', params.cursor);
+            if (params.limit) query.append('limit', params.limit.toString());
+            if (params.search) query.append('search', params.search);
+            if (params.excludeFriends) query.append('excludeFriends', 'true');
+
+            const queryString = query.toString();
+            return apiRequest<CursorPaginatedResult<ContactResponseDto>>(
+                  `/api/v1/contacts${queryString ? `?${queryString}` : ''}`,
+                  { method: 'GET' },
+                  accessToken,
+            );
+      },
+
+      removeSyncedContact(contactUserId: string, accessToken: string) {
+            return apiRequest<void>(`/api/v1/contacts/${contactUserId}`, { method: 'DELETE' }, accessToken);
       },
 };
 

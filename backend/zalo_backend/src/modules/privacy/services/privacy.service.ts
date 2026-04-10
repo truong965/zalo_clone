@@ -5,6 +5,7 @@ import {
   PrivacySettings,
   PrivacyLevel,
   FriendshipStatus,
+  Prisma,
 } from '@prisma/client';
 import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
@@ -94,17 +95,11 @@ export class PrivacyService {
       const pipeline = this.redis.getClient().pipeline();
 
       for (const userId of missingUserIds) {
-        let settings = settingsMap.get(userId);
+        const settings = settingsMap.get(userId);
 
-        if (!settings) {
-          settings = await this.prisma.privacySettings.upsert({
-            where: { userId },
-            create: { userId },
-            update: {},
-          });
-        }
-
-        const dto = this.mapToResponseDto(settings);
+        const dto: PrivacySettingsResponseDto = settings
+          ? this.mapToResponseDto(settings)
+          : this.getDefaultEphemeralSettings(userId);
         result.set(userId, dto);
 
         // Cache it
@@ -130,13 +125,13 @@ export class PrivacyService {
 
     if (cached) return JSON.parse(cached) as PrivacySettingsResponseDto;
 
-    let settings = await this.prisma.privacySettings.findUnique({
+    const settings = await this.prisma.privacySettings.findUnique({
       where: { userId },
     });
 
-    if (!settings) settings = await this.createDefaultSettings(userId);
-
-    const response = this.mapToResponseDto(settings);
+    const response: PrivacySettingsResponseDto = settings
+      ? this.mapToResponseDto(settings)
+      : this.getDefaultEphemeralSettings(userId);
     await this.redis.setex(
       cacheKey,
       this.config.ttl.privacy,
@@ -153,14 +148,10 @@ export class PrivacyService {
     userId: string,
     dto: UpdatePrivacySettingsDto,
   ): Promise<PrivacySettingsResponseDto> {
-    let settings = await this.prisma.privacySettings.findUnique({
+    const updatedSettings = await this.prisma.privacySettings.upsert({
       where: { userId },
-    });
-    if (!settings) settings = await this.createDefaultSettings(userId);
-
-    const updatedSettings = await this.prisma.privacySettings.update({
-      where: { userId },
-      data: { ...dto, updatedById: userId },
+      create: { userId, ...dto },
+      update: { ...dto, updatedById: userId },
     });
 
     await this.invalidatePrivacyCache(userId);
@@ -351,14 +342,21 @@ export class PrivacyService {
     return friend?.status === FriendshipStatus.ACCEPTED;
   }
 
-  private async createDefaultSettings(
+  /**
+   * Returns default privacy settings for users who haven't customized them
+   */
+  private getDefaultEphemeralSettings(
     userId: string,
-  ): Promise<PrivacySettings> {
-    return this.prisma.privacySettings.create({
-      data: {
-        userId,
-      },
-    });
+  ): PrivacySettingsResponseDto {
+    return {
+      userId,
+      showProfile: PrivacyLevel.EVERYONE,
+      whoCanMessageMe: PrivacyLevel.EVERYONE,
+      whoCanCallMe: PrivacyLevel.EVERYONE,
+      showOnlineStatus: true,
+      showLastSeen: true,
+      updatedAt: new Date(),
+    };
   }
 
   private async invalidatePrivacyCache(userId: string): Promise<void> {

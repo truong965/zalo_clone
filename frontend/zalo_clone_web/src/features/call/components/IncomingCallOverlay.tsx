@@ -25,6 +25,7 @@ const RINGING_TIMEOUT_S = 30;
 export function IncomingCallOverlay() {
       const { t } = useTranslation();
       const incomingCall = useCallStore((s) => s.incomingCall);
+      const error = useCallStore((s) => s.error);
       const resetCallState = useCallStore((s) => s.resetCallState);
       const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
       const audioCtxRef = useRef<AudioContext | null>(null);
@@ -101,7 +102,7 @@ export function IncomingCallOverlay() {
       // ── Lifecycle ───────────────────────────────────────────────────────
 
       useEffect(() => {
-            if (!incomingCall) {
+            if (!incomingCall || error) {
                   stopRingtone();
                   if (countdownRef.current) {
                         clearInterval(countdownRef.current);
@@ -130,11 +131,11 @@ export function IncomingCallOverlay() {
                         countdownRef.current = null;
                   }
             };
-      }, [incomingCall, startRingtone, stopRingtone, handleReject]);
+      }, [incomingCall, error, startRingtone, stopRingtone, handleReject]);
 
       // ── Render ──────────────────────────────────────────────────────────
 
-      if (!incomingCall) return null;
+      if (!incomingCall || error) return null;
 
       const isVideo = incomingCall.callType === 'VIDEO';
       const isGroup = incomingCall.isGroupCall ?? false;

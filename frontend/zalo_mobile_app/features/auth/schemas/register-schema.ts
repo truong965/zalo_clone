@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const phoneRegex = /^(0|84)(3|5|7|8|9)([0-9]{8})$/;
+import { PHONE_REGEX } from '@/constants/validation';
 
 export const registerSchema = z
       .object({
@@ -9,7 +9,7 @@ export const registerSchema = z
                   .string()
                   .trim()
                   .min(1, 'auth.validation.phoneRequired')
-                  .regex(phoneRegex, 'auth.validation.invalidPhoneNumber'),
+                  .regex(PHONE_REGEX, 'auth.validation.invalidPhoneNumber'),
             password: z.string().min(6, 'auth.validation.passwordMin'),
             confirmPassword: z.string().min(1, 'auth.validation.confirmPasswordRequired'),
             gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),

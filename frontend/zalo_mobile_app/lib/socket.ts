@@ -67,6 +67,38 @@ class SocketManager {
     return this.socket;
   }
 
+  connectUnauthenticated(): Socket {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+
+    const baseUrl = this.baseUrl.replace('/api/v1', '');
+    if (!baseUrl) {
+      throw new Error('Socket base URL not configured');
+    }
+    const socketUrl = `${baseUrl}/socket.io`;
+
+    this.socket = io(socketUrl, {
+      path: '/socket.io',
+      transports: ['websocket'],
+      query: { type: 'public' }, // Báo cho Backend đây là kết nối công khai hợp lệ
+      autoConnect: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+    });
+
+    this.socket.on(SocketEvents.CONNECT, () => {
+      console.log('✅ Socket connected (Unauthenticated):', this.socket?.id);
+    });
+
+    this.socket.on(SocketEvents.CONNECT_ERROR, (error) => {
+      console.error('❌ Socket connection error (Unauthenticated):', error.message);
+    });
+
+    return this.socket;
+  }
+
   async emitWithAck<T>(
     event: string,
     data: any,

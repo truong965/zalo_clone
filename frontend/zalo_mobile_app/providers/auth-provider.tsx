@@ -3,7 +3,19 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { PropsWithChildren } from 'react';
 
 import { mobileApi } from '@/services/api';
-import type { LoginPayload, RegisterPayload, UserProfile, UpdateUserPayload, ChangePasswordPayload } from '@/types/auth';
+import { signWithDeviceKey } from '@/utils/device-crypto';
+import { getStableDeviceId } from '@/utils/device-identity';
+import type {
+      LoginPayload,
+      RegisterPayload,
+      UserProfile,
+      UpdateUserPayload,
+      ChangePasswordPayload,
+      TwoFactorRequiredResponse,
+      VerifyTwoFactorRequest,
+      RequestRegisterOtpPayload,
+      VerifyRegisterOtpPayload,
+} from '@/types/auth';
 
 const ACCESS_TOKEN_KEY = 'zalo_mobile_access_token';
 
@@ -24,8 +36,13 @@ type AuthContextValue = {
       user: UserProfile | null;
       isLoading: boolean;
       isAuthenticated: boolean;
+      twoFactorData: TwoFactorRequiredResponse | null;
       login: (payload: LoginPayload) => Promise<void>;
+      verify2fa: (payload: VerifyTwoFactorRequest) => Promise<any>;
+      clear2fa: () => void;
       register: (payload: RegisterPayload) => Promise<void>;
+      requestRegisterOtp: (payload: RequestRegisterOtpPayload) => Promise<void>;
+      verifyRegisterOtp: (payload: VerifyRegisterOtpPayload) => Promise<void>;
       logout: () => Promise<void>;
       refreshProfile: () => Promise<void>;
       updateProfile: (payload: UpdateUserPayload) => Promise<void>;
@@ -38,6 +55,36 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const [accessToken, setAccessToken] = useState<string | null>(null);
       const [user, setUser] = useState<UserProfile | null>(null);
       const [isLoading, setIsLoading] = useState(true);
+      const [twoFactorData, setTwoFactorData] = useState<TwoFactorRequiredResponse | null>(null);
+
+      /**
+       * Silent Attestation: Verify device identity with ECDSA signature
+       * automatically after login/2fa success.
+       */
+      const performSilentAttestation = useCallback(async (token: string) => {
+            try {
+                  const deviceId = await getStableDeviceId();
+                  const { sessions } = await mobileApi.getSessions(token);
+                  const currentSession = sessions.find(s => s.deviceId === deviceId);
+
+                  if (currentSession && !currentSession.attestationVerified) {
+                        console.log('[Attestation] Starting silent verify for device:', deviceId);
+                        const { challenge } = await mobileApi.generateAttestChallenge(token);
+                        const signature = await signWithDeviceKey(challenge);
+                        
+                        if (signature) {
+                              const result = await mobileApi.verifyAttest(deviceId, { challenge, signature }, token);
+                              if (result.verified) {
+                                    console.log('[Attestation] Device verified successfully');
+                              } else {
+                                    console.error('[Attestation] Signature verification failed on server');
+                              }
+                        }
+                  }
+            } catch (error) {
+                  console.error('[Attestation] Silent verification failed:', error);
+            }
+      }, []);
 
       const hydrateAuth = useCallback(async () => {
             try {
@@ -51,6 +98,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
                   setAccessToken(token);
                   const profile = await mobileApi.getProfile(token);
                   setUser(profile);
+                  
+                  // Trigger silent attestation check even on hydrate
+                  void performSilentAttestation(token);
             } catch {
                   await clearAccessTokenInStorage();
                   setAccessToken(null);
@@ -58,7 +108,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             } finally {
                   setIsLoading(false);
             }
-      }, []);
+      }, [performSilentAttestation]);
 
       useEffect(() => {
             void hydrateAuth();
@@ -66,20 +116,63 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       const login = useCallback(async (payload: LoginPayload) => {
             const response = await mobileApi.login(payload);
-            await setAccessTokenInStorage(response.accessToken);
-            setAccessToken(response.accessToken);
 
-            if (response.user) {
-                  setUser(response.user);
+            if ('status' in response && response.status === '2FA_REQUIRED') {
+                  setTwoFactorData(response as TwoFactorRequiredResponse);
                   return;
             }
 
-            const profile = await mobileApi.getProfile(response.accessToken);
-            setUser(profile);
+            const authResponse = response as any;
+            await setAccessTokenInStorage(authResponse.accessToken);
+            setAccessToken(authResponse.accessToken);
+
+            if (authResponse.user) {
+                  setUser(authResponse.user);
+            } else {
+                  const profile = await mobileApi.getProfile(authResponse.accessToken);
+                  setUser(profile);
+            }
+
+            // Trigger silent attestation
+            void performSilentAttestation(authResponse.accessToken);
+      }, [performSilentAttestation]);
+
+      const verify2fa = useCallback(async (payload: VerifyTwoFactorRequest) => {
+            const response = await mobileApi.verify2fa(payload);
+
+            if (response.accessToken) {
+                  await setAccessTokenInStorage(response.accessToken);
+                  setAccessToken(response.accessToken);
+                  setTwoFactorData(null);
+
+                  if (response.user) {
+                        setUser(response.user);
+                  } else {
+                        const profile = await mobileApi.getProfile(response.accessToken);
+                        setUser(profile);
+                  }
+
+                  // Trigger silent attestation
+                  void performSilentAttestation(response.accessToken);
+            }
+
+            return response;
+      }, [performSilentAttestation]);
+
+      const clear2fa = useCallback(() => {
+            setTwoFactorData(null);
       }, []);
 
       const register = useCallback(async (payload: RegisterPayload) => {
             await mobileApi.register(payload);
+      }, []);
+
+      const requestRegisterOtp = useCallback(async (payload: RequestRegisterOtpPayload) => {
+            await mobileApi.requestRegisterOtp(payload);
+      }, []);
+
+      const verifyRegisterOtp = useCallback(async (payload: VerifyRegisterOtpPayload) => {
+            await mobileApi.verifyRegisterOtp(payload);
       }, []);
 
       const logout = useCallback(async () => {
@@ -119,14 +212,34 @@ export function AuthProvider({ children }: PropsWithChildren) {
                   user,
                   isLoading,
                   isAuthenticated: Boolean(accessToken),
+                  twoFactorData,
                   login,
+                  verify2fa,
+                  clear2fa,
                   register,
+                  requestRegisterOtp,
+                  verifyRegisterOtp,
                   logout,
                   refreshProfile,
                   updateProfile,
                   changePassword,
             }),
-            [accessToken, isLoading, login, logout, refreshProfile, register, user, updateProfile, changePassword],
+            [
+                  accessToken,
+                  isLoading,
+                  twoFactorData,
+                  login,
+                  verify2fa,
+                  clear2fa,
+                  logout,
+                  refreshProfile,
+                  register,
+                  requestRegisterOtp,
+                  verifyRegisterOtp,
+                  user,
+                  updateProfile,
+                  changePassword,
+            ],
       );
 
       return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

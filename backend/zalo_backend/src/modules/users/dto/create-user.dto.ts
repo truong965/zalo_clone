@@ -11,6 +11,7 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 import { Gender } from '@prisma/client';
 import { Type } from 'class-transformer';
+import { NormalizePhone } from 'src/common/decorator/normalize-phone.decorator';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Nguyen Van A', description: 'Tên hiển thị' })
@@ -29,6 +30,7 @@ export class CreateUserDto {
 
   @ApiProperty({ example: '0987654321', description: 'Số điện thoại (VN)' })
   @IsNotEmpty()
+  @NormalizePhone()
   @IsPhoneNumber('VN', {
     message: 'phoneNumber must be a valid phone number (e.g. 09xxx or +849xxx)',
   })

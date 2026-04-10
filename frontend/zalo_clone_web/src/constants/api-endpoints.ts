@@ -22,15 +22,33 @@ export const API_ENDPOINTS = {
     VERIFY_OTP: '/api/v1/auth/verify-otp',
     RESET_PASSWORD: '/api/v1/auth/reset-password',
     CHANGE_PASSWORD: '/api/v1/auth/change-password',
+    REGISTER_OTP_REQUEST: '/api/v1/auth/register/otp-request',
+    REGISTER_OTP_VERIFY: '/api/v1/auth/register/otp-verify',
+
+    // 2FA
+    TWO_FACTOR_CHALLENGE_SMS: '/api/v1/auth/2fa/challenge/sms',
+    TWO_FACTOR_CHALLENGE_EMAIL: '/api/v1/auth/2fa/challenge/email',
+    TWO_FACTOR_CHALLENGE_TOTP: '/api/v1/auth/2fa/challenge/totp',
+    TWO_FACTOR_CHALLENGE_PUSH: '/api/v1/auth/2fa/challenge/push',
+    TWO_FACTOR_VERIFY: '/api/v1/auth/2fa/verify',
+    TWO_FACTOR_UPDATE_METHOD: '/api/v1/auth/2fa/method',
+    TWO_FACTOR_SETUP_INIT: '/api/v1/auth/2fa/setup/init',
+    TWO_FACTOR_SETUP_CONFIRM: '/api/v1/auth/2fa/setup/confirm',
+    EMAIL_CHANGE_REQUEST: '/api/v1/auth/2fa/email/change-request',
+    EMAIL_CHANGE_CONFIRM: '/api/v1/auth/2fa/email/change-confirm',
   },
+
 
   // Users
   USERS: {
     GET_BY_ID: (id: string) => `/api/v1/users/${id}`,
     GET_PROFILE: '/api/v1/users/profile',
+    GET_PUBLIC_PROFILE: (id: string) => `/api/v1/users/${id}/public-profile`,
     UPDATE_PROFILE: (id: string) => `/api/v1/users/${id}`,
     UPLOAD_AVATAR: '/api/v1/users/avatar',
     SEARCH: '/api/v1/users/search',
+    DEACTIVATE: '/api/v1/users/deactivate',
+    DELETE_SELF: (id: string) => `/api/v1/users/${id}`,
   },
 
   // Chat - Conversations

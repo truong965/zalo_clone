@@ -27,4 +27,15 @@ export class AdminSystemController {
   getSystemStatus() {
     return this.systemService.getSystemStatus();
   }
+
+  @ApiOperation({
+    summary: 'Get link to Bull Board (Monitoring Queues)',
+  })
+  @Get('queues-url')
+  getQueuesUrl() {
+    return {
+      url: '/admin/queues',
+      description: 'Giao diện quản lý hàng đợi BullMQ (Retry/Delete jobs)',
+    };
+  }
 }

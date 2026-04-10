@@ -16,11 +16,11 @@ export default registerAs('social', () => ({
     // Giới hạn đồng bộ danh bạ
     contactSync: {
       maxPerRequest: parseInt(
-        process.env.SOCIAL_CONTACT_SYNC_MAX_SIZE || '500',
+        process.env.SOCIAL_CONTACT_SYNC_MAX_SIZE || '1000',
         10,
       ),
       maxPerDay: parseInt(
-        process.env.SOCIAL_CONTACT_SYNC_DAILY_LIMIT || '3',
+        process.env.SOCIAL_CONTACT_SYNC_DAILY_LIMIT || '1',
         10,
       ),
       windowSeconds: 86400, // 24 giờ

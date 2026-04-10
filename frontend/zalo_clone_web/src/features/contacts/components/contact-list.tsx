@@ -35,19 +35,32 @@ import {
       MoreOutlined,
       EditOutlined,
       DeleteOutlined,
+      UserAddOutlined,
 } from '@ant-design/icons';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useContactsList, useRemoveContact } from '../hooks/use-contacts-list';
+import { useSendFriendRequest } from '../api/friendship.api';
 import { FriendCard } from './friend-card';
 import { AliasEditModal } from './alias-edit-modal';
 import type { ContactResponseDto } from '../types/contact.types';
 import { conversationApi } from '@/features/conversation';
 import { handleInteractionError } from '@/utils/interaction-error';
 import { useQueryClient } from '@tanstack/react-query';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 
 const { Text } = Typography;
 
 const ITEM_HEIGHT = 92;
+const HEADER_HEIGHT = 42;
+
+// ============================================================================
+// Types for Flattened List
+// ============================================================================
+
+type ListRow =
+      | { type: 'header'; label: string; id: string }
+      | { type: 'contact'; data: ContactResponseDto }
+      | { type: 'loader'; id: string };
 
 // ============================================================================
 // ContactList
@@ -67,7 +80,7 @@ export function ContactList({
       const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
       const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-            const value = e.target.value;
+            const value = e.target.value.slice(0, MAX_SEARCH_LENGTH);
             setSearch(value);
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => setDebouncedSearch(value.trim()), 350);
@@ -77,15 +90,41 @@ export function ContactList({
       const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
             useContactsList({ search: debouncedSearch || undefined, excludeFriends: true });
 
-      const contacts = data?.pages.flatMap((p) => p.data) ?? [];
-      const totalCount = hasNextPage ? contacts.length + 1 : contacts.length;
+      const rawContacts = useMemo(() => data?.pages.flatMap((p) => p.data) ?? [], [data]);
+
+      // Flatten logic with grouping
+      const listData = useMemo(() => {
+            const suggestions = rawContacts.filter((c) => c.isMutual);
+            const others = rawContacts.filter((c) => !c.isMutual);
+
+            const result: ListRow[] = [];
+
+            if (suggestions.length > 0) {
+                  result.push({ type: 'header', label: 'Gợi ý kết bạn từ danh bạ', id: 'header-suggestions' });
+                  suggestions.forEach((c) => result.push({ type: 'contact', data: c }));
+            }
+
+            if (others.length > 0) {
+                  result.push({ type: 'header', label: 'Danh sách liên lạc', id: 'header-others' });
+                  others.forEach((c) => result.push({ type: 'contact', data: c }));
+            }
+
+            if (hasNextPage) {
+                  result.push({ type: 'loader', id: 'loader-bottom' });
+            }
+
+            return result;
+      }, [rawContacts, hasNextPage]);
 
       // ── Virtualizer ────────────────────────────────────────────────────────────
       const scrollParentRef = useRef<HTMLDivElement | null>(null);
       const virtualizer = useVirtualizer({
-            count: totalCount,
+            count: listData.length,
             getScrollElement: () => scrollParentRef.current,
-            estimateSize: () => ITEM_HEIGHT,
+            estimateSize: (index) => {
+                  const item = listData[index];
+                  return item?.type === 'header' ? HEADER_HEIGHT : ITEM_HEIGHT;
+            },
             overscan: 6,
       });
 
@@ -94,15 +133,15 @@ export function ContactList({
 
       useEffect(() => {
             if (lastVirtualItem == null) return;
-            // Trigger fetch when we are 5 items away from the end of loaded list
+            // Trigger fetch when we are near the bottom of the list
             if (
-                  lastVirtualItem.index >= contacts.length - 5 &&
+                  lastVirtualItem.index >= listData.length - 3 &&
                   hasNextPage &&
                   !isFetchingNextPage
             ) {
                   void fetchNextPage();
             }
-      }, [lastVirtualItem?.index, contacts.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+      }, [lastVirtualItem?.index, listData.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
       // ── Shared alias modal (single instance for the whole virtual list) ────────
       const [selectedForAlias, setSelectedForAlias] =
@@ -152,6 +191,7 @@ export function ContactList({
                               value={search}
                               onChange={handleSearchChange}
                               allowClear
+                              maxLength={MAX_SEARCH_LENGTH}
                         />
                   </div>
 
@@ -161,7 +201,7 @@ export function ContactList({
                               <div className="flex items-center justify-center py-12">
                                     <Spin />
                               </div>
-                        ) : contacts.length === 0 ? (
+                        ) : listData.length === 0 ? (
                               <Empty
                                     description={
                                           <Text type="secondary">
@@ -178,8 +218,8 @@ export function ContactList({
                                     style={{ height: virtualizer.getTotalSize() }}
                               >
                                     {virtualItems.map((virtualRow) => {
-                                          const isLoaderRow = virtualRow.index >= contacts.length;
-                                          const contact = contacts[virtualRow.index];
+                                          const row = listData[virtualRow.index];
+                                          if (!row) return null;
 
                                           return (
                                                 <div
@@ -191,17 +231,25 @@ export function ContactList({
                                                             height: virtualRow.size,
                                                       }}
                                                 >
-                                                      {isLoaderRow ? (
-                                                            <div className="flex items-center justify-center py-4">
+                                                      {row.type === 'header' && (
+                                                            <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 sticky top-0 z-10 h-full flex items-center">
+                                                                  <Text type="secondary" className="text-[11px] font-bold uppercase tracking-wider">
+                                                                        {row.label}
+                                                                  </Text>
+                                                            </div>
+                                                      )}
+                                                      {row.type === 'contact' && (
+                                                            <ContactItem
+                                                                  contact={row.data}
+                                                                  loading={navigatingId === row.data.contactUserId}
+                                                                  onMessage={() => void handleMessage(row.data)}
+                                                                  onSetAlias={() => setSelectedForAlias(row.data)}
+                                                            />
+                                                      )}
+                                                      {row.type === 'loader' && (
+                                                            <div className="flex items-center justify-center py-4 h-full">
                                                                   <Spin size="small" />
                                                             </div>
-                                                      ) : (
-                                                            <ContactItem
-                                                                  contact={contact}
-                                                                  loading={navigatingId === contact.contactUserId}
-                                                                  onMessage={() => void handleMessage(contact)}
-                                                                  onSetAlias={() => setSelectedForAlias(contact)}
-                                                            />
                                                       )}
                                                 </div>
                                           );
@@ -239,6 +287,7 @@ function ContactItem({
 }) {
       const { t } = useTranslation();
       const removeContact = useRemoveContact();
+      const sendFriendRequest = useSendFriendRequest();
       const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
 
       const menuItems = useMemo(() => [
@@ -258,7 +307,7 @@ function ContactItem({
       const handleMenuClick = useCallback(({ key }: { key: string }) => {
             if (key === 'set-alias') onSetAlias();
             if (key === 'remove') setRemoveConfirmOpen(true);
-      }, [onMessage, onSetAlias]);
+      }, [onSetAlias]);
 
       // Subtitle: show alias hint or phone book source
       const subtitle = useMemo(() => {
@@ -278,38 +327,61 @@ function ContactItem({
                   subtitle={subtitle}
                   onClick={onMessage}
                   extra={
-                        contact.source === 'PHONE_SYNC' ? (
-                              <Tag color="blue" className="mt-0.5 text-xs">{t('contacts.contactList.fromContacts')}</Tag>
-                        ) : undefined
+                        <div className="flex items-center gap-2 mt-0.5">
+                              {contact.isMutual && (
+                                    <Tag color="success" className="text-[10px] py-0 px-1.5 font-bold">
+                                          GỢI Ý
+                                    </Tag>
+                              )}
+                              {contact.source === 'PHONE_SYNC' && (
+                                    <Tag color="blue" className="text-[10px] py-0 px-1.5 opacity-70">
+                                          {t('contacts.contactList.fromContacts')}
+                                    </Tag>
+                              )}
+                        </div>
                   }
                   actions={
-                        <Popconfirm
-                              title={t('contacts.contactList.removeConfirm.title')}
-                              description={t('contacts.contactList.removeConfirm.description', { name: contact.displayName })}
-                              open={removeConfirmOpen}
-                              okText={t('contacts.contactList.removeConfirm.ok')}
-                              cancelText={t('contacts.contactList.removeConfirm.cancel')}
-                              okButtonProps={{ danger: true }}
-                              onConfirm={() => {
-                                    removeContact.mutate(contact.contactUserId, {
-                                          onSuccess: () => setRemoveConfirmOpen(false),
-                                    });
-                              }}
-                              onCancel={() => setRemoveConfirmOpen(false)}
-                        >
-                              <Dropdown
-                                    menu={{ items: menuItems, onClick: handleMenuClick }}
-                                    trigger={['click']}
-                                    placement="bottomRight"
+                        <div className="flex items-center gap-1">
+                              <Button
+                                    type="primary"
+                                    size="small"
+                                    ghost
+                                    icon={<UserAddOutlined />}
+                                    onClick={() => sendFriendRequest.mutate(contact.contactUserId)}
+                                    loading={sendFriendRequest.isPending}
+                                    className="text-xs font-semibold"
+                                    style={{ borderRadius: '12px' }}
                               >
-                                    <Button
-                                          icon={<MoreOutlined />}
-                                          size="small"
-                                          type="text"
-                                          className="text-gray-500 hover:bg-gray-100"
-                                    />
-                              </Dropdown>
-                        </Popconfirm>
+                                    Kết bạn
+                              </Button>
+                              <Popconfirm
+                                    title={t('contacts.contactList.removeConfirm.title')}
+                                    description={t('contacts.contactList.removeConfirm.description', { name: contact.displayName })}
+                                    open={removeConfirmOpen}
+                                    okText={t('contacts.contactList.removeConfirm.ok')}
+                                    cancelText={t('contacts.contactList.removeConfirm.cancel')}
+                                    okButtonProps={{ danger: true }}
+                                    onConfirm={() => {
+                                          removeContact.mutate(contact.contactUserId, {
+                                                onSuccess: () => setRemoveConfirmOpen(false),
+                                          });
+                                    }}
+                                    onCancel={() => setRemoveConfirmOpen(false)}
+                              >
+                                    <Dropdown
+                                          menu={{ items: menuItems, onClick: handleMenuClick }}
+                                          trigger={['click']}
+                                          placement="bottomRight"
+                                    >
+                                          <Button
+                                                icon={<MoreOutlined />}
+                                                size="small"
+                                                type="text"
+                                                className="text-gray-400 hover:bg-gray-100"
+                                          />
+                                    </Dropdown>
+                              </Popconfirm>
+                        </div>
                   }
             />
       );

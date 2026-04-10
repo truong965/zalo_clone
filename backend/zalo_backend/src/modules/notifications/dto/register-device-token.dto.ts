@@ -12,9 +12,9 @@ export class RegisterDeviceTokenDto {
     example: 'web-abc123def456',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(255)
-  deviceId: string;
+  deviceId?: string;
 
   @ApiProperty({
     description: 'FCM registration token obtained from Firebase Messaging',

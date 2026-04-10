@@ -131,9 +131,86 @@ export class RedisKeyBuilder {
     return `AUTH:USER_PROFILE:${userId}`;
   }
 
-  /** Email OTP for forgot password: AUTH:EMAIL_OTP:{email} (TTL: 5min) */
+  /** Email OTP for forgot password: AUTH:EMAIL_OTP:{email} (TTL: 5min) - DEPRECATED: use accountOtp instead */
   static emailOtp(email: string): string {
     return `${this.DOMAIN_AUTH}:EMAIL_OTP:${email}`;
+  }
+
+  /** Password reset token for forgot password: auth:password-reset:{token} (TTL: 5min) */
+  static accountPasswordResetToken(token: string): string {
+    return `auth:password-reset:${token}`;
+  }
+
+  /** Account-based OTP for forgot password: AUTH:ACCOUNT_OTP:{userId} (TTL: 90s) */
+  static accountOtp(userId: string): string {
+    return `${this.DOMAIN_AUTH}:ACCOUNT_OTP:${userId}`;
+  }
+
+  /** OTP Request Cooldown: AUTH:OTP_COOLDOWN:{userId} (TTL: 45s) */
+  static accountOtpCooldown(userId: string): string {
+    return `${this.DOMAIN_AUTH}:OTP_COOLDOWN:${userId}`;
+  }
+
+  /** Registration OTP: AUTH:REGISTER_OTP:{phone} (TTL: 90s) */
+  static registerOtp(phone: string): string {
+    return `${this.DOMAIN_AUTH}:REGISTER_OTP:${phone}`;
+  }
+
+  /** Registration OTP Cooldown: AUTH:REGISTER_OTP_COOLDOWN:{phone} (TTL: 45s) */
+  static registerOtpCooldown(phone: string): string {
+    return `${this.DOMAIN_AUTH}:REGISTER_OTP_COOLDOWN:${phone}`;
+  }
+
+  /** Registration Verified Flag: AUTH:REGISTER_VERIFIED:{phone} (TTL: 10m) */
+  static registerVerified(phone: string): string {
+    return `${this.DOMAIN_AUTH}:REGISTER_VERIFIED:${phone}`;
+  }
+
+  /** distributed lock for security operations: AUTH:SECURITY_LOCK:{userId} (TTL: 10s) */
+  static userSecurityLock(userId: string): string {
+    return `${this.DOMAIN_AUTH}:SECURITY_LOCK:${userId}`;
+  }
+
+  /** distributed lock for phone-based operations: AUTH:PHONE_SECURITY_LOCK:{phone} (TTL: 10s) */
+  static phoneSecurityLock(phone: string): string {
+    return `${this.DOMAIN_AUTH}:PHONE_SECURITY_LOCK:${phone}`;
+  }
+
+  /** Login fail counter: auth:login_fail:{phoneNumber} (TTL: 15m) */
+  static loginFailCount(phoneNumber: string): string {
+    return `auth:login_fail:${phoneNumber}`;
+  }
+
+  /** Login locked flag: auth:login_locked:{phoneNumber} (TTL: 15m) */
+  static loginLocked(phoneNumber: string): string {
+    return `auth:login_locked:${phoneNumber}`;
+  }
+
+  // ============ 2FA KEYS ============
+
+  /** Temporary secret during 2FA setup: auth:2fa_setup_secret:{userId} (TTL: 10m) */
+  static twoFactorPendingSetup(userId: string): string {
+    return `auth:2fa_setup_secret:${userId}`;
+  }
+
+  /** Pending 2FA authentication state for login: auth:2fa_pending:{pendingToken} (TTL: 5m) */
+  static twoFactorPending(pendingToken: string): string {
+    return `auth:2fa_pending:${pendingToken}`;
+  }
+
+  /** SMS OTP for 2FA fallback: auth:2fa_sms_otp:{userId} (TTL: 3m) */
+  static twoFactorSmsOtp(userId: string): string {
+    return `auth:2fa_sms_otp:${userId}`;
+  }
+
+  /** Email OTP for 2FA fallback: auth:2fa_email_otp:{userId} (TTL: 5m) */
+  static twoFactorEmailOtp(userId: string): string {
+    return `auth:2fa_email_otp:${userId}`;
+  }
+
+  /** Rate limit cooldown for 2FA challenge requests: auth:2fa_cooldown:{userId}:{method} (TTL: 60s) */
+  static twoFactorCooldown(userId: string, method: string): string {
+    return `auth:2fa_cooldown:${userId}:${method.toUpperCase()}`;
   }
 
   // ============ QR LOGIN KEYS ============
@@ -151,6 +228,11 @@ export class RedisKeyBuilder {
   /** Rate-limit for QR exchange: AUTH:QR_RATE_LIMIT:{qrSessionId} */
   static qrExchangeRateLimit(qrSessionId: string): string {
     return `${this.DOMAIN_AUTH}:QR_RATE_LIMIT:${qrSessionId}`;
+  }
+
+  /** Device Attestation Challenge: AUTH:ATTEST_CHALLENGE:{userId} (TTL: 60s) */
+  static deviceAttestChallenge(userId: string): string {
+    return `${this.DOMAIN_AUTH}:ATTEST_CHALLENGE:${userId}`;
   }
 
   // ============ RATE LIMIT (legacy format) ============

@@ -2,6 +2,7 @@ import { CONVERSATION_SYSTEM_MESSAGE_PORT } from './conversation-system-message.
 import { FRIENDSHIP_READ_PORT } from './friendship-read.port';
 import { INTERACTION_READ_PORT } from './interaction-read.port';
 import { PRIVACY_READ_PORT } from './privacy-read.port';
+import { USER_READ_PORT } from './user-read.port';
 
 export interface InternalApiPortOwnership {
   token: symbol;
@@ -63,6 +64,17 @@ export const INTERNAL_API_PORT_OWNERSHIP: InternalApiPortOwnership[] = [
     crossDomainUseCases: [
       'call/reminder system-message broadcast',
       'cross-domain conversation timeline updates',
+    ],
+  },
+  {
+    token: USER_READ_PORT,
+    tokenName: 'USER_READ_PORT',
+    ownerModule: 'users',
+    contractFile: 'src/common/contracts/internal-api/user-read.port.ts',
+    intent: 'read',
+    crossDomainUseCases: [
+      'authorization checks (interaction logic)',
+      'presence fanout validation',
     ],
   },
 ];

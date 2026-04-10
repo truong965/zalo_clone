@@ -15,9 +15,10 @@ import { registerSchema, type RegisterFormData } from '@/features/auth/schemas/r
 type RegisterFormProps = {
       isSubmitting: boolean;
       onSubmit: (payload: RegisterFormData) => Promise<void>;
+      hidePhone?: boolean;
 };
 
-export function RegisterForm({ isSubmitting, onSubmit }: RegisterFormProps) {
+export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: RegisterFormProps) {
       const { t } = useTranslation();
       const loginHref = '/login' as Href;
 
@@ -62,26 +63,28 @@ export function RegisterForm({ isSubmitting, onSubmit }: RegisterFormProps) {
                         )}
                   />
 
-                  <Controller
-                        control={control}
-                        name="phoneNumber"
-                        render={({ field: { onChange, onBlur, value } }) => (
-                              <View className="gap-1">
-                                    <TextInput
-                                          value={value}
-                                          onBlur={onBlur}
-                                          onChangeText={onChange}
-                                          placeholder={t('auth.phoneNumber')}
-                                          keyboardType="phone-pad"
-                                          autoCapitalize="none"
-                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
-                                    />
-                                    {errors.phoneNumber ? (
-                                          <Text className="text-sm text-danger">{t(errors.phoneNumber.message ?? 'auth.validation.phoneRequired')}</Text>
-                                    ) : null}
-                              </View>
-                        )}
-                  />
+                  {!hidePhone && (
+                        <Controller
+                              control={control}
+                              name="phoneNumber"
+                              render={({ field: { onChange, onBlur, value } }) => (
+                                    <View className="gap-1">
+                                          <TextInput
+                                                value={value}
+                                                onBlur={onBlur}
+                                                onChangeText={onChange}
+                                                placeholder={t('auth.phoneNumber')}
+                                                keyboardType="phone-pad"
+                                                autoCapitalize="none"
+                                                className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
+                                          />
+                                          {errors.phoneNumber ? (
+                                                <Text className="text-sm text-danger">{t(errors.phoneNumber.message ?? 'auth.validation.phoneRequired')}</Text>
+                                          ) : null}
+                                    </View>
+                              )}
+                        />
+                  )}
 
                   <Controller
                         control={control}
@@ -192,11 +195,13 @@ export function RegisterForm({ isSubmitting, onSubmit }: RegisterFormProps) {
                         </Text>
                   </Pressable>
 
-                  <Link href={loginHref} asChild>
-                        <Pressable>
-                              <Text className="mt-1 text-center font-semibold text-primary">{t('auth.hasAccountLogin')}</Text>
-                        </Pressable>
-                  </Link>
+                  {!hidePhone && (
+                        <Link href={loginHref} asChild>
+                              <Pressable>
+                                    <Text className="mt-1 text-center font-semibold text-primary">{t('auth.hasAccountLogin')}</Text>
+                              </Pressable>
+                        </Link>
+                  )}
             </View>
       );
 }

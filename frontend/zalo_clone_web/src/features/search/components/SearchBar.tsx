@@ -16,6 +16,7 @@ import { SearchSuggestions } from './SearchSuggestions';
 import { useSearchSuggestions } from '../hooks/use-search-suggestions';
 import { useSearchHistory } from '../hooks/use-search-history';
 import type { SearchStatus } from '../types';
+import { MAX_KEYWORD_LENGTH } from '../hooks/use-search';
 
 interface SearchBarProps {
       /** Current keyword */
@@ -139,6 +140,7 @@ export function SearchBar({
                               onBlur={handleBlur}
                               onPressEnter={(e) => handleSearch((e.target as HTMLInputElement).value)}
                               allowClear
+                              maxLength={MAX_KEYWORD_LENGTH}
                               className="bg-gray-100 border-none rounded-lg"
                         />
                   </div>

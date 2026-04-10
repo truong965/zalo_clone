@@ -7,6 +7,8 @@ import { useAuth } from '@/providers/auth-provider';
 import { useReminderStore } from '@/features/chats/stores/reminder.store';
 import Toast from 'react-native-toast-message';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { useLoginApprovalStore } from '@/features/auth/stores/login-approval.store';
+import { useContactSyncStore } from '@/features/contacts/stores/contact-sync.store';
 
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
@@ -116,6 +118,34 @@ export function usePushNotifications() {
             type: 'info',
             text1: data.title || 'Nhóm',
             text2: data.body || 'Có cập nhật mới trong nhóm',
+          });
+          break;
+        
+        case 'LOGIN_APPROVAL':
+          // Update store to show modal
+          useLoginApprovalStore.getState().showRequest({
+            pendingToken: data.pendingToken,
+            deviceName: data.deviceName,
+            location: data.location,
+            ipAddress: data.ipAddress,
+            timestamp: data.timestamp || new Date().toISOString(),
+          });
+
+          Toast.show({
+              type: 'info',
+              text1: '🔐 Yêu cầu đăng nhập mới',
+              text2: `Thiết bị ${data.deviceName} đang yêu cầu đăng nhập`,
+              visibilityTime: 10000,
+          });
+          break;
+
+        case 'CONTACTS_SYNCED':
+          queryClient.invalidateQueries({ queryKey: ['contacts'] });
+          useContactSyncStore.getState().setSuccess();
+          Toast.show({
+            type: 'success',
+            text1: 'Đồng bộ hoàn tất',
+            text2: `Đã tìm thấy ${data.matchedCount || 0} liên lạc mới từ danh bạ`,
           });
           break;
 

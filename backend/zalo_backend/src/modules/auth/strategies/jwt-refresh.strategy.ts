@@ -27,6 +27,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
   ) {
     super({
       jwtFromRequest: (req: Request) => {
+        // Try body first (for Mobile)
+        if (req?.body?.refreshToken) {
+          return req.body.refreshToken;
+        }
         // Extract refresh token from HttpOnly cookie
         const cookies = req?.cookies as Record<string, string>;
         const token = cookies?.[jwtConfiguration.refreshToken.cookieName];
@@ -51,9 +55,9 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException('Invalid token type');
     }
 
-    // Extract refresh token from cookie for rotation
-    const cookies = req.cookies as Record<string, string>;
-    const refreshToken = cookies[this.jwtConfiguration.refreshToken.cookieName];
+    // Extract refresh token from body or cookie for rotation
+    const cookies = (req?.cookies || {}) as Record<string, string>;
+    const refreshToken = req?.body?.refreshToken || cookies[this.jwtConfiguration.refreshToken.cookieName];
     // Attach to request for controller
     return {
       userId: payload.sub,

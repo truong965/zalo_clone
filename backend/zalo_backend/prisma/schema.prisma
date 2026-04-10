@@ -194,6 +194,8 @@ enum TokenRevocationReason {
   TOKEN_ROTATION
   ADMIN_ACTION
   NEW_LOGIN_OVERRIDE
+  ACCOUNT_DEACTIVATED
+  ACCOUNT_DELETED
 
   @@map("token_revocation_reason")
 }
@@ -272,8 +274,15 @@ enum ContactSource {
 enum LoginMethod {
   PASSWORD
   QR_CODE
-
+  BIOMETRIC    // ← NEW (reserved for future)
+  TWO_FACTOR   // ← NEW (khi 2FA là standalone verification step)
   @@map("login_method")
+}
+enum TwoFactorMethod {
+  TOTP    // Google Authenticator (primary)
+  SMS     // SMS OTP via Telegram (dev) / SpeedSMS (prod)
+  EMAIL   // Email OTP (fallback)
+  @@map("two_factor_method")
 }
 // ============================================================================
 // 3. IAM MODULE (USER, AUTH, RBAC)
@@ -290,8 +299,6 @@ model User {
   phoneCode             String  @default("+84") @map("phone_country_code") @db.VarChar(5)
   // Secure contact sync matching
   phoneNumberHash       String? @map("phone_number_hash") @db.VarChar(64)
-  // Normalized phone for prefix search (e.g., "+84901234567" or "0901234567")
-  phoneNumberNormalized String? @map("phone_number_normalized") @db.VarChar(20)
 
   // Profile Info
   displayName String     @map("display_name") @db.VarChar(100)
@@ -325,51 +332,28 @@ model User {
   devices         UserDevice[]
   tokens          UserToken[]
 
-  // Social Graph
-  // [DECOUPLED - Phase 2.2]: Remove physical relations for Social Graph
-  // sentFriendRequests     Friendship[] @relation("User1")
-  // receivedFriendRequests Friendship[] @relation("User2")
-  // friendshipInitiator    Friendship[] @relation("Requester")
-  // friendshipActions      Friendship[] @relation("LastActionBy")
-
-  // blocksBlocked    Block[] @relation("Blocker")
-  // blocksWasBlocked Block[] @relation("Blocked")
-
-  // Messaging & Groups
-  // [DECOUPLED - Phase 2.4]: Remove physical relations for Messaging Domain
-  // conversations        ConversationMember[]
-  // joinRequests         GroupJoinRequest[]   @relation("MemberRequesting") // tự xin vào group
-  // groupInvitesSent     GroupJoinRequest[]   @relation("RequestInviter") // Lời mời vào nhóm tôi gửi
-  // reviewedJoinRequests GroupJoinRequest[]   @relation("ReviewedRequests")
-
-  // messagesSent    Message[]
-  // messagesDeleted Message[] @relation("DeletedBy")
-
-  // Contacts (Shadow Graph)
-  // [DECOUPLED - Phase 2.2]: Remove physical relations for Shadow Graph
-  // myContacts   UserContact[] @relation("MyContacts") // Danh bạ tôi lưu
-  // inContactsOf UserContact[] @relation("InContacts") // Tôi nằm trong danh bạ ai
-
-  // Media
-  // [DECOUPLED - Phase 2.1]: Remove physical relation to MediaAttachment
-  // uploadedMedia MediaAttachment[] @relation("UploadedMedia")
-
-  // Calls [NEW]
-  // [DECOUPLED - Phase 2.2]: Remove physical relations for Call Domain
-  // callsMade          CallHistory[]     @relation("CallsMade")
-  // callParticipations CallParticipant[] @relation("CallParticipations")
-  // kickedCalls        CallParticipant[] @relation("KickedParticipants")
-
   // Search Analytics
   searchQueries SearchQuery[]
 
   // Reminders
   reminders Reminder[]
 
+  // === 2FA Fields ===
+  twoFactorEnabled  Boolean   @default(false) @map("two_factor_enabled")
+
+  // TOTP secret — phải encrypt tại application layer (AES-256-GCM)
+  // Không lưu plaintext. Decrypt chỉ khi verify TOTP.
+  twoFactorSecret   String?   @map("two_factor_secret") @db.Text
+
+  // Backup codes — mảng các hashed codes (bcrypt hoặc SHA-256)
+  // Format: ["$2b$10$...", "$2b$10$..."] — 10 codes, mỗi code dùng 1 lần
+  twoFactorBackupCodes String[] @map("two_factor_backup_codes")
+  twoFactorSetupAt  DateTime? @map("two_factor_setup_at") @db.Timestamptz
+  twoFactorMethod   TwoFactorMethod? @map("two_factor_method") // Preferred method
+
   @@index([phoneNumber])
   @@index([roleId])
   @@index([phoneNumberHash])
-  @@index([phoneNumberNormalized]) // For prefix phone search
   @@map("users")
 }
 
@@ -386,14 +370,21 @@ model UserToken {
   loginMethod LoginMethod @default(PASSWORD) @map("login_method")
   
   // Device Fingerprint
-  deviceId   String      @map("device_id") @db.VarChar(255)
-  deviceName String?     @map("device_name") @db.VarChar(100)
-  deviceType DeviceType? @map("device_type")
-  platform   Platform?
+  deviceId       String      @map("device_id") @db.VarChar(255)
+  deviceName     String?     @map("device_name") @db.VarChar(200)
+  deviceType     DeviceType? @map("device_type")
+  platform       Platform?
+
+  // Extended Device Info
+  browserName    String?     @map("browser_name") @db.VarChar(50)
+  browserVersion String?     @map("browser_version") @db.VarChar(50)
+  osName         String?     @map("os_name") @db.VarChar(50)
+  osVersion      String?     @map("os_version") @db.VarChar(50)
 
   // Security Tracking
-  ipAddress String? @map("ip_address") @db.VarChar(45)
-  userAgent String? @map("user_agent") @db.Text
+  ipAddress      String?     @map("ip_address") @db.VarChar(45)
+  location       String?     @map("location") @db.VarChar(100)
+  userAgent      String?     @map("user_agent") @db.Text
 
   // Token Lifecycle
   issuedAt   DateTime @default(now()) @map("issued_at") @db.Timestamptz
@@ -422,19 +413,60 @@ model UserToken {
 
 /**
  * Model: UserDevice
- * Tracks physical devices for Push Notifications (FCM).
+ * Tracks physical devices for Push Notifications (FCM) and forms the Device Registry for Trust logic.
  */
 model UserDevice {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  deviceId     String   @map("device_id") @db.VarChar(255)
-  fcmToken     String?  @map("fcm_token")
-  platform     String?  @db.VarChar(20)
-  lastActiveAt DateTime @default(now()) @map("last_active_at") @db.Timestamptz
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  deviceId     String    @map("device_id") @db.VarChar(255)
+  
+  // Device Identity (Parsed from UA)
+  deviceName     String    @map("device_name") @db.VarChar(200)
+  browserName    String?   @map("browser_name") @db.VarChar(50)
+  browserVersion String?   @map("browser_version") @db.VarChar(50)
+  osName         String?   @map("os_name") @db.VarChar(50)
+  osVersion      String?   @map("os_version") @db.VarChar(50)
+  
+  // Trust & Security
+  isTrusted      Boolean   @default(false) @map("is_trusted")
+  trustedAt    DateTime? @map("trusted_at") @db.Timestamptz
+  
+  // Location & Network
+  lastIp       String?   @map("last_ip") @db.VarChar(45)
+  lastLocation String?   @map("last_location") @db.VarChar(100)
+  
+  // Push Notification
+  fcmToken     String?   @map("fcm_token")
+  platform     String?   @db.VarChar(20)
+  
+  // Activity Tracking
+  lastActiveAt DateTime  @default(now()) @map("last_active_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // === NEW FIELDS ===
+  // Device Type (để phân biệt Web vs Mobile trong device list)
+  deviceType   DeviceType? @map("device_type")
+
+  fingerprint  String?   @map("fingerprint") @db.VarChar(64) // SHA-256 hash, 64 hex chars
+
+  // Phase 2 — ECDSA Key Pair (nullable: Phase 1 dùng UUID, Phase 2 dùng key pair)
+  publicKey      String?   @map("public_key") @db.Text        // PEM ECDSA P-256
+  keyAlgorithm   String?   @map("key_algorithm") @db.VarChar(20) // "EC-P256"
+  registeredAt   DateTime? @map("registered_at") @db.Timestamptz
+  registrationIp String?   @map("registration_ip") @db.VarChar(45)
+
+  // Optional Platform Attestation (Phase 3+, future)
+  attestationType     String?   @map("attestation_type") @db.VarChar(20)
+  attestationVerified Boolean   @default(false) @map("attestation_verified")
+  attestedAt          DateTime? @map("attested_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
+  @@index([userId, isTrusted])
+  @@index([userId, deviceType])         // [NEW] Query by type
+  @@index([userId, lastActiveAt(sort: Desc)]) // [NEW] Sort by activity
+   @@index([userId, fingerprint])  // [NEW] Lookup by fingerprint
   @@map("user_devices")
 }
 

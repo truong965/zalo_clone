@@ -1,15 +1,17 @@
+import { Conversation } from '@/types/conversation';
+import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, RefreshControl, View, Text } from 'react-native';
-import { useRouter } from 'expo-router';
-import { ConversationItem } from './components/conversations/conversation-item';
+import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
+import { Button } from 'react-native-paper';
+import { useSyncContacts } from '../contacts/hooks/use-sync-contacts';
 import { ConversationActionSheet } from './components/conversations/conversation-action-sheet';
-import { useConversationsList } from './hooks/use-conversations-list';
+import { ConversationItem } from './components/conversations/conversation-item';
 import { useConversationActions } from './hooks/use-conversation-actions';
-import { useConversationRealtime } from './hooks/use-conversation-realtime';
+import { useConversationsList } from './hooks/use-conversations-list';
 import { useMarkAsSeen } from './hooks/use-mark-as-seen';
-import { Conversation } from '@/types/conversation';
 
 export function ChatsScreen() {
   const { t } = useTranslation();
@@ -30,6 +32,8 @@ export function ChatsScreen() {
 
   const { pinConversation, muteConversation } = useConversationActions();
   const { markAsSeen } = useMarkAsSeen();
+
+  const { isSyncing, performSync } = useSyncContacts();
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -79,8 +83,37 @@ export function ChatsScreen() {
   return (
     <View className="flex-1 bg-background">
       {flattenedData.length === 0 && !isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-muted-foreground text-lg">{t('chats.empty')}</Text>
+        <View className="flex-1 items-center justify-center px-8">
+          <View className="items-center mb-6">
+            <View className="w-20 h-20 bg-primary/10 rounded-full items-center justify-center mb-4">
+              <Ionicons name="chatbubbles-outline" size={40} color="#1E88E5" />
+            </View>
+            <Text className="text-xl font-bold text-foreground mb-2 text-center">
+              Chào mừng bạn đến với Zalo
+            </Text>
+            <Text className="text-muted-foreground text-center">
+              Hãy kết nối với bạn bè để bắt đầu trò chuyện
+            </Text>
+          </View>
+
+          <Button
+            mode="contained"
+            onPress={performSync}
+            loading={isSyncing}
+            disabled={isSyncing}
+            className="w-full mb-3 py-1"
+            icon={() => <Ionicons name="people-outline" size={20} color="white" />}
+          >
+            Tìm bạn từ danh bạ
+          </Button>
+
+          <Button
+            mode="outlined"
+            onPress={() => router.push('/search')}
+            className="w-full py-1"
+          >
+            Tìm kiếm bạn bè
+          </Button>
         </View>
       ) : (
         (() => {

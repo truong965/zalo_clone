@@ -8,7 +8,7 @@ import {
       ClockCircleOutlined,
       StopOutlined,
 } from '@ant-design/icons';
-import { useSearch } from '@/features/search/hooks/use-search';
+import { useSearch, MAX_SEARCH_LENGTH } from '@/features/search';
 import { UserInfoView } from '@/features/profile/components/user-info-view';
 import { conversationService } from '@/features/conversation';
 import { useSendFriendRequest, useCancelRequest, useAcceptRequest } from '../api/friendship.api';
@@ -327,10 +327,11 @@ export function FriendshipSearchModal({
                               <div className="flex gap-2">
                                     <Input
                                           value={phoneInput}
-                                          onChange={(e) => setPhoneInput(e.target.value)}
+                                          onChange={(e) => setPhoneInput(e.target.value.slice(0, MAX_SEARCH_LENGTH))}
                                           placeholder={t('contacts.search.phonePlaceholder')}
                                           prefix={<SearchOutlined className="text-gray-400" />}
                                           onPressEnter={handleSearch}
+                                          maxLength={MAX_SEARCH_LENGTH}
                                     />
                                     <Button type="primary" onClick={handleSearch}>
                                           {t('contacts.search.searchBtn')}

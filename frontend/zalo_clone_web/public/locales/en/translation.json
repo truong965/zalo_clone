@@ -53,7 +53,9 @@
       "passwordMismatch": "Confirm password does not match",
       "updatePassword": "Update Password",
       "passwordSuccess": "Success",
-      "passwordSuccessDesc": "Password has been changed.",
+      "passwordSuccessDesc": "Your password has been changed. You will be logged out now.",
+      "confirmPasswordChangeTitle": "Confirm Password Change",
+      "confirmPasswordChangeDesc": "Changing your password will log you out of all active devices (including this browser). Are you sure you want to continue?",
       "passwordError": "Error",
       "updateEmailTitle": "Update Email",
       "emailRequired": "Please enter an email",
@@ -63,8 +65,30 @@
       "emailSuccess": "Success",
       "emailSuccessDesc": "Email updated successfully.",
       "emailError": "Error",
-      "logoutAllDevices": "Log out from all other devices after password change",
-      "logoutInfo": "Note: All active sessions on other devices will be invalidated for security."
+      "twoFactor": "Two-Factor Auth",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "identityEmail": "Identity Email",
+      "logoutInfo": "Note: All active sessions on other devices will be invalidated for security.",
+      "accountActions": "Account Options",
+      "deactivateAccount": "Deactivate Account",
+      "deactivateDesc": "Temporarily disable your account.",
+      "deactivate": "Deactivate Account",
+      "deleteAccount": "Delete Account",
+      "deleteDesc": "Permanently delete your account and data.",
+      "delete": "Delete Account",
+      "deactivateTitle": "Deactivate Account",
+      "deactivateWarning": "Note: Deactivating your account will disable your profile. Logging back in will reactivate it. You may need 2FA.",
+      "verifyPassword": "Enter password to continue",
+      "passwordRequired": "Please enter your password",
+      "confirmDeactivate": "Confirm Deactivate",
+      "deleteTitle": "Permanently Delete Account",
+      "deleteWarning": "WARNING: This will permanently delete your account and all associated data (messages, contacts). This action cannot be undone.",
+      "verifyPasswordDelete": "Enter password to confirm permanent deletion",
+      "confirmDelete": "Confirm Permanent Deletion",
+      "error": "Error",
+      "deactivateError": "Could not deactivate account",
+      "deleteError": "Could not delete account"
     },
     "menu": {
       "appearance": "Appearance",
@@ -100,10 +124,13 @@
     }
   },
   "common": {
+    "unknown": "Unknown",
     "errorBoundary": {
       "message": "An unexpected error occurred",
       "retry": "Retry"
-    }
+    },
+    "confirm": "Confirm",
+    "cancel": "Cancel"
   },
   "auth": {
     "login": {
@@ -478,7 +505,7 @@
     "dobEmpty": "Not set",
     "phone": "Phone:",
     "phoneEmpty": "Not set",
-    "phonePrivacyNote": "Only friends who saved your number in their contacts can see it.",
+    "phonePrivacyNote": "Only friends can see it.",
     "editBtn": "Update",
     "modalViewTitle": "Account info",
     "modalEditTitle": "Update info",
@@ -493,7 +520,6 @@
     "formEmailPlaceholder": "Enter Gmail address",
     "formEmailRequired": "Please enter an email",
     "formEmailInvalid": "Invalid email format",
-    "formEmailGmailOnly": "Only @gmail.com addresses are accepted",
     "formPersonalInfo": "Personal info",
     "formDob": "Date of birth",
     "formDobPlaceholder": "Select date of birth",

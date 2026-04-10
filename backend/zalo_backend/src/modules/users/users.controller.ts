@@ -11,6 +11,7 @@ import {
   ClassSerializerInterceptor,
   UseGuards,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CurrentUser, ResponseMessage } from 'src/common/decorator/customize';
@@ -18,9 +19,13 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateUserAdminDto } from './dto/create-user-admin.dto';
 import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
+import { DeactivateAccountDto } from './dto/deactivate-account.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Roles } from '@common/decorator/roles.decorator';
 import { RolesGuard } from '@common/guards/roles.guard';
 import type { User } from '@prisma/client';
+import { InteractionGuard, RequireInteraction } from '@modules/authorization/guards/interaction.guard';
+import { PermissionAction } from '@common/constants/permission-actions.constant';
 
 //swagger
 @ApiTags('users')
@@ -55,6 +60,17 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
+  @Get(':targetUserId/public-profile')
+  @UseGuards(InteractionGuard)
+  @RequireInteraction(PermissionAction.PROFILE)
+  @ResponseMessage('Fetch public profile of another user')
+  async getPublicProfile(
+    @Param('targetUserId') targetUserId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.getPublicProfile(targetUserId, currentUser.id);
+  }
+
   @Patch(':id')
   @ResponseMessage('Update a User')
   update(
@@ -79,10 +95,35 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
   @ResponseMessage('Delete a User')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    const isAdmin = (currentUser as any).role?.name === 'ADMIN';
+
+    // Phase 10: Allow Admin or the User themselves to delete the account
+    if (currentUser.id !== id && !isAdmin) {
+      throw new ForbiddenException(
+        'Bạn chỉ có thể thực hiện xóa tài khoản của chính mình',
+      );
+    }
+
+    // Double-check: non-admin MUST provide password
+    if (!isAdmin && !dto.password) {
+      throw new BadRequestException('Mật khẩu là bắt buộc để thực hiện xóa tài khoản');
+    }
+
+    return this.usersService.remove(id, dto.password);
+  }
+
+  @Post('deactivate')
+  @ResponseMessage('Tạm khóa (vô hiệu hóa) tài khoản thành công')
+  deactivate(
+    @CurrentUser() currentUser: User,
+    @Body() dto: DeactivateAccountDto,
+  ) {
+    return this.usersService.deactivateAccount(currentUser.id, dto);
   }
 }

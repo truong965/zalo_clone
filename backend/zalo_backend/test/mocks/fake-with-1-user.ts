@@ -18,6 +18,7 @@ import {
 } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { fakerVI as faker } from '@faker-js/faker';
+import * as crypto from 'crypto';
 
 // Ensure DATABASE_URL is loaded
 if (!process.env.DATABASE_URL) {
@@ -30,7 +31,7 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 // ================= CONFIGURATION (GIỮ NGUYÊN) =================
-const TARGET_PHONE = '0987654321';
+const TARGET_PHONE = '+84987654321';
 const CONFIG = {
       TOTAL_USERS: 150, // Tổng user trong hệ thống (bao gồm target)
       TARGET_FRIENDS: 100, // Số bạn bè của user chính
@@ -74,7 +75,7 @@ async function createUsers(): Promise<{ allUsers: User[], targetUser: User }> {
             id: targetId,
             phoneNumber: TARGET_PHONE,
             phoneCode: '+84',
-            phoneNumberNormalized: TARGET_PHONE,
+            phoneNumberHash: crypto.createHash('sha256').update(TARGET_PHONE).digest('hex'),
             displayName: 'BOSS (Target User)',
             avatarUrl: 'https://i.pravatar.cc/300?u=target',
             passwordHash: CONFIG.DEFAULT_PASSWORD_HASH,
@@ -98,13 +99,14 @@ async function createUsers(): Promise<{ allUsers: User[], targetUser: User }> {
       for (let i = 0; i < CONFIG.TOTAL_USERS - 1; i++) {
             const userId = faker.string.uuid();
             const sex = faker.person.sexType();
-            const rawPhone = faker.phone.number({ style: 'national' }).replace(/\D/g, '').slice(0, 15);
+            const rawPhoneSuffix = faker.string.numeric(9);
+            const normalizedPhone = `+84${rawPhoneSuffix}`;
 
             usersData.push({
                   id: userId,
-                  phoneNumber: rawPhone,
+                  phoneNumber: normalizedPhone,
                   phoneCode: '+84',
-                  phoneNumberNormalized: rawPhone,
+                  phoneNumberHash: crypto.createHash('sha256').update(normalizedPhone).digest('hex'),
                   displayName: faker.person.fullName({ sex }),
                   avatarUrl: faker.image.avatar(),
                   passwordHash: CONFIG.DEFAULT_PASSWORD_HASH,

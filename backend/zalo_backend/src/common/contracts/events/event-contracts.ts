@@ -71,6 +71,11 @@ export interface UserProfileUpdatedEventPayload extends DomainEventEnvelope {
   userId: string;
 }
 
+export interface UserEmailUpdatedEventPayload extends DomainEventEnvelope {
+  userId: string;
+  newEmail: string;
+}
+
 export interface UserLoggedOutEventPayload {
   userId: string;
   deviceId: string;

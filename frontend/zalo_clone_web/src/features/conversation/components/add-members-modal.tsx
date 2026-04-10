@@ -9,6 +9,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Modal, Avatar, Button, Spin, Empty, Alert, Typography, Input, Segmented } from 'antd';
 import { UserAddOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons';
 import { useFriendSearch, type SearchTab } from '../hooks/use-friend-search';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 
 const { Text } = Typography;
 const DEBOUNCE_MS = 300;
@@ -47,10 +48,11 @@ export function AddMembersModal({
             });
 
       const handleSearchChange = useCallback((value: string) => {
-            setLocalValue(value);
+            const truncated = value.slice(0, MAX_SEARCH_LENGTH);
+            setLocalValue(truncated);
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
-                  setKeyword(value.trim());
+                  setKeyword(truncated.trim());
             }, DEBOUNCE_MS);
       }, []);
 
@@ -135,6 +137,7 @@ export function AddMembersModal({
                               value={localValue}
                               onChange={(e) => handleSearchChange(e.target.value)}
                               allowClear
+                              maxLength={MAX_SEARCH_LENGTH}
                               onClear={() => {
                                     setLocalValue('');
                                     setKeyword('');

@@ -18,6 +18,9 @@
 
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { notification } from 'antd';
+import { socketManager } from '@/lib/socket';
+import { SocketEvents } from '@/constants/socket-events';
 import { useCallSocket } from '../hooks/use-call-socket';
 import { useWebRTCCall } from '../hooks/use-webrtc-call';
 import { useDailyCall } from '../hooks/use-daily-call';
@@ -186,14 +189,17 @@ export function CallManager() {
 
       // ── Listen for CustomEvents from UI components ──────────────────────
       useEffect(() => {
-            const handleInitiate = (e: Event) => {
+            const handleInitiate = async (e: Event) => {
                   const detail = (e as CustomEvent<InitiateCallDetail>).detail;
                   if (!detail) return;
                   dbg('call:initiate', { calleeId: detail.calleeId, callType: detail.callType, receiverIds: detail.receiverIds?.length });
 
                   const isGroupCall = (detail.receiverIds?.length ?? 0) > 0;
 
-                  // Set store to DIALING
+                  // Clear any previous error state
+                  useCallStore.getState().setError(null);
+
+                  // Optimistic UI: Set store to DIALING immediately so the "Calling..." overlay shows
                   useCallStore.getState().startDialing({
                         callType: detail.callType,
                         peerId: detail.calleeId,
@@ -203,13 +209,19 @@ export function CallManager() {
                         initialCameraOff: detail.initialCameraOff,
                   });
 
-                  // Emit to server (include receiverIds for group calls)
-                  socketEmitters.emitInitiateCall({
-                        calleeId: detail.calleeId,
-                        callType: detail.callType,
-                        conversationId: detail.conversationId ?? undefined,
-                        receiverIds: detail.receiverIds,
-                  });
+                  try {
+                        // Emit to server
+                        await socketEmitters.emitInitiateCall({
+                              calleeId: detail.calleeId,
+                              callType: detail.callType,
+                              conversationId: detail.conversationId ?? undefined,
+                              receiverIds: detail.receiverIds,
+                        });
+                  } catch (err: any) {
+                        dbg('handleInitiate FAILED', err.message);
+                        useCallStore.getState().setError(err.message);
+                        useCallStore.getState().resetCallState();
+                  }
             };
 
             const handleAccept = () => {
@@ -303,7 +315,7 @@ export function CallManager() {
                   });
             };
 
-            const handleJoinExisting = (e: Event) => {
+            const handleJoinExisting = async (e: Event) => {
                   const detail = (e as CustomEvent<{ conversationId: string; peerInfo: PeerInfo }>).detail;
                   if (!detail?.conversationId) return;
 
@@ -312,7 +324,10 @@ export function CallManager() {
 
                   dbg('call:join-existing', { conversationId: detail.conversationId });
 
-                  // Set store to DIALING (group call)
+                  // Clear any previous error state
+                  useCallStore.getState().setError(null);
+
+                  // Optimistic UI: Set store to DIALING
                   useCallStore.getState().startDialing({
                         callType: 'VIDEO',
                         peerId: detail.conversationId,
@@ -321,11 +336,14 @@ export function CallManager() {
                         isGroupCall: true,
                   });
 
-                  // Emit to server — server will respond with call:daily-room
-                  socketEmitters.emitJoinExisting({ conversationId: detail.conversationId }).catch((err: any) => {
-                        console.error('[CallManager] emitJoinExisting error:', err);
+                  try {
+                        // Emit to server
+                        await socketEmitters.emitJoinExisting({ conversationId: detail.conversationId });
+                  } catch (err: any) {
+                        dbg('handleJoinExisting FAILED', err.message);
+                        useCallStore.getState().setError(err.message);
                         useCallStore.getState().resetCallState();
-                  });
+                  }
             };
 
             window.addEventListener('call:initiate', handleInitiate);
@@ -395,6 +413,8 @@ export function CallManager() {
             if (callStatus !== 'ACTIVE' || !callId) return;
             socketEmitters.emitMediaState({ callId, cameraOff: isCameraOff, muted: isMuted });
       }, [isCameraOff, isMuted, callStatus, callId, socketEmitters]);
+
+
 
       // ── Cleanup on unmount or when call ends ────────────────────────────
       // Use refs to avoid re-running every render (webrtc/daily are new objects

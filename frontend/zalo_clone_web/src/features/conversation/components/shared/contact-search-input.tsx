@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { Input, Segmented } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 
 const DEBOUNCE_MS = 300;
 
@@ -46,10 +47,11 @@ export function ContactSearchInput({
 
       const handleChange = useCallback(
             (value: string) => {
-                  setLocalValue(value);
+                  const truncated = value.slice(0, MAX_SEARCH_LENGTH);
+                  setLocalValue(truncated);
                   if (debounceRef.current) clearTimeout(debounceRef.current);
                   debounceRef.current = setTimeout(() => {
-                        onSearchChange(value.trim());
+                        onSearchChange(truncated.trim());
                   }, DEBOUNCE_MS);
             },
             [onSearchChange],
@@ -83,6 +85,7 @@ export function ContactSearchInput({
                         value={localValue}
                         onChange={(e) => handleChange(e.target.value)}
                         allowClear
+                        maxLength={MAX_SEARCH_LENGTH}
                         onClear={handleClear}
                   />
                   {showTabs && (

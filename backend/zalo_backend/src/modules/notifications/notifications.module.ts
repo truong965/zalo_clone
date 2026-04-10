@@ -22,6 +22,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from '@database/prisma.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import firebaseConfig from '@config/firebase.config';
+import { DeviceFingerprintModule } from '../auth/device-fingerprint.module';
 
 // Services
 import { FirebaseService } from './services/firebase.service';
@@ -46,6 +47,7 @@ import { ReminderNotificationListener } from './listeners/reminder-notification.
     DatabaseModule,
     EventEmitterModule,
     IdempotencyModule,
+    DeviceFingerprintModule,
   ],
   controllers: [DeviceTokenController],
   providers: [

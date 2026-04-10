@@ -12,6 +12,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { IBlockChecker } from '@modules/block/services/block-checker.interface';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
 import {
@@ -24,11 +25,14 @@ import {
   CanInteractResult,
   FRIENDSHIP_READ_PORT,
   PRIVACY_READ_PORT,
+  USER_READ_PORT,
 } from '@common/contracts/internal-api';
 import type {
   IFriendshipReadPort,
   IPrivacyReadPort,
+  IUserReadPort,
 } from '@common/contracts/internal-api';
+import { UserStatus } from '@prisma/client';
 
 @Injectable()
 export class InteractionAuthorizationService {
@@ -39,7 +43,12 @@ export class InteractionAuthorizationService {
     private readonly privacyRead: IPrivacyReadPort,
     @Inject(FRIENDSHIP_READ_PORT)
     private readonly friendshipRead: IFriendshipReadPort,
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  private get userRead(): IUserReadPort {
+    return this.moduleRef.get(USER_READ_PORT, { strict: false });
+  }
 
   /**
    * Check if requester can perform action on target.
@@ -56,6 +65,30 @@ export class InteractionAuthorizationService {
 
     if (requesterId === targetId) {
       return { allowed: true };
+    }
+
+    // 1. Status Check (Both users must be ACTIVE)
+    const [requesterStatus, targetStatus] = await Promise.all([
+      this.userRead.getUserStatus(requesterId),
+      this.userRead.getUserStatus(targetId),
+    ]);
+
+    if (requesterStatus !== UserStatus.ACTIVE) {
+      return {
+        allowed: false,
+        reason: requesterStatus
+          ? `Account is ${requesterStatus.toLowerCase()}`
+          : 'Requester account not found',
+      };
+    }
+
+    if (targetStatus !== UserStatus.ACTIVE) {
+      return {
+        allowed: false,
+        reason: targetStatus
+          ? `Target user is ${targetStatus.toLowerCase()}`
+          : 'Target user not found',
+      };
     }
 
     const isBlocked = await this.blockChecker.isBlocked(requesterId, targetId);
@@ -191,5 +224,11 @@ export class InteractionAuthorizationService {
    */
   async isBlocked(userId1: string, userId2: string): Promise<boolean> {
     return this.blockChecker.isBlocked(userId1, userId2);
+  }
+  /**
+   * Check if two users are friends.
+   */
+  async areFriends(userId1: string, userId2: string): Promise<boolean> {
+    return this.friendshipRead.areFriends(userId1, userId2);
   }
 }

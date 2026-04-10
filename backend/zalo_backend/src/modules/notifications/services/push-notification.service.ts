@@ -14,6 +14,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { FirebaseService } from './firebase.service';
 import { DeviceTokenService } from './device-token.service';
 
+export interface LoginApprovalPushParams {
+  userId: string;
+  deviceName: string;
+  location?: string;
+  ipAddress?: string;
+  pendingToken: string;
+}
+
 export interface IncomingCallPushParams {
   callId: string;
   callType: 'VOICE' | 'VIDEO';
@@ -323,7 +331,6 @@ export class PushNotificationService {
     const {
       conversationType,
       senderName,
-      messageContent,
       messageCount,
       conversationName,
     } = params;
@@ -333,14 +340,14 @@ export class PushNotificationService {
       if (messageCount > 1) {
         return { title, body: `${messageCount} tin nhắn mới` };
       }
-      return { title, body: `${senderName}: ${messageContent}` };
+      return { title, body: `${senderName}: ${params.messageContent}` };
     }
 
     // DIRECT
     if (messageCount > 1) {
       return { title: senderName, body: `Đã gửi ${messageCount} tin nhắn` };
     }
-    return { title: senderName, body: messageContent };
+    return { title: senderName, body: params.messageContent };
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -507,5 +514,37 @@ export class PushNotificationService {
     );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Login Approval (2FA PUSH)
+  // ─────────────────────────────────────────────────────────────────────
+
+  async sendLoginApprovalPush(params: LoginApprovalPushParams): Promise<void> {
+    const { userId, deviceName, location, ipAddress, pendingToken } = params;
+
+    const tokens = await this.deviceTokens.getTokensByUserId(userId);
+    if (tokens.length === 0) return;
+
+    // Data-only message: App handles the approval UI
+    const data: Record<string, string> = {
+      type: 'LOGIN_APPROVAL',
+      deviceName,
+      location: location ?? 'Vị trí không xác định',
+      ipAddress: ipAddress ?? 'IP không xác định',
+      pendingToken,
+      timestamp: new Date().toISOString(),
+    };
+
+    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+      priority: 'high',
+      ttlSeconds: 300, // 5 minutes TTL for 2FA
+    });
+
+    await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
+
+    this.logger.log(
+      `📱 Login approval push sent to user ${userId.slice(0, 8)}… (${tokens.length} device(s))`,
+    );
   }
 }

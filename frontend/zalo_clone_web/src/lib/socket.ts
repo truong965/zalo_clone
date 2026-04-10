@@ -2,14 +2,13 @@
 import { env } from '@/config/env';
 import { io, Socket } from 'socket.io-client';
 import { SocketEvents } from '@/constants/socket-events';
-import { STORAGE_KEYS } from '@/constants/storage-keys';
 
 interface SocketAuthCallbacks {
   getToken: () => string | null;
   refreshToken: () => Promise<void>;
   onLogout: () => Promise<void>;
   onReset: () => void;
-  onError?: (message: string) => void;
+  onError?: (message: string, code?: string) => void;
 }
 
 class SocketManager {
@@ -22,11 +21,11 @@ class SocketManager {
   private refreshedOnceForThisSocket = false;
 
   // DI callbacks — set via init() before first connect()
-  private getTokenFn: () => string | null = () => localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+  private getTokenFn: () => string | null = () => null;
   private refreshTokenFn: () => Promise<void> = async () => { };
   private onLogoutFn: () => Promise<void> = async () => { };
   private onResetFn: () => void = () => { };
-  private onErrorFn: (message: string) => void = (msg) => console.error('Socket Global Error:', msg);
+  private onErrorFn: (message: string, code?: string) => void = (msg) => console.error('Socket Global Error:', msg);
 
   /**
    * Inject auth callbacks so this class never imports from @/features/auth.
@@ -94,6 +93,11 @@ class SocketManager {
       void this.refreshAuthAndReconnect();
     });
 
+    this.socket.on(SocketEvents.SERVER_SHUTDOWN, () => {
+      console.warn('⚠️ Server is shutting down. Disconnecting gracefully...');
+      this.disconnect();
+    });
+
     this.socket.on('error', (error) => {
       console.error('❌ Socket transport error:', error);
     });
@@ -102,7 +106,7 @@ class SocketManager {
     this.socket.on(SocketEvents.ERROR, (payload: any) => {
       console.error('❌ Socket error:', payload);
       const message = payload.message || payload.error || 'Unknown socket error';
-      this.onErrorFn(message);
+      this.onErrorFn(message, payload.code);
     });
 
     return this.socket;
@@ -149,7 +153,7 @@ class SocketManager {
 
   connect(token: string): Socket {
     this.token = token;
-    
+
     // Nếu token thay đổi, disconnect socket cũ để tạo kết nối xác thực mới
     if (this.socket && (!this.socket.auth || (this.socket.auth as any).token !== token)) {
       this.socket.disconnect();
@@ -220,7 +224,7 @@ class SocketManager {
         if (response && typeof response === 'object' && 'error' in response) {
           const errorMsg = response.error || 'Unknown error';
           if (!options?.skipGlobalError) {
-            this.onErrorFn(errorMsg);
+            this.onErrorFn(errorMsg, response.code);
           }
           reject(new Error(errorMsg));
           return;

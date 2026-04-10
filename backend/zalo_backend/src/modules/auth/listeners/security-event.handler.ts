@@ -5,6 +5,7 @@ import { InternalEventNames } from '@common/contracts/events';
 import { EventType, TokenRevocationReason } from '@prisma/client';
 import { IdempotencyService } from '@common/idempotency/idempotency.service';
 import { TokenService } from '../services/token.service';
+import * as crypto from 'crypto';
 
 /**
  * PHASE 3 Action 3.2: SecurityEventHandler (SEPARATED LISTENER)
@@ -30,7 +31,9 @@ export interface AuthSecurityRevokedEvent {
     | 'PASSWORD_CHANGE'
     | 'MANUAL_LOGOUT_ALL'
     | 'SECURITY_RISK'
-    | 'TOKEN_ROTATION';
+    | 'TOKEN_ROTATION'
+    | 'ACCOUNT_DEACTIVATED'
+    | 'ACCOUNT_DELETED';
   excludeDeviceId?: string;
 }
 
@@ -69,7 +72,7 @@ export class SecurityEventHandler implements OnApplicationBootstrap {
     payload: AuthSecurityRevokedEvent,
   ): Promise<void> {
     const { userId, reason } = payload;
-    const eventId = payload.eventId || `auth.security.revoked-${userId}`;
+    const eventId = payload.eventId || crypto.randomUUID();
     const handlerId = this.constructor.name;
 
     try {
@@ -95,10 +98,18 @@ export class SecurityEventHandler implements OnApplicationBootstrap {
 
     try {
       // 1. Revoke all refresh tokens in DB
-      await this.tokenService.revokeAllUserSessions(
-        userId,
-        TokenRevocationReason.SUSPICIOUS_ACTIVITY,
-      );
+      const revocationReasonMap: Record<string, TokenRevocationReason> = {
+        PASSWORD_CHANGE: TokenRevocationReason.PASSWORD_CHANGED,
+        ACCOUNT_DEACTIVATED: TokenRevocationReason.ACCOUNT_DEACTIVATED,
+        ACCOUNT_DELETED: TokenRevocationReason.ACCOUNT_DELETED,
+        TOKEN_ROTATION: TokenRevocationReason.TOKEN_ROTATION,
+        MANUAL_LOGOUT_ALL: TokenRevocationReason.MANUAL_LOGOUT,
+      };
+
+      const revocationReason =
+        revocationReasonMap[reason] || TokenRevocationReason.SUSPICIOUS_ACTIVITY;
+
+      await this.tokenService.revokeAllUserSessions(userId, revocationReason);
       this.logger.debug(
         `[SECURITY] Invalidated all refresh tokens for ${userId}`,
       );
@@ -107,7 +118,7 @@ export class SecurityEventHandler implements OnApplicationBootstrap {
       if (this.socketGateway) {
         await this.socketGateway.forceDisconnectUser(
           userId,
-          `Security revocation: ${reason}`,
+          `Security revocation: ${reason.replace(/_/g, ' ')}`,
         );
         this.logger.debug(`[SECURITY] Disconnected all sockets for ${userId}`);
       }

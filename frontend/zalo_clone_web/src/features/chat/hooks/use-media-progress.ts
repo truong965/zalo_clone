@@ -234,7 +234,7 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
 
                                     if ((result.processingStatus === 'READY' && !needsThumb) || result.processingStatus === 'FAILED') {
                                           // DEBUG: Log completion
-                                          console.log(`✅ [MediaProgress] Media ${mediaId} processing complete:`, result.processingStatus);
+                                          // console.log(`✅ [MediaProgress] Media ${mediaId} processing complete:`, result.processingStatus);
 
                                           queryClientRef.current.setQueryData<MessagesInfiniteData>(
                                                 queryKeyRef.current,
@@ -258,7 +258,7 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                               .catch((err: unknown) => {
                                     // DEBUG: Log errors
                                     const status = (err as { response?: { status?: number } })?.response?.status;
-                                    console.log(`❌ [MediaProgress] Media ${mediaId} poll error (status: ${status}):`, err);
+                                    // console.log(`❌ [MediaProgress] Media ${mediaId} poll error (status: ${status}):`, err);
 
                                     // 403 = not the media owner (user B).
                                     // The backend now broadcasts progress:{mediaId} to all conversation

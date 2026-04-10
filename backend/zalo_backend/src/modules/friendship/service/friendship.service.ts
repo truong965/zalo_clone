@@ -1335,7 +1335,7 @@ export class FriendshipService {
     const friendships = await this.prisma.friendship.findMany({
       where: {
         OR: [{ user1Id: userId }, { user2Id: userId }],
-        status: FriendshipStatus.ACCEPTED,
+        status: { in: [FriendshipStatus.ACCEPTED, FriendshipStatus.PENDING] },
         deletedAt: null,
       },
       select: {

@@ -25,12 +25,13 @@ export function OutgoingCallOverlay() {
       const callStatus = useCallStore((s) => s.callStatus);
       const callType = useCallStore((s) => s.callType);
       const peerInfo = useCallStore((s) => s.peerInfo);
+      const error = useCallStore((s) => s.error);
 
       const handleHangup = useCallback(() => {
             window.dispatchEvent(new CustomEvent('call:hangup'));
       }, []);
 
-      if (callStatus !== 'DIALING') return null;
+      if (callStatus !== 'DIALING' || error) return null;
 
       const isVideo = callType === 'VIDEO';
 

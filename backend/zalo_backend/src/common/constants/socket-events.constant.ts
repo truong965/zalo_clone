@@ -63,6 +63,7 @@ export const SocketEvents = {
   // Sync events
   MESSAGES_SYNC: 'messages:sync', // Offline message batch
   CONVERSATION_UPDATED: 'conversation:updated', // Last message changed
+  ACCOUNT_EMAIL_UPDATED: 'account:email_updated', // Self-sync email update
 
   CONVERSATION_LIST_ITEM_UPDATED: 'conversation:list:itemUpdated',
 
@@ -139,6 +140,12 @@ export const SocketEvents = {
   QR_EXPIRED: 'qr.expired',
   QR_CANCELLED: 'qr.cancelled',
 
+  // === 2FA EVENTS (Server → Web, targeted by pendingToken room) ===
+  TWO_FACTOR_APPROVED: '2fa.approved',
+  TWO_FACTOR_REJECTED: '2fa.rejected',
+  LOGIN_APPROVAL_REQUEST: 'auth.login_approval_request',
+
+
   // === FRIENDSHIP EVENTS (Server → Client) ===
   FRIEND_REQUEST_RECEIVED: 'friendship:requestReceived',
   FRIEND_REQUEST_ACCEPTED: 'friendship:requestAccepted',
@@ -149,6 +156,8 @@ export const SocketEvents = {
   // === CONTACT EVENTS (Server → Client) ===
   /** Owner's alias for a contact was updated; only sent to the owner */
   CONTACT_ALIAS_UPDATED: 'contact:aliasUpdated',
+  /** Background contact sync completed; only sent to the owner */
+  CONTACTS_SYNCED: 'contact:synced',
 
   // === CALL EVENTS ===
 

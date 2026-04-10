@@ -48,3 +48,29 @@ export class UserProfileUpdatedEvent extends DomainEvent {
     };
   }
 }
+
+/**
+ * Emitted when a user updates their email address.
+ * Separated from UserProfileUpdatedEvent for security and sync purposes.
+ */
+export class UserEmailUpdatedEvent extends DomainEvent {
+  readonly eventType = 'USER_EMAIL_UPDATED';
+  readonly version = 1;
+
+  constructor(
+    readonly userId: string,
+    readonly newEmail: string,
+  ) {
+    super('UsersModule', 'User', userId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      userId: this.userId,
+      newEmail: this.newEmail,
+      eventType: this.eventType,
+    };
+  }
+}
+

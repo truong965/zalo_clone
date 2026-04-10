@@ -18,6 +18,12 @@ export const SocketEvents = {
       QR_APPROVED: 'qr.approved',
       QR_EXPIRED: 'qr.expired',
       QR_CANCELLED: 'qr.cancelled',
+      
+      // 2FA
+      TWO_FACTOR_SUBSCRIBE: '2fa:subscribe',
+      TWO_FACTOR_APPROVED: '2fa.approved',
+      TWO_FACTOR_REJECTED: '2fa.rejected',
+
 
       // Server events
       SERVER_SHUTDOWN: 'server:shutdown',
@@ -69,6 +75,7 @@ export const SocketEvents = {
       // Sync events
       MESSAGES_SYNC: 'messages:sync', // Offline message batch
       CONVERSATION_UPDATED: 'conversation:updated', // Last message changed
+      ACCOUNT_EMAIL_UPDATED: 'account:email_updated', // Self-sync email update
 
       CONVERSATION_LIST_ITEM_UPDATED: 'conversation:list:itemUpdated',
 

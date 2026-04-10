@@ -10,6 +10,10 @@ export type UserProfile = {
       dateOfBirth?: string;
       bio?: string | null;
       email?: string | null;
+      twoFactorEnabled: boolean;
+      twoFactorMethod: TwoFactorMethod | null;
+      twoFactorSetupAt?: string;
+      hasTotpSecret: boolean;
 };
 
 export type LoginPayload = {
@@ -25,11 +29,47 @@ export type RegisterPayload = {
       dateOfBirth?: string;
 };
 
+export type RequestRegisterOtpPayload = {
+      phoneNumber: string;
+};
+
+export type VerifyRegisterOtpPayload = {
+      phoneNumber: string;
+      otp: string;
+};
+
 export type AuthResponse = {
       accessToken: string;
       tokenType: string;
       expiresIn: number;
+      refreshToken?: string;
       user?: UserProfile;
+};
+
+export type TwoFactorMethod = 'TOTP' | 'SMS' | 'EMAIL' | 'PUSH';
+
+export type TwoFactorRequiredResponse = {
+      status: '2FA_REQUIRED';
+      pendingToken: string;
+      availableMethods: TwoFactorMethod[];
+      preferredMethod: TwoFactorMethod;
+      maskedPhone?: string;
+      maskedEmail?: string;
+      isReactivation?: boolean;
+      autoTriggered?: boolean;
+};
+
+export type VerifyTwoFactorRequest = {
+      pendingToken: string;
+      code?: string;
+      method: TwoFactorMethod;
+      trustDevice?: boolean;
+};
+
+export type TwoFactorSetupResponse = {
+      otpAuthUri: string;
+      qrCodeDataUrl: string;
+      expiresIn?: number;
 };
 
 export type QrScanResponse = {
@@ -43,11 +83,22 @@ export type QrScanResponse = {
 export type DeviceSession = {
       deviceId: string;
       deviceName: string;
+      deviceType: string;
       platform: string;
+      browserName?: string;
+      browserVersion?: string;
+      osName?: string;
+      osVersion?: string;
       loginMethod: string;
       lastUsedAt?: string | Date;
+      lastActiveAt?: string | Date;
       ipAddress: string;
+      lastIp?: string;
+      lastLocation?: string;
       isOnline: boolean;
+      isTrusted: boolean;
+      attestationVerified?: boolean;
+      registeredAt?: string | Date;
 };
 
 export type UpdateUserPayload = {
@@ -66,16 +117,10 @@ export type ChangePasswordPayload = {
 };
 
 export type ForgotPasswordPayload = {
-      email: string;
-};
-
-export type VerifyOtpPayload = {
-      email: string;
-      otp: string;
+      identifier: string;
 };
 
 export type ResetPasswordPayload = {
-      email: string;
-      otp: string;
+      resetToken: string;
       newPassword: string;
 };

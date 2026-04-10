@@ -98,19 +98,40 @@ export function useSearchSocket(store: SearchStoreApi) {
             /**
              * search:error — Error notification from server
              */
-            const onSearchError = (payload: SearchErrorPayload) => {
+            const onSearchError = (payload: any) => {
                   try {
-                        storeRef.current.setError(payload.error);
+                        // Extract message from various possible error formats
+                        let message = 'An unknown search error occurred';
+
+                        if (typeof payload === 'string') {
+                              message = payload;
+                        } else if (payload && typeof payload === 'object') {
+                              // Priority: payload.error > payload.message > payload.details.message
+                              message =
+                                    payload.error ||
+                                    payload.message ||
+                                    (payload.details && typeof payload.details === 'object'
+                                          ? payload.details.message
+                                          : null) ||
+                                    'Search operation failed';
+
+                              // If message is still an array (validation errors), join it
+                              if (Array.isArray(message)) {
+                                    message = message.join(', ');
+                              }
+                        }
+
+                        storeRef.current.setError(String(message));
 
                         // Handle specific error codes
-                        if (payload.code === 'UNAUTHORIZED') {
-                              // Auth refresh is handled by SocketManager automatically
+                        const code = payload?.code || payload?.errorCode;
+                        if (code === 'UNAUTHORIZED') {
                               console.warn('[SearchSocket] Unauthorized — socket will reconnect');
-                        } else if (payload.code === 'RATE_LIMIT') {
+                        } else if (code === 'RATE_LIMIT') {
                               console.warn('[SearchSocket] Rate limited — slow down');
                         }
-                  } catch {
-                        // Ignore handler errors
+                  } catch (err) {
+                        console.error('[SearchSocket] Error in error handler:', err);
                   }
             };
 

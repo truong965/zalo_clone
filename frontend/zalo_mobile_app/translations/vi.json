@@ -4,7 +4,9 @@
             "success": "Thành công",
             "error": "Lỗi",
             "unknown": "Không xác định",
-            "loading": "Đang xử lý..."
+            "loading": "Đang xử lý...",
+            "back": "Quay lại",
+            "verify": "Xác thực"
       },
       "auth": {
             "loginTitle": "Đăng nhập Zalo",
@@ -57,7 +59,24 @@
             "resetSuccess": "Mật khẩu của bạn đã được cập nhật.",
             "backToLogin": "Quay lại đăng nhập",
             "otpSent": "Mã OTP đã được gửi đến email của bạn.",
-            "otpCorrect": "Mã OTP chính xác. Vui lòng đặt mật khẩu mới."
+            "otpCorrect": "Mã OTP chính xác. Vui lòng đặt mật khẩu mới.",
+            "twoFactorTitle": "Xác thực 2 lớp",
+            "twoFactorSubtitle": "Tài khoản của bạn được bảo mật. Vui lòng xác thực để tiếp tục.",
+            "enterTotp": "Nhập mã từ ứng dụng xác thực (Google Authenticator)",
+            "enterSmsOtp": "Nhập mã OTP gửi tới số điện thoại",
+            "enterEmailOtp": "Nhập mã OTP gửi tới email",
+            "waitingForPush": "Đang chờ phê duyệt...",
+            "pushSentInstructions": "Một yêu cầu phê duyệt đã được gửi tới thiết bị tin cậy của bạn. Vui lòng mở Zalo trên thiết bị đó để xác nhận.",
+            "resendPush": "Gửi lại yêu cầu phê duyệt",
+            "resendCode": "Gửi lại mã",
+            "codeRequired": "Vui lòng nhập mã xác thực",
+            "verifyFailed": "Xác thực thất bại. Vui lòng kiểm tra lại mã.",
+            "pushRejected": "Yêu cầu đăng nhập đã bị từ chối.",
+            "denied": "Từ chối",
+            "socketOnline": "Đã kết nối máy chủ xác thực",
+            "socketConnecting": "Đang kết nối máy chủ...",
+            "otpSentToPhone": "Mã OTP đã được gửi tới số điện thoại {{phone}}",
+            "otpSentToEmail": "Mã OTP đã được gửi tới email {{email}}"
       },
       "tabs": {
             "chats": "Tin nhắn",

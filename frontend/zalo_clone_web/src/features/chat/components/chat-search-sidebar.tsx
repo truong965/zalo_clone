@@ -20,6 +20,7 @@ import type { Dayjs } from 'dayjs';
 import { useQuery } from '@tanstack/react-query';
 import {
       useSearch,
+      MAX_KEYWORD_LENGTH,
       MessageResult,
       SearchEmpty,
       SearchLoading,
@@ -202,6 +203,7 @@ export function ChatSearchSidebar({ conversationId, initialKeyword, onClose, onN
                               onChange={(e) => handleKeywordChange(e.target.value)}
                               onPressEnter={(e) => triggerSearch((e.target as HTMLInputElement).value)}
                               allowClear
+                              maxLength={MAX_KEYWORD_LENGTH}
                               className="rounded-md"
                               autoFocus
                         />

@@ -11,6 +11,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { useRef, useCallback, useState, useEffect, type ChangeEvent } from 'react';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 import { Input, Button, Spin, Empty, Typography } from 'antd';
 import { SearchOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -37,7 +38,7 @@ export function GroupList({
 
       const handleSearchChange = useCallback(
             (e: ChangeEvent<HTMLInputElement>) => {
-                  const value = e.target.value;
+                  const value = e.target.value.slice(0, MAX_SEARCH_LENGTH);
                   setSearch(value);
                   if (debounceRef.current) clearTimeout(debounceRef.current);
                   debounceRef.current = setTimeout(
@@ -137,6 +138,7 @@ export function GroupList({
                               value={search}
                               onChange={handleSearchChange}
                               allowClear
+                              maxLength={MAX_SEARCH_LENGTH}
                         />
                   </div>
 

@@ -20,6 +20,7 @@ import { MediaPreviewModal } from '@/features/chat/components/media-preview-moda
 import { FileDocumentItem } from './file-document-item';
 import type { RecentMediaItem, MessageType } from '@/types/api';
 import { useTranslation } from 'react-i18next';
+import { MAX_SEARCH_LENGTH } from '@/features/search';
 
 const { Text } = Typography;
 
@@ -118,7 +119,7 @@ export function MediaBrowserPanel({
       // ── Debounce search logic ───────────────────────────────────────────────────
       useEffect(() => {
             const timer = setTimeout(() => {
-                  const trimmed = fileKeyword.trim();
+                  const trimmed = fileKeyword.trim().slice(0, MAX_SEARCH_LENGTH);
                   // Chỉ gọi query khi có 3 ký tự trở lên HOẶC khi xóa trắng
                   if (trimmed.length >= 3 || trimmed.length === 0) {
                         setDebouncedFileKeyword(trimmed);
@@ -229,6 +230,7 @@ export function MediaBrowserPanel({
                                     value={fileKeyword}
                                     onChange={(e) => setFileKeyword(e.target.value)}
                                     allowClear
+                                    maxLength={MAX_SEARCH_LENGTH}
                                     size="small"
                                     className="rounded-md"
                               />

@@ -16,6 +16,7 @@
 
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { debounce } from 'lodash-es';
+import { MAX_SEARCH_LENGTH } from '../constants';
 import { useSearchSocket } from './use-search-socket';
 import {
       useGlobalSearchStore,
@@ -32,6 +33,9 @@ import type {
 
 /** Minimum keyword length to trigger search (matches backend minLength = 3) */
 const MIN_KEYWORD_LENGTH = 3;
+
+/** Maximum keyword length allowed by backend (avoid WsException) */
+export const MAX_KEYWORD_LENGTH = MAX_SEARCH_LENGTH;
 
 /** Debounce delay for search input (ms) */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -77,6 +81,7 @@ export function useSearch(options?: UseSearchOptions) {
       const setActiveTab = useStore((s) => s.setActiveTab);
       const setConversationId = useStore((s) => s.setConversationId);
       const setStatus = useStore((s) => s.setStatus);
+      const setError = useStore((s) => s.setError);
       const openSearch = useStore((s) => s.openSearch);
       const closeSearch = useStore((s) => s.closeSearch);
       const resetSearch = useStore((s) => s.resetSearch);
@@ -193,6 +198,16 @@ export function useSearch(options?: UseSearchOptions) {
                         return;
                   }
 
+                  // Prevent excessively long keywords (B6 error fix)
+                  if (trimmed.length > MAX_KEYWORD_LENGTH) {
+                        debouncedSubscribe.cancel();
+                        setStatus('error');
+                        // No need to call setError as setStatus('error') already updates status,
+                        // but we want a nice message.
+                        setError(`Từ khóa tìm kiếm quá dài (tối đa ${MAX_KEYWORD_LENGTH} ký tự)`);
+                        return;
+                  }
+
                   if (!autoSubscribe) return;
 
                   // Show loading immediately for responsive UX
@@ -208,6 +223,7 @@ export function useSearch(options?: UseSearchOptions) {
                   conversationId,
                   autoSubscribe,
                   setStatus,
+                  setError,
                   unsubscribe,
             ],
       );
@@ -249,6 +265,12 @@ export function useSearch(options?: UseSearchOptions) {
                   const searchKeyword = (kw ?? keyword).trim();
                   if (searchKeyword.length < MIN_KEYWORD_LENGTH) return;
 
+                  if (searchKeyword.length > MAX_KEYWORD_LENGTH) {
+                        setStatus('error');
+                        setError(`Từ khóa tìm kiếm quá dài (tối đa ${MAX_KEYWORD_LENGTH} ký tự)`);
+                        return;
+                  }
+
                   debouncedSubscribe.cancel();
                   setStatus('loading');
 
@@ -278,7 +300,7 @@ export function useSearch(options?: UseSearchOptions) {
 
                   subscribe(payload);
             },
-            [keyword, searchType, conversationId, debouncedSubscribe, setStatus, subscribe],
+            [keyword, searchType, conversationId, debouncedSubscribe, setStatus, setError, subscribe],
       );
 
       /**

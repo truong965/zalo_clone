@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { BlockModule } from '@modules/block/block.module';
 import { PrivacyModule } from '@modules/privacy/privacy.module';
 import { FriendshipModule } from '@modules/friendship/friendship.module';
+
 import { InteractionAuthorizationService } from './services/interaction-authorization.service';
 import { InteractionGuard } from './guards/interaction.guard';
 import { NotBlockedGuard } from '@common/guards/not-blocked.guard';
