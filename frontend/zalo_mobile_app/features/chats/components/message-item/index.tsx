@@ -29,6 +29,7 @@ export interface MessageItemProps {
   onUnpin?: (message: Message) => void;
   onRecall?: (message: Message) => void;
   onDeleteForMe?: (message: Message) => void;
+  onForward?: (message: Message) => void;
   isHighlighted?: boolean;
 }
 
@@ -49,6 +50,7 @@ export function MessageItem({
   onUnpin,
   onRecall,
   onDeleteForMe,
+  onForward,
   isHighlighted,
 }: MessageItemProps) {
   const theme = useTheme();
@@ -67,8 +69,8 @@ export function MessageItem({
 
   if (!message || typeof message !== 'object') return null;
 
-  const time       = format(new Date(message.createdAt), 'HH:mm');
-  const sender     = message?.sender;
+  const time = format(new Date(message.createdAt), 'HH:mm');
+  const sender = message?.sender;
   const senderName = sender?.displayName || 'Người dùng';
 
   // Build menu options for long press
@@ -81,8 +83,8 @@ export function MessageItem({
   const enHidden = isTranslationHidden(msgId, 'en');
   const isRecalled = Boolean(
     message.metadata &&
-      typeof message.metadata === 'object' &&
-      (message.metadata as Record<string, unknown>).recalled === true,
+    typeof message.metadata === 'object' &&
+    (message.metadata as Record<string, unknown>).recalled === true,
   );
 
   const menuOptions: (MenuOption | { divider: boolean })[] = [
@@ -106,6 +108,15 @@ export function MessageItem({
       icon: 'arrow-undo',
       color: '#007AFF',
       onPress: () => onLongPress?.(message),
+    },
+    {
+      id: 'forward',
+      label: 'Chuyển tiếp',
+      icon: 'share-outline',
+      color: '#007AFF',
+      onPress: () => onForward?.(message),
+      disabled: isRecalled,
+      hidden: !onForward,
     },
     {
       id: 'recall',
@@ -186,15 +197,15 @@ export function MessageItem({
             onLongPress={() => setMenuVisible(true)}
             style={[
               styles.bubble,
-              isMe ? styles.bubbleMe        : styles.bubbleOther,
-              isMe ? styles.bubbleCornerMe  : styles.bubbleCornerOther,
+              isMe ? styles.bubbleMe : styles.bubbleOther,
+              isMe ? styles.bubbleCornerMe : styles.bubbleCornerOther,
               isHighlighted && styles.highlighted,
             ]}
           >
-            <MessageContent 
-              message={message} 
-              isMe={isMe} 
-              theme={theme} 
+            <MessageContent
+              message={message}
+              isMe={isMe}
+              theme={theme}
               onJumpToMessage={onJumpToMessage}
               onMediaPress={onMediaPress}
               isHighlighted={isHighlighted}
@@ -221,24 +232,24 @@ export function MessageItem({
 
 // ─── SendStatusLabel (private, only used above) ──────────────────────────────
 
-function SendStatusLabel({ 
-  message, 
-  isDirect, 
-  onRetry 
-}: { 
-  message: Message; 
+function SendStatusLabel({
+  message,
+  isDirect,
+  onRetry
+}: {
+  message: Message;
   isDirect: boolean;
   onRetry?: (message: Message) => void;
 }) {
   const sendStatus = getSendStatus(message.metadata);
   if (sendStatus === 'SENDING') return <Text style={styles.statusText}>Đang gửi...</Text>;
-  
+
   if (sendStatus === 'FAILED') {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Text style={styles.statusError}>Lỗi mạng</Text>
-        <TouchableOpacity 
-          style={styles.retryBtn} 
+        <TouchableOpacity
+          style={styles.retryBtn}
           onPress={() => onRetry?.(message)}
         >
           <Text style={styles.retryText}>Thử lại</Text>
@@ -248,9 +259,9 @@ function SendStatusLabel({
   }
 
   const state = getReceiptDisplayState(message, isDirect);
-  if (state === 'none')      return null;
-  if (state === 'sent')      return <Text style={styles.statusText}>Đã gửi</Text>;
+  if (state === 'none') return null;
+  if (state === 'sent') return <Text style={styles.statusText}>Đã gửi</Text>;
   if (state === 'delivered') return <Text style={styles.statusText}>Đã nhận</Text>;
-  if (state === 'seen')      return <Text style={styles.statusSeen}>Đã xem</Text>;
+  if (state === 'seen') return <Text style={styles.statusSeen}>Đã xem</Text>;
   return null;
 }

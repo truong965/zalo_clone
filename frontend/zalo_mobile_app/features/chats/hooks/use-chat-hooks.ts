@@ -286,6 +286,45 @@ export function useRecallMessage() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// useForwardMessage
+// ─────────────────────────────────────────────────────────────
+export function useForwardMessage() {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (variables: {
+      sourceMessageId: string;
+      targetConversationIds: string[];
+      clientRequestId: string;
+      includeCaption?: boolean;
+    }) => {
+      if (!accessToken) {
+        throw new Error('Bạn cần đăng nhập lại để chuyển tiếp tin nhắn');
+      }
+
+      return mobileApi.forwardMessage(variables, accessToken);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      Toast.show({
+        type: 'success',
+        text1: 'Đã chuyển tiếp tin nhắn',
+        position: 'top',
+      });
+    },
+    onError: (error) => {
+      Toast.show({
+        type: 'error',
+        text1: 'Chuyển tiếp thất bại',
+        text2: error instanceof Error ? error.message : 'Đã có lỗi xảy ra',
+        position: 'top',
+      });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // useDeleteMessageForMe
 // ─────────────────────────────────────────────────────────────
 export function useDeleteMessageForMe() {

@@ -6,9 +6,9 @@ import { useTranslationStore } from '@/hooks/use-translation-store';
 import { Message, MessageType } from '@/types/message';
 import { getFullUrl, getReplyPreviewText } from './message-item.utils';
 import { styles } from './message-item.styles';
-import { MessageImageAttachment }    from './attachments/message-image-attachment';
-import { MessageVideoAttachment }    from './attachments/message-video-attachment';
-import { MessageAudioAttachment }    from './attachments/message-audio-attachment';
+import { MessageImageAttachment } from './attachments/message-image-attachment';
+import { MessageVideoAttachment } from './attachments/message-video-attachment';
+import { MessageAudioAttachment } from './attachments/message-audio-attachment';
 import { MessageDocumentAttachment } from './attachments/message-document-attachment';
 
 interface Props {
@@ -23,36 +23,42 @@ interface Props {
   pendingLangs?: string[];
 }
 
-export function MessageContent({ 
-  message, 
-  isMe, 
-  theme, 
-  onJumpToMessage, 
-  onMediaPress, 
+export function MessageContent({
+  message,
+  isMe,
+  theme,
+  onJumpToMessage,
+  onMediaPress,
   isHighlighted,
   translations = {},
   isTranslationHidden = () => false,
   pendingLangs = [],
 }: Props) {
-  const { 
-    hideTranslation, 
-    showTranslation, 
-    clearTranslations 
+  const {
+    hideTranslation,
+    showTranslation,
+    clearTranslations
   } = useTranslationStore();
-  
+
   const msgId = String(message.id);
   const recalled = Boolean(
     message.metadata &&
     typeof message.metadata === 'object' &&
     (message.metadata as Record<string, unknown>).recalled === true,
   );
+  const isForwarded = Boolean(
+    message.metadata &&
+    typeof message.metadata === 'object' &&
+    (message.metadata as Record<string, unknown>).forward &&
+    typeof (message.metadata as Record<string, unknown>).forward === 'object',
+  );
   const attachments = message.mediaAttachments || [];
 
   const isPendingNonText = attachments.length === 0 && !message.parentMessage && !message.replyTo && message.type !== MessageType.TEXT;
 
-  const images    = attachments.filter(a => a.mediaType === 'IMAGE');
-  const videos    = attachments.filter(a => a.mediaType === 'VIDEO');
-  const audios    = attachments.filter(a => a.mediaType === 'AUDIO');
+  const images = attachments.filter(a => a.mediaType === 'IMAGE');
+  const videos = attachments.filter(a => a.mediaType === 'VIDEO');
+  const audios = attachments.filter(a => a.mediaType === 'AUDIO');
   const documents = attachments.filter(a => a.mediaType === 'DOCUMENT');
 
   if (recalled) {
@@ -67,6 +73,12 @@ export function MessageContent({
 
   return (
     <View style={{ flexDirection: 'column', gap: 4 }}>
+      {isForwarded && (
+        <Text style={{ fontSize: 11, color: '#9ca3af', marginBottom: 2 }}>
+          Đã chuyển tiếp
+        </Text>
+      )}
+
       {/* Reply preview */}
       {(message.parentMessage || message.replyTo) && (() => {
         const replyMsg = message.parentMessage || message.replyTo;
@@ -81,14 +93,14 @@ export function MessageContent({
               if (replyMsg?.id) onJumpToMessage?.(replyMsg.id.toString());
             }}
           >
-            <Text 
-              style={[styles.replySender, isDeleted && { color: '#9ca3af' }]} 
+            <Text
+              style={[styles.replySender, isDeleted && { color: '#9ca3af' }]}
               numberOfLines={1}
             >
               {replyMsg.sender?.displayName || 'Người dùng'}
             </Text>
-            <Text 
-              style={[styles.replyContent, isDeleted && { fontStyle: 'italic', color: '#9ca3af' }]} 
+            <Text
+              style={[styles.replyContent, isDeleted && { fontStyle: 'italic', color: '#9ca3af' }]}
               numberOfLines={1}
             >
               {getReplyPreviewText(replyMsg)}
@@ -121,20 +133,20 @@ export function MessageContent({
             {/* Header with actions */}
             <View style={localStyles.translationHeader}>
               <Text style={localStyles.langLabel}>{langLabel}</Text>
-              
+
               <View style={localStyles.actionGroup}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => isHidden ? showTranslation(msgId, lang) : hideTranslation(msgId, lang)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons 
-                    name={isHidden ? 'eye-outline' : 'eye-off-outline'} 
-                    size={16} 
-                    color="#9ca3af" 
+                  <Ionicons
+                    name={isHidden ? 'eye-outline' : 'eye-off-outline'}
+                    size={16}
+                    color="#9ca3af"
                   />
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => clearTranslations()} // GLOBAL CLEAR as requested
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
@@ -162,7 +174,7 @@ export function MessageContent({
         const langLabel = lang === 'vi' ? 'Tiếng Việt' : lang === 'en' ? 'Tiếng Anh' : lang;
         return (
           <View key={`pending-${lang}`} style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e5e7eb', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <ActivityIndicator size={12} color="#007AFF" /> 
+            <ActivityIndicator size={12} color="#007AFF" />
             <Text style={{ fontSize: 13, color: '#9ca3af', fontStyle: 'italic' }}>
               Đang dịch {langLabel}...
             </Text>

@@ -72,6 +72,7 @@ export const API_ENDPOINTS = {
   MESSAGES: {
     GET_ALL: '/api/v1/messages',
     SEND: '/api/v1/messages',
+    FORWARD: '/api/v1/messages/forward',
     EDIT: (id: string) => `/api/v1/messages/${id}`,
     DELETE: (id: string) => `/api/v1/messages/${id}`,
     SEARCH: '/api/v1/messages/search',

@@ -23,6 +23,7 @@ import { PinnedMessagesBanner } from './components/pinned-messages-banner';
 import { MediaBrowserPanel } from './components/media-browser-panel';
 import { ActiveGroupCallBanner } from './components/ActiveGroupCallBanner';
 import { ChatAiSidebar } from './components/chat-ai-sidebar.tsx';
+import { ForwardMessageModal } from './components/modals/forward-message-modal';
 
 // ── Cross-feature components (rendered by page-level host) ───────────────
 import { FriendshipSearchModal } from '@/features/contacts';
@@ -127,7 +128,7 @@ export function ChatFeature() {
       const { createReminder, isCreating: isReminderCreating } = useReminders();
 
       // ── AI Summary Trigger ──────────────────────────────────────────────────
-      const [aiSummaryTrigger, setAiSummaryTrigger] = useState<{count: number; startMessageId: string | undefined} | null>(null);
+      const [aiSummaryTrigger, setAiSummaryTrigger] = useState<{ count: number; startMessageId: string | undefined } | null>(null);
 
       // ── Reply handler ────────────────────────────────────────────────────
       const handleReply = (msg: ChatMessage) => {
@@ -638,7 +639,7 @@ export function ChatFeature() {
             } else {
                   setAiSummaryTrigger(null);
             }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+            // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [selectedId]); // Intentional: Only run precisely when selectedId changes
 
       // Phase 3: Sync active call on conversation change
@@ -651,7 +652,7 @@ export function ChatFeature() {
                               if (callStatus === 'IDLE') {
                                     await new Promise(resolve => setTimeout(resolve, 300));
                               }
-                              
+
                               const res = await getActiveCall(selectedId);
                               console.log("res active", res);
                               // Phase 6 & 9: res is now already unwrapped by call.api.ts
@@ -790,8 +791,8 @@ export function ChatFeature() {
                                                             >
                                                                   <span role="img" aria-label="ai">✨</span> Tóm tắt AI
                                                             </button>
-                                                            <button 
-                                                                  className="w-6 h-6 flex items-center justify-center hover:bg-blue-700/50 rounded-full transition-colors cursor-pointer" 
+                                                            <button
+                                                                  className="w-6 h-6 flex items-center justify-center hover:bg-blue-700/50 rounded-full transition-colors cursor-pointer"
                                                                   onClick={() => setAiSummaryTrigger(null)}
                                                             >
                                                                   <CloseOutlined className="text-xs" />
@@ -925,6 +926,8 @@ export function ChatFeature() {
                               await ensureConversationLoaded(conversationId);
                         }}
                   />
+
+                  <ForwardMessageModal />
 
                   <CreateReminderModal
                         open={!!reminderTarget}

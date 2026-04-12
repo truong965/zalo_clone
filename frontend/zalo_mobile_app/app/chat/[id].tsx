@@ -25,6 +25,7 @@ import { MessageSeparator } from '@/features/chats/components/message-item/messa
 import {
   useChatRealtime,
   useDeleteMessageForMe,
+  useForwardMessage,
   useMessagesList,
   useRecallMessage,
   useSendMessage,
@@ -33,6 +34,7 @@ import { useJumpToMessage } from '@/features/chats/hooks/use-jump-to-message';
 import { usePinMessage } from '@/features/chats/hooks/use-pin-message';
 import { PinnedMessagesHeader } from '@/features/chats/components/pinned-messages-header';
 import { MessageActionSheet } from '@/features/chats/components/message-action-sheet';
+import { ForwardMessageModal } from '@/features/chats/components/modals/forward-message-modal';
 import { useChatStore } from '@/features/chats/stores/chat.store';
 import { useMarkAsSeen } from '@/features/chats/hooks/use-mark-as-seen';
 import { MediaViewerModal } from '@/features/chats/components/media-viewer-modal';
@@ -57,6 +59,7 @@ const ChatMessage = React.memo(
     onLongPress, onJumpToMessage, onMediaPress, isHighlighted,
     onRetry, conversationId, isPinned, onPin, onUnpin,
     onRecall, onDeleteForMe,
+    onForward,
   }: {
     item: Message;
     isMe: boolean;
@@ -77,6 +80,7 @@ const ChatMessage = React.memo(
     onUnpin?: (msg: Message) => void;
     onRecall?: (msg: Message) => void;
     onDeleteForMe?: (msg: Message) => void;
+    onForward?: (msg: Message) => void;
   }) => {
     if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
     return (
@@ -100,6 +104,7 @@ const ChatMessage = React.memo(
           onUnpin={onUnpin}
           onRecall={onRecall}
           onDeleteForMe={onDeleteForMe}
+          onForward={onForward}
           isHighlighted={isHighlighted}
         />
       </View>
@@ -155,6 +160,7 @@ export default function ChatDetailScreen() {
 
   const sendMessageMutation = useSendMessage();
   const recallMessageMutation = useRecallMessage();
+  const forwardMessageMutation = useForwardMessage();
   const deleteMessageForMeMutation = useDeleteMessageForMe();
 
   const handleRecall = useCallback(
@@ -209,6 +215,7 @@ export default function ChatDetailScreen() {
   const headerHeight = useHeaderHeight();
 
   const [selectedMsgForMenu, setSelectedMsgForMenu] = React.useState<Message | null>(null);
+  const [forwardSourceMessage, setForwardSourceMessage] = React.useState<Message | null>(null);
   const [viewerState, setViewerState] = React.useState({ isVisible: false, initialIndex: 0 });
   const fetchingRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -398,6 +405,29 @@ export default function ChatDetailScreen() {
     [id, sendMessageMutation]
   );
 
+  const handleForward = useCallback((msg: Message) => {
+    setForwardSourceMessage(msg);
+  }, []);
+
+  const handleSubmitForward = useCallback(
+    async (payload: {
+      sourceMessageId: string;
+      targetConversationIds: string[];
+      includeCaption?: boolean;
+    }) => {
+      try {
+        await forwardMessageMutation.mutateAsync({
+          ...payload,
+          clientRequestId: uuidv4(),
+        });
+        setForwardSourceMessage(null);
+      } catch {
+        // Error toast is handled inside useForwardMessage
+      }
+    },
+    [forwardMessageMutation],
+  );
+
   const renderItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
       const olderMessage = messages[index - 1];
@@ -429,13 +459,14 @@ export default function ChatDetailScreen() {
           onUnpin={(msg) => unpinMessage(msg.id)}
           onRecall={handleRecall}
           onDeleteForMe={handleDeleteForMe}
+          onForward={handleForward}
           isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
       );
     },
     [user?.id, messages, isGroup, isDirect, latestMyMessageId,
       setSelectedMsgForMenu, jumpToMessage, handleMediaPress, handleRetry,
-      handleRecall, handleDeleteForMe, highlightedId],
+      handleRecall, handleDeleteForMe, handleForward, highlightedId],
   );
 
   const handleSend = useCallback(
@@ -566,12 +597,24 @@ export default function ChatDetailScreen() {
             messageId: msg.id,
           });
         }}
+        onForward={(msg) => {
+          setForwardSourceMessage(msg);
+        }}
         onDeleteForMe={(msg) => {
           deleteMessageForMeMutation.mutate({
             conversationId: id,
             messageId: msg.id,
           });
         }}
+      />
+
+      <ForwardMessageModal
+        visible={!!forwardSourceMessage}
+        sourceMessage={forwardSourceMessage}
+        currentConversationId={id}
+        isSubmitting={forwardMessageMutation.isPending}
+        onDismiss={() => setForwardSourceMessage(null)}
+        onSubmit={handleSubmitForward}
       />
 
       <MediaViewerModal

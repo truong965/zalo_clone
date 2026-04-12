@@ -82,3 +82,28 @@ export class MessageDeletedEvent extends DomainEvent {
     };
   }
 }
+
+export class MessageForwardedEvent extends DomainEvent {
+  readonly eventType = 'MESSAGE_FORWARDED';
+  readonly version = 1;
+
+  constructor(
+    readonly sourceMessageId: string,
+    readonly forwardedById: string,
+    readonly targetConversationIds: string[],
+    readonly targetMessageIds: string[],
+  ) {
+    super('MessageModule', 'Message', sourceMessageId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      sourceMessageId: this.sourceMessageId,
+      forwardedById: this.forwardedById,
+      targetConversationIds: this.targetConversationIds,
+      targetMessageIds: this.targetMessageIds,
+      eventType: this.eventType,
+    };
+  }
+}

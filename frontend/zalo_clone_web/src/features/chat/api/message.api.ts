@@ -41,6 +41,20 @@ export const messageService = {
             return response.data.data;
       },
 
+      async forwardMessage(dto: {
+            sourceMessageId: string;
+            targetConversationIds: string[];
+            clientRequestId: string;
+            includeCaption?: boolean;
+      }): Promise<MessageListItem[]> {
+            const response = await apiClient.post<ApiResponse<MessageListItem[]>>(
+                  API_ENDPOINTS.MESSAGES.FORWARD,
+                  dto,
+            );
+
+            return response.data.data;
+      },
+
       async recallMessage(messageId: string): Promise<void> {
             await apiClient.delete(API_ENDPOINTS.MESSAGES.DELETE(messageId), {
                   params: { deleteForEveryone: true },

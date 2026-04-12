@@ -234,6 +234,13 @@ export interface MessageSentEventPayload extends DomainEventEnvelope {
   senderId: string;
 }
 
+export interface MessageForwardedEventPayload extends DomainEventEnvelope {
+  sourceMessageId: string;
+  forwardedById: string;
+  targetConversationIds: string[];
+  targetMessageIds: string[];
+}
+
 export interface MessageDeletedEventPayload extends DomainEventEnvelope {
   messageId: string;
   conversationId: string;
@@ -340,6 +347,7 @@ export interface InternalEventPayloadMap {
   [InternalEventNames.CONTACTS_SYNCED]: ContactsSyncedEventPayload;
 
   [InternalEventNames.MESSAGE_SENT]: MessageSentEventPayload;
+  [InternalEventNames.MESSAGE_FORWARDED]: MessageForwardedEventPayload;
   [InternalEventNames.MESSAGE_DELETED]: MessageDeletedEventPayload;
   [InternalEventNames.MESSAGE_UPDATED]: MessageUpdatedEventPayload;
   [InternalEventNames.MESSAGE_EDITED]: MessageUpdatedEventPayload;

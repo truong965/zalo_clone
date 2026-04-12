@@ -11,6 +11,7 @@ import { PrismaService } from 'src/database/prisma.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { SendMessageDto } from '../dto/send-message.dto';
 import { GetMessagesDto } from '../dto/get-messages.dto';
+import { ForwardMessageDto } from '../dto/forward-message.dto';
 import {
   ConversationType,
   MediaProcessingStatus,
@@ -26,7 +27,11 @@ import s3Config from 'src/config/s3.config';
 import type { ConfigType } from '@nestjs/config';
 import { safeJSON, safeStringify } from 'src/common/utils/json.util';
 import { EventPublisher } from '@shared/events';
-import { MessageSentEvent, MessageDeletedEvent } from '../events';
+import {
+  MessageSentEvent,
+  MessageDeletedEvent,
+  MessageForwardedEvent,
+} from '../events';
 import { InteractionAuthorizationService } from '@modules/authorization/services/interaction-authorization.service';
 import { PermissionAction } from '@common/constants/permission-actions.constant';
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
@@ -69,6 +74,31 @@ const MEDIA_ATTACHMENT_SELECT = {
   messageId: true,
 } as const;
 
+const FORWARD_SOURCE_MEDIA_ATTACHMENT_SELECT = {
+  id: true,
+  mediaType: true,
+  mimeType: true,
+  cdnUrl: true,
+  thumbnailUrl: true,
+  optimizedUrl: true,
+  hlsPlaylistUrl: true,
+  originalName: true,
+  size: true,
+  width: true,
+  height: true,
+  duration: true,
+  processingStatus: true,
+  processingError: true,
+  processedAt: true,
+  s3Bucket: true,
+  s3Key: true,
+  thumbnailS3Key: true,
+  optimizedS3Key: true,
+  uploadedBy: true,
+  uploadedFrom: true,
+  retryCount: true,
+} as const;
+
 type RecentMediaMessageRow = {
   id: bigint;
   type: MessageType;
@@ -97,7 +127,7 @@ export class MessageService {
     private readonly config: ConfigType<typeof redisConfig>,
     @Inject(s3Config.KEY)
     private readonly s3Cfg: ConfigType<typeof s3Config>,
-  ) {}
+  ) { }
 
   /**
    * Rewrites a media URL so that its host matches the current S3_ENDPOINT.
@@ -305,9 +335,9 @@ export class MessageService {
       sender: composeSender(message.senderId),
       parentMessage: message.parentMessage
         ? {
-            ...message.parentMessage,
-            sender: composeSender(message.parentMessage.senderId),
-          }
+          ...message.parentMessage,
+          sender: composeSender(message.parentMessage.senderId),
+        }
         : message.parentMessage,
     }));
   }
@@ -460,6 +490,313 @@ export class MessageService {
 
     this.logger.log(`Message ${message.id} sent (Type: ${dto.type})`);
     return safeJSON(fullMessage);
+  }
+
+  async forwardMessage(
+    dto: ForwardMessageDto,
+    senderId: string,
+  ): Promise<Message[]> {
+    const idempotencyKey = RedisKeyBuilder.messageIdempotency(dto.clientRequestId);
+
+    const cachedForward = await this.redis.getClient().get(idempotencyKey);
+    if (cachedForward) {
+      try {
+        const parsed = JSON.parse(cachedForward) as { messageIds?: string[] };
+        const messageIds = (parsed.messageIds ?? []).flatMap((id) => {
+          try {
+            return [BigInt(id)];
+          } catch {
+            return [];
+          }
+        });
+
+        if (messageIds.length > 0) {
+          return this.getOrderedMessagesForViewer(messageIds, senderId);
+        }
+      } catch {
+        // Ignore malformed cache and continue normal flow
+      }
+    }
+
+    const targetConversationIds = [...new Set(dto.targetConversationIds)];
+    if (targetConversationIds.length === 0) {
+      throw new BadRequestException(
+        'At least one target conversation is required',
+      );
+    }
+    if (targetConversationIds.length > 5) {
+      throw new BadRequestException(
+        'Cannot forward to more than 5 conversations at once',
+      );
+    }
+
+    const sourceMessageId = this.toBigIntMessageId(
+      dto.sourceMessageId,
+      'sourceMessageId',
+    );
+
+    const sourceMessage = await this.prisma.message.findUnique({
+      where: { id: sourceMessageId },
+      select: {
+        id: true,
+        conversationId: true,
+        senderId: true,
+        type: true,
+        content: true,
+        metadata: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!sourceMessage || sourceMessage.deletedAt) {
+      throw new BadRequestException('Source message not found');
+    }
+
+    if (this.extractMetadata(sourceMessage.metadata).recalled === true) {
+      throw new BadRequestException('Cannot forward a recalled message');
+    }
+
+    if (this.isMessageDeletedForUser(sourceMessage.metadata, senderId)) {
+      throw new BadRequestException('Source message is not accessible');
+    }
+
+    const canAccessSourceConversation = await this.isMember(
+      sourceMessage.conversationId,
+      senderId,
+    );
+    if (!canAccessSourceConversation) {
+      throw new ForbiddenException('You cannot access source conversation');
+    }
+
+    const targetConversations = await this.prisma.conversation.findMany({
+      where: { id: { in: targetConversationIds } },
+      select: {
+        id: true,
+        type: true,
+        members: {
+          where: { status: MemberStatus.ACTIVE },
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (targetConversations.length !== targetConversationIds.length) {
+      throw new BadRequestException('One or more target conversations not found');
+    }
+
+    const targetConversationMap = new Map(
+      targetConversations.map((conversation) => [conversation.id, conversation]),
+    );
+    const orderedTargetConversations = targetConversationIds.map(
+      (conversationId) => targetConversationMap.get(conversationId)!,
+    );
+
+    const missingMembership = orderedTargetConversations
+      .filter((conversation) =>
+        !conversation.members.some((member) => member.userId === senderId),
+      )
+      .map((conversation) => conversation.id);
+
+    if (missingMembership.length > 0) {
+      throw new ForbiddenException(
+        'You must be an active member in all target conversations',
+      );
+    }
+
+    for (const conversation of orderedTargetConversations) {
+      if (conversation.type !== ConversationType.DIRECT) {
+        continue;
+      }
+
+      const targetUserId = conversation.members.find(
+        (member) => member.userId !== senderId,
+      )?.userId;
+
+      if (!targetUserId) {
+        throw new BadRequestException('Invalid direct conversation members');
+      }
+
+      await this.validateSendPermissions(senderId, targetUserId);
+    }
+
+    const sourceAttachments = await this.prisma.mediaAttachment.findMany({
+      where: {
+        messageId: sourceMessage.id,
+        deletedAt: null,
+      },
+      select: FORWARD_SOURCE_MEDIA_ATTACHMENT_SELECT,
+    });
+
+    const sourceMetadata = this.extractMetadata(sourceMessage.metadata);
+    const { deletedForUserIds, recalled, recalledAt, recalledBy, ...rest } =
+      sourceMetadata;
+    const forwardedMetadata: Prisma.InputJsonValue = {
+      ...rest,
+      forward: {
+        sourceMessageId: sourceMessage.id.toString(),
+        originalSenderId: sourceMessage.senderId,
+      },
+    };
+
+    const includeCaption = dto.includeCaption !== false || sourceAttachments.length === 0;
+
+    const createdMessageIds = await this.prisma.$transaction(async (tx) => {
+      const createdIds: bigint[] = [];
+
+      for (const targetConversation of orderedTargetConversations) {
+        const recipientIds = targetConversation.members
+          .map((member) => member.userId)
+          .filter((userId) => userId !== senderId);
+
+        const directTargetUserId =
+          targetConversation.type === ConversationType.DIRECT
+            ? recipientIds[0] ?? null
+            : null;
+
+        if (
+          targetConversation.type === ConversationType.DIRECT &&
+          !directTargetUserId
+        ) {
+          throw new BadRequestException('Invalid direct conversation members');
+        }
+
+        const createdMessage = await tx.message.create({
+          data: {
+            conversationId: targetConversation.id,
+            senderId,
+            type: sourceMessage.type,
+            content: includeCaption
+              ? sourceMessage.content?.trim() || null
+              : null,
+            metadata: forwardedMetadata,
+            clientMessageId: null,
+            totalRecipients: recipientIds.length,
+            directReceipts: directTargetUserId
+              ? { [directTargetUserId]: { delivered: null, seen: null } }
+              : undefined,
+          },
+        });
+
+        if (sourceAttachments.length > 0) {
+          await tx.mediaAttachment.createMany({
+            data: sourceAttachments.map((attachment) => ({
+              messageId: createdMessage.id,
+              originalName: attachment.originalName,
+              mimeType: attachment.mimeType,
+              mediaType: attachment.mediaType,
+              size: attachment.size,
+              s3Bucket: attachment.s3Bucket,
+              // Zero-copy by reusing URL references; keep s3Key null to avoid unique conflicts.
+              s3Key: null,
+              cdnUrl: attachment.cdnUrl,
+              thumbnailUrl: attachment.thumbnailUrl,
+              thumbnailS3Key: attachment.thumbnailS3Key,
+              optimizedUrl: attachment.optimizedUrl,
+              optimizedS3Key: attachment.optimizedS3Key,
+              hlsPlaylistUrl: attachment.hlsPlaylistUrl,
+              duration: attachment.duration,
+              width: attachment.width,
+              height: attachment.height,
+              processingStatus: attachment.processingStatus,
+              processingError: attachment.processingError,
+              processedAt: attachment.processedAt,
+              uploadId: null,
+              s3KeyTemp: null,
+              retryCount: attachment.retryCount,
+              uploadedBy: attachment.uploadedBy,
+              uploadedFrom: attachment.uploadedFrom ?? 'FORWARDED_ZERO_COPY',
+            })),
+          });
+        }
+
+        await tx.conversation.update({
+          where: { id: targetConversation.id },
+          data: { lastMessageAt: createdMessage.createdAt },
+        });
+
+        createdIds.push(createdMessage.id);
+      }
+
+      return createdIds;
+    });
+
+    const forwardedMessages = await this.getOrderedMessagesForViewer(
+      createdMessageIds,
+      senderId,
+    );
+
+    await this.redis.getClient().setex(
+      idempotencyKey,
+      this.config.ttl.messageIdempotency,
+      safeStringify({
+        messageIds: createdMessageIds.map((id) => id.toString()),
+      }),
+    );
+
+    for (const message of forwardedMessages) {
+      await this.eventPublisher.publish(
+        new MessageSentEvent(
+          message.id.toString(),
+          message.conversationId,
+          message.senderId ?? senderId,
+          message.content || '',
+          message.type,
+        ),
+        { throwOnListenerError: true },
+      );
+    }
+
+    await this.eventPublisher.publish(
+      new MessageForwardedEvent(
+        sourceMessage.id.toString(),
+        senderId,
+        targetConversationIds,
+        createdMessageIds.map((id) => id.toString()),
+      ),
+      { fireAndForget: true },
+    );
+
+    return forwardedMessages;
+  }
+
+  private toBigIntMessageId(value: string, fieldName: string): bigint {
+    try {
+      return BigInt(value);
+    } catch {
+      throw new BadRequestException(`Invalid ${fieldName} format`);
+    }
+  }
+
+  private async getOrderedMessagesForViewer(
+    messageIds: bigint[],
+    viewerId: string,
+  ): Promise<Message[]> {
+    if (messageIds.length === 0) {
+      return [];
+    }
+
+    const rawMessages = await this.prisma.message.findMany({
+      where: { id: { in: messageIds } },
+      include: {
+        parentMessage: { select: PARENT_MESSAGE_PREVIEW_SELECT },
+      },
+    });
+
+    const messagesWithMedia = await this.enrichMessagesWithMedia(rawMessages);
+    const hydrated = await this.hydrateMessagesWithSenders(
+      messagesWithMedia,
+      viewerId,
+    );
+
+    const byId = new Map(
+      hydrated.map((message) => [message.id.toString(), message]),
+    );
+
+    const ordered = messageIds
+      .map((id) => byId.get(id.toString()))
+      .filter((message): message is (typeof hydrated)[number] => !!message);
+
+    return safeJSON(ordered);
   }
 
   /**

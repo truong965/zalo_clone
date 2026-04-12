@@ -166,8 +166,6 @@ SUSPICIOUS_ACTIVITY SUSPICIOUS_ACTIVITY
 TOKEN_ROTATION TOKEN_ROTATION
 ADMIN_ACTION ADMIN_ACTION
 NEW_LOGIN_OVERRIDE NEW_LOGIN_OVERRIDE
-ACCOUNT_DEACTIVATED ACCOUNT_DEACTIVATED
-ACCOUNT_DELETED ACCOUNT_DELETED
         }
     
 
@@ -223,24 +221,14 @@ MANUAL MANUAL
         login_method {
             PASSWORD PASSWORD
 QR_CODE QR_CODE
-BIOMETRIC BIOMETRIC
-TWO_FACTOR TWO_FACTOR
-        }
-    
-
-
-        two_factor_method {
-            TOTP TOTP
-SMS SMS
-EMAIL EMAIL
         }
     
   "users" {
     String id "🗝️"
     String phone_number 
-    String email "❓"
     String phone_country_code 
     String phone_number_hash "❓"
+    String phone_number_normalized "❓"
     String display_name 
     String avatar_url "❓"
     String bio "❓"
@@ -257,11 +245,6 @@ EMAIL EMAIL
     DateTime created_at 
     DateTime updated_at "❓"
     DateTime deleted_at "❓"
-    Boolean two_factor_enabled 
-    String two_factor_secret "❓"
-    String two_factor_backup_codes 
-    DateTime two_factor_setup_at "❓"
-    TwoFactorMethod two_factor_method "❓"
     }
   
 
@@ -274,12 +257,7 @@ EMAIL EMAIL
     String device_name "❓"
     DeviceType device_type "❓"
     Platform platform "❓"
-    String browser_name "❓"
-    String browser_version "❓"
-    String os_name "❓"
-    String os_version "❓"
     String ip_address "❓"
-    String location "❓"
     String user_agent "❓"
     DateTime issued_at 
     DateTime expires_at 
@@ -295,28 +273,9 @@ EMAIL EMAIL
     String id "🗝️"
     String user_id 
     String device_id 
-    String device_name 
-    String browser_name "❓"
-    String browser_version "❓"
-    String os_name "❓"
-    String os_version "❓"
-    Boolean is_trusted 
-    DateTime trusted_at "❓"
-    String last_ip "❓"
-    String last_location "❓"
     String fcm_token "❓"
     String platform "❓"
     DateTime last_active_at 
-    DateTime created_at 
-    DeviceType device_type "❓"
-    String fingerprint "❓"
-    String public_key "❓"
-    String key_algorithm "❓"
-    DateTime registered_at "❓"
-    String registration_ip "❓"
-    String attestation_type "❓"
-    Boolean attestation_verified 
-    DateTime attested_at "❓"
     }
   
 
@@ -623,14 +582,12 @@ EMAIL EMAIL
     "users" |o--|o "Gender" : "enum:gender"
     "users" |o--|| "UserStatus" : "enum:status"
     "users" }o--|o roles : "role"
-    "users" |o--|o "TwoFactorMethod" : "enum:two_factor_method"
     "user_tokens" |o--|| "LoginMethod" : "enum:login_method"
     "user_tokens" |o--|o "DeviceType" : "enum:device_type"
     "user_tokens" |o--|o "Platform" : "enum:platform"
     "user_tokens" |o--|o "TokenRevocationReason" : "enum:revoked_reason"
     "user_tokens" |o--|o user_tokens : "parentToken"
     "user_tokens" }o--|| users : "user"
-    "user_devices" |o--|o "DeviceType" : "enum:device_type"
     "user_devices" }o--|| users : "user"
     "role_permissions" }o--|| roles : "role"
     "role_permissions" }o--|| permissions : "permission"
