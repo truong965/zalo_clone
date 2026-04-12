@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Pressable,
   Text,
+  Keyboard,
   KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -213,6 +214,7 @@ export default function ChatDetailScreen() {
   const { setReplyTarget, jumpToMessageId, setJumpToMessageId } = useChatStore();
   const { markAsSeen } = useMarkAsSeen();
   const headerHeight = useHeaderHeight();
+  const [androidKeyboardInset, setAndroidKeyboardInset] = React.useState(0);
 
   const [selectedMsgForMenu, setSelectedMsgForMenu] = React.useState<Message | null>(null);
   const [forwardSourceMessage, setForwardSourceMessage] = React.useState<Message | null>(null);
@@ -341,6 +343,28 @@ export default function ChatDetailScreen() {
 
   const [isAtBottom, setIsAtBottom] = React.useState(true);
   const isAtBottomRef = useRef(true);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      setAndroidKeyboardInset(event.endCoordinates.height);
+      if (isAtBottomRef.current) {
+        requestAnimationFrame(() => {
+          flashListRef.current?.scrollToEnd({ animated: true });
+        });
+      }
+    });
+
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidKeyboardInset(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (messages.length === 0) return;
@@ -506,7 +530,7 @@ export default function ChatDetailScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
       >
         <PinnedMessagesHeader
@@ -568,7 +592,9 @@ export default function ChatDetailScreen() {
           )}
         </View>
 
-        <ChatInput onSend={handleSend} conversationId={id} />
+        <View style={Platform.OS === 'android' ? { paddingBottom: androidKeyboardInset } : undefined}>
+          <ChatInput onSend={handleSend} conversationId={id} />
+        </View>
       </KeyboardAvoidingView>
 
       <MessageActionSheet
