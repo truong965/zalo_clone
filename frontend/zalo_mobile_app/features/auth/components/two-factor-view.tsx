@@ -31,7 +31,7 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
       const [method, setMethod] = useState<TwoFactorMethod>(
             (twoFactorData?.autoTriggered && hasPush) 
                   ? 'PUSH' 
-                  : (twoFactorData?.preferredMethod || availableMethods[0] || 'TOTP')
+                  : (twoFactorData?.preferredMethod || availableMethods[0] || 'SMS')
       );
       
       const [pushStatus, setPushStatus] = useState<'IDLE' | 'WAITING' | 'REJECTED' | 'TIMEOUT' | 'VERIFYING'>(
@@ -40,12 +40,48 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
                   : 'IDLE'
       );
 
+      if (!twoFactorData) {
+            return (
+                  <View className="flex-1 items-center justify-center p-6">
+                        <ActivityIndicator size="large" color="#007AFF" />
+                        <Text className="mt-4 text-gray-500">Đang chuẩn bị xác thực...</Text>
+                  </View>
+            );
+      }
+
       const [code, setCode] = useState('');
       const [isLoading, setIsLoading] = useState(false);
       const [timer, setTimer] = useState(90); // 90s PUSH/OTP timeout
       const [resendCooldown, setResendCooldown] = useState(twoFactorData?.autoTriggered ? 45 : 0); // 45s anti-spam
       const timerRef = useRef<any>(null);
       const cooldownRef = useRef<any>(null);
+
+      // Effect to sync state when twoFactorData changes from null to value
+      useEffect(() => {
+            if (twoFactorData) {
+                  const methods = twoFactorData.availableMethods || [];
+                  const hasPushNotify = methods.includes('PUSH');
+                  
+                  // Initialize method
+                  const initialMethod = (twoFactorData.autoTriggered && hasPushNotify)
+                        ? 'PUSH'
+                        : (twoFactorData.preferredMethod || methods[0] || 'SMS'); // Default to SMS for safety in mobile
+                  
+                  setMethod(initialMethod);
+                  
+                  // Initialize push status
+                  if (twoFactorData.autoTriggered && (twoFactorData.preferredMethod === 'PUSH' || (!twoFactorData.preferredMethod && hasPushNotify))) {
+                        setPushStatus('WAITING');
+                  } else {
+                        setPushStatus('IDLE');
+                  }
+
+                  if (twoFactorData.autoTriggered) {
+                        setResendCooldown(45);
+                        startTimer();
+                  }
+            }
+      }, [twoFactorData]);
 
       const startTimer = () => {
             if (timerRef.current) clearInterval(timerRef.current);
@@ -217,10 +253,12 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
                               <Text className="text-3xl font-bold text-foreground">
                                     {twoFactorData?.isReactivation ? 'Kích hoạt lại tài khoản' : t('auth.twoFactorTitle')}
                               </Text>
-                              <Text className="mt-2 text-gray-700 text-base font-medium">
-                                    {twoFactorData?.isReactivation
-                                          ? 'Vui lòng xác minh danh tính để tiếp tục kích hoạt lại tài khoản của bạn.'
-                                          : t('auth.twoFactorSubtitle')}
+                               <Text className="mt-2 text-gray-700 text-base font-medium">
+                                    {twoFactorData?.isForgotPassword && !twoFactorData?.twoFactorEnabled
+                                          ? `Mã OTP đã được gửi về số điện thoại ${twoFactorData.maskedPhone}. Vui lòng nhập mã để khôi phục mật khẩu.`
+                                          : twoFactorData?.isReactivation
+                                                ? 'Vui lòng xác minh danh tính để tiếp tục kích hoạt lại tài khoản của bạn.'
+                                                : t('auth.twoFactorSubtitle')}
                               </Text>
                         </View>
 
@@ -234,28 +272,30 @@ export function TwoFactorView({ onSuccess, onCancel }: TwoFactorViewProps) {
                         )}
 
                         {/* Method Selector */}
-                        <View className="flex-row flex-wrap gap-2">
-                              {availableMethods.map((m) => (
-                                    <TouchableOpacity
-                                          key={m}
-                                          disabled={resendCooldown > 0 || isLoading}
-                                          onPress={() => {
-                                                if (m === 'TOTP') {
-                                                      triggerChallenge('TOTP');
-                                                } else {
-                                                      triggerChallenge(m);
-                                                }
-                                          }}
-                                          className={`rounded-full px-4 py-2 border ${method === m ? 'bg-primary border-primary' : 'bg-secondary border-border'
-                                                } ${resendCooldown > 0 ? 'opacity-50' : ''}`}>
-                                          <Text
-                                                className={`font-semibold ${method === m ? 'text-primary-foreground' : 'text-secondary-foreground'
-                                                      }`}>
-                                                {m}
-                                          </Text>
-                                    </TouchableOpacity>
-                              ))}
-                        </View>
+                        {twoFactorData?.twoFactorEnabled && (
+                              <View className="flex-row flex-wrap gap-2">
+                                    {availableMethods.map((m) => (
+                                          <TouchableOpacity
+                                                key={m}
+                                                disabled={resendCooldown > 0 || isLoading}
+                                                onPress={() => {
+                                                      if (m === 'TOTP') {
+                                                            triggerChallenge('TOTP');
+                                                      } else {
+                                                            triggerChallenge(m);
+                                                      }
+                                                }}
+                                                className={`rounded-full px-4 py-2 border ${method === m ? 'bg-primary border-primary' : 'bg-secondary border-border'
+                                                      } ${resendCooldown > 0 ? 'opacity-50' : ''}`}>
+                                                <Text
+                                                      className={`font-semibold ${method === m ? 'text-primary-foreground' : 'text-secondary-foreground'
+                                                            }`}>
+                                                      {m}
+                                                </Text>
+                                          </TouchableOpacity>
+                                    ))}
+                              </View>
+                        )}
 
                         {/* Challenge Content */}
                         <View className="gap-4 rounded-2xl bg-secondary p-6 border border-border mt-2 shadow-sm">

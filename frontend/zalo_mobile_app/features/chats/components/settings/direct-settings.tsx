@@ -26,7 +26,7 @@ export function DirectSettings({ conversation, members: propMembers, onEditName 
   const theme = useTheme();
   const router = useRouter();
   const { user } = useAuth();
-  const { pinConversation, muteConversation } = useConversationActions();
+  const { pinConversation, muteConversation, isPinning, isMuting } = useConversationActions();
   const { reminders, deleteReminder, completeReminder } = useReminders(conversation.id);
 
   const targetUserId = React.useMemo(() => {
@@ -84,7 +84,9 @@ export function DirectSettings({ conversation, members: propMembers, onEditName 
         isAdmin={true} // In direct chat, we can always edit the name (alias)
         onEditName={onEditName}
         onTogglePin={() => pinConversation(conversation.id, !conversation.isPinned)}
-        onToggleMute={() => muteConversation(conversation.id, !!conversation.isMuted)}
+        onToggleMute={() => muteConversation(conversation.id, !conversation.isMuted)}
+        isPinning={isPinning}
+        isMuting={isMuting}
       />
 
       <View className="mt-2" />

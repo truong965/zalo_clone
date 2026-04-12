@@ -12,7 +12,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Button, Input, Spin, Typography, Empty } from 'antd';
-import { ArrowLeftOutlined, SearchOutlined, LoadingOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SearchOutlined, LoadingOutlined, PlayCircleOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { groupBy } from 'lodash-es';
 import { useMediaBrowser } from '@/features/chat/hooks/use-media-browser';
@@ -54,12 +54,32 @@ function formatDate(isoDate: string, t: any): string {
 // ── Sub-components ───────────────────────────────────────────────────────
 
 function PhotoGrid({ items, onItemClick }: { items: RecentMediaItem[]; onItemClick: (item: RecentMediaItem) => void }) {
+      const { t } = useTranslation();
+
+      const handleDownload = async (e: React.MouseEvent, url: string, filename: string) => {
+            e.stopPropagation();
+            try {
+                  const response = await fetch(url);
+                  const blob = await response.blob();
+                  const blobUrl = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = blobUrl;
+                  a.download = filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(blobUrl);
+            } catch (error) {
+                  console.error('Failed to download media:', error);
+            }
+      };
+
       return (
             <div className="grid grid-cols-3 gap-1 px-3">
                   {items.map((item) => (
                         <div
                               key={item.mediaId}
-                              className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer hover:opacity-80 transition-opacity relative"
+                              className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer relative group transition-all"
                               onClick={() => onItemClick(item)}
                         >
                               {item.thumbnailUrl ? (
@@ -67,20 +87,31 @@ function PhotoGrid({ items, onItemClick }: { items: RecentMediaItem[]; onItemCli
                                           <img
                                                 src={item.thumbnailUrl}
                                                 alt={item.originalName}
-                                                className="w-full h-full object-cover"
+                                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                                 loading="lazy"
                                           />
                                           {item.messageType === 'VIDEO' ? (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                                      <PlayCircleOutlined className="text-white text-2xl drop-shadow" />
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+                                                      <PlayCircleOutlined className="text-white text-2xl drop-shadow opacity-90 group-hover:opacity-100" />
                                                 </div>
                                           ) : null}
                                     </>
                               ) : (
                                     <div className="w-full h-full flex items-center justify-center">
-                                          <div className="w-12 h-12 bg-gray-200 rounded" />
+                                          <div className="w-12 h-12 bg-gray-200 rounded animate-pulse" />
                                     </div>
                               )}
+
+                              {/* Hover Actions Overlay */}
+                              <div className="absolute inset-x-0 bottom-0 p-1.5 flex justify-end opacity-0 group-hover:opacity-100 transition-all bg-gradient-to-t from-black/50 to-transparent">
+                                    <button
+                                          onClick={(e) => handleDownload(e, item.cdnUrl ?? '', item.originalName)}
+                                          className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/40 text-white backdrop-blur-sm transition-all"
+                                          title={t('chat.messageList.actions.download')}
+                                    >
+                                          <DownloadOutlined className="text-[14px]" />
+                                    </button>
+                              </div>
                         </div>
                   ))}
             </div>
@@ -200,22 +231,20 @@ export function MediaBrowserPanel({
                         <button
                               type="button"
                               onClick={() => setActiveTab('photos')}
-                              className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors cursor-pointer ${
-                                    activeTab === 'photos'
+                              className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors cursor-pointer ${activeTab === 'photos'
                                           ? 'text-blue-600 border-b-2 border-blue-600'
                                           : 'text-gray-500 hover:text-gray-700'
-                              }`}
+                                    }`}
                         >
                               {t('chat.mediaBrowser.photos')}
                         </button>
                         <button
                               type="button"
                               onClick={() => setActiveTab('files')}
-                              className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors cursor-pointer ${
-                                    activeTab === 'files'
+                              className={`flex-1 py-2.5 text-sm font-medium text-center transition-colors cursor-pointer ${activeTab === 'files'
                                           ? 'text-blue-600 border-b-2 border-blue-600'
                                           : 'text-gray-500 hover:text-gray-700'
-                              }`}
+                                    }`}
                         >
                               {t('chat.mediaBrowser.files')}
                         </button>

@@ -204,11 +204,28 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
                         `[SQS] ${type} job for media ${payload.mediaId} completed`,
                   );
             } catch (error) {
+                  const isNotFound = (error as Error).message.includes(
+                        ERROR_MESSAGES.MEDIA_NOT_FOUND,
+                  );
+
+                  if (isNotFound) {
+                        this.logger.warn(
+                              `[SQS] Media record ${payload.mediaId} not found in DB after all retries. The database might have been reset or the record was hard-deleted. Discarding SQS message.`,
+                        );
+                        await this.deleteMessage(queueUrl, receiptHandle);
+                        return;
+                  }
+
                   this.logger.error(
                         `[SQS] Job failed for media ${payload.mediaId}`,
                         error,
                   );
-                  await this.handleJobFailure(payload.mediaId, error as Error, receiptHandle, queueUrl);
+                  await this.handleJobFailure(
+                        payload.mediaId,
+                        error as Error,
+                        receiptHandle,
+                        queueUrl,
+                  );
             }
       }
 

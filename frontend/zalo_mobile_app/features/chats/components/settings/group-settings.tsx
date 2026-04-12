@@ -32,7 +32,7 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
   const theme = useTheme();
   const router = useRouter();
   const { user } = useAuth();
-  const { pinConversation, muteConversation } = useConversationActions();
+  const { pinConversation, muteConversation, isPinning, isMuting } = useConversationActions();
   const {
     updateMutation,
     addMembersMutation,
@@ -109,7 +109,9 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
           onEditAvatar={onEditAvatar}
           onAddMember={() => setAddMemberVisible(true)}
           onTogglePin={() => pinConversation(conversation.id, !conversation.isPinned)}
-          onToggleMute={() => muteConversation(conversation.id, !!conversation.isMuted)}
+          onToggleMute={() => muteConversation(conversation.id, !conversation.isMuted)}
+          isPinning={isPinning}
+          isMuting={isMuting}
         />
 
         <View className="mt-2" />

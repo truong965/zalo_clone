@@ -62,8 +62,21 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
         try {
             const assets = await pickMedia();
             if (assets && assets.length > 0) {
-                // Send immediately with local assets for optimistic UI
-                onSend('', MessageType.IMAGE, undefined, replyTarget ?? undefined, assets);
+                // Separate images and videos
+                // In Zalo/Clone pattern: Group images into one message, but videos are often separate
+                const images = assets.filter(a => a.type === 'image');
+                const videos = assets.filter(a => a.type === 'video');
+
+                // Send images ensemble
+                if (images.length > 0) {
+                    onSend('', MessageType.IMAGE, undefined, replyTarget ?? undefined, images);
+                }
+
+                // Send each video as a separate message
+                for (const video of videos) {
+                    onSend('', MessageType.VIDEO, undefined, replyTarget ?? undefined, [video]);
+                }
+
                 setShowExtraOptions(false);
                 clearReplyTarget();
             }

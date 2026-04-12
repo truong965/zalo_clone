@@ -1,11 +1,10 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import { useCallStore } from '../stores/call.store';
-import { useCallActions } from '../hooks/use-call-actions';
-import { Avatar, Button } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect } from 'react';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Avatar } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEffect } from 'react';
+import { useCallActions } from '../hooks/use-call-actions';
+import { useCallStore } from '../stores/call.store';
 import { ActiveCallView } from './active-call-view';
 import { GroupCallWebView } from './group-call-webview';
 
@@ -25,7 +24,7 @@ export function IncomingCallModal() {
 
   useEffect(() => {
     console.log('[IncomingCallModal] status changed:', callStatus);
-    
+
     // RINGING auto-reject (30s) - match web RINGING_TIMEOUT_S
     let timeout: any = null;
     if (callStatus === 'RINGING' && incomingCall) {
@@ -34,7 +33,7 @@ export function IncomingCallModal() {
         rejectCall();
       }, 30_000);
     }
-    
+
     return () => {
       if (timeout) clearTimeout(timeout);
     };
@@ -69,46 +68,46 @@ export function IncomingCallModal() {
 
   if (!isIncoming && !isDialing && !isWebActive && !isReconnecting) return null;
 
-  const displayInfo = isIncoming 
-    ? { 
-        name: incomingCall?.callerInfo.displayName, 
-        avatar: incomingCall?.callerInfo.avatarUrl,
-        type: incomingCall?.callType,
-        status: 'Đang gọi tới...'
-      }
-    : isWebActive
+  const displayInfo = isIncoming
     ? {
+      name: incomingCall?.callerInfo.displayName,
+      avatar: incomingCall?.callerInfo.avatarUrl,
+      type: incomingCall?.callType,
+      status: 'Đang gọi tới...'
+    }
+    : isWebActive
+      ? {
         name: peerInfo?.displayName,
         avatar: peerInfo?.avatarUrl,
         type: callType,
         status: 'Đang chuyển hướng sang trình duyệt...'
       }
-    : isReconnecting
-    ? {
-        name: peerInfo?.displayName,
-        avatar: peerInfo?.avatarUrl,
-        type: callType,
-        status: 'Đang kết nối lại...'
-      }
-    : {
-        name: peerInfo?.displayName,
-        avatar: peerInfo?.avatarUrl,
-        type: callType,
-        status: 'Đang kết nối...'
-      };
+      : isReconnecting
+        ? {
+          name: peerInfo?.displayName,
+          avatar: peerInfo?.avatarUrl,
+          type: callType,
+          status: 'Đang kết nối lại...'
+        }
+        : {
+          name: peerInfo?.displayName,
+          avatar: peerInfo?.avatarUrl,
+          type: callType,
+          status: 'Đang kết nối...'
+        };
 
   return (
     <Modal visible={true} animationType="slide" transparent={false}>
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Text style={styles.title}>
-            {displayInfo.type === 'VIDEO' ? 'Cuộc gọi video' : 'Cuộc gọi thoại'}
+            {displayInfo.type === 'VIDEO' ? 'video' : 'thoại'}
           </Text>
           <Text style={styles.status}>
-            {isIncoming ? 'Cuộc gọi đến...' : 
-             isDialing ? 'Đang gọi...' : 
-             isReconnecting ? 'Đang kết nối lại...' :
-             isWebActive ? formatDuration(callDuration) : ''}
+            {isIncoming ? 'Cuộc gọi đến...' :
+              isDialing ? 'Đang gọi...' :
+                isReconnecting ? 'Đang kết nối lại...' :
+                  isWebActive ? formatDuration(callDuration) : ''}
           </Text>
         </View>
 
@@ -126,7 +125,7 @@ export function IncomingCallModal() {
           )}
           <Text style={styles.callerName}>{displayInfo.name}</Text>
           <Text style={styles.statusText}>{displayInfo.status}</Text>
-          
+
           <View style={styles.webHint}>
             <Ionicons name="globe-outline" size={20} color="#8E8E93" />
             <Text style={styles.webHintText}>Cuộc gọi sẽ được mở trong trình duyệt</Text>
@@ -134,8 +133,8 @@ export function IncomingCallModal() {
         </View>
 
         <View style={[styles.actions, { paddingBottom: insets.bottom + 40 }]}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.rejectButton]} 
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
             onPress={() => {
               if (isIncoming) {
                 rejectCall();
@@ -149,8 +148,8 @@ export function IncomingCallModal() {
           </TouchableOpacity>
 
           {isIncoming && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.acceptButton]} 
+            <TouchableOpacity
+              style={[styles.actionButton, styles.acceptButton]}
               onPress={acceptCall}
             >
               <Ionicons name={incomingCall?.callType === 'VIDEO' ? "globe" : "call"} size={32} color="white" />

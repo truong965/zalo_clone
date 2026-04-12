@@ -329,23 +329,40 @@ export class MediaUploadService {
 
       const cdnUrl = this.s3Service.getCloudFrontUrl(permanentKey);
 
+      // ── Re-infer MediaType to be robust against client-side mislabeling ────
+      // (Especially important for mobile where video might be hardcoded as IMAGE)
+      const actualMimeType = fileCheck.metadata?.contentType || media.mimeType;
+      const inferredType = FileUtils.inferMediaType(
+        media.originalName,
+        actualMimeType,
+      );
+
+      if (inferredType !== media.mediaType) {
+        this.logger.log('Correcting media type based on file metadata', {
+          old: media.mediaType,
+          new: inferredType,
+          originalName: media.originalName,
+        });
+      }
+
       // ── Mark as READY with cdnUrl — user sees original file immediately ──
       const updated = await this.prisma.mediaAttachment.update({
         where: { id: media.id },
         data: {
           processingStatus: MediaProcessingStatus.READY,
+          mediaType: inferredType, // Use inferred type
           s3Key: permanentKey,
           s3KeyTemp: null,
           cdnUrl,
           size: BigInt(actualSize),
-          mimeType: fileCheck.metadata?.contentType || media.mimeType,
+          mimeType: actualMimeType,
         },
       });
 
       // ── Enqueue background work only for IMAGE/VIDEO (thumbnails, optimization) ──
       if (
-        media.mediaType === MediaType.IMAGE ||
-        media.mediaType === MediaType.VIDEO
+        updated.mediaType === MediaType.IMAGE ||
+        updated.mediaType === MediaType.VIDEO
       ) {
         await this.enqueueProcessing(updated);
       }

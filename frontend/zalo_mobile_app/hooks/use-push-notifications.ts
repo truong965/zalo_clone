@@ -199,5 +199,61 @@ export function usePushNotifications() {
     });
 
     return () => sub.remove();
-  }, []);
+  }, [setIncomingCall]);
+
+  // Handle background notification clicks for FCM native notifications
+  useEffect(() => {
+    if (!messagingInstance) return;
+
+    function handleFCMClick(data: any) {
+      if (!data) return;
+      
+      if (data.type === 'REMINDER_TRIGGERED') {
+        const { pushAlert } = useReminderStore.getState();
+        pushAlert({
+          id: `tap-${data.reminderId}-${Date.now()}`,
+          reminderId: data.reminderId,
+          content: data.content || data.body || '',
+          conversationId: data.conversationId,
+          creatorId: data.creatorId,
+          triggeredAt: new Date().toISOString(),
+        });
+      } else if (data.type === 'INCOMING_CALL') {
+        if (useCallStore.getState().callStatus === 'IDLE') {
+          console.log('[FCM] INCOMING_CALL click detected (native), setting state');
+          setIncomingCall({
+            callId: data.callId,
+            callType: data.callType,
+            conversationId: data.conversationId,
+            callerInfo: {
+              id: data.callerId,
+              displayName: data.callerName,
+              avatarUrl: data.callerAvatar || null,
+            },
+            receivedAt: Date.now(),
+          });
+        }
+      }
+    }
+
+    let unsub: any;
+    try {
+      const messagingModule = require('@react-native-firebase/messaging');
+      unsub = messagingModule.default().onNotificationOpenedApp((remoteMessage: any) => {
+        console.log('[FCM] Notification clicked (background):', remoteMessage);
+        handleFCMClick(remoteMessage.data);
+      });
+
+      messagingModule.default().getInitialNotification().then((remoteMessage: any) => {
+        if (remoteMessage) {
+          console.log('[FCM] Notification clicked (killed):', remoteMessage);
+          handleFCMClick(remoteMessage.data);
+        }
+      });
+    } catch {}
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [setIncomingCall]);
 }

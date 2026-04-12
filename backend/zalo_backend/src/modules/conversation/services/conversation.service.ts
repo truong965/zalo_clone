@@ -28,6 +28,7 @@ import { MAX_PINNED_CONVERSATIONS } from '../constants/conversation.constants';
 import type { GroupSettings } from './group.service';
 import {
   ConversationArchivedEvent,
+  ConversationCreatedEvent,
   ConversationMutedEvent,
   ConversationPinnedEvent,
   ConversationUnpinnedEvent
@@ -254,6 +255,16 @@ export class ConversationService {
 
     this.logger.log(
       `Created DIRECT conversation ${conversation.id} between ${user1} and ${user2}`,
+    );
+
+    this.eventEmitter.emit(
+      InternalEventNames.CONVERSATION_CREATED,
+      new ConversationCreatedEvent(
+        conversation.id,
+        userId1,
+        ConversationType.DIRECT,
+        [user1, user2],
+      ),
     );
 
     return { id: conversation.id, isNew: true };

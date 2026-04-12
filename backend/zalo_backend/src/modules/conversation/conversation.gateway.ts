@@ -25,6 +25,7 @@ import {
 
 import type {
   ConversationArchivedEvent,
+  ConversationCreatedEvent,
   ConversationMutedEvent,
 } from './events';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -379,6 +380,31 @@ export class ConversationGateway extends BaseGateway implements OnGatewayInit {
   // ═══════════════════════════════════════════════════════════════════════
   // CONVERSATION PREFERENCE EVENTS (archive / mute — personal, cross-device)
   // ═══════════════════════════════════════════════════════════════════════
+
+  @OnEvent(InternalEventNames.CONVERSATION_CREATED)
+  async handleConversationCreatedEvent(
+    payload: ConversationCreatedEvent,
+  ): Promise<void> {
+    if (payload.type === 'DIRECT') {
+      try {
+        await this.emitToUser(
+          payload.createdBy,
+          SocketEvents.CONVERSATION_LIST_ITEM_UPDATED,
+          {
+            conversationId: payload.conversationId,
+            lastMessage: null,
+            lastMessageAt: new Date().toISOString(),
+            unreadCountDelta: 0,
+          },
+        );
+      } catch (error) {
+        this.logger.error(
+          `[CONVERSATION_CREATED] Failed to emit socket for user ${payload.createdBy}`,
+          (error as Error).stack,
+        );
+      }
+    }
+  }
 
   /**
    * React to ConversationArchivedEvent → emit socket to user's devices.

@@ -90,6 +90,7 @@ export function useConversationListRealtime(params: {
                   payload: ConversationListItemUpdatedPayload,
             ) => {
                   try {
+                        let isMissing = false;
                         queryClient.setQueryData<ConversationsInfiniteData>(
                               conversationsQueryKey,
                               (prev) => {
@@ -115,6 +116,7 @@ export function useConversationListRealtime(params: {
                                     });
 
                                     if (!found) {
+                                          isMissing = true;
                                           return prev;
                                     }
 
@@ -185,6 +187,10 @@ export function useConversationListRealtime(params: {
                                     return changed ? { ...prev, pages } : prev;
                               },
                         );
+
+                        if (isMissing) {
+                              void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                        }
                   } catch {
                         // ignore handler errors to avoid breaking all socket listeners
                   }

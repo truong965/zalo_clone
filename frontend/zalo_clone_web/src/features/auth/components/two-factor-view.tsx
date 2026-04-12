@@ -201,42 +201,46 @@ export const TwoFactorView: React.FC<TwoFactorViewProps> = ({ data, onSuccess, o
         </div>
 
         <Text type="secondary">
-          {data.isReactivation 
-            ? 'Tài khoản của bạn hiện đang ở trạng thái tạm khóa. Vui lòng xác thực danh tính để tiếp tục kích hoạt lại tài khoản.'
-            : 'Để bảo mật tài khoản, vui lòng xác nhận danh tính của bạn bằng một trong các phương thức sau.'}
+          {data.isForgotPassword && !data.twoFactorEnabled
+            ? `Mã OTP đã được gửi về số điện thoại ${data.maskedPhone}. Vui lòng nhập mã để khôi phục mật khẩu.`
+            : data.isReactivation 
+              ? 'Tài khoản của bạn hiện đang ở trạng thái tạm khóa. Vui lòng xác thực danh tính để tiếp tục kích hoạt lại tài khoản.'
+              : 'Để bảo mật tài khoản, vui lòng xác nhận danh tính của bạn bằng một trong các phương thức sau.'}
         </Text>
 
-        <Radio.Group 
-          value={method} 
-          onChange={(e) => {
-            const newMethod = e.target.value;
-            clearError();
-            setMethod(newMethod);
-            form.resetFields();
-            
-            // If switching to TOTP, trigger automatically (it doesn't have a specific challenge usually, but we check activation)
-            if (newMethod === 'TOTP') {
-              send2faTotpChallenge(data.pendingToken).catch(() => {});
-              setResendCooldown(45);
-            }
-          }} 
-          buttonStyle="solid"
-          className="w-full flex"
-          disabled={resendCooldown > 0 || isLoading} 
-        >
-          {data.availableMethods.includes('PUSH') && (
-            <Radio.Button value="PUSH" className="flex-1 text-center">App PUSH</Radio.Button>
-          )}
-          {data.availableMethods.includes('TOTP') && (
-            <Radio.Button value="TOTP" className="flex-1 text-center">Authenticator</Radio.Button>
-          )}
-          {data.availableMethods.includes('SMS') && (
-            <Radio.Button value="SMS" className="flex-1 text-center">SMS OTP</Radio.Button>
-          )}
-          {data.availableMethods.includes('EMAIL') && (
-            <Radio.Button value="EMAIL" className="flex-1 text-center">Email</Radio.Button>
-          )}
-        </Radio.Group>
+        {data.twoFactorEnabled && (
+          <Radio.Group 
+            value={method} 
+            onChange={(e) => {
+              const newMethod = e.target.value;
+              clearError();
+              setMethod(newMethod);
+              form.resetFields();
+              
+              // If switching to TOTP, trigger automatically (it doesn't have a specific challenge usually, but we check activation)
+              if (newMethod === 'TOTP') {
+                send2faTotpChallenge(data.pendingToken).catch(() => {});
+                setResendCooldown(45);
+              }
+            }} 
+            buttonStyle="solid"
+            className="w-full flex"
+            disabled={resendCooldown > 0 || isLoading} 
+          >
+            {data.availableMethods.includes('PUSH') && (
+              <Radio.Button value="PUSH" className="flex-1 text-center">App PUSH</Radio.Button>
+            )}
+            {data.availableMethods.includes('TOTP') && (
+              <Radio.Button value="TOTP" className="flex-1 text-center">Authenticator</Radio.Button>
+            )}
+            {data.availableMethods.includes('SMS') && (
+              <Radio.Button value="SMS" className="flex-1 text-center">SMS OTP</Radio.Button>
+            )}
+            {data.availableMethods.includes('EMAIL') && (
+              <Radio.Button value="EMAIL" className="flex-1 text-center">Email</Radio.Button>
+            )}
+          </Radio.Group>
+        )}
 
         {resendCooldown > 0 && (
           <div className="text-center">
@@ -246,7 +250,7 @@ export const TwoFactorView: React.FC<TwoFactorViewProps> = ({ data, onSuccess, o
           </div>
         )}
 
-        <Divider className="my-2" />
+        {(data.twoFactorEnabled || resendCooldown > 0) && <Divider className="my-2" />}
 
         {error && <Alert message={error} type="error" showIcon closable className="mb-4" onClose={clearError} />}
 

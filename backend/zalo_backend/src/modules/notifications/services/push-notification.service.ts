@@ -154,8 +154,17 @@ export class PushNotificationService {
       return;
     }
 
-    // Data-only message: client-side rendering for full-screen call UI
-    // Do NOT use `notification` key — allows client to handle display
+    // Hybrid payload: OS displays the notification block instantly, bypassing
+    // battery-saving throttling that affects data-only messages.
+    // The data block is still included for JS-layer processing.
+    const callTypeLabel = callType === 'VIDEO' ? 'Video' : 'Thoại';
+    const title = isGroupCall ? '📞 Cuộc gọi nhóm' : '📞 Cuộc gọi đến';
+    const body = isGroupCall
+      ? `${callerName} đang gọi nhóm ${callTypeLabel}${
+          groupName ? ` trong ${groupName}` : ''
+        }`
+      : `${callerName} đang gọi ${callTypeLabel} cho bạn`;
+
     const data: Record<string, string> = {
       type: 'INCOMING_CALL',
       callId,
@@ -169,10 +178,16 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
-      priority: 'high',
-      ttlSeconds: 30, // Expire quickly — caller may cancel
-    });
+    const { invalidTokens } = await this.firebase.sendNotification(
+      tokens,
+      { title, body },
+      data,
+      {
+        priority: 'high',
+        ttlSeconds: 30, // Call notifications expire quickly
+        androidTag: `call-${callId}`, // Allows cancel to replace this notification
+      },
+    );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -189,17 +204,25 @@ export class PushNotificationService {
     const tokens = await this.deviceTokens.getTokensByUserId(userId);
     if (tokens.length === 0) return;
 
-    // Data-only message: instructs client app/SW to dismiss the ringing UI
+    // Send a CANCEL_CALL Hybrid push. Using the same androidTag ensures
+    // the "Call ended" notification replaces the "Incoming Call" notification
+    // in the Android tray instantly, providing immediate feedback.
     const data: Record<string, string> = {
       type: 'CANCEL_CALL',
       callId,
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
-      priority: 'high',
-      ttlSeconds: 30, // Also short TTL since it's just a dismissal
-    });
+    const { invalidTokens } = await this.firebase.sendNotification(
+      tokens,
+      { title: 'Cuộc gọi đã kết thúc', body: '' },
+      data,
+      {
+        priority: 'high',
+        ttlSeconds: 10,
+        androidTag: `call-${callId}`, // Same tag replaces incoming call notification
+      },
+    );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -292,7 +315,7 @@ export class PushNotificationService {
       conversationName,
     });
 
-    // Data-only message — SW renders browser notification
+    // Hybrid message: OS handles the notification block, App handles the data block
     const data: Record<string, string> = {
       type: 'NEW_MESSAGE',
       conversationId,
@@ -305,10 +328,15 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
-      priority: 'normal',
-      ttlSeconds: 300, // 5 minutes — messages aren't as urgent as calls
-    });
+    const { invalidTokens } = await this.firebase.sendNotification(
+      tokens,
+      { title, body },
+      data,
+      {
+        priority: 'normal',
+        ttlSeconds: 300, // 5 minutes — messages aren't as urgent as calls
+      },
+    );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -361,21 +389,29 @@ export class PushNotificationService {
     const tokens = await this.deviceTokens.getTokensByUserId(recipientId);
     if (tokens.length === 0) return;
 
+    const title = 'Lời mời kết bạn';
+    const body = `${fromUserName} muốn kết bạn với bạn`;
+
     const data: Record<string, string> = {
       type: 'FRIEND_REQUEST',
       fromUserId,
       fromUserName,
       fromUserAvatar: fromUserAvatar ?? '',
       requestId,
-      title: 'Lời mời kết bạn',
-      body: `${fromUserName} muốn kết bạn với bạn`,
+      title,
+      body,
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
-      priority: 'normal',
-      ttlSeconds: 3600, // 1 hour — friend requests aren't urgent
-    });
+    const { invalidTokens } = await this.firebase.sendNotification(
+      tokens,
+      { title, body },
+      data,
+      {
+        priority: 'normal',
+        ttlSeconds: 3600, // 1 hour — friend requests aren't urgent
+      },
+    );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -398,21 +434,29 @@ export class PushNotificationService {
     const tokens = await this.deviceTokens.getTokensByUserId(recipientId);
     if (tokens.length === 0) return;
 
+    const title = 'Kết bạn thành công';
+    const body = `${acceptedByName} đã chấp nhận lời mời kết bạn`;
+
     const data: Record<string, string> = {
       type: 'FRIEND_ACCEPTED',
       acceptedByUserId,
       acceptedByName,
       acceptedByAvatar: acceptedByAvatar ?? '',
       friendshipId,
-      title: 'Kết bạn thành công',
-      body: `${acceptedByName} đã chấp nhận lời mời kết bạn`,
+      title,
+      body,
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
-      priority: 'normal',
-      ttlSeconds: 3600,
-    });
+    const { invalidTokens } = await this.firebase.sendNotification(
+      tokens,
+      { title, body },
+      data,
+      {
+        priority: 'normal',
+        ttlSeconds: 3600,
+      },
+    );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -442,10 +486,15 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
-      priority: 'normal',
-      ttlSeconds: 3600,
-    });
+    const { invalidTokens } = await this.firebase.sendNotification(
+      tokens,
+      { title, body },
+      data,
+      {
+        priority: 'normal',
+        ttlSeconds: 3600,
+      },
+    );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -483,10 +532,15 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
-      priority: 'high', // Reminders are time-sensitive
-      ttlSeconds: 3600, // 1 hour — reminder is stale if delivered much later
-    });
+    const { invalidTokens } = await this.firebase.sendNotification(
+      tokens,
+      { title, body },
+      data,
+      {
+        priority: 'high', // Reminders are time-sensitive
+        ttlSeconds: 3600, // 1 hour — reminder is stale if delivered much later
+      },
+    );
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 

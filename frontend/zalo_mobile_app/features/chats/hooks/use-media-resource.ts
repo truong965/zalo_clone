@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { getFullUrl } from '@/utils/url-helpers';
 import { MessageMediaAttachmentItem } from '@/types/message';
 
@@ -35,15 +36,24 @@ export function useMediaResource(
   const checkResource = async () => {
     if (!src || isFailedInDB) return;
     
+    // If it's ready, we might want to skip the aggressive HEAD check 
+    // especially in dev environments where resolution can be slow/flaky
+    if (processingStatus === 'READY' && Platform.OS !== 'web') {
+      return;
+    }
+
     try {
       const response = await fetch(src, { method: 'HEAD' });
       if (response.status === 403 || response.status === 404) {
-        setIsResourceError(true);
-        options?.onResourceError?.();
+        // Only set error if it's really missing and not just a race condition
+        if (processingStatus !== 'READY') {
+          setIsResourceError(true);
+          options?.onResourceError?.();
+        }
       }
     } catch (err) {
-      // Network error or other, might not be a 404
-      console.warn('Resource check failed:', err);
+      // Network error or other, might not be a 404. Don't block the UI for this.
+      console.warn('Resource check failed (transient):', err);
     }
   };
 

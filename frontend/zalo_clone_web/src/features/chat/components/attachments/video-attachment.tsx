@@ -18,9 +18,11 @@ import { PlayCircleOutlined, VideoCameraOutlined } from '@ant-design/icons';
 interface VideoAttachmentProps {
       attachment: MessageMediaAttachmentItem;
       className?: string;
+      /** Callback when the video is clicked */
+      onClick?: () => void;
 }
 
-export function VideoAttachment({ attachment, className }: VideoAttachmentProps) {
+export function VideoAttachment({ attachment, className, onClick }: VideoAttachmentProps) {
       const { t } = useTranslation();
       const isReady = attachment.processingStatus === MediaProcessingStatus.READY;
       const isFailed = attachment.processingStatus === MediaProcessingStatus.FAILED;
@@ -42,7 +44,9 @@ export function VideoAttachment({ attachment, className }: VideoAttachmentProps)
                   className={cn(
                         'relative w-48 h-28 overflow-hidden rounded-lg bg-gray-800',
                         className,
+                        isReady && 'cursor-pointer',
                   )}
+                  onClick={isReady ? onClick : undefined}
             >
                   {thumbSrc ? (
                         thumbSrc.startsWith('blob:') ? (
@@ -76,14 +80,9 @@ export function VideoAttachment({ attachment, className }: VideoAttachmentProps)
 
                   {/* Play button when ready */}
                   {isReady && attachment.cdnUrl && (
-                        <a
-                              href={attachment.cdnUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="absolute inset-0 flex items-center justify-center"
-                        >
+                        <div className="absolute inset-0 flex items-center justify-center">
                               <PlayCircleOutlined className="text-white text-3xl drop-shadow-lg" />
-                        </a>
+                        </div>
                   )}
 
                   {/* Processing spinner */}

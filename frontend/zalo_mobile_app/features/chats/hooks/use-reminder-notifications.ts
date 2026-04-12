@@ -82,23 +82,10 @@ export function useReminderNotifications() {
   const pushAlert = useCallback((alert: ReminderAlert) => {
     storePushAlert(alert);
     
-    // If app is in background but socket/FCM foreground listener received the alert,
-    // show a local system notification so the user actually sees it.
-    if (AppState.currentState !== 'active' && !isExpoGo && Notifications) {
-      Notifications.scheduleNotificationAsync({
-        identifier: alert.reminderId,
-        content: {
-          title: '🔔 Nhắc hẹn',
-          body: alert.content || 'Bạn có nhắc hẹn',
-          data: { ...alert, type: 'REMINDER_TRIGGERED' },
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.MAX,
-        },
-        trigger: { 
-          channelId: 'default' 
-        } as any, // immediate with channel
-      }).catch((err: any) => console.error('[ReminderNotif] Failed to show background notification:', err));
-    }
+    // NOTE: We no longer schedule local notifications here (e.g. Notifications.scheduleNotificationAsync).
+    // The backend sends a Hybrid FCM payload for REMINDER_TRIGGERED, which means the OS
+    // automatically displays a system notification when the app is in the background.
+    // Scheduling one here manually would cause duplicate notifications.
   }, [storePushAlert]);
 
   const dismissAlert = useCallback((alert: ReminderAlert) => {
@@ -135,40 +122,11 @@ export function useReminderNotifications() {
   }, []);
 
   const scheduleLocalReminder = useCallback(async (reminder: any) => {
-    try {
-      const triggerDate = new Date(reminder.remindAt);
-      if (triggerDate.getTime() <= Date.now() + 1000) return; // already passed or too soon (within 1s)
-
-      // Cancel any existing schedule for this reminder
-      await cancelLocalReminder(reminder.id);
-
-      if (!isEnabled) return;
-
-      const notifId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '🔔 Nhắc hẹn',
-          body: reminder.content || 'Bạn có nhắc hẹn',
-          data: {
-            reminderId: reminder.id,
-            content: reminder.content,
-            conversationId: reminder.conversationId,
-            type: 'REMINDER_TRIGGERED',
-          },
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.MAX,
-        } as any,
-        trigger: { 
-          type: Notifications.SchedulableTriggerInputTypes.DATE, 
-          date: triggerDate,
-          channelId: 'default'
-        },
-      });
-
-      const map = await getScheduledMap();
-      map[reminder.id] = notifId;
-      await saveScheduledMap(map);
-    } catch { /* silent */ }
-  }, [cancelLocalReminder]);
+    // NOTE: Local scheduling disabled. 
+    // We now rely entirely on Backend FCM pushes for reminder notifications.
+    // This prevents duplicate notifications (local + push) for the creator.
+    return;
+  }, []);
 
   // ── Full sync: fetch all active reminders, schedule locally ──────
   const syncAllReminders = useCallback(async () => {

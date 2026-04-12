@@ -27,12 +27,14 @@ interface ImageAttachmentProps {
        * h-32 / w-full grid thumbnail.
        */
       isSingle?: boolean;
+      /** Callback when the image is clicked */
+      onClick?: () => void;
 }
 
 const READY_STATUSES = new Set<string>([MediaProcessingStatus.READY]);
 const FAILED_STATUSES = new Set<string>([MediaProcessingStatus.FAILED]);
 
-export function ImageAttachment({ attachment, className, isSingle = false }: ImageAttachmentProps) {
+export function ImageAttachment({ attachment, className, isSingle = false, onClick }: ImageAttachmentProps) {
       const { t } = useTranslation();
       const isReady = READY_STATUSES.has(attachment.processingStatus);
       const isFailed = FAILED_STATUSES.has(attachment.processingStatus);
@@ -63,34 +65,17 @@ export function ImageAttachment({ attachment, className, isSingle = false }: Ima
                         'relative overflow-hidden rounded-lg bg-gray-100',
                         isSingle && 'inline-block',
                         className,
+                        isReady && 'cursor-pointer',
                   )}
+                  onClick={isReady ? onClick : undefined}
             >
                   {src ? (
-                        isReady && fullSrc ? (
-                              <a
-                                    href={fullSrc}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="block"
-                              >
-                                    <img
-                                          src={src}
-                                          alt={attachment.originalName}
-                                          loading="lazy"
-                                          className={imgClass}
-                                    />
-                              </a>
-                        ) : (
-                              <img
-                                    src={src}
-                                    alt={attachment.originalName}
-                                    loading="lazy"
-                                    className={cn(
-                                          'h-32 w-full object-cover',
-                                          isProcessing && 'opacity-60 blur-[1px]',
-                                    )}
-                              />
-                        )
+                        <img
+                              src={src}
+                              alt={attachment.originalName}
+                              loading="lazy"
+                              className={imgClass}
+                        />
                   ) : (
                         <div className={cn(
                               'flex items-center justify-center text-gray-400',

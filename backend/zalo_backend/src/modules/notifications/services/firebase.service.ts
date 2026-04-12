@@ -133,17 +133,24 @@ export class FirebaseService implements OnModuleInit {
 
   /**
    * Send a notification message (title + body + optional data) to multiple tokens.
+   *
+   * @param androidTag - Optional Android notification tag. Two notifications with the same
+   * tag replace each other in the tray. Useful for call start/cancel pairing.
    */
   async sendNotification(
     tokens: string[],
     notification: { title: string; body: string; imageUrl?: string },
     data?: Record<string, string>,
-    options: { priority?: 'high' | 'normal'; ttlSeconds?: number } = {},
+    options: {
+      priority?: 'high' | 'normal';
+      ttlSeconds?: number;
+      androidTag?: string;
+    } = {},
   ): Promise<{ invalidTokens: string[] }> {
     if (!this.app || tokens.length === 0) return { invalidTokens: [] };
 
     const messaging = this.app.messaging();
-    const { priority = 'normal', ttlSeconds = 3600 } = options;
+    const { priority = 'normal', ttlSeconds = 3600, androidTag } = options;
 
     const message: admin.messaging.MulticastMessage = {
       tokens,
@@ -156,11 +163,30 @@ export class FirebaseService implements OnModuleInit {
       android: {
         priority: priority === 'high' ? 'high' : 'normal',
         ttl: ttlSeconds * 1000,
+        // Tag lets the OS replace the existing notification with the same tag.
+        // Used by cancelCallNotification to dismiss the incoming-call tray entry.
+        ...(androidTag
+          ? { notification: { tag: androidTag, sound: 'default' } }
+          : {}),
       },
       webpush: {
         headers: {
           Urgency: priority === 'high' ? 'high' : 'normal',
           TTL: String(ttlSeconds),
+        },
+      },
+      apns: {
+        headers: {
+          'apns-priority': priority === 'high' ? '10' : '5',
+          'apns-expiration': String(
+            Math.floor(Date.now() / 1000) + ttlSeconds,
+          ),
+        },
+        payload: {
+          aps: {
+            contentAvailable: true,
+            ...(priority === 'high' ? { sound: 'default' } : {}),
+          },
         },
       },
     };
@@ -178,6 +204,10 @@ export class FirebaseService implements OnModuleInit {
             code === 'messaging/invalid-argument'
           ) {
             invalidTokens.push(tokens[idx]);
+          } else {
+            this.logger.warn(
+              `FCM transient error for token ${tokens[idx].slice(0, 12)}…: ${code}`,
+            );
           }
         }
       });

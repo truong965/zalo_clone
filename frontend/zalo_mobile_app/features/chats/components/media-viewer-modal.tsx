@@ -34,6 +34,8 @@ import { getFullUrl } from '@/utils/url-helpers';
 import { formatAudioDuration } from './message-item/message-item.utils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const MAX_SAF_FILE_SIZE = 10 * 1024 * 1024; // 10MB - Base64 reading over this causes OOM on Android
+
 
 // ─── Image Component with Zoom ──────────────────────────────────────────────
 
@@ -104,10 +106,9 @@ function ZoomableImage({ item }: { item: any }) {
 
 // ─── Video Component ─────────────────────────────────────────────────────────
 
-function VideoMedia({ item }: { item: any }) {
+function VideoMedia({ item, isActive }: { item: any; isActive: boolean }) {
   // Video must use cdnUrl/optimizedUrl, never thumbnail
   const { src, isProcessing, isError } = useMediaResource(item, { useFullRes: true });
-  const player = useVideoPlayer(src || '');
 
   if (isError) {
     return (
@@ -118,9 +119,78 @@ function VideoMedia({ item }: { item: any }) {
     );
   }
 
+  // Fallback thumbnail if not active or still loading
+  const thumbSrc = getFullUrl(item.optimizedUrl || item.thumbnailUrl || item.cdnUrl);
+
+  // We only initialize the player for the active item to save memory (OOM prevention)
+  // and we use a stable key for the player component to prevent "released object" errors.
   return (
     <View style={styles.mediaContainer}>
+      {isActive && src ? (
+        <ActiveVideoPlayer 
+          key={`active-player-${item.id}`} // Unique key per item ensure clean mount
+          src={src} 
+          isProcessing={isProcessing} 
+        />
+      ) : (
+        <View style={styles.mediaContainer}>
+           {thumbSrc ? (
+             <RNImage 
+               source={{ uri: thumbSrc }} 
+               style={styles.fullMedia} 
+               resizeMode="contain" 
+             />
+           ) : (
+             <ActivityIndicator color="white" size="large" />
+           )}
+           <View style={{ position: 'absolute', backgroundColor: 'rgba(0,0,0,0.3)', padding: 10, borderRadius: 30 }}>
+              <Ionicons name="play" size={40} color="white" />
+           </View>
+           {!isActive && (
+             <Text style={{ color: 'rgba(255,255,255,0.6)', marginTop: 80, fontSize: 12 }}>
+                Cuộn để xem video
+             </Text>
+           )}
+        </View>
+      )}
+      {(isProcessing || !src) && <ActivityIndicator color="white" style={styles.loader} />}
+    </View>
+  );
+}
+
+/**
+ * Separate component to encapsulate VideoPlayer lifecycle.
+ * This ensures native objects are ONLY created for the currently viewed video.
+ */
+function ActiveVideoPlayer({ src, isProcessing }: { src: string; isProcessing: boolean }) {
+  // Initialize with the real source immediately since it's active
+  const player = useVideoPlayer(src, (p) => {
+    p.loop = true;
+    p.play();
+  });
+
+  // Track the source currently loaded in the player to avoid redundant synchronous/async loads
+  const lastSrcRef = useRef(src);
+
+  // Handle source changes asynchronously (especially for iOS)
+  useEffect(() => {
+    if (src && player && src !== lastSrcRef.current) {
+      // Use replaceAsync to avoid UI freezes on iOS as recommended by Expo
+      if (typeof (player as any).replaceAsync === 'function') {
+        (player as any).replaceAsync(src).catch((err: any) => 
+          console.error('[ActiveVideoPlayer] replaceAsync failed:', err)
+        );
+      } else {
+        player.replace(src);
+      }
+      lastSrcRef.current = src;
+    }
+  }, [src, player]);
+
+  return (
+    <View style={styles.fullMedia}>
       <VideoView
+        key="active-video-view"
         player={player}
         style={styles.fullMedia}
         contentFit="contain"
@@ -128,18 +198,25 @@ function VideoMedia({ item }: { item: any }) {
         allowsPictureInPicture
         nativeControls={true}
       />
-      {(isProcessing || !src) && <ActivityIndicator color="white" style={styles.loader} />}
+      {isProcessing && <ActivityIndicator color="white" style={styles.loader} />}
     </View>
   );
 }
 
 // ─── Voice Component ─────────────────────────────────────────────────────────
 
-function VoiceMedia({ item, theme }: { item: any; theme: any }) {
+function VoiceMedia({ item, theme, isActive }: { item: any; theme: any; isActive: boolean }) {
   const { src, isProcessing, isError } = useMediaResource(item, { useFullRes: true });
   const player = useAudioPlayer(src || '');
   const status = useAudioPlayerStatus(player);
   const isPlaying = status.playing;
+
+  // Pause when not active
+  useEffect(() => {
+    if (!isActive && player) {
+      player.pause();
+    }
+  }, [isActive, player]);
 
   const handlePlayPause = () => {
     if (isPlaying) {
@@ -194,7 +271,16 @@ export function MediaViewerModal({ isVisible, onClose, items, initialIndex }: Me
   const theme = useTheme();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [isDownloading, setIsDownloading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (isVisible) {
@@ -228,79 +314,124 @@ export function MediaViewerModal({ isVisible, onClose, items, initialIndex }: Me
       }
     } catch (error) {
       console.error('Share error:', error);
-      Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không thể chia sẻ tệp' });
+      Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không thể chia sẻ tệp', position: 'bottom' });
     }
   };
 
   const handleDownload = async () => {
+    if (isDownloading) return;
+
     const item = items[currentIndex];
     const rawSrc = item.optimizedUrl || item.cdnUrl || item.thumbnailUrl;
     const src = getFullUrl(rawSrc);
 
     if (!src) {
-      Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không có liên kết tải về' });
+      Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không có liên kết tải về', position: 'bottom' });
       return;
     }
 
+    setIsDownloading(true);
+    // Attachments use mediaType, Search results use messageType
+    const mediaType = item.mediaType || item.messageType;
+
+    // Use a unique temp path to avoid IO locks and corruption
+    const timestamp = Date.now();
+    const originalExt = (item.originalName || '').split('.').pop()?.toLowerCase() || '';
+    
+    // Correct extension based on simplified mapping if possible, else fallback to original
+    let ext = originalExt;
+    if (mediaType === 'IMAGE' && !['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) ext = 'jpg';
+    if (mediaType === 'VIDEO' && !['mp4', 'mov', 'webm'].includes(ext)) ext = 'mp4';
+    
+    const tempFileName = `dl_${item.id || 'file'}_${timestamp}.${ext}`;
+    const localUri = `${FileSystem.documentDirectory}${tempFileName}`;
+
     try {
-      const fileName = item.originalName || `file_${Date.now()}`;
+      const fileName = item.originalName || `file_${timestamp}.${ext}`;
       const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '-');
 
       Toast.show({ type: 'info', text1: 'Bắt đầu tải...', text2: safeFileName, position: 'bottom' });
 
-      const localUri = `${FileSystem.documentDirectory}${safeFileName}`;
       const downloadRes = await FileSystem.downloadAsync(src, localUri);
+      if (!isMounted.current) return;
 
-      if (downloadRes.status !== 200) throw new Error('Download failed');
+      if (downloadRes.status !== 200) throw new Error(`Download failed with status ${downloadRes.status}`);
 
-      if (item.messageType === 'IMAGE' || item.messageType === 'VIDEO') {
-        const { status, canAskAgain } = await MediaLibrary.requestPermissionsAsync(true, ['photo', 'video']);
+      if (mediaType === 'IMAGE' || mediaType === 'VIDEO') {
+        const { status } = await MediaLibrary.requestPermissionsAsync(true, ['photo', 'video']);
         if (status === 'granted') {
           await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
-          Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã lưu vào thư viện ảnh', position: 'top' });
-        } else if (!canAskAgain) {
-          Toast.show({ type: 'error', text1: 'Thất bại', text2: 'Vui lòng cấp quyền trong cài đặt', position: 'top' });
+          Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã lưu vào thư viện', position: 'bottom' });
         } else {
-          Toast.show({ type: 'error', text1: 'Thất bại', text2: 'Cần quyền truy cập thư viện', position: 'top' });
+          Toast.show({ type: 'error', text1: 'Thất bại', text2: 'Cần quyền truy cập thư viện', position: 'bottom' });
         }
       } else {
         // Document/Voice handling
         if (Platform.OS === 'android') {
-          const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-          if (permissions.granted) {
-            const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-              permissions.directoryUri,
-              safeFileName,
-              'application/octet-stream',
-            );
-            const fileData = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
-            await FileSystem.writeAsStringAsync(newFileUri, fileData, { encoding: FileSystem.EncodingType.Base64 });
-            Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã lưu file vào máy', position: 'top' });
+          // MEMORY SAFETY: Only use SAF for small-ish files (< 10MB) to avoid OOM via Base64
+          const info = await FileSystem.getInfoAsync(localUri);
+
+          if (info.exists && info.size && info.size < MAX_SAF_FILE_SIZE) {
+            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+            if (permissions.granted) {
+              const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+                permissions.directoryUri,
+                safeFileName,
+                'application/octet-stream',
+              );
+              const fileData = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+              await FileSystem.writeAsStringAsync(newFileUri, fileData, { encoding: FileSystem.EncodingType.Base64 });
+              Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã lưu file vào máy', position: 'bottom' });
+            }
+          } else {
+            // Memory safe fallback for > 10MB files on Android
+            await Sharing.shareAsync(localUri, { UTI: 'public.item' });
+            Toast.show({ type: 'success', text1: 'Thành công', text2: 'Tải xuống hoàn tất', position: 'bottom' });
           }
         } else {
           const isAvailable = await Sharing.isAvailableAsync();
           if (isAvailable) {
             await Sharing.shareAsync(localUri, { UTI: 'public.item' });
+            Toast.show({ type: 'success', text1: 'Thành công', text2: 'Tải xuống hoàn tất', position: 'bottom' });
           }
         }
       }
-
-      await FileSystem.deleteAsync(localUri, { idempotent: true });
     } catch (error) {
-      console.error('Download error:', error);
-      Toast.show({ type: 'error', text1: 'Lỗi tải xuống', text2: 'Không thể tải tệp vào lúc này', position: 'top' });
+      console.error('[MediaViewer] Download error:', error);
+      if (isMounted.current) {
+        Toast.show({ 
+          type: 'error', 
+          text1: 'Lỗi tải xuống', 
+          text2: error instanceof Error ? error.message : 'Vui lòng thử lại sau', 
+          position: 'bottom' 
+        });
+      }
+    } finally {
+      if (isMounted.current) {
+        setIsDownloading(false);
+      }
+      // Dọn dẹp file tạm ngay lập tức để giải phóng bộ nhớ
+      try {
+        await FileSystem.deleteAsync(localUri, { idempotent: true });
+      } catch (err) {
+        console.warn('Failed to cleanup temp file:', err);
+      }
     }
   };
 
-  const renderItem = useCallback(({ item }: { item: any }) => {
-    if (item.messageType === 'VIDEO') {
-      return <VideoMedia item={item} />;
-    } else if (item.messageType === 'AUDIO' || item.messageType === 'VOICE') {
-      return <VoiceMedia item={item} theme={theme} />;
+  const renderItem = useCallback(({ item, index }: { item: any; index: number }) => {
+    // CRITICAL: Attachments use mediaType, but Search results use messageType
+    const mediaType = item.mediaType || item.messageType;
+    const isActive = index === currentIndex;
+
+    if (mediaType === 'VIDEO') {
+      return <VideoMedia item={item} isActive={isActive} />;
+    } else if (mediaType === 'AUDIO' || mediaType === 'VOICE') {
+      return <VoiceMedia item={item} theme={theme} isActive={isActive} />;
     } else {
       return <ZoomableImage item={item} />;
     }
-  }, [theme]);
+  }, [theme, currentIndex]);
 
   if (!isVisible) return null;
 
@@ -338,13 +469,17 @@ export function MediaViewerModal({ isVisible, onClose, items, initialIndex }: Me
               onPress={handleShare}
               style={styles.headerBtn}
             />
-            <IconButton
-              icon="download"
-              iconColor="white"
-              size={24}
-              onPress={handleDownload}
-              style={styles.headerBtn}
-            />
+            {isDownloading ? (
+               <ActivityIndicator color="white" size="small" style={{ marginHorizontal: 15 }} />
+            ) : (
+              <IconButton
+                icon="download"
+                iconColor="white"
+                size={24}
+                onPress={handleDownload}
+                style={styles.headerBtn}
+              />
+            )}
           </View>
 
           {/* Media List */}
@@ -371,9 +506,11 @@ export function MediaViewerModal({ isVisible, onClose, items, initialIndex }: Me
             })}
             initialNumToRender={1}
             maxToRenderPerBatch={1}
-            windowSize={3}
+            windowSize={1} // Only render the current item to avoid OOM
             removeClippedSubviews={Platform.OS === 'android'}
           />
+          {/* Internal Toast to ensure visibility over Modal */}
+          <Toast />
         </View>
       </GestureHandlerRootView>
     </Modal>

@@ -350,6 +350,10 @@ export class TwoFactorService {
 
     const preferredMethod = user.twoFactorMethod || (user.phoneNumber ? TwoFactorMethod.SMS : TwoFactorMethod.EMAIL);
 
+    const maskedPhone = user.phoneNumber ? user.phoneNumber.replace(/(\d{3})\d{4}(\d{3})/, '$1****$2') : undefined;
+    const [userPart, domainPart] = user.email ? user.email.split('@') : ['', ''];
+    const maskedEmail = user.email ? `${userPart.substring(0, 3)}***@${domainPart}` : undefined;
+
     let autoTriggered = false;
     // Seamless Login Rule: Auto-trigger the challenge
     if (!options.isForgotPassword) {
@@ -370,6 +374,19 @@ export class TwoFactorService {
         });
         autoTriggered = true;
       }
+    } else if (options.isForgotPassword && !user.twoFactorEnabled) {
+      // Auto-trigger SMS (preferred) or Email for forgot password if 2FA is disabled
+      if (user.phoneNumber) {
+        await this.sendSmsChallenge(pendingToken, true).catch(err => {
+          this.logger.error(`Failed to auto-trigger SMS challenge for forgot password: ${err.message}`);
+        });
+        autoTriggered = true;
+      } else if (user.email) {
+        await this.sendEmailChallenge(pendingToken, true).catch(err => {
+          this.logger.error(`Failed to auto-trigger Email challenge for forgot password: ${err.message}`);
+        });
+        autoTriggered = true;
+      }
     }
 
     return {
@@ -378,6 +395,9 @@ export class TwoFactorService {
       availableMethods,
       preferredMethod: autoTriggered && availableMethods.includes('PUSH') ? 'PUSH' : preferredMethod,
       autoTriggered,
+      twoFactorEnabled: user.twoFactorEnabled,
+      maskedPhone,
+      maskedEmail,
       ...options
     };
   }
@@ -574,8 +594,8 @@ export class TwoFactorService {
 
     if (!user) throw new UnauthorizedException('User not found');
     
-    // Normal 2FA requires enabled flag. Reactivation bypasses this because it's a mandatory identity check.
-    if (!pendingData.isReactivation && !user.twoFactorEnabled) {
+    // Normal 2FA requires enabled flag. Reactivation and Forgot Password bypass this because they are mandatory identity checks.
+    if (!pendingData.isReactivation && !pendingData.isForgotPassword && !user.twoFactorEnabled) {
       throw new UnauthorizedException('2FA is not enabled');
     }
 

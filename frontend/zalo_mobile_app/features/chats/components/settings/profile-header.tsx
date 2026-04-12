@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, TouchableOpacity, Image } from 'react-native';
-import { Text, useTheme, Avatar, IconButton } from 'react-native-paper';
+import { Text, useTheme, Avatar, IconButton, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/providers/auth-provider';
 import { Conversation } from '@/types/conversation';
@@ -14,6 +14,8 @@ interface ProfileHeaderProps {
   onToggleMute: () => void;
   onAddMember?: () => void;
   isAdmin: boolean;
+  isPinning?: boolean;
+  isMuting?: boolean;
 }
 
 export function ProfileHeader({
@@ -23,7 +25,9 @@ export function ProfileHeader({
   onTogglePin,
   onToggleMute,
   onAddMember,
-  isAdmin
+  isAdmin,
+  isPinning,
+  isMuting
 }: ProfileHeaderProps) {
   const { user } = useAuth();
   const theme = useTheme();
@@ -73,9 +77,10 @@ export function ProfileHeader({
             size={28}
             onPress={() => onToggleMute()}
             containerColor={theme.colors.secondaryContainer}
+            disabled={isMuting}
           />
           <Text className="text-xs text-muted-foreground mt-1 text-center">
-            {conversation.isMuted ? 'Bật thông báo' : 'Tắt thông báo'}
+            {isMuting ? 'Đang xử lý...' : (conversation.isMuted ? 'Bật thông báo' : 'Tắt thông báo')}
           </Text>
         </View>
 
@@ -86,9 +91,10 @@ export function ProfileHeader({
             size={28}
             onPress={() => onTogglePin()}
             containerColor={theme.colors.secondaryContainer}
+            disabled={isPinning}
           />
           <Text className="text-xs text-muted-foreground mt-1 text-center">
-            {conversation.isPinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
+            {isPinning ? 'Đang xử lý...' : (conversation.isPinned ? 'Bỏ ghim' : 'Ghim hội thoại')}
           </Text>
         </View>
 

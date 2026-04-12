@@ -97,16 +97,17 @@ export function ForgotPasswordPage() {
         return (
           <Form layout="vertical" onFinish={onIdentifierSubmit} size="large">
             <Text type="secondary" className="block mb-4">
-              Nhập số điện thoại hoặc email liên kết với tài khoản để bắt đầu quá trình khôi phục.
+              Nhập số điện thoại liên kết với tài khoản để bắt đầu quá trình khôi phục.
             </Text>
             <Form.Item
-              label="Số điện thoại hoặc Email"
+              label="Số điện thoại"
               name="identifier"
               rules={[
-                { required: true, message: 'Vui lòng nhập thông tin tài khoản' },
+                { required: true, message: 'Vui lòng nhập số điện thoại' },
+                { pattern: /^[0-9+]{8,15}$/, message: 'Số điện thoại không hợp lệ' },
               ]}
             >
-              <Input prefix={<UserOutlined />} placeholder="0xxxxxxxxx hoặc email@example.com" />
+              <Input prefix={<UserOutlined />} placeholder="0xxxxxxxxx" />
             </Form.Item>
             <Button type="primary" htmlType="submit" block loading={isLoading}>
               Tiếp tục

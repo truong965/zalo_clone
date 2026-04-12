@@ -56,7 +56,9 @@ export type TwoFactorRequiredResponse = {
       maskedPhone?: string;
       maskedEmail?: string;
       isReactivation?: boolean;
+      isForgotPassword?: boolean;
       autoTriggered?: boolean;
+      twoFactorEnabled?: boolean;
 };
 
 export type VerifyTwoFactorRequest = {

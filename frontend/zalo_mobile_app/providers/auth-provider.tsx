@@ -37,6 +37,7 @@ type AuthContextValue = {
       isLoading: boolean;
       isAuthenticated: boolean;
       twoFactorData: TwoFactorRequiredResponse | null;
+      setTwoFactorData: (data: TwoFactorRequiredResponse | null) => void;
       login: (payload: LoginPayload) => Promise<void>;
       verify2fa: (payload: VerifyTwoFactorRequest) => Promise<any>;
       clear2fa: () => void;
@@ -213,6 +214,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
                   isLoading,
                   isAuthenticated: Boolean(accessToken),
                   twoFactorData,
+                  setTwoFactorData,
                   login,
                   verify2fa,
                   clear2fa,
@@ -228,6 +230,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
                   accessToken,
                   isLoading,
                   twoFactorData,
+                  setTwoFactorData,
                   login,
                   verify2fa,
                   clear2fa,

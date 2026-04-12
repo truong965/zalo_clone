@@ -6,7 +6,8 @@
             "unknown": "Không xác định",
             "loading": "Đang xử lý...",
             "back": "Quay lại",
-            "verify": "Xác thực"
+            "verify": "Xác thực",
+            "continue": "Tiếp tục"
       },
       "auth": {
             "loginTitle": "Đăng nhập Zalo",

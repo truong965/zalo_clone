@@ -6,7 +6,8 @@
             "unknown": "Unknown",
             "loading": "Processing...",
             "back": "Back",
-            "verify": "Verify"
+            "verify": "Verify",
+            "continue": "Continue"
       },
       "auth": {
             "loginTitle": "Sign in to Zalo Clone",

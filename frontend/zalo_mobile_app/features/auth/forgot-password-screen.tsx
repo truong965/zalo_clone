@@ -11,7 +11,7 @@ import type { TwoFactorRequiredResponse } from '@/types/auth';
 export function ForgotPasswordScreen() {
       const router = useRouter();
       const { t } = useTranslation();
-      const { setTwoFactorData, clear2fa } = useAuth() as any; // Access internal setters if needed, or just manage local state
+      const { setTwoFactorData, clear2fa } = useAuth(); // Access internal setters if needed, or just manage local state
 
       const [currentStep, setCurrentStep] = useState(0);
       const [isLoading, setIsLoading] = useState(false);
@@ -88,12 +88,13 @@ export function ForgotPasswordScreen() {
                                     <View className="items-center mb-2">
                                           <MaterialCommunityIcons name="account-search-outline" size={64} color="hsl(217.2 91.2% 59.8%)" />
                                           <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.forgotPasswordTitle')}</Text>
-                                          <Text className="text-center text-muted mt-1 px-4">Nhập số điện thoại hoặc email để khôi phục mật khẩu</Text>
+                                          <Text className="text-center text-muted mt-1 px-4">Nhập số điện thoại để khôi phục mật khẩu</Text>
                                     </View>
                                     <TextInput
                                           value={identifier}
                                           onChangeText={setIdentifier}
-                                          placeholder="Số điện thoại hoặc Email"
+                                          placeholder="Số điện thoại"
+                                          keyboardType="phone-pad"
                                           autoCapitalize="none"
                                           className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
                                     />
@@ -170,13 +171,6 @@ export function ForgotPasswordScreen() {
                   className="flex-1 bg-background">
                   <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
                         <View className="rounded-3xl bg-secondary p-6 shadow-sm border border-border">
-                              <Pressable 
-                                  onPress={() => currentStep > 0 && currentStep < 3 ? setCurrentStep(currentStep - 1) : router.back()}
-                                  className="absolute left-4 top-4 z-10 p-2"
-                              >
-                                  <MaterialCommunityIcons name="arrow-left" size={24} color="hsl(240 3.8% 46.1%)" />
-                              </Pressable>
-                              
                               <View className={currentStep === 1 ? "" : "mt-8"}>
                                   {renderStep()}
                               </View>

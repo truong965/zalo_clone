@@ -72,36 +72,8 @@ async function playNotificationSound(): Promise<void> {
       }
 }
 
-/** Request browser notification permission (once) */
-function requestNotificationPermission() {
-      if ('Notification' in window && Notification.permission === 'default') {
-            void Notification.requestPermission();
-      }
-}
-
-/** Show browser notification when tab is unfocused */
-function showBrowserNotification(t: any, content: string, conversationId: string | null) {
-      if (!('Notification' in window) || Notification.permission !== 'granted') return;
-      if (document.hasFocus()) return; // Only for unfocused tab
-
-      const n = new Notification(t('reminder.notifications.modalTitle'), {
-            body: content,
-            icon: '/vite.svg',
-            tag: 'reminder', // Prevent stacking
-            requireInteraction: true,
-      });
-
-      n.onclick = () => {
-            window.focus();
-            if (conversationId) {
-                  // Navigate to conversation — simple approach via URL
-                  window.dispatchEvent(
-                        new CustomEvent('reminder:navigate', { detail: { conversationId } }),
-                  );
-            }
-            n.close();
-      };
-}
+// Browser notification is handled natively by FCM Web Push Service Worker.
+// We do not manually trigger it here to avoid duplicate notifications.
 
 /** Show persistent modal notification + acknowledge on dismiss */
 function showReminderModal(
@@ -146,9 +118,11 @@ export function useReminderNotifications() {
             [queryClient],
       );
 
-      // Request browser notification permission on mount
+      // Request browser notification permission so SW can receive pushes
       useEffect(() => {
-            requestNotificationPermission();
+            if ('Notification' in window && Notification.permission === 'default') {
+                  void Notification.requestPermission();
+            }
       }, []);
 
       // Unlock AudioContext on first user gesture (browser autoplay policy)
@@ -182,9 +156,6 @@ export function useReminderNotifications() {
                   // other members see it as view-only (modal closes without API call)
                   const isCreator = currentUserId === payload.creatorId;
                   showReminderModal(t, payload, isCreator ? acknowledgeReminder : undefined);
-
-                  // Show browser notification if tab unfocused
-                  showBrowserNotification(t, payload.content, payload.conversationId);
 
                   // Invalidate cache to refresh lists
                   void queryClient.invalidateQueries({ queryKey: REMINDERS_BASE_KEY });

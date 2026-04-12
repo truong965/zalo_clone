@@ -244,6 +244,13 @@ export default function ChatDetailScreen() {
     return visible;
   }, [data?.pages, user?.id]);
 
+  const mediaSignature = useMemo(() => {
+    return messages
+      .filter(msg => !!msg.mediaAttachments?.length)
+      .map(msg => msg.id + (msg.mediaAttachments?.map(a => a.id).join('') || ''))
+      .join('|');
+  }, [messages]);
+
   const allMediaItems = useMemo(() => {
     const media: any[] = [];
     messages.forEach(msg => {
@@ -260,7 +267,7 @@ export default function ChatDetailScreen() {
       }
     });
     return media;
-  }, [messages]);
+  }, [mediaSignature]);
 
   const handleMediaPress = useCallback((mediaId: string) => {
     const idx = allMediaItems.findIndex(m => m.id === mediaId || m.mediaId === mediaId);

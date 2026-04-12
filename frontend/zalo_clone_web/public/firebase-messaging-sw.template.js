@@ -57,6 +57,9 @@ if (!isConfigured) {
             }
       }
 
+      // Use raw push event listener for full control over notification display.
+      // This prevents the Firebase compat SDK from double-showing notifications
+      // when using messaging.onBackgroundMessage with hybrid payloads.
       self.addEventListener('push', (event) => {
             if (!event.data) return;
 
@@ -68,15 +71,24 @@ if (!isConfigured) {
                   return;
             }
 
+            // Firebase wraps FCM data inside payload.data
+            // For hybrid payloads: payload.notification exists
+            // For data-only: payload.data has everything
             const data = payload.data || {};
+            const hasNativeNotification = !!payload.notification;
 
             event.waitUntil((async function () {
+                  // Always broadcast to open tabs for socket/state sync
                   await broadcastPushEventToApp(data);
 
                   const focused = await hasFocusedAppClient();
-                  if (focused) return Promise.resolve();
+                  if (focused) return;
 
+                  // CALLS: Always show our custom notification manually for better UI/actions.
+                  // - Web doesn't have the same "Doze" throttling for Data pushes as Android.
+                  // - Showing manually allows us to embed full call data for the click handler.
                   if (data.type === 'INCOMING_CALL') {
+                        console.log('[SW] INCOMING_CALL received', data.callId);
                         const callerName = data.callerName || 'Ai đó';
                         const callType = data.callType === 'VIDEO' ? 'Video' : 'Thoại';
 
@@ -84,7 +96,7 @@ if (!isConfigured) {
                               body: 'Nhấn để mở ứng dụng và trả lời cuộc gọi',
                               icon: data.callerAvatar || '/favicon.ico',
                               badge: '/favicon.ico',
-                              tag: `incoming-call-${data.callId}`,
+                              tag: `call-${data.callId}`,
                               requireInteraction: true,
                               renotify: true,
                               data: {
@@ -105,6 +117,27 @@ if (!isConfigured) {
                         });
                   }
 
+                  // CANCEL_CALL: Close the call notification in the tray.
+                  if (data.type === 'CANCEL_CALL') {
+                        console.log('[SW] CANCEL_CALL received', data.callId);
+                        const callTag = `call-${data.callId}`;
+                        const existing = await self.registration.getNotifications({ tag: callTag });
+                        for (const n of existing) {
+                              console.log('[SW] Closing notification', n.tag);
+                              n.close();
+                        }
+                        return;
+                  }
+
+                  // HYBRID types (Messages, Reminders, etc.):
+                  // If the payload has a `notification` block, the browser handles it.
+                  // Only show manually if it's a pure data message (fallback).
+                  if (hasNativeNotification) {
+                        console.log('[SW] Hybrid payload — Browser natively displaying:', data.type || 'notification');
+                        return;
+                  }
+
+                  // DATA-ONLY fallback: MISSED_CALL (if it didn't come with a notification block)
                   if (data.type === 'MISSED_CALL') {
                         return self.registration.showNotification(data.title || 'Cuộc gọi nhỡ', {
                               body: data.body || 'Bạn có cuộc gọi nhỡ',
@@ -119,113 +152,14 @@ if (!isConfigured) {
                         });
                   }
 
-                  if (data.type === 'NEW_MESSAGE') {
-                        const title = data.title || 'Tin nhắn mới';
-                        const body = data.body || '';
-                        const tag = `msg-${data.conversationId || 'unknown'}`;
-
-                        return self.registration.showNotification(title, {
-                              body,
+                  if (data.title || data.body) {
+                        console.log('[SW] Rendering manual fallback for data-only message:', data.type);
+                        return self.registration.showNotification(data.title || 'Thông báo mới', {
+                              body: data.body || data.content || '',
                               icon: '/favicon.ico',
-                              badge: '/favicon.ico',
-                              tag,
-                              renotify: true,
-                              data: {
-                                    type: 'NEW_MESSAGE',
-                                    conversationId: data.conversationId,
-                                    conversationType: data.conversationType,
-                                    senderId: data.senderId,
-                                    url: data.conversationId ? `/chat/${data.conversationId}` : '/',
-                              },
+                              data: { ...data, url: '/' },
                         });
                   }
-
-                  if (data.type === 'FRIEND_REQUEST') {
-                        const title = data.title || 'Lời mời kết bạn';
-                        const body = data.body || '';
-
-                        return self.registration.showNotification(title, {
-                              body,
-                              icon: data.fromUserAvatar || '/favicon.ico',
-                              badge: '/favicon.ico',
-                              tag: `friend-request-${data.requestId || 'unknown'}`,
-                              data: {
-                                    type: 'FRIEND_REQUEST',
-                                    fromUserId: data.fromUserId,
-                                    requestId: data.requestId,
-                                    url: '/contacts?tab=requests',
-                              },
-                        });
-                  }
-
-                  if (data.type === 'FRIEND_ACCEPTED') {
-                        const title = data.title || 'Kết bạn thành công';
-                        const body = data.body || '';
-
-                        return self.registration.showNotification(title, {
-                              body,
-                              icon: data.acceptedByAvatar || '/favicon.ico',
-                              badge: '/favicon.ico',
-                              tag: `friend-accepted-${data.friendshipId || 'unknown'}`,
-                              data: {
-                                    type: 'FRIEND_ACCEPTED',
-                                    acceptedByUserId: data.acceptedByUserId,
-                                    friendshipId: data.friendshipId,
-                                    url: '/contacts',
-                              },
-                        });
-                  }
-
-                  if (data.type === 'GROUP_EVENT') {
-                        const title = data.title || 'Sự kiện nhóm';
-                        const body = data.body || '';
-
-                        return self.registration.showNotification(title, {
-                              body,
-                              icon: '/favicon.ico',
-                              badge: '/favicon.ico',
-                              tag: `group-event-${data.conversationId || 'unknown'}-${data.subtype || ''}`,
-                              data: {
-                                    type: 'GROUP_EVENT',
-                                    subtype: data.subtype,
-                                    conversationId: data.conversationId,
-                                    groupName: data.groupName,
-                                    url: data.conversationId ? `/chat/${data.conversationId}` : '/',
-                              },
-                        });
-                  }
-
-                  if (data.type === 'REMINDER_TRIGGERED') {
-                        const title = data.title || '🔔 Nhắc hẹn';
-                        const body = data.content || data.body || 'Bạn có một nhắc hẹn';
-                        const tag = `reminder-${data.reminderId || 'unknown'}`;
-
-                        return self.registration.showNotification(title, {
-                              body,
-                              icon: '/favicon.ico',
-                              badge: '/favicon.ico',
-                              tag,
-                              requireInteraction: true,
-                              renotify: true,
-                              data: {
-                                    type: 'REMINDER_TRIGGERED',
-                                    reminderId: data.reminderId,
-                                    conversationId: data.conversationId,
-                                    url: data.conversationId ? `/chat/${data.conversationId}` : '/',
-                              },
-                        });
-                  }
-
-                  if (data.title) {
-                        return self.registration.showNotification(data.title, {
-                              body: data.body || '',
-                              icon: '/favicon.ico',
-                              badge: '/favicon.ico',
-                              data: { url: data.url || '/' },
-                        });
-                  }
-
-                  return Promise.resolve();
             })());
       });
 

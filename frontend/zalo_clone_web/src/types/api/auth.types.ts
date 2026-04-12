@@ -243,6 +243,7 @@ export interface TwoFactorRequiredResponse {
   isReactivation?: boolean;
   isForgotPassword?: boolean;
   autoTriggered?: boolean;
+  twoFactorEnabled?: boolean;
 }
 
 export interface VerifyTwoFactorRequest {

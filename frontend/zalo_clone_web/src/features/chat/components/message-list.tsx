@@ -1,9 +1,9 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Button, Dropdown, Empty, Spin, Tooltip, Avatar } from 'antd';
 import type { MenuProps } from 'antd';
 import { MoreOutlined, UserOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../types';
-import type { DirectReceipts } from '@/types/api';
+import type { DirectReceipts, RecentMediaItem, MessageMediaAttachmentItem } from '@/types/api';
 import { ImageAttachment, VideoAttachment, AudioAttachment, DocumentAttachment } from './attachments';
 import { ReplyQuote } from './reply-quote';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import React from 'react';
 import { useTranslationStore } from '../stores/use-translation-store';
 import { useChatStore } from '../stores/chat.store';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
+import { MediaPreviewModal } from './media-preview-modal';
 
 interface MessageListProps {
       messages: ChatMessage[];
@@ -155,91 +156,6 @@ function isMessageRecalled(metadata: ChatMessage['metadata']): boolean {
       return (metadata as Record<string, unknown>).recalled === true;
 }
 
-function renderMessageBody(msg: ChatMessage) {
-      if (isMessageRecalled(msg.metadata)) {
-            return <div className="whitespace-pre-wrap italic text-gray-400">Tin nhắn đã được thu hồi</div>;
-      }
-
-      const attachments = msg.mediaAttachments ?? [];
-
-      if (attachments.length > 0) {
-            const images = attachments.filter((a) => a.mediaType === 'IMAGE');
-            const videos = attachments.filter((a) => a.mediaType === 'VIDEO');
-            const audios = attachments.filter((a) => a.mediaType === 'AUDIO');
-            const documents = attachments.filter((a) => a.mediaType === 'DOCUMENT');
-
-            return (
-                  <div className="space-y-2">
-                        {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
-
-                        {/* Image grid
-                             - 1 image  : natural size (no forced h-32 / full-width)
-                             - 2+ images: 2-col grid; last item spans both cols when count is odd
-                        */}
-                        {images.length === 1 && (
-                              <ImageAttachment
-                                    attachment={images[0]}
-                                    isSingle
-                              />
-                        )}
-                        {images.length > 1 && (
-                              <div className="grid grid-cols-2 gap-2">
-                                    {images.map((a, idx) => (
-                                          <ImageAttachment
-                                                key={a.id}
-                                                attachment={a}
-                                                className={
-                                                      images.length % 2 !== 0 && idx === images.length - 1
-                                                            ? 'col-span-2'
-                                                            : undefined
-                                                }
-                                          />
-                                    ))}
-                              </div>
-                        )}
-
-                        {/* Video attachments */}
-                        {videos.length > 0 && (
-                              <div className="space-y-2">
-                                    {videos.map((a) => (
-                                          <VideoAttachment
-                                                key={a.id}
-                                                attachment={a}
-                                          />
-                                    ))}
-                              </div>
-                        )}
-
-                        {/* Audio attachments — native HTML5 player */}
-                        {audios.length > 0 && (
-                              <div className="space-y-2">
-                                    {audios.map((a) => (
-                                          <AudioAttachment
-                                                key={a.id}
-                                                attachment={a}
-                                          />
-                                    ))}
-                              </div>
-                        )}
-
-                        {/* Document/file attachments */}
-                        {documents.length > 0 && (
-                              <div className="space-y-2">
-                                    {documents.map((a) => (
-                                          <DocumentAttachment
-                                                key={a.id}
-                                                attachment={a}
-                                          />
-                                    ))}
-                              </div>
-                        )}
-                  </div>
-            );
-      }
-
-      return <div className="whitespace-pre-wrap">{msg.content ?? ''}</div>;
-}
-
 function getSendStatus(metadata: ChatMessage['metadata']): string | undefined {
       if (!metadata) return undefined;
       if (typeof metadata !== 'object') return undefined;
@@ -379,6 +295,123 @@ export function MessageList({
 
       const setRightSidebar = useChatStore(s => s.setRightSidebar);
       const setAiSummaryStartMessageId = useChatStore(s => s.setAiSummaryStartMessageId);
+
+      // ── Media Preview State ──
+      const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+      const [previewItems, setPreviewItems] = useState<RecentMediaItem[]>([]);
+      const [initialPreviewIndex, setInitialPreviewIndex] = useState(0);
+
+      const handleAttachmentClick = (clickedAttachment: MessageMediaAttachmentItem, msg: ChatMessage) => {
+            const visualAttachments = (msg.mediaAttachments ?? []).filter(
+                  (a) => a.mediaType === 'IMAGE' || a.mediaType === 'VIDEO',
+            );
+
+            const items: RecentMediaItem[] = visualAttachments.map((a) => ({
+                  messageId: msg.id,
+                  mediaId: a.id,
+                  originalName: a.originalName,
+                  mimeType: a.mimeType || '',
+                  mediaType: a.mediaType,
+                  size: a.size,
+                  thumbnailUrl: a.thumbnailUrl || null,
+                  cdnUrl: a.cdnUrl || null,
+                  messageType: a.mediaType as any, // Simple mapping works for IMAGE/VIDEO
+                  createdAt: msg.createdAt,
+            }));
+
+            const clickIndex = visualAttachments.findIndex((a) => a.id === clickedAttachment.id);
+            setPreviewItems(items);
+            setInitialPreviewIndex(clickIndex >= 0 ? clickIndex : 0);
+            setIsPreviewOpen(true);
+      };
+
+      function renderMessageBody(msg: ChatMessage) {
+            if (isMessageRecalled(msg.metadata)) {
+                  return <div className="whitespace-pre-wrap italic text-gray-400">Tin nhắn đã được thu hồi</div>;
+            }
+
+            const attachments = msg.mediaAttachments ?? [];
+
+            if (attachments.length > 0) {
+                  const images = attachments.filter((a) => a.mediaType === 'IMAGE');
+                  const videos = attachments.filter((a) => a.mediaType === 'VIDEO');
+                  const audios = attachments.filter((a) => a.mediaType === 'AUDIO');
+                  const documents = attachments.filter((a) => a.mediaType === 'DOCUMENT');
+
+                  return (
+                        <div className="space-y-2">
+                              {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
+
+                              {/* Image grid
+                                   - 1 image  : natural size (no forced h-32 / full-width)
+                                   - 2+ images: 2-col grid; last item spans both cols when count is odd
+                              */}
+                              {images.length === 1 && (
+                                    <ImageAttachment
+                                          attachment={images[0]}
+                                          isSingle
+                                          onClick={() => handleAttachmentClick(images[0], msg)}
+                                    />
+                              )}
+                              {images.length > 1 && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                          {images.map((a, idx) => (
+                                                <ImageAttachment
+                                                      key={a.id}
+                                                      attachment={a}
+                                                      onClick={() => handleAttachmentClick(a, msg)}
+                                                      className={
+                                                            images.length % 2 !== 0 && idx === images.length - 1
+                                                                  ? 'col-span-2'
+                                                                  : undefined
+                                                      }
+                                                />
+                                          ))}
+                                    </div>
+                              )}
+
+                              {/* Video attachments */}
+                              {videos.length > 0 && (
+                                    <div className="space-y-2">
+                                          {videos.map((a) => (
+                                                <VideoAttachment
+                                                      key={a.id}
+                                                      attachment={a}
+                                                      onClick={() => handleAttachmentClick(a, msg)}
+                                                />
+                                          ))}
+                                    </div>
+                              )}
+
+                              {/* Audio attachments — native HTML5 player */}
+                              {audios.length > 0 && (
+                                    <div className="space-y-2">
+                                          {audios.map((a) => (
+                                                <AudioAttachment
+                                                      key={a.id}
+                                                      attachment={a}
+                                                />
+                                          ))}
+                                    </div>
+                              )}
+
+                              {/* Document/file attachments */}
+                              {documents.length > 0 && (
+                                    <div className="space-y-2">
+                                          {documents.map((a) => (
+                                                <DocumentAttachment
+                                                      key={a.id}
+                                                      attachment={a}
+                                                />
+                                          ))}
+                                    </div>
+                              )}
+                        </div>
+                  );
+            }
+
+            return <div className="whitespace-pre-wrap">{msg.content ?? ''}</div>;
+      }
 
       const handleTranslate = async (msg: ChatMessage, lang: string) => {
             startTranslation(msg.id, lang);
@@ -698,6 +731,13 @@ export function MessageList({
                         </div>
                   )}
                   <div ref={messagesEndRef} className="h-1" />
+
+                  <MediaPreviewModal
+                        isOpen={isPreviewOpen}
+                        items={previewItems}
+                        initialIndex={initialPreviewIndex}
+                        onClose={() => setIsPreviewOpen(false)}
+                  />
             </>
       );
 }
