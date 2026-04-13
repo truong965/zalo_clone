@@ -31,6 +31,8 @@ import {
   ConversationMemberLeftEvent,
   ConversationMemberPromotedEvent,
   ConversationUpdatedEvent,
+  ConversationMessagePinnedEvent,
+  ConversationMessageUnpinnedEvent,
 } from '../events';
 import { MAX_PINNED_MESSAGES } from '../constants/conversation.constants';
 import { BLOCK_CHECKER } from '@modules/block/services/block-checker.interface';
@@ -474,6 +476,10 @@ export class GroupService {
       },
     });
 
+    await this.eventPublisher.publish(
+      new ConversationMessagePinnedEvent(conversationId, messageId, userId),
+    );
+
     return { success: true };
   }
 
@@ -507,6 +513,10 @@ export class GroupService {
         updatedAt: new Date(),
       },
     });
+
+    await this.eventPublisher.publish(
+      new ConversationMessageUnpinnedEvent(conversationId, messageId, userId),
+    );
 
     return { success: true };
   }

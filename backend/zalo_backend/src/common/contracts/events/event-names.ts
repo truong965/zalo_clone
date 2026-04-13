@@ -60,6 +60,8 @@ export const InternalEventNames = {
   CONVERSATION_DISSOLVED: 'conversation.dissolved',
   CONVERSATION_PINNED: 'conversation.pinned',
   CONVERSATION_UNPINNED: 'conversation.unpinned',
+  CONVERSATION_MESSAGE_PINNED: 'conversation.message.pinned',
+  CONVERSATION_MESSAGE_UNPINNED: 'conversation.message.unpinned',
   CONVERSATION_MUTED: 'conversation.muted',
   CONVERSATION_ARCHIVED: 'conversation.archived',
   CONVERSATION_UPDATED: 'conversation.updated',

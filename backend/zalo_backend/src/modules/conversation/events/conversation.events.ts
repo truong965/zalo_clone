@@ -299,3 +299,61 @@ export class ConversationUpdatedEvent extends DomainEvent {
     };
   }
 }
+
+/**
+ * Emitted when a message is pinned in a conversation.
+ *
+ * Listeners:
+ * - ConversationGateway: Broadcast socket "conversation:message:pinned" to all members
+ */
+export class ConversationMessagePinnedEvent extends DomainEvent {
+  readonly eventType = 'CONVERSATION_MESSAGE_PINNED';
+  readonly version = 1;
+
+  constructor(
+    readonly conversationId: string,
+    readonly messageId: bigint,
+    readonly pinnedBy: string,
+  ) {
+    super('ConversationModule', 'Conversation', conversationId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      conversationId: this.conversationId,
+      messageId: this.messageId.toString(),
+      pinnedBy: this.pinnedBy,
+      eventType: this.eventType,
+    };
+  }
+}
+
+/**
+ * Emitted when a message is unpinned from a conversation.
+ *
+ * Listeners:
+ * - ConversationGateway: Broadcast socket "conversation:message:unpinned" to all members
+ */
+export class ConversationMessageUnpinnedEvent extends DomainEvent {
+  readonly eventType = 'CONVERSATION_MESSAGE_UNPINNED';
+  readonly version = 1;
+
+  constructor(
+    readonly conversationId: string,
+    readonly messageId: bigint,
+    readonly unpinnedBy: string,
+  ) {
+    super('ConversationModule', 'Conversation', conversationId, 1);
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      conversationId: this.conversationId,
+      messageId: this.messageId.toString(),
+      unpinnedBy: this.unpinnedBy,
+      eventType: this.eventType,
+    };
+  }
+}

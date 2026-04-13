@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder } from 'react-native';
-import { Text, Avatar } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
-import { useCallStore } from '../stores/call.store';
-import { useCallActions } from '../hooks/use-call-actions';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { RTCView } from 'react-native-webrtc';
-import { useAuth } from '@/providers/auth-provider';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { useAuth } from '@/providers/auth-provider';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { Animated, Dimensions, PanResponder, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { RTCView } from 'react-native-webrtc';
+import { useCallActions } from '../hooks/use-call-actions';
+import { useCallStore } from '../stores/call.store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export function ActiveCallView() {
-  const { 
-    peerInfo, 
-    callType, 
-    callDuration, 
+  const {
+    peerInfo,
+    callType,
+    callDuration,
     isPeerConnected,
     localStream,
     remoteStream,
@@ -99,8 +98,8 @@ export function ActiveCallView() {
             <UserAvatar uri={peerInfo?.avatarUrl} size={150} />
             <Text style={styles.remoteName}>{peerInfo?.displayName}</Text>
             <Text style={styles.statusText}>
-              {!isPeerConnected 
-                ? (callStatus === 'RECONNECTING' ? 'Đang kết nối lại...' : 'Đang kết nối...') 
+              {!isPeerConnected
+                ? (callStatus === 'RECONNECTING' ? 'Đang kết nối lại...' : 'Đang kết nối...')
                 : ((remoteVideoOff || peerCameraOff) ? 'Đang trong cuộc gọi' : 'Đang tải video...')}
             </Text>
           </View>
@@ -118,30 +117,30 @@ export function ActiveCallView() {
       </View>
 
       {/* Floating Local Camera (Selfie View) — Always show for unified layout */}
-        <Animated.View
-          {...panResponder.panHandlers}
-          style={[
-            styles.floatingLocalView,
-            {
-              transform: [{ translateX: pan.x }, { translateY: pan.y }],
-            },
-          ]}
-        >
-          {!isCameraOff && localStream ? (
-            <RTCView
-              streamURL={localStream.toURL()}
-              style={styles.localCamera}
-              objectFit="cover"
-              zOrder={1}
-              mirror={true}
-            />
-          ) : (
-            <View style={styles.localAvatarOverlay}>
-              <UserAvatar uri={user?.avatarUrl} size={60} />
-            </View>
-          )}
-        </Animated.View>
- 
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.floatingLocalView,
+          {
+            transform: [{ translateX: pan.x }, { translateY: pan.y }],
+          },
+        ]}
+      >
+        {!isCameraOff && localStream ? (
+          <RTCView
+            streamURL={localStream.toURL()}
+            style={styles.localCamera}
+            objectFit="cover"
+            zOrder={1}
+            mirror={true}
+          />
+        ) : (
+          <View style={styles.localAvatarOverlay}>
+            <UserAvatar uri={user?.avatarUrl} size={60} />
+          </View>
+        )}
+      </Animated.View>
+
       {/* Connecting Overlay */}
       {!isPeerConnected && (
         <View style={styles.connectingOverlay}>
@@ -151,32 +150,32 @@ export function ActiveCallView() {
           </Text>
         </View>
       )}
- 
+
       {/* Bottom Controls */}
       <View style={[styles.controls, { bottom: insets.bottom + 40 }]}>
-        <TouchableOpacity 
-          style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]} 
+        <TouchableOpacity
+          style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]}
           onPress={toggleSpeaker}
         >
           <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={28} color="white" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.controlBtn, isMuted && styles.controlBtnActive]} 
+        <TouchableOpacity
+          style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
           onPress={toggleMute}
         >
           <Ionicons name={isMuted ? "mic-off" : "mic"} size={28} color="white" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.controlBtn, styles.endCallBtn]} 
+        <TouchableOpacity
+          style={[styles.controlBtn, styles.endCallBtn]}
           onPress={endCall}
         >
           <Ionicons name="call" size={32} color="white" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.controlBtn, isCameraOff && styles.controlBtnActive]} 
+        <TouchableOpacity
+          style={[styles.controlBtn, isCameraOff && styles.controlBtnActive]}
           onPress={toggleCamera}
         >
           <Ionicons name={isCameraOff ? "videocam-off" : "videocam"} size={28} color="white" />

@@ -7,6 +7,8 @@ import { Message, MessageType } from '@/types/message';
 import { useChatStore } from '@/features/chats/stores/chat.store';
 import { Ionicons } from '@expo/vector-icons';
 
+import { getMessagePreviewText } from '@/features/chats/components/message-item/message-item.utils';
+
 export default function PinnedMessagesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
@@ -16,15 +18,6 @@ export default function PinnedMessagesScreen() {
   const handleJump = (messageId: string) => {
     setJumpToMessageId(messageId);
     router.back();
-  };
-
-  const renderContent = (msg: Message) => {
-    if (msg.type === MessageType.TEXT) return msg.content;
-    if (msg.type === MessageType.IMAGE) return '[Hình ảnh]';
-    if (msg.type === MessageType.VIDEO) return '[Video]';
-    if (msg.type === MessageType.VOICE) return '[Tin nhắn thoại]';
-    if (msg.type === MessageType.FILE) return '[Tệp tin]';
-    return '[Tin nhắn]';
   };
 
   const renderItem = ({ item }: { item: Message }) => (
@@ -49,7 +42,7 @@ export default function PinnedMessagesScreen() {
           </View>
         </View>
         <Text style={styles.messageText} numberOfLines={3}>
-          {renderContent(item)}
+          {getMessagePreviewText(item)}
         </Text>
       </View>
       <View style={styles.actions}>

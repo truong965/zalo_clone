@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Inject,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/database/prisma.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { SendMessageDto } from '../dto/send-message.dto';
@@ -27,6 +28,8 @@ import s3Config from 'src/config/s3.config';
 import type { ConfigType } from '@nestjs/config';
 import { safeJSON, safeStringify } from 'src/common/utils/json.util';
 import { EventPublisher } from '@shared/events';
+import { OUTBOUND_SOCKET_EVENT } from '@common/events/outbound-socket.event';
+import { SocketEvents } from '@common/constants/socket-events.constant';
 import {
   MessageSentEvent,
   MessageDeletedEvent,
@@ -123,6 +126,7 @@ export class MessageService {
     private readonly eventPublisher: EventPublisher,
     private readonly interactionAuth: InteractionAuthorizationService,
     private readonly displayNameResolver: DisplayNameResolver,
+    private readonly eventEmitter: EventEmitter2,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
     @Inject(s3Config.KEY)
@@ -755,6 +759,67 @@ export class MessageService {
       ),
       { fireAndForget: true },
     );
+
+    // ── Socket broadcast: deliver forwarded messages to all members ──
+    for (let i = 0; i < forwardedMessages.length; i++) {
+      const message = forwardedMessages[i];
+      const targetConversation = orderedTargetConversations[i];
+      const allMemberIds = targetConversation.members.map((m) => m.userId);
+      const recipientIds = allMemberIds.filter((uid) => uid !== senderId);
+      const isoCreatedAt = new Date(message.createdAt).toISOString();
+
+      // Emit MESSAGE_NEW to all members (including sender for cross-device sync)
+      for (const memberId of allMemberIds) {
+        this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+          event: SocketEvents.MESSAGE_NEW,
+          userId: memberId,
+          data: { message, conversationId: targetConversation.id },
+        });
+      }
+
+      // Emit CONVERSATION_LIST_ITEM_UPDATED to all members
+      const listItemBase = {
+        conversationId: targetConversation.id,
+        lastMessage: {
+          id: message.id?.toString(),
+          content: message.content ?? null,
+          type: message.type,
+          senderId: message.senderId ?? null,
+          createdAt: isoCreatedAt,
+        },
+        lastMessageAt: isoCreatedAt,
+      };
+
+      this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+        event: SocketEvents.CONVERSATION_LIST_ITEM_UPDATED,
+        userId: senderId,
+        data: { ...listItemBase, unreadCountDelta: 0 },
+      });
+
+      for (const recipientId of recipientIds) {
+        this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+          event: SocketEvents.CONVERSATION_LIST_ITEM_UPDATED,
+          userId: recipientId,
+          data: { ...listItemBase, unreadCountDelta: 1 },
+        });
+      }
+
+      // Increment unread count for recipients
+      if (recipientIds.length > 0) {
+        await this.prisma.conversationMember.updateMany({
+          where: {
+            conversationId: targetConversation.id,
+            userId: { in: recipientIds },
+          },
+          data: { unreadCount: { increment: 1 } },
+        }).catch((err) => {
+          this.logger.warn(
+            `Failed to increment unread count for forward target ${targetConversation.id}`,
+            err,
+          );
+        });
+      }
+    }
 
     return forwardedMessages;
   }

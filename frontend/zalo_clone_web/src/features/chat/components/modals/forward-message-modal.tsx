@@ -11,7 +11,7 @@ import {
     notification,
 } from 'antd';
 import { CheckCircleFilled, SearchOutlined, UserOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { conversationService } from '@/features/conversation';
 import { messageService } from '../../api/message.api';
 import {
@@ -54,6 +54,7 @@ function pickPalette(id: string) {
 
 export function ForwardMessageModal() {
     const selectedId = useChatStore((s) => s.selectedId);
+    const queryClient = useQueryClient();
     const isOpen = useForwardMessageStore((s) => s.isOpen);
     const sourceMessage = useForwardMessageStore((s) => s.sourceMessage);
     const selectedConversationIds = useForwardMessageStore((s) => s.selectedConversationIds);
@@ -123,6 +124,13 @@ export function ForwardMessageModal() {
                 clientRequestId: crypto.randomUUID(),
                 ...(hasMedia ? { includeCaption } : {}),
             });
+
+            // Invalidate message caches for each target conversation
+            for (const targetId of selectedConversationIds) {
+                queryClient.invalidateQueries({ queryKey: ['messages', targetId] });
+            }
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+
             notification.success({ message: 'Đã chuyển tiếp tin nhắn', placement: 'top' });
             close();
         } catch (error) {

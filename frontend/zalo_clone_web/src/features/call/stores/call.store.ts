@@ -302,7 +302,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   // Immediately toggle audio tracks on the local stream
                   if (state.localStream) {
                         for (const track of state.localStream.getAudioTracks()) {
-                               track.enabled = !next;
+                              track.enabled = !next;
                         }
                   }
                   return { isMuted: next };
@@ -313,7 +313,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   const next = !state.isCameraOff;
                   if (state.localStream) {
                         for (const track of state.localStream.getVideoTracks()) {
-                               track.enabled = !next;
+                              track.enabled = !next;
                         }
                   }
                   return { isCameraOff: next };
@@ -332,7 +332,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
                   // Stop all local tracks before resetting
                   if (state.localStream) {
                         for (const track of state.localStream.getTracks()) {
-                               track.stop();
+                              track.stop();
                         }
                   }
                   return {
@@ -375,9 +375,9 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
             set((state) => ({
                   activeGroupCalls: {
                         ...state.activeGroupCalls,
-                        [conversationId]: { 
-                              active: isActive, 
-                              roomUrl: roomUrl || state.activeGroupCalls[conversationId]?.roomUrl 
+                        [conversationId]: {
+                              active: isActive,
+                              roomUrl: roomUrl || state.activeGroupCalls[conversationId]?.roomUrl
                         },
                   },
             })),

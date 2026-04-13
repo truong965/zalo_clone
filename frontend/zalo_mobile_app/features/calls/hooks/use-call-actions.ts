@@ -48,19 +48,27 @@ export function useCallActions() {
   useEffect(() => {
     if (callStatus !== 'ACTIVE' || !callId) return;
 
-    // 1. Duration timer (every 1s)
-    const durationTimer = setInterval(() => {
-      useCallStore.getState().tick();
-    }, 1_000);
+    // Duration timer is managed by useWebRTCCall.startDurationTimer for P2P calls
+    // (triggered when ICE state reaches 'connected'). For group calls (Daily.co),
+    // we start it here since there is no ICE negotiation on the mobile side.
+    const isGroupCall = useCallStore.getState().isGroupCall;
 
-    // 2. Heartbeat (every 60s)
+    let durationTimer: ReturnType<typeof setInterval> | null = null;
+    if (isGroupCall) {
+      // Group/Daily.co: no WebRTC ICE, so we own the duration timer here
+      durationTimer = setInterval(() => {
+        useCallStore.getState().tick();
+      }, 1_000);
+    }
+
+    // Heartbeat (every 60s) — keep session alive on server
     const heartbeatTimer = setInterval(() => {
       console.log('[useCallActions] sending call:heartbeat', { callId });
       socketManager.getSocket()?.emit(SocketEvents.CALL_HEARTBEAT, { callId });
     }, 60_000);
 
     return () => {
-      clearInterval(durationTimer);
+      if (durationTimer) clearInterval(durationTimer);
       clearInterval(heartbeatTimer);
     };
   }, [callStatus, callId]);
@@ -138,25 +146,32 @@ export function useCallActions() {
     resetCallWithTimeout();
     // Wait for the server to acknowledge the acceptance successfully.
     // If it throws (e.g., answered elsewhere), it will be caught below.
+    //
+    // IMPORTANT: Do NOT set ACTIVE before the server ACKs. Setting ACTIVE early
+    // caused the `call:ended` guard (`if (store.callStatus === 'IDLE') return`) to
+    // pass, allowing a stale call:ended event (emitted right after the server ACKs
+    // the accept) to reach the handler and incorrectly reset state on both devices.
     try {
-      // SET ACTIVE EARLY: This prevents race conditions where cleanup FCM messages (CANCEL_CALL)
-      // reset the state because it's still "RINGING" while we await the socket response.
-      store.setCallActive({ callId });
-
       const response: any = await socketManager.emitWithAck(SocketEvents.CALL_ACCEPT, { callId });
-      
-      // Update with any additional data from server (like room URL)
-      // If server returns a room URL in response (often it does for group calls)
-      // or if we already had it in the store
+
+      // Guard: call may have been ended while we awaited the ACK
+      const currentStatus = useCallStore.getState().callStatus;
+      const currentCallId = useCallStore.getState().callId;
+      if (currentStatus === 'IDLE' || currentCallId !== callId) {
+        console.warn('[useCallActions] acceptCall: call ended while awaiting server ACK, aborting');
+        return;
+      }
+
+      // Now safe to transition to ACTIVE
       const url = response?.dailyRoomUrl || dailyRoomUrl;
 
-      // Only open WebView if we have a valid Daily.co URL. 
-      // This prevents 1v1 P2P calls from accidentally triggering the WebView overlay
-      // if there's stale state or a malformed response.
       if (url && (url.includes('daily.co') || store.isGroupCall)) {
         console.log('[useCallActions] acceptCall: opening in-app web call URL', url);
-        store.setCallActive({ callId, dailyRoomUrl: url, dailyToken: response?.dailyToken });
+        useCallStore.getState().setCallActive({ callId, dailyRoomUrl: url, dailyToken: response?.dailyToken });
         openWebCall(url);
+      } else {
+        // P2P call: set ACTIVE and wait for offer from caller
+        useCallStore.getState().setCallActive({ callId });
       }
     } catch (err) {
       console.error('[useCallActions] acceptCall error:', err);

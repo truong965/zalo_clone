@@ -9,22 +9,22 @@ export interface PeerInfo {
   avatarUrl: string | null;
 }
 
- export type IncomingCallData = {
-   callId: string;
-   callType: CallType;
-   conversationId: string;
-   callerInfo: {
-     id: string;
-     displayName: string;
-     avatarUrl: string | null;
-   };
-   receivedAt: number;
-   isGroupCall?: boolean;
-   dailyRoomUrl?: string;
-   dailyToken?: string;
-   iceServers?: any[];
-   iceTransportPolicy?: string;
- };
+export type IncomingCallData = {
+  callId: string;
+  callType: CallType;
+  conversationId: string;
+  callerInfo: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  receivedAt: number;
+  isGroupCall?: boolean;
+  dailyRoomUrl?: string;
+  dailyToken?: string;
+  iceServers?: any[];
+  iceTransportPolicy?: string;
+};
 
 interface CallStoreState {
   callStatus: CallStatus;
@@ -214,7 +214,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
       console.log('[CallStore] setRemoteStream');
       set({ remoteStream: stream });
     },
-    
+
     toggleMute: () =>
       set((state) => {
         const next = !state.isMuted;
@@ -225,7 +225,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
         }
         return { isMuted: next };
       }),
-    
+
     toggleCamera: () =>
       set((state) => {
         const next = !state.isCameraOff;
@@ -265,7 +265,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
           console.warn('[CallStore] Error stopping tracks:', e);
         }
       }
-      
+
       const activeGroupCalls = state.activeGroupCalls;
       set({ ...initialState });
       if (preserveActiveGroupCalls) {
@@ -276,7 +276,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
     setPeerMediaState: (cameraOff, muted) => {
       set({ peerCameraOff: cameraOff, peerMuted: muted });
     },
-    setActiveGroupCall: (conversationId, isActive, roomUrl) => 
+    setActiveGroupCall: (conversationId, isActive, roomUrl) =>
       set((state) => ({
         activeGroupCalls: {
           ...state.activeGroupCalls,

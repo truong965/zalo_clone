@@ -305,8 +305,14 @@ export function useForwardMessage() {
 
       return mobileApi.forwardMessage(variables, accessToken);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+
+      // Invalidate message caches for each target conversation
+      for (const targetId of variables.targetConversationIds) {
+        queryClient.invalidateQueries({ queryKey: messagesQueryKey(targetId, 'older') });
+      }
+
       Toast.show({
         type: 'success',
         text1: 'Đã chuyển tiếp tin nhắn',

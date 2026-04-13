@@ -110,7 +110,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
 
             const onAccepted = (payload: CallAcceptedPayload) => {
                   dbg('call:accepted received', { callId: payload.callId, servers: payload.iceServers?.length, policy: payload.iceTransportPolicy });
-                  
+
                   const state = useCallStore.getState();
                   if (state.callStatus === 'IDLE' || (state.callId && state.callId !== payload.callId)) {
                         dbg('call:accepted IGNORED (stale or idle)', { received: payload.callId, current: state.callId, status: state.callStatus });
@@ -169,14 +169,14 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
                         // Re-check: user may have already started a new call
                         const s = useCallStore.getState();
                         if (s.callStatus === 'DIALING' && s.error === 'Người dùng đang bận') {
-                               useCallStore.getState().resetCallState();
+                              useCallStore.getState().resetCallState();
                         }
                   }, 2000);
             };
 
             const onOffer = (payload: SdpRelayPayload) => {
                   dbg('call:offer received', { callId: payload.callId, from: payload.fromUserId, sdpLen: payload.sdp?.length });
-                  
+
                   const state = useCallStore.getState();
                   if (state.callStatus === 'IDLE' || (state.callId && state.callId !== payload.callId)) {
                         dbg('call:offer IGNORED (stale or idle)', { received: payload.callId, current: state.callId });
@@ -188,7 +188,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
 
             const onAnswer = (payload: SdpRelayPayload) => {
                   dbg('call:answer received', { callId: payload.callId, from: payload.fromUserId, sdpLen: payload.sdp?.length });
-                  
+
                   const state = useCallStore.getState();
                   if (state.callStatus === 'IDLE' || (state.callId && state.callId !== payload.callId)) {
                         dbg('call:answer IGNORED (stale or idle)', { received: payload.callId, current: state.callId });
@@ -200,7 +200,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
 
             const onIceCandidate = (payload: IceCandidateRelayPayload) => {
                   dbg('call:ice-candidate received', { callId: payload.callId, from: payload.fromUserId });
-                  
+
                   const state = useCallStore.getState();
                   if (state.callStatus === 'IDLE' || (state.callId && state.callId !== payload.callId)) {
                         // Not a warning, common during transition
@@ -224,7 +224,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
 
             const onMediaState = (payload: { callId: string; cameraOff: boolean; muted: boolean }) => {
                   dbg('call:media-state received', payload);
-                  
+
                   const state = useCallStore.getState();
                   if (state.callStatus === 'IDLE' || (state.callId && state.callId !== payload.callId)) {
                         return;
@@ -236,7 +236,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
             // Phase 4: Daily.co room info (P2P→SFU fallback or group call)
             const onDailyRoom = (payload: DailyRoomPayload) => {
                   dbg('call:daily-room received', { callId: payload.callId, roomUrl: payload.roomUrl, tokenCount: Object.keys(payload.tokens).length });
-                  
+
                   const state = useCallStore.getState();
                   if (state.callStatus === 'IDLE' || (state.callId && state.callId !== payload.callId)) {
                         dbg('call:daily-room IGNORED (stale or idle)', { received: payload.callId, current: state.callId });
@@ -258,7 +258,7 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
             // Phase 5: W5 - Receive fresh TURN credentials midway
             const onIceRestart = (payload: CallIceRestartPayload) => {
                   dbg('call:ice-restart received', payload);
-                  
+
                   const state = useCallStore.getState();
                   if (state.callStatus === 'IDLE' || (state.callId && state.callId !== payload.callId)) {
                         return;
@@ -267,9 +267,9 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
                   if (payload.iceServers) {
                         // Immediately persist new servers string in store
                         state.setCallAccepted({
-                               callId: payload.callId,
-                               iceServers: payload.iceServers,
-                               iceTransportPolicy: payload.iceTransportPolicy || 'all',
+                              callId: payload.callId,
+                              iceServers: payload.iceServers,
+                              iceTransportPolicy: payload.iceTransportPolicy || 'all',
                         });
                   }
                   callbacksRef.current.onIceRestart?.(payload);
@@ -332,13 +332,13 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
             async (payload: InitiateCallRequest, options?: { skipGlobalError?: boolean }) => {
                   try {
                         const ack = await socketManager.emitWithAck<{ callId?: string }>(
-                               SocketEvents.CALL_INITIATE,
-                               payload,
-                               options
+                              SocketEvents.CALL_INITIATE,
+                              payload,
+                              options
                         );
                         if (ack?.callId) {
-                               dbg('emitInitiateCall ACK success', { callId: ack.callId });
-                               useCallStore.getState().setCallId(ack.callId);
+                              dbg('emitInitiateCall ACK success', { callId: ack.callId });
+                              useCallStore.getState().setCallId(ack.callId);
                         }
                         return ack;
                   } catch (err: any) {

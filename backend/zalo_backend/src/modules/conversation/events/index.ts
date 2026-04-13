@@ -8,6 +8,8 @@ export {
   ConversationArchivedEvent,
   ConversationMutedEvent,
   ConversationUpdatedEvent,
+  ConversationMessagePinnedEvent,
+  ConversationMessageUnpinnedEvent,
 } from './conversation.events';
 export {
   ConversationPinnedEvent,

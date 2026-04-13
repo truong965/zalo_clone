@@ -166,10 +166,10 @@ export function CallManager() {
                   dbg('Using fallback token lookup', { fallbackId });
                   // Close P2P connection
                   webrtcRef.current?.cleanup();
-                  useCallStore.getState().switchToDaily({ 
+                  useCallStore.getState().switchToDaily({
                         callId: payload.callId,
-                        roomUrl, 
-                        token: fallbackToken 
+                        roomUrl,
+                        token: fallbackToken
                   });
                   navigate(`/calls/${payload.callId}`);
                   return;
@@ -179,10 +179,10 @@ export function CallManager() {
             webrtcRef.current?.cleanup();
 
             // Switch store to Daily.co
-            useCallStore.getState().switchToDaily({ 
+            useCallStore.getState().switchToDaily({
                   callId: payload.callId,
-                  roomUrl: payload.roomUrl, 
-                  token: myToken 
+                  roomUrl: payload.roomUrl,
+                  token: myToken
             });
             navigate(`/calls/${payload.callId}`);
       };
@@ -279,7 +279,7 @@ export function CallManager() {
                         void dailyRef.current?.leave();
 
                         if (callId) {
-                              socketEmitters.emitHangup({ callId }, { skipGlobalError: true }).catch(() => {});
+                              socketEmitters.emitHangup({ callId }, { skipGlobalError: true }).catch(() => { });
                         }
 
                         useCallStore.getState().resetCallState();

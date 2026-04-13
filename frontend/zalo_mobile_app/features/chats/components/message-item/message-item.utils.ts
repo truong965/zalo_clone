@@ -96,23 +96,28 @@ export function getMessagePreviewText(
     return 'Tin nhắn đã được thu hồi';
   }
   if (msg.deletedAt) return 'Tin nhắn đã bị xóa';
-  if (msg.content) return msg.content;
   
+  // 1. Prioritize text content (caption or text message)
+  if (msg.content && msg.content.trim().length > 0) {
+    return msg.content;
+  }
+  
+  // 2. Fallback to media attachments label
   const attachments = msg.mediaAttachments || [];
   if (attachments.length > 0) {
     const first = attachments[0];
-    const typeLabel = first.mediaType === 'IMAGE' ? 'Hình ảnh'
-                   : first.mediaType === 'VIDEO' ? 'Video'
-                   : first.mediaType === 'AUDIO' ? 'Tin nhắn thoại'
-                   : 'Tập tin';
-    return `[${typeLabel}] ${first.originalName || ''}`.trim();
+    if (first.mediaType === 'IMAGE') return '🖼️ Hình ảnh';
+    if (first.mediaType === 'VIDEO') return '🎥 Video';
+    if (first.mediaType === 'AUDIO') return '🎵 Tin nhắn thoại';
+    if (first.mediaType === 'DOCUMENT') return `📄 ${first.originalName || 'Tệp tin'}`;
+    return '📎 Tập tin';
   }
 
-  // Fallback based on message type if no attachments/content
-  if (msg.type === 'IMAGE') return '[Hình ảnh]';
-  if (msg.type === 'VIDEO') return '[Video]';
-  if (msg.type === 'AUDIO' || msg.type === 'VOICE') return '[Tin nhắn thoại]';
-  if (msg.type === 'FILE') return '[Tập tin]';
+  // 3. Last resort fallback based on message type
+  if (msg.type === 'IMAGE') return '🖼️ Hình ảnh';
+  if (msg.type === 'VIDEO') return '🎥 Video';
+  if (msg.type === 'AUDIO' || msg.type === 'VOICE') return '🎵 Tin nhắn thoại';
+  if (msg.type === 'FILE') return '📎 Tệp tin';
   
   return '';
 }

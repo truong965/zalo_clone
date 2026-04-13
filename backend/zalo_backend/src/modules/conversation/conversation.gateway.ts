@@ -26,6 +26,8 @@ import {
 import type {
   ConversationArchivedEvent,
   ConversationCreatedEvent,
+  ConversationMessagePinnedEvent,
+  ConversationMessageUnpinnedEvent,
   ConversationMutedEvent,
 } from './events';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -453,6 +455,74 @@ export class ConversationGateway extends BaseGateway implements OnGatewayInit {
     } catch (error) {
       this.logger.error(
         `[CONVERSATION_MUTED] Failed to emit socket for user ${payload.userId}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  /**
+   * React to ConversationMessagePinnedEvent → broadcast socket "conversation:message:pinned" to all members.
+   */
+  @OnEvent(InternalEventNames.CONVERSATION_MESSAGE_PINNED)
+  async handleConversationMessagePinned(
+    payload: ConversationMessagePinnedEvent,
+  ): Promise<void> {
+    try {
+      const members = await this.conversationService.getActiveMembers(
+        payload.conversationId,
+      );
+      const recipientIds = members.map((m) => m.userId);
+
+      await Promise.all(
+        recipientIds.map((userId) =>
+          this.emitToUser(userId, SocketEvents.CONVERSATION_MESSAGE_PINNED, {
+            conversationId: payload.conversationId,
+            messageId: payload.messageId.toString(),
+            pinnedBy: payload.pinnedBy,
+          }),
+        ),
+      );
+
+      this.logger.debug(
+        `[CONVERSATION_MESSAGE_PINNED] Broadcasted to ${recipientIds.length} members in ${payload.conversationId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[CONVERSATION_MESSAGE_PINNED] Failed to broadcast for conversation ${payload.conversationId}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  /**
+   * React to ConversationMessageUnpinnedEvent → broadcast socket "conversation:message:unpinned" to all members.
+   */
+  @OnEvent(InternalEventNames.CONVERSATION_MESSAGE_UNPINNED)
+  async handleConversationMessageUnpinned(
+    payload: ConversationMessageUnpinnedEvent,
+  ): Promise<void> {
+    try {
+      const members = await this.conversationService.getActiveMembers(
+        payload.conversationId,
+      );
+      const recipientIds = members.map((m) => m.userId);
+
+      await Promise.all(
+        recipientIds.map((userId) =>
+          this.emitToUser(userId, SocketEvents.CONVERSATION_MESSAGE_UNPINNED, {
+            conversationId: payload.conversationId,
+            messageId: payload.messageId.toString(),
+            unpinnedBy: payload.unpinnedBy,
+          }),
+        ),
+      );
+
+      this.logger.debug(
+        `[CONVERSATION_MESSAGE_UNPINNED] Broadcasted to ${recipientIds.length} members in ${payload.conversationId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[CONVERSATION_MESSAGE_UNPINNED] Failed to broadcast for conversation ${payload.conversationId}`,
         (error as Error).stack,
       );
     }

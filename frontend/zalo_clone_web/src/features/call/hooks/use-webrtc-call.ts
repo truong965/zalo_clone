@@ -318,7 +318,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       // ── Get local media ─────────────────────────────────────────────────
       const acquireLocalMedia = useCallback(async () => {
             // Unified model: always try to get video to allow later toggling
-            const tryVideo = true; 
+            const tryVideo = true;
 
             try {
                   dbg('acquireLocalMedia: requesting getUserMedia', { audio: true, video: tryVideo });
@@ -605,7 +605,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
             // Must await emitAcceptCall to handle race condition errors
             try {
                   await emittersRef.current.emitAcceptCall({ callId });
-                  
+
                   // Hide IncomingCallOverlay immediately on success
                   useCallStore.getState().setCallActive();
             } catch (err) {
@@ -618,13 +618,13 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
 
             // Acquire media early (while waiting for offer)
             const stream = await acquireLocalMedia();
-            
+
             // Phase 4 RACE CONDITION GUARD:
             // If the call was ended (e.g., by the initiator) while we were 
             // acquiring media, abort the acceptance flow.
             const currentStatus = useCallStore.getState().callStatus;
             const currentCallId = useCallStore.getState().callId;
-            
+
             if (currentStatus === 'IDLE' || !currentCallId || currentCallId !== callId) {
                   dbg('ABORT acceptCall: call was ended or changed during media acquisition');
                   if (stream) {
@@ -647,7 +647,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       const hangup = useCallback(() => {
             const callId = useCallStore.getState().callId;
             if (callId) {
-                  emittersRef.current.emitHangup({ callId }, { skipGlobalError: true }).catch(() => {});
+                  emittersRef.current.emitHangup({ callId }, { skipGlobalError: true }).catch(() => { });
             }
             cleanup();
             useCallStore.getState().setReconnectStartedAt(null);
@@ -659,7 +659,7 @@ export function useWebRTCCall({ socketEmitters }: UseWebRTCCallParams) {
       const rejectCall = useCallback(() => {
             const callId = useCallStore.getState().callId;
             if (callId) {
-                  emittersRef.current.emitRejectCall({ callId }, { skipGlobalError: true }).catch(() => {});
+                  emittersRef.current.emitRejectCall({ callId }, { skipGlobalError: true }).catch(() => { });
             }
             cleanup();
             useCallStore.getState().resetCallState();
