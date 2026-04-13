@@ -32,15 +32,27 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
   const [inputValue, setInputValue] = useState('');
 
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
-      () => setIsKeyboardVisible(true)
+      (event) => {
+        setIsKeyboardVisible(true);
+        if (Platform.OS === 'android') {
+          setAndroidKeyboardInset(event.endCoordinates.height);
+        }
+        requestAnimationFrame(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        });
+      }
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
-      () => setIsKeyboardVisible(false)
+      () => {
+        setIsKeyboardVisible(false);
+        setAndroidKeyboardInset(0);
+      }
     );
     return () => {
       showSub.remove();
@@ -148,7 +160,7 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
     >
       <View style={styles.container}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={[
             styles.contentContainer,
             { paddingTop: insets.top },
@@ -236,7 +248,11 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
 
           <View style={[
             styles.inputContainer,
-            { paddingBottom: isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) },
+            {
+              paddingBottom:
+                (isKeyboardVisible ? 12 : Math.max(insets.bottom, 12)) +
+                (Platform.OS === 'android' ? androidKeyboardInset : 0),
+            },
           ]}>
             <View style={styles.inputWrapper}>
               <TextInput

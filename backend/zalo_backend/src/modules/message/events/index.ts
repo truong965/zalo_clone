@@ -1,1 +1,5 @@
-export { MessageSentEvent, MessageDeletedEvent } from './message.events';
+export {
+    MessageSentEvent,
+    MessageDeletedEvent,
+    MessageForwardedEvent,
+} from './message.events';

@@ -83,7 +83,7 @@ import { getDevicePublicKey, getDeviceKeyAlgorithm } from '../utils/device-crypt
 
 async function getDeviceHeaders(): Promise<Record<string, string>> {
       const publicKey = await getDevicePublicKey();
-      
+
       return {
             'X-Device-Type': resolveDeviceTypeHeader(),
             'X-Platform': resolvePlatformHeader(),
@@ -94,8 +94,8 @@ async function getDeviceHeaders(): Promise<Record<string, string>> {
             'X-OS-Name': Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Unknown',
             'X-OS-Version': String(Platform.Version ?? ''),
             ...(publicKey ? {
-              'X-Public-Key': publicKey,
-              'X-Key-Algorithm': getDeviceKeyAlgorithm(),
+                  'X-Public-Key': publicKey,
+                  'X-Key-Algorithm': getDeviceKeyAlgorithm(),
             } : {}),
       };
 }
@@ -708,6 +708,25 @@ export const mobileApi = {
       sendMessage(data: { conversationId: string; content?: string; type: string; clientMessageId: string; mediaIds?: string[] }, accessToken: string) {
             return apiRequest<any>(
                   '/api/v1/messages',
+                  {
+                        method: 'POST',
+                        body: JSON.stringify(data),
+                  },
+                  accessToken,
+            );
+      },
+
+      forwardMessage(
+            data: {
+                  sourceMessageId: string;
+                  targetConversationIds: string[];
+                  clientRequestId: string;
+                  includeCaption?: boolean;
+            },
+            accessToken: string,
+      ) {
+            return apiRequest<any[]>(
+                  '/api/v1/messages/forward',
                   {
                         method: 'POST',
                         body: JSON.stringify(data),

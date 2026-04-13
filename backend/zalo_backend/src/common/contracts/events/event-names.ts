@@ -46,6 +46,7 @@ export const InternalEventNames = {
 
   // Messaging
   MESSAGE_SENT: 'message.sent',
+  MESSAGE_FORWARDED: 'message.forwarded',
   MESSAGE_DELETED: 'message.deleted',
   MESSAGE_UPDATED: 'message.updated',
   MESSAGE_EDITED: 'message.edited',

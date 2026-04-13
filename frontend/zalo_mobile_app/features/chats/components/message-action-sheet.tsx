@@ -13,6 +13,7 @@ interface MessageActionSheetProps {
   onReply: (message: Message) => void;
   onPin: (message: Message) => void;
   onUnpin: (message: Message) => void;
+  onForward: (message: Message) => void;
   onRecall: (message: Message) => void;
   onDeleteForMe: (message: Message) => void;
 }
@@ -26,6 +27,7 @@ export function MessageActionSheet({
   onReply,
   onPin,
   onUnpin,
+  onForward,
   onRecall,
   onDeleteForMe,
 }: MessageActionSheetProps) {
@@ -35,8 +37,8 @@ export function MessageActionSheet({
 
   const isRecalled = Boolean(
     message.metadata &&
-      typeof message.metadata === 'object' &&
-      (message.metadata as Record<string, unknown>).recalled === true,
+    typeof message.metadata === 'object' &&
+    (message.metadata as Record<string, unknown>).recalled === true,
   );
 
   return (
@@ -72,6 +74,17 @@ export function MessageActionSheet({
               }
               onDismiss();
             }}
+          />
+
+          <Divider />
+          <List.Item
+            title="Chuyển tiếp"
+            left={(props) => <List.Icon {...props} icon="share-variant-outline" />}
+            onPress={() => {
+              onForward(message);
+              onDismiss();
+            }}
+            disabled={isRecalled}
           />
 
           <Divider />

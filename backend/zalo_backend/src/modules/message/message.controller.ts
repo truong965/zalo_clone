@@ -18,6 +18,7 @@ import { MessageService } from './services/message.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { RecentMediaQueryDto } from './dto/recent-media.dto';
+import { ForwardMessageDto } from './dto/forward-message.dto';
 import { CurrentUser } from 'src/common/decorator/customize';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ParseBigIntPipe } from 'src/common/pipes/parse-bigint.pipe';
@@ -26,12 +27,18 @@ import { ParseBigIntPipe } from 'src/common/pipes/parse-bigint.pipe';
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
 export class MessageController {
-  constructor(private readonly messageService: MessageService) {}
+  constructor(private readonly messageService: MessageService) { }
 
   @Post()
   @ApiOperation({ summary: 'Send message via HTTP (fallback)' })
   async sendMessage(@CurrentUser() user, @Body() dto: SendMessageDto) {
     return this.messageService.sendMessage(dto, user.id);
+  }
+
+  @Post('forward')
+  @ApiOperation({ summary: 'Forward message (zero-copy media)' })
+  async forwardMessage(@CurrentUser() user, @Body() dto: ForwardMessageDto) {
+    return this.messageService.forwardMessage(dto, user.id);
   }
 
   @Get()

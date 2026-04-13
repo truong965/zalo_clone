@@ -11,6 +11,7 @@ import api from '@/lib/axios';
 import React from 'react';
 import { useTranslationStore } from '../stores/use-translation-store';
 import { useChatStore } from '../stores/chat.store';
+import { useForwardMessageStore } from '../stores/forward-message.store';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import { MediaPreviewModal } from './media-preview-modal';
 
@@ -156,6 +157,12 @@ function isMessageRecalled(metadata: ChatMessage['metadata']): boolean {
       return (metadata as Record<string, unknown>).recalled === true;
 }
 
+function isForwardedMessage(metadata: ChatMessage['metadata']): boolean {
+      if (!metadata || typeof metadata !== 'object') return false;
+      const forward = (metadata as Record<string, unknown>).forward;
+      return !!forward && typeof forward === 'object';
+}
+
 function getSendStatus(metadata: ChatMessage['metadata']): string | undefined {
       if (!metadata) return undefined;
       if (typeof metadata !== 'object') return undefined;
@@ -295,6 +302,7 @@ export function MessageList({
 
       const setRightSidebar = useChatStore(s => s.setRightSidebar);
       const setAiSummaryStartMessageId = useChatStore(s => s.setAiSummaryStartMessageId);
+      const openForwardModal = useForwardMessageStore((s) => s.open);
 
       // ── Media Preview State ──
       const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -485,6 +493,11 @@ export function MessageList({
                                                             items: [
                                                                   { key: 'reply', label: t('chat.messageList.reply') },
                                                                   {
+                                                                        key: 'forward',
+                                                                        label: 'Chuyển tiếp',
+                                                                        disabled: recalled,
+                                                                  },
+                                                                  {
                                                                         key: 'translate',
                                                                         label: t('chat.messageList.translate', 'Dịch'),
                                                                         children: [
@@ -547,6 +560,7 @@ export function MessageList({
                                                                   e.domEvent?.stopPropagation();
                                                                   const { key } = e;
                                                                   if (key === 'reply') onReply?.(msg);
+                                                                  if (key === 'forward') openForwardModal(msg);
                                                                   if (key === 'pin') onPinMessage?.(msg.id);
                                                                   if (key === 'unpin') onUnpinMessage?.(msg.id);
                                                                   if (key === 'recall') onRecallMessage?.(msg);
@@ -591,6 +605,9 @@ export function MessageList({
                                                                                     : ''
                                                                               }
                                                 `}>
+                                                                              {isForwardedMessage(msg.metadata) && (
+                                                                                    <div className="mb-1 text-[11px] text-gray-400 font-medium">Đã chuyển tiếp</div>
+                                                                              )}
                                                                               {/* Reply quote (if this message is a reply) */}
                                                                               {msg.parentMessage ? (
                                                                                     <ReplyQuote
