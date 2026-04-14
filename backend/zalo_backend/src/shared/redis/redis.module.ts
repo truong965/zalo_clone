@@ -8,6 +8,7 @@ import { RedisPubSubService } from './services/redis-pub-sub.service';
 import { RedisPresenceService } from './services/redis-presence.service';
 import { RedisRegistryService } from './services/redis-registry.service';
 import { UserSecurityLockService } from './services/user-security-lock.service';
+import { AiRedisPublisherService } from './services/ai-redis-publisher.service';
 
 @Global()
 @Module({
@@ -19,6 +20,7 @@ import { UserSecurityLockService } from './services/user-security-lock.service';
     RedisRegistryService,
     RedisRateLimitService,
     UserSecurityLockService,
+    AiRedisPublisherService,
   ],
   exports: [
     RedisService,
@@ -27,6 +29,7 @@ import { UserSecurityLockService } from './services/user-security-lock.service';
     RedisRegistryService,
     RedisRateLimitService,
     UserSecurityLockService,
+    AiRedisPublisherService,
   ],
 })
 export class RedisModule {}

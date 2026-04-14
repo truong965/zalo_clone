@@ -1,12 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { 
-  useAudioRecorder as useExpoAudioRecorder, 
-  useAudioRecorderState,
-  RecordingPresets, 
-  requestRecordingPermissionsAsync 
-} from 'expo-audio';
-import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
+import { mobileApi } from '@/services/api';
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  useAudioRecorderState,
+  useAudioRecorder as useExpoAudioRecorder
+} from 'expo-audio';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Toast from 'react-native-toast-message';
 
 const VOICE_RECORDING_PRESET = {
@@ -57,9 +57,12 @@ const getFileInfoFromUri = (localFilePath: string, durationSeconds: number) => {
     mimeType = 'audio/x-caf';
   } else if (extension === 'wav') {
     mimeType = 'audio/wav';
+  } else {
+    // Fallback for voice recordings if extension is unknown
+    mimeType = 'audio/mp4';
   }
 
-  return { fileName, mimeType, uri: localFilePath };
+  return { fileName, mimeType, uri: localFilePath, extension };
 };
 
 export function useAudioRecorder() {
@@ -69,7 +72,7 @@ export function useAudioRecorder() {
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const startInFlightRef = useRef(false);
   const { accessToken } = useAuth();
-  
+
   // Use HIGH_QUALITY preset which targets AAC/M4A on both platforms
   const recorder = useExpoAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const state = useAudioRecorderState(recorder);
@@ -147,7 +150,7 @@ export function useAudioRecorder() {
     try {
       await recorder.stop();
     } catch (error) {
-       console.error('Error stopping recording on cancel', error);
+      console.error('Error stopping recording on cancel', error);
     }
     setIsRecording(false);
     setRecordingDuration('00:00');
@@ -217,17 +220,17 @@ export function useAudioRecorder() {
 
       // 2. Re-use 3-step S3 upload process
       const initResponse = await mobileApi.initiateUpload({
-         fileName,
-         mimeType,
-         fileSize: 1024, // Approximation
+        fileName,
+        mimeType,
+        fileSize: 1024, // Approximation
       }, accessToken);
 
       const fileInfo = {
-         uri,
-         type: mimeType,
-         name: fileName,
+        uri,
+        type: mimeType,
+        name: fileName,
       };
-      
+
       await mobileApi.uploadToS3(initResponse.presignedUrl, fileInfo);
 
       const confirmResponse = await mobileApi.confirmUpload(initResponse.uploadId, accessToken);

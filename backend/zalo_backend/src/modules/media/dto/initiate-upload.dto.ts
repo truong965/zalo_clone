@@ -9,10 +9,6 @@ export class InitiateUploadDto {
   })
   @IsString()
   @MaxLength(255)
-  // Regex để chặn các tên file chứa ký tự đặc biệt nguy hiểm (tùy chọn nhưng recommended)
-  @Matches(/^[a-zA-Z0-9._-\s()]+$/, {
-    message: 'File name contains invalid characters',
-  })
   fileName: string;
 
   @ApiProperty({ description: 'MIME type (image/jpeg, video/mp4...)' })

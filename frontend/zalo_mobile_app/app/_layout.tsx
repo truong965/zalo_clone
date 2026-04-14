@@ -144,6 +144,53 @@ function AppContent({ colorScheme }: { colorScheme: 'light' | 'dark' | null | un
     useCallSocket();
   }
 
+  // FCM foreground message handler.
+  // onMessage fires when the app is in the FOREGROUND and receives any FCM message.
+  // For MOST types (messages, social events) — socket has already delivered them
+  // in realtime, so we suppress the OS notification to avoid duplicates.
+  // Exception: REMINDER_TRIGGERED must always show (like an alarm) even in foreground.
+  useEffect(() => {
+    if (isExpoGo) return;
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const messaging = require('@react-native-firebase/messaging').default;
+      const Notifications = require('expo-notifications');
+
+      unsubscribe = messaging().onMessage(async (remoteMessage: any) => {
+        const msgType = remoteMessage?.data?.type;
+        const msgData = remoteMessage?.data || {};
+
+        if (msgType === 'REMINDER_TRIGGERED') {
+          // Reminder is time-critical — show OS notification even in foreground.
+          // (setNotificationHandler returns shouldShowAlert: false for expo-notifications,
+          // but we bypass it by scheduling directly here.)
+          console.log('[FCM] Foreground REMINDER — scheduling OS notification');
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: msgData.title || '🔔 Nhắc hẹn',
+              body: msgData.body || msgData.content || 'Bạn có nhắc hẹn',
+              data: { ...msgData },
+              sound: true,
+              priority: Notifications.AndroidNotificationPriority.MAX,
+            },
+            trigger: { channelId: 'default' } as any,
+          }).catch((e: any) =>
+            console.warn('[FCM] Foreground reminder schedule failed:', e),
+          );
+          return;
+        }
+
+        // All other types: socket already delivered in realtime — suppress.
+        console.log('[FCM] Foreground message suppressed (type:', msgType, ')');
+      });
+    } catch (e) {
+      // Silently ignore if firebase module not linked (e.g. during testing)
+    }
+
+    return () => unsubscribe?.();
+  }, []);
+
   useEffect(() => {
     if (isLoading) return;
 

@@ -163,11 +163,14 @@ export class FirebaseService implements OnModuleInit {
       android: {
         priority: priority === 'high' ? 'high' : 'normal',
         ttl: ttlSeconds * 1000,
-        // Tag lets the OS replace the existing notification with the same tag.
-        // Used by cancelCallNotification to dismiss the incoming-call tray entry.
-        ...(androidTag
-          ? { notification: { tag: androidTag, sound: 'default' } }
-          : {}),
+        // Android 8+ (Oreo) REQUIRES channelId — without it the notification is
+        // silently dropped. Must match the channel created in the mobile app
+        // (see _layout.tsx → setNotificationChannelAsync('default', ...)).
+        notification: {
+          channelId: 'default',
+          sound: 'default',
+          ...(androidTag ? { tag: androidTag } : {}),
+        },
       },
       webpush: {
         headers: {

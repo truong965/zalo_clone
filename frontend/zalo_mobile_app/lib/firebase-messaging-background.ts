@@ -90,20 +90,57 @@ messaging().setBackgroundMessageHandler(async (remoteMessage: any) => {
       }
       break;
 
-    default:
-      // For NEW_MESSAGE, REMINDER_TRIGGERED, FRIEND_REQUEST, GROUP_EVENT, etc.
-      // These are Hybrid payloads — the OS already displayed the notification natively.
-      // Skip manual rendering to prevent duplicates.
-      if (hasNativeNotification) {
-        console.log('[FCM] Native notification present, skipping manual render for type:', data.type);
-        return;
-      }
-
-      // Fallback for any pure data message that needs a visible alert (shouldn't happen normally)
-      if (data.title || data.body) {
+    case 'REMINDER_TRIGGERED':
+      // Backend sends REMINDER_TRIGGERED as HYBRID payload (notification + data),
+      // so Android OS already displayed the notification from the `notification` block.
+      // We do NOT schedule via expo-notifications to avoid duplicate.
+      // The `setBackgroundMessageHandler` still fires for data-routing purposes
+      // (e.g., updating reminder badge state), but display is OS-handled.
+      if (!hasNativeNotification) {
+        // Fallback: data-only path (should not happen with current backend config)
         await Notifications.scheduleNotificationAsync({
           content: {
             ...commonContent,
+            title: data.title || '🔔 Nhắc hẹn',
+            priority: Notifications.AndroidNotificationPriority.MAX,
+          },
+          trigger: immediateTrigger as any,
+        });
+      }
+      break;
+
+    default:
+      // NEW_MESSAGE, FRIEND_REQUEST, FRIEND_ACCEPTED, GROUP_EVENT, etc.
+      // Backend sends these as DATA-ONLY payloads (no notification block).
+      // setBackgroundMessageHandler is responsible for rendering the OS notification.
+      //
+      // Guard: if somehow a hybrid payload reaches here, the OS already displayed
+      // the notification — skip to prevent duplicate.
+      if (hasNativeNotification) {
+        console.log('[FCM] Hybrid in default case — OS handled display, skipping for type:', data.type);
+        break;
+      }
+
+      if (data.title || data.body || data.content) {
+        const title =
+          data.title ||
+          (data.type === 'NEW_MESSAGE'
+            ? 'Tin nhắn mới'
+            : data.type === 'FRIEND_REQUEST'
+              ? 'Lời mời kết bạn'
+              : data.type === 'FRIEND_ACCEPTED'
+                ? 'Kết bạn thành công'
+                : data.type === 'GROUP_EVENT'
+                  ? data.groupName || 'Sự kiện nhóm'
+                  : 'Zalo');
+        const body = data.body || data.content || 'Bạn có thông báo mới';
+
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title,
+            body,
+            data: { ...data },
+            sound: true,
             priority: Notifications.AndroidNotificationPriority.HIGH,
           },
           trigger: immediateTrigger as any,

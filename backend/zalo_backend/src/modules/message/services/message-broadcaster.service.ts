@@ -1,7 +1,6 @@
-// src/modules/message/services/message-broadcaster.service.ts
-
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RedisPubSubService } from 'src/shared/redis/services/redis-pub-sub.service';
+import { AiRedisPublisherService } from 'src/shared/redis/services/ai-redis-publisher.service';
 import { RedisKeyBuilder } from '@shared/redis/redis-key-builder';
 import { Message } from '@prisma/client';
 
@@ -36,7 +35,10 @@ export interface TypingStatusPayload {
 export class MessageBroadcasterService implements OnModuleInit {
   private readonly logger = new Logger(MessageBroadcasterService.name);
 
-  constructor(private readonly redisPubSub: RedisPubSubService) {}
+  constructor(
+    private readonly redisPubSub: RedisPubSubService,
+    private readonly aiRedisPublisher: AiRedisPublisherService,
+  ) {}
 
   onModuleInit() {
     this.logger.log('Message Broadcaster Service initialized');
@@ -52,13 +54,6 @@ export class MessageBroadcasterService implements OnModuleInit {
 
       await Promise.all([
         this.redisPubSub.publish(channel, payload),
-        this.redisPubSub.publish(globalChannel, {
-          messageId: payload.message.id.toString(),
-          conversationId: conversationId,
-          userId: payload.senderId,
-          text: payload.message.content,
-          createdAt: new Date(payload.message.createdAt).toISOString(),
-        }),
       ]);
 
       this.logger.debug(
