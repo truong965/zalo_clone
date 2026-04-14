@@ -9,23 +9,52 @@ import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
 import Toast from 'react-native-toast-message';
 
+const VOICE_RECORDING_PRESET = {
+  ...RecordingPresets.HIGH_QUALITY,
+  isMeteringEnabled: true,
+};
+
+const buildVoiceFileName = (rawName: string, durationSeconds: number) => {
+  const safeSeconds = Math.max(1, Math.floor(durationSeconds));
+  const secondsSuffix = `_${safeSeconds}s`;
+  const dotIndex = rawName.lastIndexOf('.');
+
+  if (dotIndex <= 0) {
+    return `voice_${Date.now()}${secondsSuffix}.m4a`;
+  }
+
+  const baseName = rawName.slice(0, dotIndex);
+  const extension = rawName.slice(dotIndex);
+  return `${baseName}${secondsSuffix}${extension}`;
+};
+
 /**
  * Extracts file metadata from a local URI dynamically.
  */
-const getFileInfoFromUri = (localFilePath: string) => {
+const getFileInfoFromUri = (localFilePath: string, durationSeconds: number) => {
   const rawName = localFilePath.split('/').pop()?.split('?')[0] || '';
-  const hasExtension = rawName.includes('.');
-  const fileName = hasExtension ? rawName : `voice_${Date.now()}.m4a`;
+  const fileName = buildVoiceFileName(rawName, durationSeconds);
   const extension = fileName.split('.').pop()?.toLowerCase();
 
   // Keep VOICE uploads consistently classified as AUDIO on backend.
+  // Include common mobile recorder containers to avoid incorrect MIME tagging.
   let mimeType = 'audio/mp4';
   if (extension === 'm4a' || extension === 'mp4') {
     mimeType = 'audio/mp4';
+  } else if (extension === 'webm' || extension === 'weba') {
+    mimeType = 'audio/webm';
+  } else if (extension === 'mp3') {
+    mimeType = 'audio/mpeg';
+  } else if (extension === 'ogg' || extension === 'oga') {
+    mimeType = 'audio/ogg';
+  } else if (extension === '3gp' || extension === '3gpp') {
+    mimeType = 'audio/3gpp';
   } else if (extension === 'aac') {
     mimeType = 'audio/aac';
   } else if (extension === 'amr') {
     mimeType = 'audio/amr';
+  } else if (extension === 'caf') {
+    mimeType = 'audio/x-caf';
   } else if (extension === 'wav') {
     mimeType = 'audio/wav';
   }
@@ -96,9 +125,7 @@ export function useAudioRecorder() {
         // no-op: recorder may already be stopped/uninitialized
       }
 
-      await recorder.prepareToRecordAsync({
-          isMeteringEnabled: true,
-      });
+      await recorder.prepareToRecordAsync(VOICE_RECORDING_PRESET);
       recorder.record();
       setIsRecording(true);
       setRecordingDuration('00:00');
@@ -185,7 +212,8 @@ export function useAudioRecorder() {
       if (!uri) throw new Error('No URI available from recording');
 
       // 1. Get dynamic file info from the URI
-      const { fileName, mimeType } = getFileInfoFromUri(uri);
+      const durationSeconds = currentDurationMillis / 1000;
+      const { fileName, mimeType } = getFileInfoFromUri(uri, durationSeconds);
 
       // 2. Re-use 3-step S3 upload process
       const initResponse = await mobileApi.initiateUpload({
