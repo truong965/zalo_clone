@@ -328,15 +328,14 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendNotification(
-      tokens,
-      { title, body },
-      data,
-      {
-        priority: 'normal',
-        ttlSeconds: 300, // 5 minutes — messages aren't as urgent as calls
-      },
-    );
+    // Data-only message: SW (web) and foreground handler (mobile) decide
+    // whether to show an OS notification based on app focus/visibility state.
+    // This prevents the browser/OS from auto-displaying a notification while
+    // the user is actively reading the conversation.
+    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+      priority: 'normal',
+      ttlSeconds: 300, // 5 minutes — messages aren't as urgent as calls
+    });
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -403,15 +402,11 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendNotification(
-      tokens,
-      { title, body },
-      data,
-      {
-        priority: 'normal',
-        ttlSeconds: 3600, // 1 hour — friend requests aren't urgent
-      },
-    );
+    // Data-only: SW/mobile controls display so it can suppress while app is active.
+    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+      priority: 'normal',
+      ttlSeconds: 3600, // 1 hour — friend requests aren't urgent
+    });
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -448,15 +443,11 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendNotification(
-      tokens,
-      { title, body },
-      data,
-      {
-        priority: 'normal',
-        ttlSeconds: 3600,
-      },
-    );
+    // Data-only: SW/mobile controls display.
+    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+      priority: 'normal',
+      ttlSeconds: 3600,
+    });
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -486,15 +477,11 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendNotification(
-      tokens,
-      { title, body },
-      data,
-      {
-        priority: 'normal',
-        ttlSeconds: 3600,
-      },
-    );
+    // Data-only: SW/mobile controls display.
+    const { invalidTokens } = await this.firebase.sendMulticast(tokens, data, {
+      priority: 'normal',
+      ttlSeconds: 3600,
+    });
 
     await this.deviceTokens.cleanupInvalidTokens(invalidTokens);
 
@@ -532,13 +519,18 @@ export class PushNotificationService {
       timestamp: new Date().toISOString(),
     };
 
+    // HYBRID payload: OS handles the notification block natively (guaranteed delivery).
+    // Reminders are time-critical — must show even through Android Doze mode and
+    // battery optimization, similar to INCOMING_CALL. sendNotification adds the
+    // `notification` block which FCM uses to bypass background throttling.
+    // The `data` block is also included so SW/app can do context-specific routing.
     const { invalidTokens } = await this.firebase.sendNotification(
       tokens,
       { title, body },
       data,
       {
-        priority: 'high', // Reminders are time-sensitive
-        ttlSeconds: 3600, // 1 hour — reminder is stale if delivered much later
+        priority: 'high',  // Wake Android from Doze mode
+        ttlSeconds: 3600,  // 1 hour — stale reminder after that
       },
     );
 
