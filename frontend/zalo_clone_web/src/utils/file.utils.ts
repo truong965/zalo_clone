@@ -87,6 +87,7 @@ export const FileUtils = {
        * Replaces disallowed characters with underscores.
        */
       sanitizeFileName(name: string): string {
-            return name.replace(/[^a-zA-Z0-9._\-\s()]/g, '_');
+            // Remove control characters and path separators, but keep Unicode (accents)
+            return name.replace(/[\0-\x1F\x7F<>:"/\\|?*]/g, '_');
       }
 };

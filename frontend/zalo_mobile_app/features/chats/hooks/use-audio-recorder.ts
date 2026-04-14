@@ -13,8 +13,17 @@ import Toast from 'react-native-toast-message';
  * Extracts file metadata from a local URI dynamically.
  */
 const getFileInfoFromUri = (localFilePath: string) => {
-  const fileName = localFilePath.split('/').pop() || `voice_${Date.now()}.m4a`;
-  const extension = fileName.split('.').pop()?.toLowerCase();
+  const rawFileName = localFilePath.split('/').pop() || `voice_${Date.now()}`;
+  
+  // Ensure we have a valid extension for audio files
+  let fileName = rawFileName;
+  const parts = rawFileName.split('.');
+  let extension = parts.length > 1 ? parts.pop()?.toLowerCase() : undefined;
+  
+  if (!extension) {
+    extension = 'm4a';
+    fileName = `${rawFileName}.m4a`;
+  }
 
   let mimeType = 'application/octet-stream';
   if (extension === 'm4a' || extension === 'mp4') {
@@ -25,9 +34,12 @@ const getFileInfoFromUri = (localFilePath: string) => {
     mimeType = 'audio/amr';
   } else if (extension === 'wav') {
     mimeType = 'audio/wav';
+  } else {
+    // Fallback for voice recordings if extension is unknown
+    mimeType = 'audio/mp4';
   }
 
-  return { fileName, mimeType, uri: localFilePath };
+  return { fileName, mimeType, uri: localFilePath, extension };
 };
 
 export function useAudioRecorder() {
