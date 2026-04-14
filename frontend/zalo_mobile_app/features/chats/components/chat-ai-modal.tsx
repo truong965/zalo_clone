@@ -9,8 +9,8 @@ import {
   Modal as RNModal,
   StatusBar,
   TextInput,
-  Keyboard,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,35 +30,11 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [inputValue, setInputValue] = useState('');
-
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
-
-  useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow',
-      (event) => {
-        setIsKeyboardVisible(true);
-        if (Platform.OS === 'android') {
-          setAndroidKeyboardInset(event.endCoordinates.height);
-        }
-        requestAnimationFrame(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        });
-      }
-    );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide',
-      () => {
-        setIsKeyboardVisible(false);
-        setAndroidKeyboardInset(0);
-      }
-    );
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+  const androidBaseBottomInset = Math.max(insets.bottom, 6);
+  const androidKeyboardOffset = Platform.OS === 'android' && androidKeyboardInset > 0
+    ? androidKeyboardInset + 6
+    : 0;
 
   const keyboardVerticalOffset = Platform.OS === 'ios' ? insets.top : 0;
 
@@ -77,6 +53,28 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
   const aiSummaryStartMessageId = useAiStore((s) => s.aiSummaryStartMessageId);
   const setAiSummaryStartMessageId = useAiStore((s) => s.setAiSummaryStartMessageId);
   const lastProcessedIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const showSub = Keyboard.addListener('keyboardDidShow', (event) => {
+      setAndroidKeyboardInset(event.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidKeyboardInset(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) {
+      setAndroidKeyboardInset(0);
+    }
+  }, [visible]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -250,8 +248,9 @@ export function ChatAiModal({ conversationId, visible, onClose }: ChatAiModalPro
             styles.inputContainer,
             {
               paddingBottom:
-                (isKeyboardVisible ? 12 : Math.max(insets.bottom, 12)) +
-                (Platform.OS === 'android' ? androidKeyboardInset : 0),
+                Platform.OS === 'ios'
+                  ? Math.max(insets.bottom, 12)
+                  : androidBaseBottomInset + androidKeyboardOffset,
             },
           ]}>
             <View style={styles.inputWrapper}>
