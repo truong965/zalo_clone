@@ -22,6 +22,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const [content, setContent] = useState('');
+    const [isVoicePanelOpen, setIsVoicePanelOpen] = useState(false);
     const [showExtraOptions, setShowExtraOptions] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -29,7 +30,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const { pickMedia, pickDocuments, isUploading } = useMobileMediaUpload();
-    const { isRecording, isUploadingAudio, recordingDuration, metering, startRecording, cancelRecording, stopAndSend } = useAudioRecorder();
+    const { isRecording, isUploadingAudio, recordingDuration, recordingUri, metering, startRecording, cancelRecording, preparePreview, stopAndSend } = useAudioRecorder();
     const { createReminder } = useReminders(conversationId);
     const { replyTarget, clearReplyTarget } = useChatStore();
     const androidBaseBottomInset = Math.max(insets.bottom, 2);
@@ -133,21 +134,49 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
             onSend('', MessageType.VOICE, [mediaId], replyTarget ?? undefined);
             setShowExtraOptions(false);
             clearReplyTarget();
+            Toast.show({
+                type: 'info',
+                text1: 'Đang gửi',
+                text2: 'Tin nhắn thoại đang được xử lý',
+            });
+        } else {
+            Toast.show({
+                type: 'error',
+                text1: 'Gửi thất bại',
+                text2: 'Không thể gửi tin nhắn thoại',
+            });
         }
+    };
+
+    const handleOpenVoicePanel = () => {
+        setIsVoicePanelOpen(true);
+    };
+
+    const handleStartVoiceRecording = async () => {
+        await startRecording();
+    };
+
+    const handleCancelVoice = async () => {
+        await cancelRecording();
+        setIsVoicePanelOpen(true);
     };
 
     const handlePickEmoji = (emojiObject: any) => {
         setContent(prev => prev + emojiObject.emoji);
     };
 
-    if (isRecording || isUploadingAudio) {
+    if (isVoicePanelOpen || isRecording || isUploadingAudio || !!recordingUri) {
         return (
             <VoiceRecordingUI
+                isRecording={isRecording}
                 isUploadingAudio={isUploadingAudio}
                 recordingDuration={recordingDuration}
+                recordingUri={recordingUri}
                 metering={metering}
-                onCancel={cancelRecording}
+                onCancel={handleCancelVoice}
                 onSend={handleStopAndSendAudio}
+                onPreview={preparePreview}
+                onStartRecording={handleStartVoiceRecording}
                 bottomInset={insets.bottom}
             />
         );
@@ -216,7 +245,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                         <TouchableOpacity className="p-2" onPress={() => setShowExtraOptions(!showExtraOptions)}>
                             <Ionicons name="ellipsis-horizontal" size={24} color={showExtraOptions ? theme.colors.primary : theme.colors.onSurfaceVariant} />
                         </TouchableOpacity>
-                        <TouchableOpacity className="p-2" onPress={startRecording}>
+                        <TouchableOpacity className="p-2" onPress={handleOpenVoicePanel}>
                             <Ionicons name="mic-outline" size={24} color={theme.colors.onSurfaceVariant} />
                         </TouchableOpacity>
                         <TouchableOpacity className="p-2" onPress={handleMediaUpload}>

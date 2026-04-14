@@ -58,8 +58,12 @@ export function MessageContent({
 
   const images = attachments.filter(a => a.mediaType === 'IMAGE');
   const videos = attachments.filter(a => a.mediaType === 'VIDEO');
-  const audios = attachments.filter(a => a.mediaType === 'AUDIO');
-  const documents = attachments.filter(a => a.mediaType === 'DOCUMENT');
+  const audios = attachments.filter(
+    (a) => a.mediaType === 'AUDIO' || (message.type === MessageType.VOICE && a.mediaType === 'DOCUMENT'),
+  );
+  const documents = attachments.filter(
+    (a) => a.mediaType === 'DOCUMENT' && !(message.type === MessageType.VOICE),
+  );
 
   if (recalled) {
     return (

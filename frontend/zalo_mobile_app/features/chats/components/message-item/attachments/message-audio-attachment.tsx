@@ -3,9 +3,8 @@ import { View, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
 import { MessageMediaAttachmentItem } from '@/types/message';
-import { getFullUrl, formatAudioDuration } from '../message-item.utils';
+import { formatAudioDuration } from '../message-item.utils';
 import { styles } from '../message-item.styles';
 
 import { AudioWaveform } from './audio-waveform';
@@ -22,6 +21,7 @@ interface Props {
 export function MessageAudioAttachment({ attachment, isMe, theme }: Props) {
   const { isProcessing, isError, src, checkResource } = useMediaResource(attachment, { useFullRes: true });
   const player = useAudioPlayer(src || '');
+  const [uiIsPlaying, setUiIsPlaying] = React.useState(false);
 
   React.useEffect(() => {
     if (!isError && !isProcessing) {
@@ -35,8 +35,27 @@ export function MessageAudioAttachment({ attachment, isMe, theme }: Props) {
   const actualDuration  = backendDuration ?? playerDuration ?? 0;
   const isPlaying = status.playing ?? false;
 
+  React.useEffect(() => {
+    setUiIsPlaying(isPlaying);
+  }, [isPlaying]);
+
+  React.useEffect(() => {
+    if (!src) {
+      setUiIsPlaying(false);
+    }
+  }, [src]);
+
   const handlePlayPause = () => {
-    isPlaying ? player.pause() : player.play();
+    if (!src || isProcessing || isError) return;
+
+    if (uiIsPlaying) {
+      setUiIsPlaying(false);
+      player.pause();
+      return;
+    }
+
+    setUiIsPlaying(true);
+    player.play();
   };
 
   const accentColor = isMe ? '#0091ff' : theme.colors.primary;
@@ -52,12 +71,16 @@ export function MessageAudioAttachment({ attachment, isMe, theme }: Props) {
 
   return (
     <View style={styles.audioWrapper}>
-      <TouchableOpacity style={[styles.audioPlayBtn, { backgroundColor: accentColor }]} onPress={handlePlayPause}>
-        <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="white" />
+      <TouchableOpacity
+        style={[styles.audioPlayBtn, { backgroundColor: accentColor, opacity: isProcessing ? 0.5 : 1 }]}
+        onPress={handlePlayPause}
+        disabled={isProcessing || !src}
+      >
+        <Ionicons name={uiIsPlaying ? 'pause' : 'play'} size={22} color="white" />
       </TouchableOpacity>
 
       <View style={styles.audioWaveWrapper}>
-        <AudioWaveform isPlaying={isPlaying} isMe={isMe} theme={theme} />
+        <AudioWaveform isPlaying={uiIsPlaying} isMe={isMe} theme={theme} />
       </View>
 
       <Text style={[styles.audioDuration, { color: accentColor }]}>
