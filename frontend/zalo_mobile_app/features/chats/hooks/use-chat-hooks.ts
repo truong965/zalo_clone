@@ -219,6 +219,11 @@ export function useSendMessage() {
           };
         },
       );
+      // Socket ack may not include full mediaAttachments (e.g. VOICE),
+      // so refetch once to hydrate the real message payload.
+      queryClient.invalidateQueries({
+        queryKey: messagesQueryKey(variables.conversationId, 'older'),
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });

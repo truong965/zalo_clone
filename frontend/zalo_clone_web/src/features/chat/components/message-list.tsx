@@ -343,8 +343,12 @@ export function MessageList({
             if (attachments.length > 0) {
                   const images = attachments.filter((a) => a.mediaType === 'IMAGE');
                   const videos = attachments.filter((a) => a.mediaType === 'VIDEO');
-                  const audios = attachments.filter((a) => a.mediaType === 'AUDIO');
-                  const documents = attachments.filter((a) => a.mediaType === 'DOCUMENT');
+                  const audios = attachments.filter(
+                        (a) => a.mediaType === 'AUDIO' || (msg.type === 'VOICE' && a.mediaType === 'DOCUMENT'),
+                  );
+                  const documents = attachments.filter(
+                        (a) => a.mediaType === 'DOCUMENT' && msg.type !== 'VOICE',
+                  );
 
                   return (
                         <div className="space-y-2">

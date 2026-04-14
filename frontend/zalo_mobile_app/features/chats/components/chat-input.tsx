@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, ActivityIndicator, Text, Keyboard, Platform } from 'react-native';
+import { View, TextInput, TouchableOpacity, ActivityIndicator, Text, Platform, Keyboard } from 'react-native';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,27 +22,32 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const [content, setContent] = useState('');
+    const [isVoicePanelOpen, setIsVoicePanelOpen] = useState(false);
     const [showExtraOptions, setShowExtraOptions] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+    const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const { pickMedia, pickDocuments, isUploading } = useMobileMediaUpload();
-    const { isRecording, isUploadingAudio, recordingDuration, metering, startRecording, cancelRecording, stopAndSend } = useAudioRecorder();
+    const { isRecording, isUploadingAudio, recordingDuration, recordingUri, metering, startRecording, cancelRecording, preparePreview, stopAndSend } = useAudioRecorder();
     const { createReminder } = useReminders(conversationId);
     const { replyTarget, clearReplyTarget } = useChatStore();
-
+    const androidBaseBottomInset = Math.max(insets.bottom, 2);
+    const androidKeyboardOffset = Platform.OS === 'android' && androidKeyboardInset > 0
+        ? androidKeyboardInset + 6
+        : 0;
 
     React.useEffect(() => {
-        const showSubscription = Keyboard.addListener(
-            Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow', 
-            () => setIsKeyboardVisible(true)
-        );
-        const hideSubscription = Keyboard.addListener(
-            Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide', 
-            () => setIsKeyboardVisible(false)
-        );
+        if (Platform.OS !== 'android') return;
+
+        const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+            setAndroidKeyboardInset(event.endCoordinates.height);
+        });
+        const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+            setAndroidKeyboardInset(0);
+        });
+
         return () => {
             showSubscription.remove();
             hideSubscription.remove();
@@ -129,28 +134,64 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
             onSend('', MessageType.VOICE, [mediaId], replyTarget ?? undefined);
             setShowExtraOptions(false);
             clearReplyTarget();
+            Toast.show({
+                type: 'info',
+                text1: 'Đang gửi',
+                text2: 'Tin nhắn thoại đang được xử lý',
+            });
+        } else {
+            Toast.show({
+                type: 'error',
+                text1: 'Gửi thất bại',
+                text2: 'Không thể gửi tin nhắn thoại',
+            });
         }
+    };
+
+    const handleOpenVoicePanel = () => {
+        setIsVoicePanelOpen(true);
+    };
+
+    const handleStartVoiceRecording = async () => {
+        await startRecording();
+    };
+
+    const handleCancelVoice = async () => {
+        await cancelRecording();
+        setIsVoicePanelOpen(true);
     };
 
     const handlePickEmoji = (emojiObject: any) => {
         setContent(prev => prev + emojiObject.emoji);
     };
 
-    if (isRecording || isUploadingAudio) {
+    if (isVoicePanelOpen || isRecording || isUploadingAudio || !!recordingUri) {
         return (
             <VoiceRecordingUI
+                isRecording={isRecording}
                 isUploadingAudio={isUploadingAudio}
                 recordingDuration={recordingDuration}
+                recordingUri={recordingUri}
                 metering={metering}
-                onCancel={cancelRecording}
+                onCancel={handleCancelVoice}
                 onSend={handleStopAndSendAudio}
+                onPreview={preparePreview}
+                onStartRecording={handleStartVoiceRecording}
                 bottomInset={insets.bottom}
             />
         );
     }
 
     return (
-        <View className="bg-card border-t border-border" style={{ paddingBottom: isKeyboardVisible ? 8 : Math.max(insets.bottom, 8) }}>
+        <View
+            className="bg-card border-t border-border"
+            style={{
+                paddingBottom:
+                    Platform.OS === 'ios'
+                        ? Math.max(insets.bottom, 8)
+                        : androidBaseBottomInset + androidKeyboardOffset,
+            }}
+        >
             {replyTarget && (
                 <View className="flex-row items-center px-4 py-2 bg-muted/30 border-b border-border/30 border-l-2 border-l-primary/60">
                     <View className="mr-3 p-1">
@@ -204,7 +245,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                         <TouchableOpacity className="p-2" onPress={() => setShowExtraOptions(!showExtraOptions)}>
                             <Ionicons name="ellipsis-horizontal" size={24} color={showExtraOptions ? theme.colors.primary : theme.colors.onSurfaceVariant} />
                         </TouchableOpacity>
-                        <TouchableOpacity className="p-2" onPress={startRecording}>
+                        <TouchableOpacity className="p-2" onPress={handleOpenVoicePanel}>
                             <Ionicons name="mic-outline" size={24} color={theme.colors.onSurfaceVariant} />
                         </TouchableOpacity>
                         <TouchableOpacity className="p-2" onPress={handleMediaUpload}>

@@ -198,8 +198,11 @@ export class MessageValidator {
         ];
 
       case MessageType.AUDIO:
-      case MessageType.VOICE:
         return [MediaType.AUDIO];
+      case MessageType.VOICE:
+        // Some mobile recordings can be inferred as DOCUMENT
+        // when metadata/extension is not stable.
+        return [MediaType.AUDIO, MediaType.DOCUMENT];
 
       default:
         return [];
