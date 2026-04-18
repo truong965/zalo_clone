@@ -12,27 +12,61 @@ socketManager.init({
       onLogout: () => useAuthStore.getState().logout(),
       onReset: () => useAuthStore.getState().reset(),
       onError: (message: string, code?: string) => {
+            const normalizedMessage = message?.toLowerCase?.() ?? '';
+
+            // Incoming call has its own full-screen UI, so suppress generic global popups.
+            if (
+                  normalizedMessage === 'incoming_call' ||
+                  normalizedMessage.includes('incoming call') ||
+                  normalizedMessage.includes('call:incoming')
+            ) {
+                  return;
+            }
+
             // Fix: Catch call-related errors directly and force reset call UI.
-            const isCallContext = code === 'CALL_ERROR' || message?.toLowerCase().includes('privacy') || message?.toLowerCase().includes('friendship') || message?.toLowerCase().includes('call');
-            
+            const isCallContext =
+                  code === 'CALL_ERROR' ||
+                  normalizedMessage.includes('privacy') ||
+                  normalizedMessage.includes('friendship') ||
+                  normalizedMessage.includes('call') ||
+                  normalizedMessage === 'answered_elsewhere' ||
+                  normalizedMessage === 'caller_cancelled' ||
+                  normalizedMessage === 'rejected_elsewhere';
+
             if (isCallContext) {
+                  const isCallEndedNotice =
+                        normalizedMessage === 'answered_elsewhere' ||
+                        normalizedMessage === 'caller_cancelled' ||
+                        normalizedMessage === 'rejected_elsewhere' ||
+                        normalizedMessage.includes('hangup') ||
+                        normalizedMessage.includes('no_answer') ||
+                        normalizedMessage.includes('call ended') ||
+                        normalizedMessage.includes('call_ended') ||
+                        normalizedMessage.includes('đã kết thúc');
+
                   console.warn('[Socket Global Error] Resetting call state due to error:', message);
                   useCallStore.getState().setError(message);
                   useCallStore.getState().resetCallState();
-                  
+
+                  if (isCallEndedNotice) {
+                        notification.info({
+                              message: 'Cuộc gọi đã kết thúc',
+                              placement: 'topRight',
+                        });
+                        return; // Don't show a second notification
+                  }
+
                   notification.error({
-                        message: 'Call Error',
+                        message: 'Lỗi cuộc gọi',
                         description: message,
+                        placement: 'topRight',
                   });
                   return; // Don't show the generic notification
             }
 
-            const description = message === 'answered_elsewhere'
-                  ? 'Cuộc gọi đã được trả lời trên thiết bị khác'
-                  : message;
             notification.error({
                   message: 'Thông báo',
-                  description,
+                  description: message,
                   placement: 'topRight',
             });
       },

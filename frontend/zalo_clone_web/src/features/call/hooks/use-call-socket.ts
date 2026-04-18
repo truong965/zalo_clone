@@ -137,14 +137,41 @@ export function useCallSocket(callbacks: CallSocketCallbacks = {}) {
             };
 
             const onEnded = (payload: CallEndedPayload) => {
+                  const currentState = useCallStore.getState();
+
+                  // Already idle: nothing to reset, ignore late events.
+                  if (currentState.callStatus === 'IDLE') {
+                        return;
+                  }
+
                   // Guard: only reset if this event belongs to the current call.
                   // Prevents stale call:ended from a previous call wiping out a
                   // newly-initiated call (race condition when user quickly re-calls).
-                  const currentCallId = useCallStore.getState().callId;
+                  const currentCallId = currentState.callId;
                   if (currentCallId && payload.callId && currentCallId !== payload.callId) {
                         dbg('call:ended IGNORED (stale)', { received: payload.callId, current: currentCallId });
                         return;
                   }
+
+                  // If this client is already in an active local call, treat
+                  // cancellation/answered-elsewhere events as stale cross-device noise.
+                  const isLocallyActive =
+                        currentState.callStatus === 'ACTIVE' ||
+                        currentState.callStatus === 'RECONNECTING';
+                  if (
+                        isLocallyActive &&
+                        (payload.reason === 'caller_cancelled' ||
+                              payload.reason === 'answered_elsewhere' ||
+                              payload.reason === 'rejected_elsewhere')
+                  ) {
+                        dbg('call:ended IGNORED (active local call)', {
+                              reason: payload.reason,
+                              callId: payload.callId,
+                              status: currentState.callStatus,
+                        });
+                        return;
+                  }
+
                   dbg('call:ended → resetCallState', { callId: payload.callId, reason: payload.reason });
 
                   if (payload.reason === 'answered_elsewhere') {

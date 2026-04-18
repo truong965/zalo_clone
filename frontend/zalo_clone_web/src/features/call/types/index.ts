@@ -30,7 +30,10 @@ export type CallEndReason =
   | 'NETWORK_DROP'
   | 'NO_ANSWER'
   | 'CANCEL'
-  | 'answered_elsewhere'; // Phase 5: M1
+  | 'answered_elsewhere' // Phase 5: M1
+  | 'caller_cancelled'
+  | 'rejected_elsewhere'
+  | 'privacy_restricted';
 
 export type CallHistoryStatus = 'COMPLETED' | 'MISSED' | 'REJECTED' | 'CANCELLED' | 'NO_ANSWER' | 'FAILED';
 

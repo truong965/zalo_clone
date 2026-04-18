@@ -41,7 +41,8 @@ export function VideoCallView() {
                   }
                   const videoTracks = remoteStream.getVideoTracks();
                   setRemoteVideoOff(
-                        videoTracks.length === 0 || videoTracks.every((t) => !t.enabled || t.muted),
+                        videoTracks.length === 0 ||
+                        videoTracks.every((t) => t.readyState === 'ended' || t.muted),
                   );
             };
 
@@ -136,11 +137,11 @@ export function VideoCallView() {
                                           className="h-24 w-24 rounded-full object-cover ring-4 ring-white/20"
                                           onError={() => setPeerAvatarError(true)}
                                     />
-                               ) : (
+                              ) : (
                                     <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-800 ring-4 ring-white/20">
                                           <UserOutlined className="text-4xl text-white/40" />
                                     </div>
-                               ) }
+                              )}
                               <span className="text-white/80 text-sm">
                                     {!remoteStream
                                           ? t('call.waitingVideo')
@@ -169,7 +170,7 @@ export function VideoCallView() {
                                                 className="h-16 w-16 rounded-full object-cover border-2 border-white/20"
                                                 onError={() => setUserAvatarError(true)}
                                           />
-                                     ) : (
+                                    ) : (
                                           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-700">
                                                 <UserOutlined className="text-2xl text-white/30" />
                                           </div>

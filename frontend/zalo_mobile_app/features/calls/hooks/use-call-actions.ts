@@ -103,7 +103,7 @@ export function useCallActions() {
             socketManager.emitWithAck(SocketEvents.CALL_HANGUP, { callId: currentStore.callId }).catch(e => console.warn(e));
           }
           currentStore.resetCallState();
-          Alert.alert('Thông báo', 'Cuộc gọi không có phản hồi.');
+          Alert.alert('Cuộc gọi thất bại', 'Cuộc gọi không có phản hồi.');
         }
         dialingTimeoutRef.current = null;
       }, 35_000);
@@ -144,6 +144,7 @@ export function useCallActions() {
     }
 
     resetCallWithTimeout();
+    useCallStore.getState().setAcceptingIncoming(true);
     // Wait for the server to acknowledge the acceptance successfully.
     // If it throws (e.g., answered elsewhere), it will be caught below.
     //
@@ -176,6 +177,8 @@ export function useCallActions() {
     } catch (err) {
       console.error('[useCallActions] acceptCall error:', err);
       useCallStore.getState().resetCallState();
+    } finally {
+      useCallStore.getState().setAcceptingIncoming(false);
     }
   }, [openWebCall, resetCallWithTimeout]);
 
@@ -189,12 +192,12 @@ export function useCallActions() {
 
     console.log('[useCallActions] endCall initiated', { callId, callStatus });
     resetCallWithTimeout();
-    
+
     if (callId) {
       socketManager.emitWithAck(SocketEvents.CALL_HANGUP, { callId })
         .catch(e => console.warn('[useCallActions] emitHangup error:', e));
     }
-    
+
     store.resetCallState();
   }, [resetCallWithTimeout]);
 
@@ -242,7 +245,7 @@ export function useCallActions() {
         if (currentStore.callStatus === 'DIALING') {
           console.warn('[useCallActions] JOIN EXISTING timeout reached (35s), resetting...');
           currentStore.resetCallState();
-          Alert.alert('Thông báo', 'Không thể tham gia cuộc gọi.');
+          Alert.alert('Cuộc gọi thất bại', 'Không thể tham gia cuộc gọi.');
         }
         dialingTimeoutRef.current = null;
       }, 35_000);
@@ -256,12 +259,12 @@ export function useCallActions() {
         console.error('[useCallActions] joinExistingCall error:', err);
         resetCallWithTimeout();
         useCallStore.getState().resetCallState();
-        
+
         // Phase 12: If call doesn't exist, clear the stale banner
         if (err.message?.includes('No active group call')) {
           useCallStore.getState().setActiveGroupCall(conversationId, false);
         }
-        
+
         Alert.alert('Lỗi', err.message || 'Không thể tham gia cuộc gọi');
       }
     },
