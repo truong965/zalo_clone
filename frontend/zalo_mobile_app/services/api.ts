@@ -220,6 +220,10 @@ function buildUrl(path: string): string {
       return `${API_BASE_URL}${path}`;
 }
 
+function wait(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function apiRequest<T>(
       path: string,
       options: RequestInit,
@@ -903,27 +907,68 @@ export const mobileApi = {
             );
       },
 
-      uploadToS3(presignedUrl: string, fileInfo: { uri: string; type: string; name: string }, onProgress?: (percent: number) => void): Promise<void> {
-            return new Promise((resolve, reject) => {
-                  const xhr = new XMLHttpRequest();
-                  xhr.upload.addEventListener('progress', (e) => {
-                        if (e.lengthComputable && onProgress) {
-                              onProgress(Math.round((e.loaded / e.total) * 100));
-                        }
+      async uploadToS3(presignedUrl: string, fileInfo: { uri: string; type: string; name: string }, onProgress?: (percent: number) => void): Promise<void> {
+            const uploadWithXhr = (payload: { uri: string; type: string; name: string } | Blob): Promise<void> => {
+                  return new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.timeout = 120000;
+
+                        xhr.upload.addEventListener('progress', (e) => {
+                              if (e.lengthComputable && onProgress) {
+                                    onProgress(Math.round((e.loaded / e.total) * 100));
+                              }
+                        });
+
+                        xhr.addEventListener('load', () => {
+                              if (xhr.status >= 200 && xhr.status < 300) {
+                                    resolve();
+                                    return;
+                              }
+
+                              const responsePreview = xhr.responseText?.slice(0, 120)?.trim();
+                              const suffix = responsePreview ? `: ${responsePreview}` : '';
+                              reject(new Error(`Upload failed with status ${xhr.status}${suffix}`));
+                        });
+
+                        xhr.addEventListener('timeout', () => {
+                              reject(new Error('Upload timed out while sending asset to storage'));
+                        });
+
+                        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+
+                        xhr.open('PUT', presignedUrl);
+                        xhr.setRequestHeader('Content-Type', fileInfo.type || 'application/octet-stream');
+                        xhr.send(payload as any);
                   });
-                  xhr.addEventListener('load', () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                              resolve();
-                        } else {
-                              reject(new Error(`Upload failed with status ${xhr.status}`));
-                        }
-                  });
-                  xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
-                  xhr.open('PUT', presignedUrl);
-                  xhr.setRequestHeader('Content-Type', fileInfo.type);
-                  // React Native specific way to send a file
-                  xhr.send(fileInfo as any);
-            });
+            };
+
+            const shouldRetry = (error: unknown): boolean => {
+                  const message = error instanceof Error ? error.message : String(error);
+                  return /status\s(502|503|504)\b/i.test(message) || /timed out/i.test(message);
+            };
+
+            try {
+                  // First attempt: React Native file descriptor object (works best with content:// URIs).
+                  await uploadWithXhr(fileInfo);
+                  onProgress?.(100);
+                  return;
+            } catch (firstError) {
+                  if (!shouldRetry(firstError)) {
+                        throw firstError;
+                  }
+            }
+
+            await wait(400);
+
+            // Fallback attempt: convert to Blob and re-upload.
+            const localResponse = await fetch(fileInfo.uri);
+            if (!localResponse.ok) {
+                  throw new Error(`Cannot read local asset for retry (status ${localResponse.status})`);
+            }
+
+            const fileBlob = await localResponse.blob();
+            await uploadWithXhr(fileBlob);
+            onProgress?.(100);
       },
 
       confirmUpload(uploadId: string, accessToken: string) {
