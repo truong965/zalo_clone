@@ -19,6 +19,7 @@ import { AddMembersModal } from '../modals/add-members-modal';
 import { useMemberActions } from '@/features/chats/hooks/use-member-actions';
 import { TransferAdminModal } from '@/features/chats/components/modals/transfer-admin-modal';
 import { MemberActionsModal } from '@/features/chats/components/modals/member-actions-modal';
+import { GroupQrModal } from '@/features/chats/components/modals/group-qr-modal';
 
 interface GroupSettingsProps {
   conversation: Conversation;
@@ -56,6 +57,7 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
   const [addMemberVisible, setAddMemberVisible] = useState(false);
   const [transferAdminVisible, setTransferAdminVisible] = useState(false);
   const [memberActionsVisible, setMemberActionsVisible] = useState(false);
+  const [groupQrVisible, setGroupQrVisible] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [remindersExpanded, setRemindersExpanded] = useState(false);
   const [requireApproval, setRequireApproval] = useState(conversation.requireApproval || false);
@@ -145,6 +147,13 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
         />
 
         <View className="mt-2" />
+        <SettingsListItem
+          icon="qr-code-outline"
+          label="Mời tham gia nhóm qua QR"
+          onPress={() => setGroupQrVisible(true)}
+        />
+
+        <View className="mt-2" />
         <MemberList
           members={members.length > 0 ? members : (conversation.members || [])}
           totalCount={members.length}
@@ -223,6 +232,14 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
       )}
 
       <Portal>
+        <GroupQrModal
+          visible={groupQrVisible}
+          onDismiss={() => setGroupQrVisible(false)}
+          conversationId={conversation.id}
+          groupName={conversation.name}
+          memberCount={members.length || conversation.memberCount || 0}
+        />
+
         <MemberActionsModal
           visible={memberActionsVisible}
           onDismiss={() => setMemberActionsVisible(false)}
