@@ -134,7 +134,7 @@ async function getFriendCount(): Promise<{ count: number }> {
 /**
  * Infinite query for friends list with cursor pagination.
  */
-export function useFriendsList(params?: { search?: string; limit?: number; conversationId?: string }) {
+export function useFriendsList(params?: { search?: string; limit?: number; conversationId?: string; staleTime?: number }) {
       const limit = params?.limit ?? 20;
 
       return useInfiniteQuery({
@@ -152,7 +152,7 @@ export function useFriendsList(params?: { search?: string; limit?: number; conve
                   }),
             getNextPageParam: (lastPage) =>
                   lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
-            staleTime: 30_000,
+            staleTime: params?.staleTime ?? 30_000,
       });
 }
 

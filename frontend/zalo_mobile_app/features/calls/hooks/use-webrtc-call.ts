@@ -1,7 +1,7 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { isExpoGo } from '@/constants/platform';
+import { useCallback, useEffect, useRef } from 'react';
 import InCallManager from 'react-native-incall-manager';
 import { useCallStore } from '../stores/call.store';
-import { isExpoGo } from '@/constants/platform';
 
 /**
  * useWebRTCCall (Mobile) — Manages RTCPeerConnection for mobile.

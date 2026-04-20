@@ -57,7 +57,7 @@ export const SocketEvents = {
   SEARCH_LOAD_MORE: 'search:loadMore',
   SEARCH_ERROR: 'search:error',
 
-  // Group
+  // Group (Client → Server)
   GROUP_CREATE: 'group:create',
   GROUP_UPDATE: 'group:update',
   GROUP_DISSOLVE: 'group:dissolve',
@@ -65,6 +65,8 @@ export const SocketEvents = {
   GROUP_ADD_MEMBERS: 'group:addMembers',
   GROUP_REMOVE_MEMBER: 'group:removeMember',
   GROUP_TRANSFER_ADMIN: 'group:transferAdmin',
+  GROUP_REQUEST_JOIN: 'group:requestJoin',     // Self request to join via QR / link
+  GROUP_INVITE_MEMBERS: 'group:inviteMembers', // Member invites others (requireApproval group)
   
   // Group (Server -> Client)
   GROUP_UPDATED: 'group:updated',

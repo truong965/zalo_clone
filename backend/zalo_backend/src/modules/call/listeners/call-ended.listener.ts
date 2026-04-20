@@ -17,12 +17,16 @@ import {
   OUTBOUND_SOCKET_EVENT,
   ISocketEmitEvent,
 } from '@common/events/outbound-socket.event';
+import { PrismaService } from 'src/database/prisma.service';
 
 @Injectable()
 export class CallEndedSocketListener {
   private readonly logger = new Logger(CallEndedSocketListener.name);
 
-  constructor(private readonly eventEmitter: EventEmitter2) {}
+  constructor(
+    private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * When a call ends (from any source), notify all participants via Socket.IO.
@@ -61,6 +65,11 @@ export class CallEndedSocketListener {
 
       // Emit GROUP_CALL_ENDED to clear banner for group calls
       if (payload.conversationId) {
+        const conversationMembers = await this.prisma.conversationMember.findMany({
+          where: { conversationId: payload.conversationId, status: 'ACTIVE' },
+          select: { userId: true },
+        });
+        const allMemberIds = conversationMembers.map((m) => m.userId);
         this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
           event: SocketEvents.GROUP_CALL_ENDED as any,
           data: {
@@ -69,7 +78,7 @@ export class CallEndedSocketListener {
             reason,
             duration: durationSeconds,
           },
-          room: `conversation:${payload.conversationId}`,
+          userIds: allMemberIds,
         });
       }
     } catch (error) {

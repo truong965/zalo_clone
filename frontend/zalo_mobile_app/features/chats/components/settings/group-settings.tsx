@@ -37,6 +37,7 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
   const {
     updateMutation,
     addMembersMutation,
+    inviteMembersMutation,
   } = useConversationSettings(conversation.id);
 
   const { reminders, deleteReminder, completeReminder } = useReminders(conversation.id);
@@ -86,11 +87,24 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
 
   const handleAddMembers = (userIds: string[]) => {
     setAddMemberVisible(false);
-    addMembersMutation.mutate(userIds, {
-      onError: (error: any) => {
-        Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể thêm thành viên' });
-      }
-    });
+
+    // If group requires approval and user is not an admin, we must use INVITE (creates join requests).
+    // Otherwise, we use ADD (direct addition).
+    const shouldInvite = conversation.requireApproval && !isAdmin;
+
+    if (shouldInvite) {
+      inviteMembersMutation.mutate(userIds, {
+        onError: (error: any) => {
+          Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể gửi lời mời' });
+        }
+      });
+    } else {
+      addMembersMutation.mutate(userIds, {
+        onError: (error: any) => {
+          Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể thêm thành viên' });
+        }
+      });
+    }
   };
 
   const excludeIds = useMemo(
@@ -214,7 +228,7 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
           onAdd={handleAddMembers}
           excludeIds={excludeIds}
           conversationId={conversation.id}
-          isLoading={addMembersMutation.isPending}
+          isLoading={addMembersMutation.isPending || inviteMembersMutation.isPending}
         />
       )}
 

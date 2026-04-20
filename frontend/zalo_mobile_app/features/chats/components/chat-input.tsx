@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, ActivityIndicator, Text, Platform, Keyboard } from 'react-native';
-import EmojiPicker from 'rn-emoji-keyboard';
-import { useTheme } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
-import { useMobileMediaUpload } from '../hooks/use-mobile-media-upload';
-import { useAudioRecorder } from '../hooks/use-audio-recorder';
 import { MessageType } from '@/types/message';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { ActivityIndicator, Keyboard, Platform, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useTheme } from 'react-native-paper';
+import EmojiPicker from 'rn-emoji-keyboard';
+import { useAudioRecorder } from '../hooks/use-audio-recorder';
+import { useMobileMediaUpload } from '../hooks/use-mobile-media-upload';
 
-import { useReminders } from '../hooks/use-reminders';
-import { CreateReminderModal } from './reminder/create-reminder-modal';
-import { useChatStore } from '../stores/chat.store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getReplyIconName, getReplyPreviewText } from './message-item/message-item.utils';
 import Toast from 'react-native-toast-message';
+import { useReminders } from '../hooks/use-reminders';
+import { useChatStore } from '../stores/chat.store';
+import { getReplyIconName, getReplyPreviewText } from './message-item/message-item.utils';
+import { CreateReminderModal } from './reminder/create-reminder-modal';
 import { VoiceRecordingUI } from './voice-recording-ui';
 
 interface ChatInputProps {
@@ -134,12 +134,14 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
             onSend('', MessageType.VOICE, [mediaId], replyTarget ?? undefined);
             setShowExtraOptions(false);
             clearReplyTarget();
+            setIsVoicePanelOpen(false);
             Toast.show({
                 type: 'info',
                 text1: 'Đang gửi',
                 text2: 'Tin nhắn thoại đang được xử lý',
             });
         } else {
+            setIsVoicePanelOpen(false);
             Toast.show({
                 type: 'error',
                 text1: 'Gửi thất bại',
@@ -158,7 +160,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
 
     const handleCancelVoice = async () => {
         await cancelRecording();
-        setIsVoicePanelOpen(true);
+        setIsVoicePanelOpen(false);
     };
 
     const handlePickEmoji = (emojiObject: any) => {
@@ -167,18 +169,32 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
 
     if (isVoicePanelOpen || isRecording || isUploadingAudio || !!recordingUri) {
         return (
-            <VoiceRecordingUI
-                isRecording={isRecording}
-                isUploadingAudio={isUploadingAudio}
-                recordingDuration={recordingDuration}
-                recordingUri={recordingUri}
-                metering={metering}
-                onCancel={handleCancelVoice}
-                onSend={handleStopAndSendAudio}
-                onPreview={preparePreview}
-                onStartRecording={handleStartVoiceRecording}
-                bottomInset={insets.bottom}
-            />
+            <View>
+                {isVoicePanelOpen && !isRecording && !recordingUri && !isUploadingAudio && (
+                    <Pressable
+                        style={{
+                            position: 'absolute',
+                            bottom: '100%',
+                            left: -100,
+                            right: -100,
+                            height: 5000,
+                        }}
+                        onPress={() => setIsVoicePanelOpen(false)}
+                    />
+                )}
+                <VoiceRecordingUI
+                    isRecording={isRecording}
+                    isUploadingAudio={isUploadingAudio}
+                    recordingDuration={recordingDuration}
+                    recordingUri={recordingUri}
+                    metering={metering}
+                    onCancel={handleCancelVoice}
+                    onSend={handleStopAndSendAudio}
+                    onPreview={preparePreview}
+                    onStartRecording={handleStartVoiceRecording}
+                    bottomInset={insets.bottom}
+                />
+            </View>
         );
     }
 

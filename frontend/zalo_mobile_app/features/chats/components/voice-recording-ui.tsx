@@ -1,14 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, TouchableOpacity, Text, ActivityIndicator, StyleSheet, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from 'react-native-paper';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTheme } from 'react-native-paper';
 import Animated, {
+  Extrapolation,
+  interpolate,
+  makeMutable,
   useAnimatedStyle,
   withTiming,
-  interpolate,
-  Extrapolation,
-  makeMutable,
   type SharedValue,
 } from 'react-native-reanimated';
 
@@ -330,103 +330,102 @@ export function VoiceRecordingUI({
       ]}
     >
       <>
-      <View style={[styles.waveBubble, { backgroundColor: theme.colors.elevation.level2 }]}>
-        {isUploadingAudio ? (
-          <View style={styles.uploadingContainer}>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-            <Text style={[styles.statusText, { color: theme.colors.primary }]}>Đang gửi…</Text>
-          </View>
-        ) : (
-          <>
-            <View style={[styles.liveDot, { backgroundColor: isRecording ? '#ef4444' : theme.colors.outline }]} />
-            <View style={styles.barsContainer}>
-              {barValues.current.map((sv, i) => (
-                <WaveBar
-                  key={i}
-                  heightSV={sv}
-                  opacity={barOpacities.current[i]}
-                  color={theme.colors.primary}
-                />
-              ))}
+        <View style={[styles.waveBubble, { backgroundColor: theme.colors.elevation.level2 }]}>
+          {isUploadingAudio ? (
+            <View style={styles.uploadingContainer}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={[styles.statusText, { color: theme.colors.primary }]}>Đang gửi…</Text>
             </View>
-            <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
-              {recordingDuration}
-            </Text>
-          </>
-        )}
-      </View>
+          ) : (
+            <>
+              <View style={[styles.liveDot, { backgroundColor: isRecording ? '#ef4444' : theme.colors.outline }]} />
+              <View style={styles.barsContainer}>
+                {barValues.current.map((sv, i) => (
+                  <WaveBar
+                    key={i}
+                    heightSV={sv}
+                    opacity={barOpacities.current[i]}
+                    color={theme.colors.primary}
+                  />
+                ))}
+              </View>
+              <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
+                {recordingDuration}
+              </Text>
+            </>
+          )}
+        </View>
 
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
-          onPress={handleDelete}
-          style={[
-            styles.sideButton,
-            { backgroundColor: theme.colors.elevation.level1, opacity: hasRecordDraft || isHolding ? 1 : 0.45 },
-          ]}
-          disabled={isUploadingAudio || (!hasRecordDraft && !isHolding)}
-          accessibilityLabel="Huỷ ghi âm"
-        >
-          <Ionicons name="trash" size={22} color={theme.colors.onSurfaceVariant} />
-        </TouchableOpacity>
-
-        {hasRecordDraft ? (
+        <View style={styles.actionsRow}>
           <TouchableOpacity
-            onPress={onSend}
-            style={styles.primaryAction}
+            onPress={handleDelete}
+            style={[
+              styles.sideButton,
+              { backgroundColor: theme.colors.elevation.level1, opacity: 1 },
+            ]}
             disabled={isUploadingAudio}
-            accessibilityLabel="Gửi tin nhắn thoại"
+            accessibilityLabel="Huỷ ghi âm"
           >
-            <View
-              style={[
-                styles.sendCircle,
-                { backgroundColor: theme.colors.primary },
-              ]}
-            >
-              <Ionicons name="send" size={24} color="#fff" />
-            </View>
-            <Text style={[styles.primaryLabel, { color: theme.colors.onSurface }]}>Gửi ngay</Text>
+            <Ionicons name="trash" size={22} color={theme.colors.onSurfaceVariant} />
           </TouchableOpacity>
-        ) : (
-          <View style={styles.primaryAction} {...holdPanResponder.panHandlers}>
-            <View
-              style={[
-                styles.sendCircle,
-                { backgroundColor: theme.colors.primary },
-              ]}
-            >
-              <Ionicons name="mic" size={24} color="#fff" />
-            </View>
-            <Text style={[styles.primaryLabel, { color: theme.colors.onSurface }]}>Giữ để ghi</Text>
-          </View>
-        )}
 
-        <TouchableOpacity
-          onPress={canPreview ? handlePreview : undefined}
+          {hasRecordDraft ? (
+            <TouchableOpacity
+              onPress={onSend}
+              style={styles.primaryAction}
+              disabled={isUploadingAudio}
+              accessibilityLabel="Gửi tin nhắn thoại"
+            >
+              <View
+                style={[
+                  styles.sendCircle,
+                  { backgroundColor: theme.colors.primary },
+                ]}
+              >
+                <Ionicons name="send" size={24} color="#fff" />
+              </View>
+              <Text style={[styles.primaryLabel, { color: theme.colors.onSurface }]}>Gửi ngay</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.primaryAction} {...holdPanResponder.panHandlers}>
+              <View
+                style={[
+                  styles.sendCircle,
+                  { backgroundColor: theme.colors.primary },
+                ]}
+              >
+                <Ionicons name="mic" size={24} color="#fff" />
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={canPreview ? handlePreview : undefined}
+            style={[
+              styles.sideButton,
+              { backgroundColor: theme.colors.elevation.level1, opacity: canPreview ? 1 : 0.45 },
+            ]}
+            disabled={isUploadingAudio || !canPreview}
+            accessibilityLabel="Nghe lại"
+          >
+            <Ionicons
+              name={canPreview ? (isPreviewPlaying ? 'pause' : 'play') : 'lock-closed'}
+              size={22}
+              color={theme.colors.onSurfaceVariant}
+            />
+          </TouchableOpacity>
+        </View>
+        <Text
           style={[
-            styles.sideButton,
-            { backgroundColor: theme.colors.elevation.level1, opacity: canPreview ? 1 : 0.45 },
+            styles.hintText,
+            {
+              color: theme.colors.onSurfaceVariant,
+              backgroundColor: theme.colors.elevation.level1,
+            },
           ]}
-          disabled={isUploadingAudio || !canPreview}
-          accessibilityLabel="Nghe lại"
         >
-          <Ionicons
-            name={canPreview ? (isPreviewPlaying ? 'pause' : 'play') : 'lock-closed'}
-            size={22}
-            color={theme.colors.onSurfaceVariant}
-          />
-        </TouchableOpacity>
-      </View>
-      <Text
-        style={[
-          styles.hintText,
-          {
-            color: theme.colors.onSurfaceVariant,
-            backgroundColor: theme.colors.elevation.level1,
-          },
-        ]}
-      >
-        {gestureHint}
-      </Text>
+          {gestureHint}
+        </Text>
       </>
     </View>
   );
