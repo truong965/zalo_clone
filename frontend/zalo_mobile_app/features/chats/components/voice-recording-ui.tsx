@@ -243,6 +243,10 @@ export function VoiceRecordingUI({
       setIsTapRecording(false);
       return;
     }
+    if (!canSend) {
+      await handleDelete();
+      return;
+    }
     const holdDuration = Date.now() - holdStartedAtRef.current;
     const isTapIntent = holdDuration < 220 && !movedDuringHoldRef.current;
     if (isTapIntent) {
@@ -331,33 +335,35 @@ export function VoiceRecordingUI({
       ]}
     >
       <>
-      {shouldShowTimeline && (
-        <View style={[styles.waveBubble, { backgroundColor: theme.colors.elevation.level2 }]}>
-          {isUploadingAudio ? (
-            <View style={styles.uploadingContainer}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={[styles.statusText, { color: theme.colors.primary }]}>Đang gửi…</Text>
-            </View>
-          ) : (
-            <>
-              <View style={[styles.liveDot, { backgroundColor: isRecording ? '#ef4444' : theme.colors.outline }]} />
-              <View style={styles.barsContainer}>
-                {barValues.current.map((sv, i) => (
-                  <WaveBar
-                    key={i}
-                    heightSV={sv}
-                    opacity={barOpacities.current[i]}
-                    color={theme.colors.primary}
-                  />
-                ))}
+      <View style={styles.timelineSlot}>
+        {shouldShowTimeline && (
+          <View style={[styles.waveBubble, { backgroundColor: theme.colors.elevation.level2 }]}>
+            {isUploadingAudio ? (
+              <View style={styles.uploadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={[styles.statusText, { color: theme.colors.primary }]}>Đang gửi…</Text>
               </View>
-              <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
-                {recordingDuration}
-              </Text>
-            </>
-          )}
-        </View>
-      )}
+            ) : (
+              <>
+                <View style={[styles.liveDot, { backgroundColor: isRecording ? '#ef4444' : theme.colors.outline }]} />
+                <View style={styles.barsContainer}>
+                  {barValues.current.map((sv, i) => (
+                    <WaveBar
+                      key={i}
+                      heightSV={sv}
+                      opacity={barOpacities.current[i]}
+                      color={theme.colors.primary}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
+                  {recordingDuration}
+                </Text>
+              </>
+            )}
+          </View>
+        )}
+      </View>
 
       <View style={styles.actionsRow}>
         <TouchableOpacity
@@ -495,7 +501,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
+  },
+  timelineSlot: {
+    minHeight: 62,
     marginBottom: 12,
+    justifyContent: 'center',
   },
   liveDot: {
     width: 8,
