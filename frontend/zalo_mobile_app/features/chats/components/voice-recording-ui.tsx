@@ -78,7 +78,6 @@ export function VoiceRecordingUI({
   const [isLocked, setIsLocked] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
   const [isTapRecording, setIsTapRecording] = useState(false);
-  const [gestureHint, setGestureHint] = useState('Giữ để ghi');
   const [deleteArmed, setDeleteArmed] = useState(false);
   const isHoldingRef = useRef(false);
   const isLockedRef = useRef(false);
@@ -95,6 +94,7 @@ export function VoiceRecordingUI({
   const isClipReady = !!playbackSource;
   const hasRecordDraft = isTapRecording || isLocked || isClipReady;
   const canPreview = isLocked || isClipReady;
+  const shouldShowTimeline = isUploadingAudio || isRecording || isClipReady;
 
   // ── Per-bar shared values (created once, never recreated) ──────────────────
   // makeMutable creates a SharedValue imperatively — safe to store in a ref.
@@ -199,7 +199,6 @@ export function VoiceRecordingUI({
     setDeleteArmed(false);
     movedDuringHoldRef.current = false;
     holdStartedAtRef.current = 0;
-    setGestureHint('Giữ để ghi');
   };
 
   const handleDelete = async () => {
@@ -211,7 +210,6 @@ export function VoiceRecordingUI({
 
   const handleSendPress = async () => {
     if (isUploadingAudio) return;
-    setGestureHint('Đang gửi...');
     await onSend();
     setPreviewUri(null);
     resetHoldStates();
@@ -227,7 +225,6 @@ export function VoiceRecordingUI({
     setIsTapRecording(false);
     setIsHolding(true);
     setDeleteArmed(false);
-    setGestureHint('Vuốt trái để xóa, phải để khóa');
     await onStartRecording();
   };
 
@@ -244,7 +241,6 @@ export function VoiceRecordingUI({
       isHoldingRef.current = false;
       setIsHolding(false);
       setIsTapRecording(false);
-      setGestureHint('Đang ghi âm (đã khóa)');
       return;
     }
     const holdDuration = Date.now() - holdStartedAtRef.current;
@@ -255,13 +251,11 @@ export function VoiceRecordingUI({
       setIsHolding(false);
       setIsLocked(true);
       setIsTapRecording(true);
-      setGestureHint('Đang ghi âm (đã khóa)');
       return;
     }
     isHoldingRef.current = false;
     setIsHolding(false);
     setIsTapRecording(false);
-    setGestureHint('Đang gửi...');
     await onSend();
   };
 
@@ -285,7 +279,6 @@ export function VoiceRecordingUI({
             if (!deleteArmedRef.current) {
               deleteArmedRef.current = true;
               setDeleteArmed(true);
-              setGestureHint('Thả tay để xóa');
             }
             return;
           }
@@ -295,7 +288,6 @@ export function VoiceRecordingUI({
             deleteArmedRef.current = false;
             setIsLocked(true);
             setDeleteArmed(false);
-            setGestureHint('Đã khóa ghi âm');
             return;
           }
 
@@ -314,7 +306,6 @@ export function VoiceRecordingUI({
 
   useEffect(() => {
     if (!isRecording && !recordingUri && !isUploadingAudio && !isLocked && !isHolding) {
-      setGestureHint('Giữ để ghi');
       setDeleteArmed(false);
       setIsTapRecording(false);
       setPreviewUri(null);
@@ -340,31 +331,33 @@ export function VoiceRecordingUI({
       ]}
     >
       <>
-      <View style={[styles.waveBubble, { backgroundColor: theme.colors.elevation.level2 }]}>
-        {isUploadingAudio ? (
-          <View style={styles.uploadingContainer}>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-            <Text style={[styles.statusText, { color: theme.colors.primary }]}>Đang gửi…</Text>
-          </View>
-        ) : (
-          <>
-            <View style={[styles.liveDot, { backgroundColor: isRecording ? '#ef4444' : theme.colors.outline }]} />
-            <View style={styles.barsContainer}>
-              {barValues.current.map((sv, i) => (
-                <WaveBar
-                  key={i}
-                  heightSV={sv}
-                  opacity={barOpacities.current[i]}
-                  color={theme.colors.primary}
-                />
-              ))}
+      {shouldShowTimeline && (
+        <View style={[styles.waveBubble, { backgroundColor: theme.colors.elevation.level2 }]}>
+          {isUploadingAudio ? (
+            <View style={styles.uploadingContainer}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={[styles.statusText, { color: theme.colors.primary }]}>Đang gửi…</Text>
             </View>
-            <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
-              {recordingDuration}
-            </Text>
-          </>
-        )}
-      </View>
+          ) : (
+            <>
+              <View style={[styles.liveDot, { backgroundColor: isRecording ? '#ef4444' : theme.colors.outline }]} />
+              <View style={styles.barsContainer}>
+                {barValues.current.map((sv, i) => (
+                  <WaveBar
+                    key={i}
+                    heightSV={sv}
+                    opacity={barOpacities.current[i]}
+                    color={theme.colors.primary}
+                  />
+                ))}
+              </View>
+              <Text style={[styles.timeText, { color: theme.colors.onSurfaceVariant }]}>
+                {recordingDuration}
+              </Text>
+            </>
+          )}
+        </View>
+      )}
 
       <View style={styles.actionsRow}>
         <TouchableOpacity
@@ -400,11 +393,11 @@ export function VoiceRecordingUI({
           <View style={styles.primaryAction} {...holdPanResponder.panHandlers}>
             <View
               style={[
-                styles.sendCircle,
+                styles.holdCircle,
                 { backgroundColor: theme.colors.primary },
               ]}
             >
-              <Ionicons name="mic" size={24} color="#fff" />
+              <Ionicons name="mic" size={36} color="#fff" />
             </View>
             <Text style={[styles.primaryLabel, { color: theme.colors.onSurface }]}>Giữ để ghi</Text>
           </View>
@@ -426,17 +419,6 @@ export function VoiceRecordingUI({
           />
         </TouchableOpacity>
       </View>
-      <Text
-        style={[
-          styles.hintText,
-          {
-            color: theme.colors.onSurfaceVariant,
-            backgroundColor: theme.colors.elevation.level1,
-          },
-        ]}
-      >
-        {gestureHint}
-      </Text>
       </>
     </View>
   );
@@ -534,6 +516,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
   },
+  holdCircle: {
+    width: 93,
+    height: 93,
+    borderRadius: 46.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
   actionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -585,15 +580,5 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  hintText: {
-    textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 8,
-    fontSize: 12,
-    borderRadius: 999,
-    alignSelf: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
   },
 });

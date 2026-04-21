@@ -26,7 +26,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const [showExtraOptions, setShowExtraOptions] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
+    const [keyboardInset, setKeyboardInset] = useState(0);
     const theme = useTheme();
     const insets = useSafeAreaInsets();
     const { pickMedia, pickDocuments, isUploading } = useMobileMediaUpload();
@@ -34,18 +34,21 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const { createReminder } = useReminders(conversationId);
     const { replyTarget, clearReplyTarget } = useChatStore();
     const androidBaseBottomInset = Math.max(insets.bottom, 2);
-    const androidKeyboardOffset = Platform.OS === 'android' && androidKeyboardInset > 0
-        ? androidKeyboardInset + 6
+    const androidKeyboardOffset = Platform.OS === 'android' && keyboardInset > 0
+        ? keyboardInset + 6
         : 0;
+    const isVoiceModeActive = isVoicePanelOpen || isRecording || isUploadingAudio || !!recordingUri;
+    const shouldHideInputForVoiceTimeline = isVoiceModeActive && (isRecording || isUploadingAudio || !!recordingUri);
+    const voicePanelHeight = keyboardInset > 0
+        ? keyboardInset
+        : (Platform.OS === 'ios' ? 310 : 280);
 
     React.useEffect(() => {
-        if (Platform.OS !== 'android') return;
-
         const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
-            setAndroidKeyboardInset(event.endCoordinates.height);
+            setKeyboardInset(event.endCoordinates.height);
         });
         const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-            setAndroidKeyboardInset(0);
+            setKeyboardInset(0);
         });
 
         return () => {
@@ -149,10 +152,12 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     };
 
     const handleOpenVoicePanel = () => {
+        Keyboard.dismiss();
         setIsVoicePanelOpen(true);
     };
 
     const handleStartVoiceRecording = async () => {
+        setIsVoicePanelOpen(true);
         await startRecording();
     };
 
@@ -161,37 +166,29 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
         setIsVoicePanelOpen(true);
     };
 
+    const handleFocusInput = () => {
+        setShowExtraOptions(false);
+        if (isVoiceModeActive) {
+            setIsVoicePanelOpen(false);
+            void cancelRecording();
+        }
+    };
+
     const handlePickEmoji = (emojiObject: any) => {
         setContent(prev => prev + emojiObject.emoji);
     };
 
-    if (isVoicePanelOpen || isRecording || isUploadingAudio || !!recordingUri) {
-        return (
-            <VoiceRecordingUI
-                isRecording={isRecording}
-                isUploadingAudio={isUploadingAudio}
-                recordingDuration={recordingDuration}
-                recordingUri={recordingUri}
-                metering={metering}
-                onCancel={handleCancelVoice}
-                onSend={handleStopAndSendAudio}
-                onPreview={preparePreview}
-                onStartRecording={handleStartVoiceRecording}
-                bottomInset={insets.bottom}
-            />
-        );
-    }
-
     return (
-        <View
-            className="bg-card border-t border-border"
-            style={{
-                paddingBottom:
-                    Platform.OS === 'ios'
-                        ? Math.max(insets.bottom, 8)
-                        : androidBaseBottomInset + androidKeyboardOffset,
-            }}
-        >
+        <View className="bg-card border-t border-border">
+            {!shouldHideInputForVoiceTimeline && (
+                <View
+                    style={{
+                        paddingBottom:
+                            Platform.OS === 'ios'
+                                ? Math.max(insets.bottom, 8)
+                                : androidBaseBottomInset + androidKeyboardOffset,
+                    }}
+                >
             {replyTarget && (
                 <View className="flex-row items-center px-4 py-2 bg-muted/30 border-b border-border/30 border-l-2 border-l-primary/60">
                     <View className="mr-3 p-1">
@@ -228,7 +225,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                         }}
                         style={{ maxHeight: 100 }}
                         editable={!isUploading}
-                        onFocus={() => setShowExtraOptions(false)}
+                        onFocus={handleFocusInput}
                     />
                 </View>
 
@@ -246,7 +243,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                             <Ionicons name="ellipsis-horizontal" size={24} color={showExtraOptions ? theme.colors.primary : theme.colors.onSurfaceVariant} />
                         </TouchableOpacity>
                         <TouchableOpacity className="p-2" onPress={handleOpenVoicePanel}>
-                            <Ionicons name="mic-outline" size={24} color={theme.colors.onSurfaceVariant} />
+                            <Ionicons name="mic-outline" size={24} color={isVoiceModeActive ? theme.colors.primary : theme.colors.onSurfaceVariant} />
                         </TouchableOpacity>
                         <TouchableOpacity className="p-2" onPress={handleMediaUpload}>
                             <Ionicons name="image-outline" size={24} color={theme.colors.onSurfaceVariant} />
@@ -285,6 +282,24 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                 open={showEmojiPicker}
                 onClose={() => setShowEmojiPicker(false)}
             />
+                </View>
+            )}
+            {isVoiceModeActive && (
+                <View style={{ height: voicePanelHeight }}>
+                    <VoiceRecordingUI
+                        isRecording={isRecording}
+                        isUploadingAudio={isUploadingAudio}
+                        recordingDuration={recordingDuration}
+                        recordingUri={recordingUri}
+                        metering={metering}
+                        onCancel={handleCancelVoice}
+                        onSend={handleStopAndSendAudio}
+                        onPreview={preparePreview}
+                        onStartRecording={handleStartVoiceRecording}
+                        bottomInset={0}
+                    />
+                </View>
+            )}
         </View>
     );
 }
