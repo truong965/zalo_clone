@@ -57,6 +57,7 @@
     },
     "plugins": [
       "expo-router",
+      "@react-native-voice/voice",
       [
         "expo-splash-screen",
         {

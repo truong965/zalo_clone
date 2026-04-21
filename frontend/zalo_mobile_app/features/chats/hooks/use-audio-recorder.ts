@@ -71,6 +71,7 @@ export function useAudioRecorder() {
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const startInFlightRef = useRef(false);
+  const recordedDurationMillisRef = useRef(0);
   const { accessToken } = useAuth();
 
   // Use HIGH_QUALITY preset which targets AAC/M4A on both platforms
@@ -87,6 +88,9 @@ export function useAudioRecorder() {
   // Sync duration from recorder state
   useEffect(() => {
     setRecordingDuration(formatTime(state.durationMillis));
+    if (state.durationMillis > 0) {
+      recordedDurationMillisRef.current = state.durationMillis;
+    }
     if (state.durationMillis >= 600000 && isRecording) {
       void stopAndSend();
     }
@@ -133,6 +137,7 @@ export function useAudioRecorder() {
       setIsRecording(true);
       setRecordingDuration('00:00');
       setRecordingUri(null);
+      recordedDurationMillisRef.current = 0;
     } catch (err) {
       console.error('Failed to start recording', err);
       Toast.show({
@@ -155,6 +160,7 @@ export function useAudioRecorder() {
     setIsRecording(false);
     setRecordingDuration('00:00');
     setRecordingUri(null);
+    recordedDurationMillisRef.current = 0;
   }, [recorder]);
 
   const preparePreview = useCallback(async (): Promise<string | null> => {
@@ -164,6 +170,10 @@ export function useAudioRecorder() {
       const uriBeforeStop = recorder.uri;
       await recorder.stop();
       const uri = recorder.uri || uriBeforeStop;
+      recordedDurationMillisRef.current = Math.max(
+        recordedDurationMillisRef.current,
+        state.durationMillis ?? 0,
+      );
 
       setIsRecording(false);
       if (uri) {
@@ -175,7 +185,7 @@ export function useAudioRecorder() {
       console.error('Failed to prepare voice preview', error);
       return null;
     }
-  }, [recorder, recordingUri]);
+  }, [recorder, recordingUri, state.durationMillis]);
 
   const stopAndSend = useCallback(async (): Promise<string | null> => {
     if (!accessToken) {
@@ -189,7 +199,10 @@ export function useAudioRecorder() {
     }
 
     try {
-      const currentDurationMillis = state.durationMillis ?? 0;
+      const currentDurationMillis = Math.max(
+        state.durationMillis ?? 0,
+        recordedDurationMillisRef.current,
+      );
       if (currentDurationMillis < 3000) {
         Toast.show({
           type: 'error',
@@ -211,6 +224,7 @@ export function useAudioRecorder() {
       setIsRecording(false);
       setRecordingDuration('00:00');
       setRecordingUri(null);
+      recordedDurationMillisRef.current = 0;
 
       if (!uri) throw new Error('No URI available from recording');
 

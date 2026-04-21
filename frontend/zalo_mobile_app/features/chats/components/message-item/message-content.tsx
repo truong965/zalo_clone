@@ -10,6 +10,7 @@ import { MessageImageAttachment } from './attachments/message-image-attachment';
 import { MessageVideoAttachment } from './attachments/message-video-attachment';
 import { MessageAudioAttachment } from './attachments/message-audio-attachment';
 import { MessageDocumentAttachment } from './attachments/message-document-attachment';
+import { MessageLinkPreview } from './message-link-preview';
 
 interface Props {
   message: Message;
@@ -53,6 +54,7 @@ export function MessageContent({
     typeof (message.metadata as Record<string, unknown>).forward === 'object',
   );
   const attachments = message.mediaAttachments || [];
+  const firstUrl = extractFirstUrl(message.content || '');
 
   const isPendingNonText = attachments.length === 0 && !message.parentMessage && !message.replyTo && message.type !== MessageType.TEXT;
 
@@ -115,10 +117,11 @@ export function MessageContent({
 
       {/* Text caption or body */}
       {!!message.content && (
-        <Text style={[styles.messageText, (attachments.length > 0 || message.parentMessage || message.replyTo || Object.keys(translations).length > 0) && { marginBottom: 4 }]}>
+        <Text style={[styles.messageText, (attachments.length > 0 || message.parentMessage || message.replyTo || Object.keys(translations).length > 0 || firstUrl) && { marginBottom: 4 }]}>
           {message.content}
         </Text>
       )}
+      {firstUrl && <MessageLinkPreview url={firstUrl} theme={theme} />}
 
       {/* Pending status for non-text without attachments */}
       {isPendingNonText && (
@@ -311,3 +314,25 @@ const localStyles = StyleSheet.create({
     fontStyle: 'italic',
   },
 });
+
+function extractFirstUrl(content: string): string | null {
+  if (!content) return null;
+  const normalizedContent = content.replace(/\n/g, ' ');
+  const withProtocolMatch = normalizedContent.match(/(https?:\/\/[^\s]+)/i);
+  if (withProtocolMatch?.[1]) {
+    return withProtocolMatch[1].trim().replace(/[),.!?]+$/, '');
+  }
+
+  const wwwMatch = normalizedContent.match(/(www\.[^\s]+)/i);
+  if (wwwMatch?.[1]) {
+    return `https://${wwwMatch[1].trim().replace(/[),.!?]+$/, '')}`;
+  }
+
+  // Fallback: plain domain like "google.com/abc" or "zalo.me"
+  const plainDomainMatch = normalizedContent.match(
+    /\b([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:\/[^\s]*)?)/i,
+  );
+  if (!plainDomainMatch?.[1]) return null;
+  const candidate = plainDomainMatch[1].trim().replace(/[),.!?]+$/, '');
+  return `https://${candidate}`;
+}
