@@ -39,6 +39,7 @@ interface CallStoreState {
   error: string | null;
 
   incomingCall: IncomingCallData | null;
+  isAcceptingIncoming: boolean;
 
   dailyRoomUrl: string | null;
   dailyToken: string | null;
@@ -72,6 +73,7 @@ interface CallStoreActions {
   setCallId: (callId: string) => void;
 
   setCallStatus: (status: CallStatus) => void;
+  setAcceptingIncoming: (accepting: boolean) => void;
   tick: () => void;
   setError: (error: string | null) => void;
   setPeerConnected: (connected: boolean) => void;
@@ -98,6 +100,7 @@ const initialState: CallStoreState = {
   callDuration: 0,
   error: null,
   incomingCall: null,
+  isAcceptingIncoming: false,
   dailyRoomUrl: null,
   dailyToken: null,
   isGroupCall: false,
@@ -129,6 +132,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
         isGroupCall: isGroupCall ?? false,
         isCameraOff: initialCameraOff ?? (callType === 'VOICE'),
         isSpeakerOn: callType === 'VIDEO',
+        isAcceptingIncoming: false,
         error: null,
       });
     },
@@ -154,6 +158,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
         isCameraOff: data.callType === 'VOICE',
         isSpeakerOn: data.callType === 'VIDEO',
         error: null,
+        isAcceptingIncoming: false,
       });
     },
 
@@ -167,6 +172,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
         dailyRoomUrl: params?.dailyRoomUrl || null,
         dailyToken: params?.dailyToken || null,
         callType: state.callType,
+        isAcceptingIncoming: false,
       }));
     },
 
@@ -181,6 +187,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
         callDuration: 0,
         incomingCall: null,
         callType: state.callType,
+        isAcceptingIncoming: false,
       }));
     },
 
@@ -189,6 +196,9 @@ export const useCallStore = create<CallStoreState & CallStoreActions>()(
     setCallStatus: (status) => {
       console.log('[CallStore] setCallStatus:', status);
       set({ callStatus: status });
+    },
+    setAcceptingIncoming: (accepting) => {
+      set({ isAcceptingIncoming: accepting });
     },
     tick: () => set((state) => ({ callDuration: state.callDuration + 1 })),
     setError: (error) => {

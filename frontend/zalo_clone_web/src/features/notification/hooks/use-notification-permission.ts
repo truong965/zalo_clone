@@ -66,8 +66,9 @@ export function useNotificationPermission(
                   // Missed call or generic notification — show toast
                   const title = payload.notification?.title || data.title || 'Thông báo';
                   const body = payload.notification?.body || data.body || '';
-
-                  toast.info(title, { description: body });
+                  if (body !== '') {
+                        toast.info(title, { description: body });
+                  }
             });
       }, [enabled]);
 

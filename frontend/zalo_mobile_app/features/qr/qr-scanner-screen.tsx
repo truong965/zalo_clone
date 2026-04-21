@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/providers/auth-provider';
 import { ApiRequestError, mobileApi } from '@/services/api';
+import { socketManager } from '@/lib/socket';
+import { SocketEvents } from '@/constants/socket-events';
 import type { QrScanResponse } from '@/types/auth';
 import type { JoinGroupPreviewResponse } from '@/types/conversation';
 
@@ -308,13 +310,22 @@ export function QrScannerScreen() {
             setIsProcessing(true);
 
             try {
-                  const result = await mobileApi.requestJoinGroup(groupPreview.conversationId, accessToken);
+                  // Use socket instead of REST: the backend handler (ConversationGateway.handleRequestJoin)
+                  // both processes the join request AND emits GROUP_JOIN_REQUEST_RECEIVED to all admins,
+                  // keeping the Web admin panel in real-time sync without any extra plumbing.
+                  const response = await socketManager.emitWithAck<{ result: { status: string; message?: string } }>(
+                        SocketEvents.GROUP_REQUEST_JOIN,
+                        { conversationId: groupPreview.conversationId },
+                  );
 
-                  if (result.status === 'APPROVED') {
+                  const status = response?.result?.status;
+
+                  if (status === 'APPROVED') {
                         router.replace({ pathname: '/chat/[id]', params: { id: groupPreview.conversationId } } as any);
                         return;
                   }
 
+                  // PENDING — admin needs to approve
                   Alert.alert(t('common.success', 'Thành công'), t('qr.groupJoinPending', 'Yêu cầu gia nhập nhóm thành công. Vui lòng chờ quản trị viên duyệt.'));
                   setHasScanned(false);
                   setGroupPreview(null);
@@ -326,6 +337,7 @@ export function QrScannerScreen() {
                   setIsProcessing(false);
             }
       };
+
 
       const onConfirm = async () => {
             if (!qrSessionId) {

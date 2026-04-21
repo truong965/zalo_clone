@@ -57,7 +57,8 @@ export function ActiveCallView() {
       const videoTracks = remoteStream.getVideoTracks();
       // On mobile, sometimes tracks are removed or muted
       setRemoteVideoOff(
-        videoTracks.length === 0 || videoTracks.every((t: any) => !t.enabled || t.muted)
+        videoTracks.length === 0 ||
+        videoTracks.every((t: any) => t.readyState === 'ended' || t.muted)
       );
     };
 

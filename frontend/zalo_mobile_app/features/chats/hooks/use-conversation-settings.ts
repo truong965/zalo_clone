@@ -69,6 +69,31 @@ export function useConversationSettings(id: string) {
     },
   });
 
+  const inviteMembersMutation = useMutation({
+    mutationFn: (userIds: string[]) => {
+      return new Promise((resolve, reject) => {
+        if (!socket) return reject(new Error('Socket not connected'));
+        socket.emit(SocketEvents.GROUP_INVITE_MEMBERS, { conversationId: id, userIds }, (response: any) => {
+          if (response?.success || !response?.error) {
+            resolve(response);
+          } else {
+            reject(new Error(response.message || 'Gửi lời mời thất bại'));
+          }
+        });
+      });
+    },
+    onSuccess: (data: any) => {
+      // Backend returns { result: { invitedCount, skippedCount } }
+      const count = data?.result?.invitedCount || 0;
+      queryClient.invalidateQueries({ queryKey: ['conversation', id] });
+      Toast.show({ 
+        type: 'success', 
+        text1: 'Đã gửi lời mời', 
+        text2: count > 0 ? `Yêu cầu tham gia đã được gửi cho ${count} người dùng.` : 'Yêu cầu tham gia đã được gửi.'
+      });
+    },
+  });
+
   const leaveMutation = useMutation({
     mutationFn: () => {
       return new Promise((resolve, reject) => {
@@ -130,6 +155,7 @@ export function useConversationSettings(id: string) {
     updateMutation,
     transferAdminMutation,
     addMembersMutation,
+    inviteMembersMutation,
     leaveMutation,
     dissolveMutation,
     removeMemberMutation,

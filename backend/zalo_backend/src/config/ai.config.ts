@@ -5,9 +5,19 @@ function parseBooleanEnv(value: string | undefined, defaultValue = false): boole
   return value.toLowerCase() === 'true';
 }
 
+function normalizeAiBaseUrl(rawValue: string | undefined): string {
+  const fallback = 'http://127.0.0.1:3001';
+  const value = (rawValue || fallback).trim();
+
+  return value
+    .replace(/^http:\/\/localhost(?=[:/]|$)/i, 'http://127.0.0.1')
+    .replace(/^https:\/\/localhost(?=[:/]|$)/i, 'https://127.0.0.1')
+    .replace(/\/+$/, '');
+}
+
 export default registerAs('ai', () => ({
   enabled: process.env.AI_AGENT_ENABLED !== 'false',
   unifiedStreamEnabled: parseBooleanEnv(process.env.AI_UNIFIED_STREAM_ENABLED, false),
-  baseUrl: process.env.AI_ZALO_URL || 'http://localhost:3001',
-  apiKey: process.env.INTERNAL_API_KEY ||'',
+  baseUrl: normalizeAiBaseUrl(process.env.AI_ZALO_URL),
+  apiKey: process.env.INTERNAL_API_KEY || '',
 }));

@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { FileUtils } from '@/utils/file.utils';
+import { DocumentPreviewModal, canPreviewDocument } from './document-preview-modal';
 
 const { Text } = Typography;
 
@@ -116,7 +117,8 @@ export const FileDocumentItem = memo(function FileDocumentItem({
 }: SharedFileItemProps) {
       const { t } = useTranslation();
       const [downloading, setDownloading] = useState(false);
-      const viewable = isBrowserViewable(mimeType);
+      const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+      const viewable = isBrowserViewable(mimeType) || canPreviewDocument(originalName, mimeType);
       const extension = FileUtils.getExtension(originalName);
 
       const handleDownload = async (e: React.MouseEvent) => {
@@ -145,43 +147,59 @@ export const FileDocumentItem = memo(function FileDocumentItem({
       };
 
       const handleItemClick = () => {
-            if (viewable && cdnUrl) window.open(cdnUrl, '_blank');
+            if (!viewable || !cdnUrl) return;
+
+            if (canPreviewDocument(originalName, mimeType)) {
+                  setIsPreviewOpen(true);
+                  return;
+            }
+
+            window.open(cdnUrl, '_blank');
       };
       return (
+            <>
+                  <div
+                        className={`flex items-center gap-3 px-3 py-2 transition-colors group ${viewable ? 'hover:bg-gray-50 cursor-pointer' : ''
+                              }`}
+                        onClick={viewable ? handleItemClick : undefined}
+                  >
+                        <FileTypeIcon extension={extension} mimeType={mimeType} />
 
-            <div
-                  className={`flex items-center gap-3 px-3 py-2 transition-colors group ${viewable ? 'hover:bg-gray-50 cursor-pointer' : ''
-                        }`}
-                  onClick={viewable ? handleItemClick : undefined}
-            >
-                  <FileTypeIcon extension={extension} mimeType={mimeType} />
-
-                  <div className="flex-1 min-w-0">
-                        <Text strong className="text-sm text-gray-800 block truncate pr-2">
-                              {originalName}
-                        </Text>
-                        <Text className="text-[11px] text-gray-400 block">
-                              {formatFileSize(sizeBytes)} · {dayjs(createdAt).format('DD/MM/YYYY')}
-                              {extraLine1 && ` · ${extraLine1}`}
-                        </Text>
-                        {extraLine2 && (
-                              <Text className="text-[11px] text-gray-400 block truncate">
-                                    {extraLine2}
+                        <div className="flex-1 min-w-0">
+                              <Text strong className="text-sm text-gray-800 block truncate pr-2">
+                                    {originalName}
                               </Text>
-                        )}
+                              <Text className="text-[11px] text-gray-400 block">
+                                    {formatFileSize(sizeBytes)} · {dayjs(createdAt).format('DD/MM/YYYY')}
+                                    {extraLine1 && ` · ${extraLine1}`}
+                              </Text>
+                              {extraLine2 && (
+                                    <Text className="text-[11px] text-gray-400 block truncate">
+                                          {extraLine2}
+                                    </Text>
+                              )}
+                        </div>
+
+                        <button
+                              onClick={handleDownload}
+                              disabled={downloading}
+                              className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors opacity-0 group-hover:opacity-100 ${downloading
+                                    ? 'text-blue-400 bg-blue-50 opacity-100 cursor-not-allowed'
+                                    : 'text-gray-500 hover:text-blue-600 hover:bg-black/5'
+                                    }`}
+                              title={t('chat.infoSidebar.media')}
+                        >
+                              <DownloadOutlined className={downloading ? 'text-lg animate-pulse' : 'text-lg'} />
+                        </button>
                   </div>
 
-                  <button
-                        onClick={handleDownload}
-                        disabled={downloading}
-                        className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors opacity-0 group-hover:opacity-100 ${downloading
-                              ? 'text-blue-400 bg-blue-50 opacity-100 cursor-not-allowed'
-                              : 'text-gray-500 hover:text-blue-600 hover:bg-black/5'
-                              }`}
-                        title={t('chat.infoSidebar.media')}
-                  >
-                        <DownloadOutlined className={downloading ? 'text-lg animate-pulse' : 'text-lg'} />
-                  </button>
-            </div>
+                  <DocumentPreviewModal
+                        open={isPreviewOpen}
+                        onClose={() => setIsPreviewOpen(false)}
+                        fileName={originalName}
+                        fileUrl={cdnUrl}
+                        mimeType={mimeType}
+                  />
+            </>
       );
 });

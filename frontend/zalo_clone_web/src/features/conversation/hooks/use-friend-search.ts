@@ -58,6 +58,9 @@ export function useFriendSearch(params?: FriendSearchParams) {
       const friendsQuery = useFriendsList({
             search: searchKeyword || undefined,
             conversationId,
+            // When used in add-member context (conversationId provided), always fetch
+            // fresh data so recently-removed members are not hidden by stale cache.
+            staleTime: conversationId ? 0 : undefined,
       });
 
       // ================================================================

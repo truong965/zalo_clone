@@ -191,19 +191,59 @@ export function MessageContent({
 
       {/* Images */}
       {images.length > 0 && (
-        images.length === 1 ? (
-          <TouchableOpacity onPress={() => onMediaPress?.(images[0].id.toString())} activeOpacity={0.9}>
-            <MessageImageAttachment attachment={images[0]} isSingle />
-          </TouchableOpacity>
-        ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: 220 }}>
-            {images.map(img => (
-              <TouchableOpacity key={img.id} onPress={() => onMediaPress?.(img.id.toString())} activeOpacity={0.9} style={{ width: '49%' }}>
-                <MessageImageAttachment attachment={img} isSingle={false} />
+        <View style={{ overflow: 'hidden', marginTop: 4 }}>
+          {images.length === 1 && (
+            <TouchableOpacity onPress={() => onMediaPress?.(images[0].id.toString())} activeOpacity={0.9} style={{ width: 240, height: 240 }}>
+              <MessageImageAttachment attachment={images[0]} />
+            </TouchableOpacity>
+          )}
+          {images.length === 2 && (
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {images.map(img => (
+                <TouchableOpacity key={img.id} onPress={() => onMediaPress?.(img.id.toString())} activeOpacity={0.9} style={{ width: 118, height: 240 }}>
+                  <MessageImageAttachment attachment={img} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {images.length === 3 && (
+            <View style={{ gap: 4 }}>
+              <TouchableOpacity onPress={() => onMediaPress?.(images[0].id.toString())} activeOpacity={0.9} style={{ width: 240, height: 140 }}>
+                <MessageImageAttachment attachment={images[0]} />
               </TouchableOpacity>
-            ))}
-          </View>
-        )
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {images.slice(1).map(img => (
+                  <TouchableOpacity key={img.id} onPress={() => onMediaPress?.(img.id.toString())} activeOpacity={0.9} style={{ width: 118, height: 118 }}>
+                    <MessageImageAttachment attachment={img} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+          {images.length === 4 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: 240, gap: 4, rowGap: 4 }}>
+              {images.map(img => (
+                <TouchableOpacity key={img.id} onPress={() => onMediaPress?.(img.id.toString())} activeOpacity={0.9} style={{ width: 118, height: 118 }}>
+                  <MessageImageAttachment attachment={img} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {images.length >= 5 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: 242, gap: 4, rowGap: 4 }}>
+              {images.slice(0, 6).map((img, index) => (
+                <TouchableOpacity key={img.id} onPress={() => onMediaPress?.(img.id.toString())} activeOpacity={0.9} style={{ width: 78, height: 78 }}>
+                  <MessageImageAttachment attachment={img} />
+                  {index === 5 && images.length > 6 && (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', borderRadius: 12 }}>
+                       <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>+{images.length - 6}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
       )}
 
       {/* Videos */}

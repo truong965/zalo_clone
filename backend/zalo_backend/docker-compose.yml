@@ -37,6 +37,7 @@ services:
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     ports:
       - "9000:9000" # API
       - "9001:9001" # Console UI
@@ -84,13 +85,23 @@ services:
     # Docker Compose substitutes ${TURN_SECRET} here from the .env file.
     # This is the correct way to inject secrets into coturn — coturn's config
     # file does NOT expand shell variables, but coturn CLI args do work.
-    command: -n -c /etc/coturn/turnserver.conf --static-auth-secret=${TURN_SECRET:-coturn-dev-secret}
+    command: -n -c /etc/coturn/turnserver.conf
+      --static-auth-secret=${TURN_SECRET:-coturn-dev-secret}
     volumes:
       - ./mc-config/coturn.conf:/etc/coturn/turnserver.conf:ro
     environment:
       - TURN_SECRET=${TURN_SECRET:-coturn-dev-secret}
     healthcheck:
-      test: [ "CMD", "turnutils_uclient", "-p", "3478", "127.0.0.1", "-e", "127.0.0.1" ]
+      test:
+        [
+          "CMD",
+          "turnutils_uclient",
+          "-p",
+          "3478",
+          "127.0.0.1",
+          "-e",
+          "127.0.0.1",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -102,7 +113,12 @@ services:
     depends_on:
       - minio
     entrypoint: >
-      /bin/sh -c " echo 'Waiting for MinIO to start...'; sleep 5; mc alias set myminio http://minio:9000 minioadmin minioadmin; mc mb myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set download myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1 myminio/zalo-clone-media-dev --prefix 'temp/'; echo 'MinIO bucket initialized with lifecycle rule (anonymous download enabled for dev)'; "
+      /bin/sh -c "set -e; echo 'Waiting for MinIO to start...'; sleep 5; mc
+      alias set myminio http://minio:9000 minioadmin minioadmin; mc mb
+      myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set download
+      myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1
+      myminio/zalo-clone-media-dev --prefix 'temp/' || true; echo 'MinIO bucket
+      initialized with lifecycle rule (anonymous download enabled for dev)'; "
 
   cloudflared:
     image: cloudflare/cloudflared:latest

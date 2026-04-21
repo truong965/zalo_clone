@@ -5,6 +5,8 @@ import { SocketEvents } from '@/constants/socket-events';
 import { ApiRequestError, mobileApi } from '@/services/api';
 import { useAiStore, type AiChatMessage } from '../stores/ai.store';
 
+let isAiIntegrationDisabled = false;
+
 function createRequestId() {
   return `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -164,7 +166,7 @@ export function useAiChat(conversationId: string) {
 
   // Fetch history on conversation change
   const syncHistory = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || isAiIntegrationDisabled) return;
 
     try {
       const data = await mobileApi.getAiSessions(accessToken, conversationId, 'ASK');
@@ -190,6 +192,16 @@ export function useAiChat(conversationId: string) {
         sessionId: sessions[0].id,
       });
     } catch (error) {
+      if (
+        error instanceof ApiRequestError &&
+        error.status === 503 &&
+        String(error.message).includes('AI integration is disabled')
+      ) {
+        isAiIntegrationDisabled = true;
+        hydrateAiConversation({ conversationId, messages: [] });
+        return;
+      }
+
       if (
         error instanceof ApiRequestError &&
         (error.status >= 500 || String(error.message).includes('Internal AI Service Error'))

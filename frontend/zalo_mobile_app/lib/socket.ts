@@ -13,11 +13,18 @@ class SocketManager {
     const forcePolling = this.shouldForcePolling();
 
     return {
-      transports: forcePolling ? ['polling'] : ['polling', 'websocket'],
+      transports: forcePolling ? ['polling'] : ['websocket', 'polling'],
       upgrade: !forcePolling,
       tryAllTransports: true,
-      rememberUpgrade: false,
+      rememberUpgrade: !forcePolling,
     };
+  }
+
+  private isTransientGatewayPollError(error: any): boolean {
+    const message = String(error?.message || '');
+    const status = Number(error?.context?.status || error?.description || 0);
+
+    return message === 'xhr poll error' && [502, 503, 504].includes(status);
   }
 
   private resolveSocketBaseUrl(): string {
@@ -64,12 +71,18 @@ class SocketManager {
     });
 
     this.socket.on(SocketEvents.CONNECT_ERROR, (error: any) => {
-      console.error('❌ Socket connection error:', {
+      const payload = {
         message: error?.message,
-        description: error?.description,
-        context: error?.context,
+        status: error?.context?.status || error?.description,
         transport: this.socket?.io.engine?.transport?.name,
-      });
+      };
+
+      if (this.isTransientGatewayPollError(error)) {
+        console.warn('⚠️ Socket transient gateway error (will retry):', payload);
+        return;
+      }
+
+      console.error('❌ Socket connection error:', payload);
     });
 
     this.socket.on('error', (error) => {
@@ -132,12 +145,21 @@ class SocketManager {
     });
 
     this.socket.on(SocketEvents.CONNECT_ERROR, (error: any) => {
-      console.error('❌ Socket connection error (Unauthenticated):', {
+      const payload = {
         message: error?.message,
-        description: error?.description,
-        context: error?.context,
+        status: error?.context?.status || error?.description,
         transport: this.socket?.io.engine?.transport?.name,
-      });
+      };
+
+      if (this.isTransientGatewayPollError(error)) {
+        console.warn(
+          '⚠️ Socket transient gateway error (Unauthenticated, will retry):',
+          payload,
+        );
+        return;
+      }
+
+      console.error('❌ Socket connection error (Unauthenticated):', payload);
     });
 
     return this.socket;

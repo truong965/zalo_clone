@@ -122,7 +122,7 @@ export class PushNotificationService {
   constructor(
     private readonly firebase: FirebaseService,
     private readonly deviceTokens: DeviceTokenService,
-  ) {}
+  ) { }
 
   /** Whether push notifications are available (Firebase initialised + credentials present). */
   get isAvailable(): boolean {
@@ -160,9 +160,8 @@ export class PushNotificationService {
     const callTypeLabel = callType === 'VIDEO' ? 'Video' : 'Thoại';
     const title = isGroupCall ? '📞 Cuộc gọi nhóm' : '📞 Cuộc gọi đến';
     const body = isGroupCall
-      ? `${callerName} đang gọi nhóm ${callTypeLabel}${
-          groupName ? ` trong ${groupName}` : ''
-        }`
+      ? `${callerName} đang gọi nhóm ${callTypeLabel}${groupName ? ` trong ${groupName}` : ''
+      }`
       : `${callerName} đang gọi ${callTypeLabel} cho bạn`;
 
     const data: Record<string, string> = {
@@ -204,23 +203,21 @@ export class PushNotificationService {
     const tokens = await this.deviceTokens.getTokensByUserId(userId);
     if (tokens.length === 0) return;
 
-    // Send a CANCEL_CALL Hybrid push. Using the same androidTag ensures
-    // the "Call ended" notification replaces the "Incoming Call" notification
-    // in the Android tray instantly, providing immediate feedback.
+    // Send data-only CANCEL_CALL. Clients use it to dismiss ringing state/UI.
+    // We intentionally avoid a notification payload to prevent a misleading
+    // "Cuộc gọi đã kết thúc" banner on the receiving device right after accept.
     const data: Record<string, string> = {
       type: 'CANCEL_CALL',
       callId,
       timestamp: new Date().toISOString(),
     };
 
-    const { invalidTokens } = await this.firebase.sendNotification(
+    const { invalidTokens } = await this.firebase.sendMulticast(
       tokens,
-      { title: 'Cuộc gọi đã kết thúc', body: '' },
       data,
       {
         priority: 'high',
         ttlSeconds: 10,
-        androidTag: `call-${callId}`, // Same tag replaces incoming call notification
       },
     );
 

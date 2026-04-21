@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { mobileApi } from '@/services/api';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -12,9 +13,36 @@ export interface MobileAsset {
   type: 'image' | 'video' | 'document';
 }
 
+const ASSET_SIZE_LIMITS_MB: Record<MobileAsset['type'], number> = {
+  image: 10,
+  video: 100,
+  document: 25,
+};
+
 export function useMobileMediaUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const { accessToken } = useAuth();
+
+  const resolveFileSize = useCallback(async (asset: MobileAsset): Promise<number> => {
+    if (asset.fileSize > 0) {
+      return asset.fileSize;
+    }
+
+    const info = await FileSystem.getInfoAsync(asset.uri);
+    if (!info.exists || typeof info.size !== 'number' || info.size <= 0) {
+      throw new Error('Khong xac dinh duoc kich thuoc tep. Vui long chon tep khac.');
+    }
+
+    return info.size;
+  }, []);
+
+  const validateAssetSize = useCallback((asset: MobileAsset, sizeBytes: number) => {
+    const limitMb = ASSET_SIZE_LIMITS_MB[asset.type];
+    const limitBytes = limitMb * 1024 * 1024;
+    if (sizeBytes > limitBytes) {
+      throw new Error(`Tep ${asset.fileName} vuot qua gioi han ${limitMb}MB cho loai ${asset.type}.`);
+    }
+  }, []);
 
   const pickMedia = useCallback(async (): Promise<MobileAsset[]> => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -58,12 +86,15 @@ export function useMobileMediaUpload() {
 
   const uploadAsset = useCallback(async (asset: MobileAsset): Promise<string> => {
     if (!accessToken) throw new Error('Not authenticated');
-    
+
+    const resolvedSize = await resolveFileSize(asset);
+    validateAssetSize(asset, resolvedSize);
+
     // Step 1: Initiate
     const initResponse = await mobileApi.initiateUpload({
       fileName: asset.fileName,
       mimeType: asset.mimeType,
-      fileSize: asset.fileSize,
+      fileSize: resolvedSize,
     }, accessToken);
 
     // Step 2: Upload to S3
@@ -77,7 +108,7 @@ export function useMobileMediaUpload() {
     // Step 3: Confirm
     const confirmResponse = await mobileApi.confirmUpload(initResponse.uploadId, accessToken);
     return confirmResponse.id as string;
-  }, [accessToken]);
+  }, [accessToken, resolveFileSize, validateAssetSize]);
 
   return { pickMedia, pickDocuments, uploadAsset, isUploading, setIsUploading };
 }

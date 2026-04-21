@@ -19,6 +19,7 @@ import { AddMembersModal } from '../modals/add-members-modal';
 import { useMemberActions } from '@/features/chats/hooks/use-member-actions';
 import { TransferAdminModal } from '@/features/chats/components/modals/transfer-admin-modal';
 import { MemberActionsModal } from '@/features/chats/components/modals/member-actions-modal';
+import { GroupQrModal } from '@/features/chats/components/modals/group-qr-modal';
 
 interface GroupSettingsProps {
   conversation: Conversation;
@@ -36,6 +37,7 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
   const {
     updateMutation,
     addMembersMutation,
+    inviteMembersMutation,
   } = useConversationSettings(conversation.id);
 
   const { reminders, deleteReminder, completeReminder } = useReminders(conversation.id);
@@ -56,6 +58,7 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
   const [addMemberVisible, setAddMemberVisible] = useState(false);
   const [transferAdminVisible, setTransferAdminVisible] = useState(false);
   const [memberActionsVisible, setMemberActionsVisible] = useState(false);
+  const [groupQrVisible, setGroupQrVisible] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [remindersExpanded, setRemindersExpanded] = useState(false);
   const [requireApproval, setRequireApproval] = useState(conversation.requireApproval || false);
@@ -84,11 +87,24 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
 
   const handleAddMembers = (userIds: string[]) => {
     setAddMemberVisible(false);
-    addMembersMutation.mutate(userIds, {
-      onError: (error: any) => {
-        Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể thêm thành viên' });
-      }
-    });
+
+    // If group requires approval and user is not an admin, we must use INVITE (creates join requests).
+    // Otherwise, we use ADD (direct addition).
+    const shouldInvite = conversation.requireApproval && !isAdmin;
+
+    if (shouldInvite) {
+      inviteMembersMutation.mutate(userIds, {
+        onError: (error: any) => {
+          Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể gửi lời mời' });
+        }
+      });
+    } else {
+      addMembersMutation.mutate(userIds, {
+        onError: (error: any) => {
+          Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message || 'Không thể thêm thành viên' });
+        }
+      });
+    }
   };
 
   const excludeIds = useMemo(
@@ -142,6 +158,13 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
         <MediaExpandableSection
           conversationId={conversation.id}
           onExpand={() => router.push(`/chat/${conversation.id}/media`)}
+        />
+
+        <View className="mt-2" />
+        <SettingsListItem
+          icon="qr-code-outline"
+          label="Mời tham gia nhóm qua QR"
+          onPress={() => setGroupQrVisible(true)}
         />
 
         <View className="mt-2" />
@@ -205,7 +228,7 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
           onAdd={handleAddMembers}
           excludeIds={excludeIds}
           conversationId={conversation.id}
-          isLoading={addMembersMutation.isPending}
+          isLoading={addMembersMutation.isPending || inviteMembersMutation.isPending}
         />
       )}
 
@@ -223,6 +246,14 @@ export function GroupSettings({ conversation, members: propMembers, isAdmin, onE
       )}
 
       <Portal>
+        <GroupQrModal
+          visible={groupQrVisible}
+          onDismiss={() => setGroupQrVisible(false)}
+          conversationId={conversation.id}
+          groupName={conversation.name}
+          memberCount={members.length || conversation.memberCount || 0}
+        />
+
         <MemberActionsModal
           visible={memberActionsVisible}
           onDismiss={() => setMemberActionsVisible(false)}
