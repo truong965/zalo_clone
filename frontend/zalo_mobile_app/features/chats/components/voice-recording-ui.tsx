@@ -209,6 +209,14 @@ export function VoiceRecordingUI({
     resetHoldStates();
   };
 
+  const handleSendPress = async () => {
+    if (isUploadingAudio) return;
+    setGestureHint('Đang gửi...');
+    await onSend();
+    setPreviewUri(null);
+    resetHoldStates();
+  };
+
   const handleHoldStart = async () => {
     if (isUploadingAudio || isLocked || isClipReady) return;
     holdStartedAtRef.current = Date.now();
@@ -242,10 +250,12 @@ export function VoiceRecordingUI({
     const holdDuration = Date.now() - holdStartedAtRef.current;
     const isTapIntent = holdDuration < 220 && !movedDuringHoldRef.current;
     if (isTapIntent) {
-      // Tap: keep recording, show delete + send.
+      // Tap: treat as locked mode (same outcome as swipe-right to lock).
+      isLockedRef.current = true;
       setIsHolding(false);
+      setIsLocked(true);
       setIsTapRecording(true);
-      setGestureHint('Đang ghi âm');
+      setGestureHint('Đang ghi âm (đã khóa)');
       return;
     }
     isHoldingRef.current = false;
@@ -371,7 +381,7 @@ export function VoiceRecordingUI({
 
         {hasRecordDraft ? (
           <TouchableOpacity
-            onPress={onSend}
+            onPress={handleSendPress}
             style={styles.primaryAction}
             disabled={isUploadingAudio}
             accessibilityLabel="Gửi tin nhắn thoại"
