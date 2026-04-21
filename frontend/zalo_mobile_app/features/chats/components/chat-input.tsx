@@ -5,6 +5,7 @@ import { useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useMobileMediaUpload } from '../hooks/use-mobile-media-upload';
 import { useAudioRecorder } from '../hooks/use-audio-recorder';
+import { useVoiceDictation } from '../hooks/use-voice-dictation';
 import { MessageType } from '@/types/message';
 
 import { useReminders } from '../hooks/use-reminders';
@@ -22,6 +23,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const [content, setContent] = useState('');
+    const [voiceSendMode, setVoiceSendMode] = useState<'record' | 'stt'>('record');
     const [isVoicePanelOpen, setIsVoicePanelOpen] = useState(false);
     const [showExtraOptions, setShowExtraOptions] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
@@ -31,6 +33,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     const insets = useSafeAreaInsets();
     const { pickMedia, pickDocuments, isUploading } = useMobileMediaUpload();
     const { isRecording, isUploadingAudio, recordingDuration, recordingUri, metering, startRecording, cancelRecording, preparePreview, stopAndSend } = useAudioRecorder();
+    const { isListening, start: startDictation, stop: stopDictation, cancel: cancelDictation } = useVoiceDictation();
     const { createReminder } = useReminders(conversationId);
     const { replyTarget, clearReplyTarget } = useChatStore();
     const androidBaseBottomInset = Math.max(insets.bottom, 2);
@@ -162,6 +165,11 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     };
 
     const handleCancelVoice = async () => {
+        if (voiceSendMode === 'stt') {
+            await cancelDictation();
+            setIsVoicePanelOpen(true);
+            return;
+        }
         await cancelRecording();
         setIsVoicePanelOpen(true);
     };
@@ -170,7 +178,35 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
         setShowExtraOptions(false);
         if (isVoiceModeActive) {
             setIsVoicePanelOpen(false);
+            void cancelDictation();
             void cancelRecording();
+        }
+    };
+
+    const handleDictationPress = async () => {
+        if (voiceSendMode !== 'stt') return;
+        if (!isListening) {
+            const started = await startDictation();
+            if (!started.ok) {
+                const sttErrorText =
+                    started.reason === 'permission_denied'
+                        ? 'Hãy cấp quyền micro trong cài đặt Android'
+                        : started.reason === 'native_module_unavailable'
+                            ? 'Bản app hiện tại chưa có native STT, hãy rebuild Android dev client'
+                            : 'Không thể khởi động nhận diện giọng nói';
+                Toast.show({
+                    type: 'error',
+                    text1: 'Không thể bật STT',
+                    text2: sttErrorText,
+                });
+            }
+            return;
+        }
+
+        const transcript = await stopDictation();
+        if (transcript) {
+            setContent(prev => `${prev}${prev.trim().length > 0 ? ' ' : ''}${transcript}`.trimStart());
+            setIsVoicePanelOpen(false);
         }
     };
 
@@ -296,6 +332,10 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                         onSend={handleStopAndSendAudio}
                         onPreview={preparePreview}
                         onStartRecording={handleStartVoiceRecording}
+                        sendMode={voiceSendMode}
+                        onSendModeChange={setVoiceSendMode}
+                        isDictating={isListening}
+                        onDictatePress={handleDictationPress}
                         bottomInset={0}
                     />
                 </View>

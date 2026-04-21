@@ -57,6 +57,10 @@ interface VoiceRecordingUIProps {
   onCancel: () => void;
   onSend: () => void;
   onPreview: () => Promise<string | null>;
+  sendMode: 'record' | 'stt';
+  onSendModeChange: (mode: 'record' | 'stt') => void;
+  isDictating?: boolean;
+  onDictatePress?: () => void | Promise<void>;
   bottomInset: number;
 }
 
@@ -70,6 +74,10 @@ export function VoiceRecordingUI({
   onCancel,
   onSend,
   onPreview,
+  sendMode,
+  onSendModeChange,
+  isDictating = false,
+  onDictatePress,
   bottomInset,
 }: VoiceRecordingUIProps) {
   const theme = useTheme();
@@ -92,9 +100,10 @@ export function VoiceRecordingUI({
   const playerStatus = useAudioPlayerStatus(player);
   const isPreviewPlaying = playerStatus.playing ?? false;
   const isClipReady = !!playbackSource;
-  const hasRecordDraft = isTapRecording || isLocked || isClipReady;
-  const canPreview = isLocked || isClipReady;
-  const shouldShowTimeline = isUploadingAudio || isRecording || isClipReady;
+  const isRecordMode = sendMode === 'record';
+  const hasRecordDraft = isRecordMode && (isTapRecording || isLocked || isClipReady);
+  const canPreview = isRecordMode && (isLocked || isClipReady);
+  const shouldShowTimeline = isRecordMode && (isUploadingAudio || isRecording || isClipReady);
 
   // ── Per-bar shared values (created once, never recreated) ──────────────────
   // makeMutable creates a SharedValue imperatively — safe to store in a ref.
@@ -216,6 +225,7 @@ export function VoiceRecordingUI({
   };
 
   const handleHoldStart = async () => {
+    if (!isRecordMode) return;
     if (isUploadingAudio || isLocked || isClipReady) return;
     holdStartedAtRef.current = Date.now();
     movedDuringHoldRef.current = false;
@@ -229,6 +239,7 @@ export function VoiceRecordingUI({
   };
 
   const handleHoldRelease = async (releasedDx?: number) => {
+    if (!isRecordMode) return;
     if (!isHoldingRef.current && holdStartedAtRef.current === 0) return;
     const dx = releasedDx ?? lastHoldDxRef.current;
     const shouldDeleteBySwipe =
@@ -309,12 +320,13 @@ export function VoiceRecordingUI({
   );
 
   useEffect(() => {
+    if (!isRecordMode) return;
     if (!isRecording && !recordingUri && !isUploadingAudio && !isLocked && !isHolding) {
       setDeleteArmed(false);
       setIsTapRecording(false);
       setPreviewUri(null);
     }
-  }, [isRecording, recordingUri, isUploadingAudio, isLocked, isHolding]);
+  }, [isRecordMode, isRecording, recordingUri, isUploadingAudio, isLocked, isHolding]);
 
   useEffect(() => {
     if (shouldAutoPlay && playbackSource) {
@@ -370,15 +382,15 @@ export function VoiceRecordingUI({
           onPress={handleDelete}
           style={[
             styles.sideButton,
-            { backgroundColor: theme.colors.elevation.level1, opacity: hasRecordDraft || isHolding ? 1 : 0.45 },
+            { backgroundColor: theme.colors.elevation.level1, opacity: isRecordMode && (hasRecordDraft || isHolding) ? 1 : 0.45 },
           ]}
-          disabled={isUploadingAudio || (!hasRecordDraft && !isHolding)}
+          disabled={!isRecordMode || isUploadingAudio || (!hasRecordDraft && !isHolding)}
           accessibilityLabel="Huỷ ghi âm"
         >
           <Ionicons name="trash" size={22} color={theme.colors.onSurfaceVariant} />
         </TouchableOpacity>
 
-        {hasRecordDraft ? (
+        {isRecordMode && hasRecordDraft ? (
           <TouchableOpacity
             onPress={handleSendPress}
             style={styles.primaryAction}
@@ -395,7 +407,7 @@ export function VoiceRecordingUI({
             </View>
             <Text style={[styles.primaryLabel, { color: theme.colors.onSurface }]}>Gửi ngay</Text>
           </TouchableOpacity>
-        ) : (
+        ) : isRecordMode ? (
           <View style={styles.primaryAction} {...holdPanResponder.panHandlers}>
             <View
               style={[
@@ -407,15 +419,33 @@ export function VoiceRecordingUI({
             </View>
             <Text style={[styles.primaryLabel, { color: theme.colors.onSurface }]}>Giữ để ghi</Text>
           </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.primaryAction}
+            onPress={() => void onDictatePress?.()}
+            accessibilityLabel="Nhấn để nói STT"
+          >
+            <View
+              style={[
+                styles.holdCircle,
+                { backgroundColor: isDictating ? theme.colors.primary : theme.colors.elevation.level3 },
+              ]}
+            >
+              <Ionicons name={isDictating ? 'mic' : 'mic-outline'} size={36} color={isDictating ? '#fff' : theme.colors.primary} />
+            </View>
+            <Text style={[styles.primaryLabel, { color: theme.colors.onSurface }]}>
+              {isDictating ? 'Đang nghe...' : 'Nhấn để nói'}
+            </Text>
+          </TouchableOpacity>
         )}
 
         <TouchableOpacity
           onPress={canPreview ? handlePreview : undefined}
           style={[
             styles.sideButton,
-            { backgroundColor: theme.colors.elevation.level1, opacity: canPreview ? 1 : 0.45 },
+            { backgroundColor: theme.colors.elevation.level1, opacity: isRecordMode && canPreview ? 1 : 0.45 },
           ]}
-          disabled={isUploadingAudio || !canPreview}
+          disabled={!isRecordMode || isUploadingAudio || !canPreview}
           accessibilityLabel="Nghe lại"
         >
           <Ionicons
@@ -423,6 +453,34 @@ export function VoiceRecordingUI({
             size={22}
             color={theme.colors.onSurfaceVariant}
           />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.modeTabsRow}>
+        <TouchableOpacity
+          style={[
+            styles.modeTab,
+            {
+              backgroundColor: isRecordMode ? theme.colors.primary : theme.colors.elevation.level1,
+            },
+          ]}
+          onPress={() => onSendModeChange('record')}
+        >
+          <Text style={[styles.modeTabLabel, { color: isRecordMode ? '#fff' : theme.colors.onSurfaceVariant }]}>
+            Send record
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.modeTab,
+            {
+              backgroundColor: !isRecordMode ? theme.colors.primary : theme.colors.elevation.level1,
+            },
+          ]}
+          onPress={() => onSendModeChange('stt')}
+        >
+          <Text style={[styles.modeTabLabel, { color: !isRecordMode ? '#fff' : theme.colors.onSurfaceVariant }]}>
+            Send STT
+          </Text>
         </TouchableOpacity>
       </View>
       </>
@@ -557,6 +615,24 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modeTabsRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  modeTab: {
+    minWidth: 112,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeTabLabel: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   barsContainer: {
     flexDirection: 'row',
