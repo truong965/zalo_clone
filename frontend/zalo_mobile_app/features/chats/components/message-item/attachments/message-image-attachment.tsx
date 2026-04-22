@@ -11,17 +11,16 @@ import { MediaProcessingOverlay } from './media-processing-overlay';
 
 interface Props {
   attachment: MessageMediaAttachmentItem;
-  isSingle: boolean;
+  isSingle?: boolean;
 }
 
-export function MessageImageAttachment({ attachment, isSingle }: Props) {
+export function MessageImageAttachment({ attachment }: Props) {
   const { isProcessing, isError, src, setResourceError } = useMediaResource(attachment);
 
   if (isError && !isProcessing) {
     return (
-      <View style={[styles.errorWrapper, isSingle ? { width: 220 } : { width: '49%', aspectRatio: 1 }]}>
+      <View style={[styles.errorWrapper, { width: '100%', height: '100%', justifyContent: 'center' }]}>
         <Ionicons name="alert-circle-outline" size={24} color="#ef4444" />
-        <Text style={styles.errorText}>File không tồn tại</Text>
       </View>
     );
   }
@@ -30,12 +29,12 @@ export function MessageImageAttachment({ attachment, isSingle }: Props) {
 
   return (
     <View 
-      style={[styles.imageWrapper, isSingle ? undefined : { width: '49%', aspectRatio: 1, marginBottom: 4 }]}
+      style={[styles.imageWrapper, { width: '100%', height: '100%' }]}
       pointerEvents="none"
     >
       <Image
         source={{ uri: src }}
-        style={[isSingle ? styles.image : { width: '100%', height: '100%' }]}
+        style={{ width: '100%', height: '100%' }}
         resizeMode="cover"
         onError={() => setResourceError(true)}
       />

@@ -1,7 +1,7 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { isExpoGo } from '@/constants/platform';
+import { useCallback, useEffect, useRef } from 'react';
 import InCallManager from 'react-native-incall-manager';
 import { useCallStore } from '../stores/call.store';
-import { isExpoGo } from '@/constants/platform';
 
 /**
  * useWebRTCCall (Mobile) — Manages RTCPeerConnection for mobile.
@@ -138,7 +138,13 @@ export function useWebRTCCall(socketEmitters: {
   }, []);
 
   const handleIceRestart = useCallback(async (payload?: any) => {
-    if (isExpoGo || !pcRef.current) return;
+    if (isExpoGo) return;
+    const pc = pcRef.current;
+    if (!pc) {
+      console.log('[WebRTC] handleIceRestart skipped: no active PeerConnection');
+      return;
+    }
+
     const store = useCallStore.getState();
     const currentCallId = store.callId;
     console.log('[WebRTC] handleIceRestart', { hasPayload: !!payload, callId: currentCallId });
@@ -172,19 +178,33 @@ export function useWebRTCCall(socketEmitters: {
         console.warn('[WebRTC] emitIceRestart failed:', err);
       }
 
-      // Check for restartIce() or fallback to { iceRestart: true }
-      if (typeof pcRef.current.restartIce === 'function') {
-        pcRef.current.restartIce();
+      // The call may have ended while awaiting the restart ACK.
+      const afterAckStore = useCallStore.getState();
+      if (
+        !pcRef.current ||
+        pcRef.current !== pc ||
+        !afterAckStore.callId ||
+        afterAckStore.callId !== currentCallId ||
+        afterAckStore.callStatus === 'IDLE' ||
+        afterAckStore.callStatus === 'ENDED'
+      ) {
+        console.log('[WebRTC] ICE restart aborted: call/pc no longer active');
+        return;
       }
 
-      const offer = await pcRef.current.createOffer({ iceRestart: true });
-      await pcRef.current.setLocalDescription(offer);
+      // Check for restartIce() or fallback to { iceRestart: true }
+      if (typeof pc.restartIce === 'function') {
+        pc.restartIce();
+      }
 
-      if (pcRef.current.localDescription) {
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+
+      if (pc.localDescription) {
         try {
           await socketEmitters.emitOffer({
             callId: currentCallId,
-            sdp: pcRef.current.localDescription.sdp
+            sdp: pc.localDescription.sdp
           });
         } catch (err) {
           console.warn('[WebRTC] emitOffer for ICE restart failed:', err);
@@ -209,6 +229,7 @@ export function useWebRTCCall(socketEmitters: {
         iceServers: effectiveServers,
         iceTransportPolicy: (store.iceTransportPolicy as any) || 'all',
       });
+      let fallbackRemoteStream: any = null;
 
       const candidateBufferRef = { current: [] as any[] };
       let flushTimeout: any = null;
@@ -216,7 +237,7 @@ export function useWebRTCCall(socketEmitters: {
       (pc as any).onicecandidate = (event: any) => {
         if (event.candidate) {
           candidateBufferRef.current.push(event.candidate.toJSON());
-          
+
           if (!flushTimeout) {
             flushTimeout = setTimeout(() => {
               const candidates = candidateBufferRef.current;
@@ -295,6 +316,33 @@ export function useWebRTCCall(socketEmitters: {
         console.log('[WebRTC] ontrack event');
         if (event.streams && event.streams[0]) {
           useCallStore.getState().setRemoteStream(event.streams[0]);
+          return;
+        }
+
+        // Some mobile/web combinations deliver track events without streams[].
+        if (event.track) {
+          const { MediaStream } = require('react-native-webrtc');
+          if (!fallbackRemoteStream) {
+            fallbackRemoteStream = new MediaStream();
+          }
+
+          const hasTrack = fallbackRemoteStream
+            .getTracks()
+            .some((track: any) => track.id === event.track.id);
+
+          if (!hasTrack) {
+            fallbackRemoteStream.addTrack(event.track);
+          }
+
+          useCallStore.getState().setRemoteStream(fallbackRemoteStream);
+        }
+      };
+
+      // Legacy fallback for environments still emitting only onaddstream.
+      (pc as any).onaddstream = (event: any) => {
+        console.log('[WebRTC] onaddstream event');
+        if (event?.stream) {
+          useCallStore.getState().setRemoteStream(event.stream);
         }
       };
 
@@ -383,7 +431,7 @@ export function useWebRTCCall(socketEmitters: {
       const raw = payload.candidates;
       let candidates: any[];
 
-      const parsed = JSON.parse(raw);
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       candidates = Array.isArray(parsed) ? parsed : [parsed];
 
       for (const candidateData of candidates) {

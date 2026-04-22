@@ -88,6 +88,9 @@ import { RedisService } from 'src/shared/redis/redis.service';
 import { InteractionAuthorizationService } from '../authorization/services/interaction-authorization.service';
 import { PermissionAction } from 'src/common/constants/permission-actions.constant';
 import { InternalEventNames } from '@common/contracts/events';
+import {
+  OUTBOUND_SOCKET_EVENT,
+} from '@common/events/outbound-socket.event';
 import type {
   UnfriendedPayload,
   UserBlockedEventPayload,
@@ -887,16 +890,25 @@ export class CallSignalingGateway extends BaseGateway implements OnGatewayInit {
 
       client.emit(SocketEvents.CALL_DAILY_ROOM, { callId, roomUrl, tokens });
 
-      // Broadcast GROUP_CALL_STARTED to the conversation room so other members see the banner
+      // Broadcast GROUP_CALL_STARTED to all participants so they see the banner
       if (conversationId) {
-        this.server.to(`conversation:${conversationId}`).emit(SocketEvents.GROUP_CALL_STARTED, {
-          callId,
-          conversationId,
-          callType,
-          callerInfo,
-          participantCount: allParticipantIds.length,
-          startedAt: new Date().toISOString(),
-          dailyRoomUrl: roomUrl, // Phase 4: L4
+        const conversationMembers = await this.prisma.conversationMember.findMany({
+          where: { conversationId, status: 'ACTIVE' },
+          select: { userId: true },
+        });
+        const allMemberIds = conversationMembers.map(m => m.userId);
+        this.eventEmitter.emit(OUTBOUND_SOCKET_EVENT, {
+          event: SocketEvents.GROUP_CALL_STARTED as any,
+          data: {
+            callId,
+            conversationId,
+            callType,
+            callerInfo,
+            participantCount: allParticipantIds.length,
+            startedAt: new Date().toISOString(),
+            dailyRoomUrl: roomUrl, // Phase 4: L4
+          },
+          userIds: allMemberIds,
         });
       }
 

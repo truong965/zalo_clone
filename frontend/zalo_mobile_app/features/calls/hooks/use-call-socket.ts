@@ -14,12 +14,12 @@ import { isExpoGo } from '@/constants/platform';
 export function useCallSocket() {
   if (isExpoGo) {
     return {
-      emitInitiateCall: async () => {},
-      emitAcceptCall: async () => {},
-      emitRejectCall: async () => {},
-      emitHangup: async () => {},
-      emitRingingAck: async () => {},
-      emitJoinExisting: async () => {},
+      emitInitiateCall: async () => { },
+      emitAcceptCall: async () => { },
+      emitRejectCall: async () => { },
+      emitHangup: async () => { },
+      emitRingingAck: async () => { },
+      emitJoinExisting: async () => { },
     };
   }
   const { isConnected } = useSocket();
@@ -51,9 +51,9 @@ export function useCallSocket() {
         console.log('[CallSocket] ignoring incoming call because in-app calls are disabled');
         return;
       }
-      
+
       const store = useCallStore.getState();
-      
+
       if (store.callStatus !== 'IDLE') {
         console.log('[CallSocket] ignoring incoming call, status is:', store.callStatus);
         return;
@@ -75,7 +75,7 @@ export function useCallSocket() {
             sound: true,
             priority: Notifications.AndroidNotificationPriority.MAX,
           },
-          trigger: { 
+          trigger: {
             channelId: 'default',
           } as any, // immediate with channel
         }).catch(err => console.error('[CallSocket] Failed to show background notification:', err));
@@ -135,7 +135,7 @@ export function useCallSocket() {
     const onEnded = (payload: any) => {
       console.log('[CallSocket] onEnded received:', payload);
       const store = useCallStore.getState();
-      
+
       // Guard: only reset if this event belongs to the current call.
       // Prevents stale call:ended from a previous call wiping out a
       // newly-initiated call (race condition when user quickly re-calls).
@@ -145,7 +145,7 @@ export function useCallSocket() {
         console.log('[CallSocket] onEnded IGNORED (stale)', { received: payload.callId, current: currentCallId });
         return;
       }
-      
+
       if (payload.reason === 'answered_elsewhere') {
         Toast.show({
           type: 'info',
@@ -164,12 +164,12 @@ export function useCallSocket() {
 
       console.log('[CallSocket] resetting call state due to onEnded');
       cleanupWebRTC();
-      
+
       // Dismiss any existing notification for this call
       if (payload.callId) {
-        Notifications.dismissNotificationAsync(payload.callId).catch(() => {});
+        Notifications.dismissNotificationAsync(payload.callId).catch(() => { });
       }
-      
+
       store.resetCallState();
     };
 
@@ -212,7 +212,7 @@ export function useCallSocket() {
       console.error('[CallSocket] onError:', payload);
       const message = payload.message || payload.error || 'Đã có lỗi xảy ra';
       const store = useCallStore.getState();
-      
+
       // Phase 12: If we get a CALL_ERROR, always reset if we are in a transition state
       if (payload.code === 'CALL_ERROR' || store.callStatus === 'DIALING' || store.callStatus === 'RINGING') {
         Toast.show({
@@ -223,7 +223,7 @@ export function useCallSocket() {
         store.resetCallState();
       }
     };
-    
+
     const onIceRestart = (payload: any) => {
       console.log('[CallSocket] onIceRestart received');
       const store = useCallStore.getState();
@@ -254,40 +254,40 @@ export function useCallSocket() {
     };
 
     socket.on(SocketEvents.CALL_INCOMING, onIncoming);
-     socket.on(SocketEvents.CALL_ACCEPTED, onAccepted);
-     socket.on(SocketEvents.CALL_REJECTED, onRejected);
-     socket.on(SocketEvents.CALL_ENDED, onEnded);
-     socket.on(SocketEvents.CALL_BUSY, onBusy);
-     socket.on(SocketEvents.CALL_DAILY_ROOM, onDailyRoom);
-     socket.on(SocketEvents.CALL_CALLER_DISCONNECTED, onCallerDisconnected);
-     socket.on(SocketEvents.CALL_QUALITY_CHANGE, onQualityChange);
-     socket.on(SocketEvents.CALL_OFFER, onOffer);
-     socket.on(SocketEvents.CALL_ANSWER, onAnswer);
-     socket.on(SocketEvents.CALL_ICE_CANDIDATE, onIceCandidate);
-     socket.on(SocketEvents.CALL_ICE_RESTART, onIceRestart);
-     socket.on(SocketEvents.ERROR, onError);
-     socket.on(SocketEvents.CALL_MEDIA_STATE, onMediaState);
-     socket.on(SocketEvents.GROUP_CALL_STARTED, onGroupCallStarted);
-     socket.on(SocketEvents.GROUP_CALL_ENDED, onGroupCallEnded);
- 
-     return () => {
-       socket.off(SocketEvents.CALL_INCOMING, onIncoming);
-       socket.off(SocketEvents.CALL_ACCEPTED, onAccepted);
-       socket.off(SocketEvents.CALL_REJECTED, onRejected);
-       socket.off(SocketEvents.CALL_ENDED, onEnded);
-       socket.off(SocketEvents.CALL_BUSY, onBusy);
-       socket.off(SocketEvents.CALL_DAILY_ROOM, onDailyRoom);
-       socket.off(SocketEvents.CALL_CALLER_DISCONNECTED, onCallerDisconnected);
-       socket.off(SocketEvents.CALL_QUALITY_CHANGE, onQualityChange);
-       socket.off(SocketEvents.CALL_OFFER, onOffer);
-       socket.off(SocketEvents.CALL_ANSWER, onAnswer);
-       socket.off(SocketEvents.CALL_ICE_CANDIDATE, onIceCandidate);
-       socket.off(SocketEvents.CALL_ICE_RESTART, onIceRestart);
-       socket.off(SocketEvents.ERROR, onError);
-       socket.off(SocketEvents.CALL_MEDIA_STATE, onMediaState);
-       socket.off(SocketEvents.GROUP_CALL_STARTED, onGroupCallStarted);
-       socket.off(SocketEvents.GROUP_CALL_ENDED, onGroupCallEnded);
-     };
+    socket.on(SocketEvents.CALL_ACCEPTED, onAccepted);
+    socket.on(SocketEvents.CALL_REJECTED, onRejected);
+    socket.on(SocketEvents.CALL_ENDED, onEnded);
+    socket.on(SocketEvents.CALL_BUSY, onBusy);
+    socket.on(SocketEvents.CALL_DAILY_ROOM, onDailyRoom);
+    socket.on(SocketEvents.CALL_CALLER_DISCONNECTED, onCallerDisconnected);
+    socket.on(SocketEvents.CALL_QUALITY_CHANGE, onQualityChange);
+    socket.on(SocketEvents.CALL_OFFER, onOffer);
+    socket.on(SocketEvents.CALL_ANSWER, onAnswer);
+    socket.on(SocketEvents.CALL_ICE_CANDIDATE, onIceCandidate);
+    socket.on(SocketEvents.CALL_ICE_RESTART, onIceRestart);
+    socket.on(SocketEvents.ERROR, onError);
+    socket.on(SocketEvents.CALL_MEDIA_STATE, onMediaState);
+    socket.on(SocketEvents.GROUP_CALL_STARTED, onGroupCallStarted);
+    socket.on(SocketEvents.GROUP_CALL_ENDED, onGroupCallEnded);
+
+    return () => {
+      socket.off(SocketEvents.CALL_INCOMING, onIncoming);
+      socket.off(SocketEvents.CALL_ACCEPTED, onAccepted);
+      socket.off(SocketEvents.CALL_REJECTED, onRejected);
+      socket.off(SocketEvents.CALL_ENDED, onEnded);
+      socket.off(SocketEvents.CALL_BUSY, onBusy);
+      socket.off(SocketEvents.CALL_DAILY_ROOM, onDailyRoom);
+      socket.off(SocketEvents.CALL_CALLER_DISCONNECTED, onCallerDisconnected);
+      socket.off(SocketEvents.CALL_QUALITY_CHANGE, onQualityChange);
+      socket.off(SocketEvents.CALL_OFFER, onOffer);
+      socket.off(SocketEvents.CALL_ANSWER, onAnswer);
+      socket.off(SocketEvents.CALL_ICE_CANDIDATE, onIceCandidate);
+      socket.off(SocketEvents.CALL_ICE_RESTART, onIceRestart);
+      socket.off(SocketEvents.ERROR, onError);
+      socket.off(SocketEvents.CALL_MEDIA_STATE, onMediaState);
+      socket.off(SocketEvents.GROUP_CALL_STARTED, onGroupCallStarted);
+      socket.off(SocketEvents.GROUP_CALL_ENDED, onGroupCallEnded);
+    };
   }, [socket, isConnected]);
 
   // Auto-emit call:media-state when local camera/mute state changes

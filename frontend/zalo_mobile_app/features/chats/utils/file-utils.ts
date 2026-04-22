@@ -4,6 +4,34 @@ import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 
+let isShareRequestInProgress = false;
+
+const shareFileSafely = async (
+  uri: string,
+  options?: Parameters<typeof Sharing.shareAsync>[1],
+): Promise<boolean> => {
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) return false;
+
+  if (isShareRequestInProgress) {
+    Toast.show({
+      type: 'info',
+      text1: 'Đang mở chia sẻ',
+      text2: 'Vui lòng chờ thao tác trước hoàn tất',
+      position: 'bottom',
+    });
+    return false;
+  }
+
+  isShareRequestInProgress = true;
+  try {
+    await Sharing.shareAsync(uri, options);
+    return true;
+  } finally {
+    isShareRequestInProgress = false;
+  }
+};
+
 export const handleOpenFile = async (src: string | null | undefined, originalName: string) => {
   if (!src) return;
   try {
@@ -15,12 +43,10 @@ export const handleOpenFile = async (src: string | null | undefined, originalNam
     const fileUri = `${FileSystem.documentDirectory}${originalName}`;
     const { uri } = await FileSystem.downloadAsync(src, fileUri);
 
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(uri, {
-        dialogTitle: 'Mở file bởi:',
-        UTI: 'public.item'
-      });
-    }
+    await shareFileSafely(uri, {
+      dialogTitle: 'Mở file bởi:',
+      UTI: 'public.item'
+    });
   } catch (error) {
     console.error('Open error:', error);
     Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không thể mở tệp' });
@@ -68,10 +94,7 @@ export const handleDownloadFile = async (src: string | null | undefined, origina
           Toast.show({ type: 'success', text1: 'Thành công', text2: 'Đã lưu file vào máy', position: 'top' });
         }
       } else {
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
-          await Sharing.shareAsync(localUri, { UTI: 'public.item' });
-        }
+        await shareFileSafely(localUri, { UTI: 'public.item' });
       }
     }
     await FileSystem.deleteAsync(localUri, { idempotent: true });

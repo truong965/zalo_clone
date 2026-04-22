@@ -207,7 +207,7 @@ export function AudioAttachment({ attachment, className }: AudioAttachmentProps)
             >
                   <div className="flex items-center gap-2">
                         <CustomerServiceOutlined className="text-base text-gray-500 flex-shrink-0" />
-                        <p className="text-xs text-gray-600 truncate flex-1">{attachment.originalName}</p>
+                        {/* <p className="text-xs text-gray-600 truncate flex-1">{attachment.originalName}</p> */}
                         {attachment.size > 0 && (
                               <span className="text-[10px] text-gray-400 flex-shrink-0">
                                     {formatBytes(attachment.size)}

@@ -25,6 +25,7 @@ import {
 import { formatBytes } from '@/lib/utils';
 import { useState } from 'react';
 import { FileUtils } from '@/utils/file.utils';
+import { DocumentPreviewModal, canPreviewDocument } from '../document-preview-modal';
 
 interface DocumentAttachmentProps {
       attachment: MessageMediaAttachmentItem;
@@ -70,12 +71,15 @@ function getFileIconConfig(fileName: string, mimeType?: string | null): FileIcon
 export function DocumentAttachment({ attachment, className }: DocumentAttachmentProps) {
       const { t } = useTranslation();
       const [isDownloading, setIsDownloading] = useState(false);
+      const [isPreviewOpen, setIsPreviewOpen] = useState(false);
       const isReady = attachment.processingStatus === MediaProcessingStatus.READY;
       const isFailed = attachment.processingStatus === MediaProcessingStatus.FAILED;
       const isProcessing = !isReady && !isFailed;
+      const previewable = canPreviewDocument(attachment.originalName, attachment.mimeType);
 
       const handleDownload = async (e: React.MouseEvent) => {
             e.preventDefault();
+            e.stopPropagation();
             if (!attachment.cdnUrl || isDownloading) return;
 
             try {
@@ -102,49 +106,66 @@ export function DocumentAttachment({ attachment, className }: DocumentAttachment
       const { icon: Icon, color, bg } = getFileIconConfig(attachment.originalName, attachment.mimeType);
 
       return (
-            <div
-                  className={cn(
-                        'relative flex items-center gap-3 rounded-lg bg-gray-50 border border-gray-100 p-3 min-w-[220px] transition-colors hover:bg-white',
-                        className,
-                  )}
-            >
+            <>
                   <div
-                        className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: bg }}
+                        className={cn(
+                              'relative flex items-center gap-3 rounded-lg bg-gray-50 border border-gray-100 p-3 min-w-[220px] transition-colors hover:bg-white',
+                              previewable && isReady && attachment.cdnUrl ? 'cursor-pointer' : '',
+                              className,
+                        )}
+                        onClick={() => {
+                              if (previewable && isReady && attachment.cdnUrl) {
+                                    setIsPreviewOpen(true);
+                              }
+                        }}
                   >
-                        <Icon
-                              className="text-2xl"
-                              style={{ color }}
-                        />
-                  </div>
-
-                  <div className="flex-1 overflow-hidden">
-                        <p className="text-sm font-medium truncate" title={attachment.originalName}>
-                              {attachment.originalName}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                              {attachment.size > 0 ? formatBytes(attachment.size) : ''}
-                              {isFailed && <span className="ml-1 text-red-500">· {t('conversation.attachments.processingError')}</span>}
-                              {isProcessing && <span className="ml-1 text-gray-400">· {t('conversation.attachments.processing')}</span>}
-                        </p>
-                  </div>
-
-                  {isReady && attachment.cdnUrl && (
-                        <a
-                              href={attachment.cdnUrl}
-                              onClick={handleDownload}
-                              className={`flex-shrink-0 transition-colors title="${t('conversation.attachments.download')}" ${isDownloading ? 'text-blue-300 cursor-not-allowed' : 'text-gray-500 hover:text-blue-500'}`}
+                        <div
+                              className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0"
+                              style={{ backgroundColor: bg }}
                         >
-                              <DownloadOutlined className={isDownloading ? "text-lg animate-pulse" : "text-lg"} />
-                        </a>
-                  )}
-
-                  {/* Linear progress bar when processing */}
-                  {isProcessing && (
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-200 overflow-hidden">
-                              <div className="h-full w-1/3 bg-blue-400 animate-pulse rounded-full" />
+                              <Icon
+                                    className="text-2xl"
+                                    style={{ color }}
+                              />
                         </div>
-                  )}
-            </div>
+
+                        <div className="flex-1 overflow-hidden">
+                              <p className="text-sm font-medium truncate" title={attachment.originalName}>
+                                    {attachment.originalName}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                    {attachment.size > 0 ? formatBytes(attachment.size) : ''}
+                                    {isFailed && <span className="ml-1 text-red-500">· {t('conversation.attachments.processingError')}</span>}
+                                    {isProcessing && <span className="ml-1 text-gray-400">· {t('conversation.attachments.processing')}</span>}
+                              </p>
+                        </div>
+
+                        {isReady && attachment.cdnUrl && (
+                              <a
+                                    href={attachment.cdnUrl}
+                                    onClick={handleDownload}
+                                    title={t('conversation.attachments.download')}
+                                    className={`flex-shrink-0 transition-colors ${isDownloading ? 'text-blue-300 cursor-not-allowed' : 'text-gray-500 hover:text-blue-500'}`}
+                              >
+                                    <DownloadOutlined className={isDownloading ? 'text-lg animate-pulse' : 'text-lg'} />
+                              </a>
+                        )}
+
+                        {/* Linear progress bar when processing */}
+                        {isProcessing && (
+                              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-200 overflow-hidden">
+                                    <div className="h-full w-1/3 bg-blue-400 animate-pulse rounded-full" />
+                              </div>
+                        )}
+                  </div>
+
+                  <DocumentPreviewModal
+                        open={isPreviewOpen}
+                        onClose={() => setIsPreviewOpen(false)}
+                        fileName={attachment.originalName}
+                        fileUrl={attachment.cdnUrl}
+                        mimeType={attachment.mimeType}
+                  />
+            </>
       );
 }

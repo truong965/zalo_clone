@@ -98,6 +98,13 @@ export function GroupInfoContent({
       const members = membersQuery.data ?? [];
       const isLoadingMembers = membersQuery.isLoading;
 
+      // Refresh members before opening the add-member modal so existingMemberIds
+      // reflects reality (e.g. someone who just left won't be wrongly excluded).
+      const handleOpenAddMembers = useCallback(() => {
+            void invalidateMembers(conversationId);
+            setShowAddMembers(true);
+      }, [conversationId, invalidateMembers]);
+
       const groupJoinQrValue = useMemo(
             () =>
                   JSON.stringify({
@@ -451,7 +458,7 @@ export function GroupInfoContent({
                         isAdmin={isAdmin}
                         onUpdateName={handleUpdateName}
                         onUpdateAvatar={handleUpdateGroupAvatar}
-                        onAddMembers={() => setShowAddMembers(true)}
+                        onAddMembers={handleOpenAddMembers}
                         onTogglePin={() => onTogglePin(conversation.id, !!conversation.isPinned)}
                         onToggleMute={() => onToggleMute(conversation.id, !!conversation.isMuted)}
                   />

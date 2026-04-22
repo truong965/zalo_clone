@@ -24,7 +24,7 @@ export class AiProxyService {
     private readonly prisma: PrismaService,
     @Inject(aiConfig.KEY)
     private readonly config: ConfigType<typeof aiConfig>,
-  ) {}
+  ) { }
 
   async prepareTranslateTrigger(dto: AiTriggerDto, userId: string): Promise<AiTriggerDto> {
     if (!dto.messageId) {
@@ -124,23 +124,37 @@ export class AiProxyService {
     requestId?: string,
     params?: Record<string, string | undefined>,
   ) {
+    if (!this.config.enabled) {
+      throw new HttpException(
+        { message: 'AI integration is disabled' },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
     const url = `${this.config.baseUrl}${path}`;
+    const fallbackUrl = this.buildIpv4LoopbackUrl(url);
     const keyPrefix = this.config.apiKey ? `${this.config.apiKey.substring(0, 5)}***` : 'MISSING';
     try {
-      const response = await lastValueFrom(
-        this.httpService.request({
-          method,
-          url,
-          data,
-          params,
-          timeout: this.requestTimeoutMs,
-          headers: {
-            'x-internal-api-key': this.config.apiKey,
-            'x-request-id': requestId,
-            'Content-Type': 'application/json',
-          },
-        }),
-      );
+      let response;
+
+      try {
+        response = await this.dispatchRequest(method, url, data, requestId, params);
+      } catch (firstError: any) {
+        if (fallbackUrl && this.shouldRetryViaIpv4Loopback(firstError)) {
+          this.logger.warn(
+            `Retrying AI request via IPv4 loopback: ${fallbackUrl}`,
+          );
+          response = await this.dispatchRequest(
+            method,
+            fallbackUrl,
+            data,
+            requestId,
+            params,
+          );
+        } else {
+          throw firstError;
+        }
+      }
 
       return response.data;
     } catch (err: any) {
@@ -159,5 +173,49 @@ export class AiProxyService {
       this.logger.error(`AI Proxy request failed [${status}]: ${err.message}`);
       throw new HttpException(data, status);
     }
+  }
+
+  private async dispatchRequest(
+    method: 'get' | 'post' | 'delete',
+    url: string,
+    data?: any,
+    requestId?: string,
+    params?: Record<string, string | undefined>,
+  ) {
+    return lastValueFrom(
+      this.httpService.request({
+        method,
+        url,
+        data,
+        params,
+        timeout: this.requestTimeoutMs,
+        headers: {
+          'x-internal-api-key': this.config.apiKey,
+          'x-request-id': requestId,
+          'Content-Type': 'application/json',
+        },
+      }),
+    );
+  }
+
+  private buildIpv4LoopbackUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname !== 'localhost') {
+        return null;
+      }
+
+      parsed.hostname = '127.0.0.1';
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private shouldRetryViaIpv4Loopback(error: any): boolean {
+    const code = String(error?.code || '');
+    const message = String(error?.message || '');
+
+    return code === 'ECONNREFUSED' && message.includes('::1');
   }
 }
