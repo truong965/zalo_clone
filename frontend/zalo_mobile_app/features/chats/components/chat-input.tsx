@@ -6,8 +6,10 @@ import {
   ActivityIndicator,
   FlatList,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -45,6 +47,15 @@ type QuickMessageMap = Record<string, string>;
 const QUICK_MESSAGE_STORAGE_KEY = 'chat.quickMessages';
 const DEFAULT_QUICK_MESSAGES: QuickMessageMap = {
   '/hello': 'xin chao minh co the giup gi cho ban',
+};
+
+const getFriendPhoneNumber = (friend: Friend): string => {
+  const candidate =
+    (friend as any).phoneNumber ??
+    (friend as any).phone ??
+    (friend as any).phoneNum ??
+    '';
+  return typeof candidate === 'string' ? candidate.trim() : '';
 };
 
 export function ChatInput({ onSend, conversationId }: ChatInputProps) {
@@ -227,8 +238,10 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
 
   const handleSendNamecard = (friend: Friend) => {
     const displayName = friend.resolvedDisplayName || friend.displayName || 'Người dùng';
+    const phone = getFriendPhoneNumber(friend);
     const avatarLine = friend.avatarUrl ? `\nAvatar: ${friend.avatarUrl}` : '';
-    const namecardContent = `[Namecard]\n${displayName}\nID: ${friend.userId}${avatarLine}`;
+    const phoneLine = phone ? `\nPhone: ${phone}` : '';
+    const namecardContent = `[Namecard]\n${displayName}${phoneLine}\nUID: ${friend.userId}${avatarLine}`;
     onSend(namecardContent, MessageType.TEXT, undefined, replyTarget ?? undefined);
     clearReplyTarget();
     setShowNamecardModal(false);
@@ -236,6 +249,23 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
   };
 
   const namecardFriends = friendsQuery.data?.pages.flatMap((page) => page.data) ?? [];
+  const trimmedInput = content.trim();
+  const quickMessageHints = React.useMemo(() => {
+    if (!trimmedInput.startsWith('/')) return [];
+    const searchTerm = trimmedInput.slice(1).trim();
+    if (searchTerm.length < 2) return [];
+    const needle = trimmedInput.toLowerCase();
+    return Object.entries(quickMessages)
+      .filter(([keyword, value]) => keyword.includes(needle) || value.toLowerCase().includes(needle))
+      .slice(0, 6);
+  }, [trimmedInput, quickMessages]);
+
+  const handleChooseQuickHint = (keyword: string, value: string) => {
+    setContent(value);
+    setShowExtraOptions(false);
+    setQuickKeywordInput(keyword);
+    setQuickValueInput(value);
+  };
 
   const handleSaveQuickMessage = async () => {
     const keyword = quickKeywordInput.trim().toLowerCase();
@@ -512,6 +542,25 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
             )}
           </View>
 
+          {quickMessageHints.length > 0 && (
+            <View className="px-2 pb-2">
+              <View className="bg-muted border border-border/50 rounded-xl overflow-hidden">
+                {quickMessageHints.map(([keyword, value], index) => (
+                  <TouchableOpacity
+                    key={keyword}
+                    className={`px-3 py-2 ${index < quickMessageHints.length - 1 ? 'border-b border-border/40' : ''}`}
+                    onPress={() => handleChooseQuickHint(keyword, value)}
+                  >
+                    <Text className="text-xs font-semibold text-primary">{keyword}</Text>
+                    <Text className="text-sm text-foreground" numberOfLines={1}>
+                      {value}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
           {showExtraOptions && (
             <View className="flex-row flex-wrap bg-muted border-t border-border/50 py-3">
               <TouchableOpacity className="items-center mb-2" style={{ width: '20%' }} onPress={handleDocumentUpload}>
@@ -615,6 +664,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                     keyExtractor={(item) => item.friendshipId}
                     renderItem={({ item }) => {
                       const displayName = item.resolvedDisplayName || item.displayName || 'Người dùng';
+                      const phone = getFriendPhoneNumber(item);
                       return (
                         <TouchableOpacity
                           className="flex-row items-center py-3 border-b border-border/40"
@@ -628,7 +678,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                               {displayName}
                             </Text>
                             <Text className="text-xs text-onSurfaceVariant" numberOfLines={1}>
-                              {item.userId}
+                              {phone || item.userId}
                             </Text>
                           </View>
                         </TouchableOpacity>
@@ -664,12 +714,18 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
 
           <Modal
             visible={showQuickMessageModal}
-            animationType="slide"
+            animationType="fade"
             transparent
             onRequestClose={() => setShowQuickMessageModal(false)}
           >
-            <View className="flex-1 bg-black/30 justify-end">
-              <View className="bg-card rounded-t-3xl px-4 pt-4 pb-6 max-h-[80%]">
+            <KeyboardAvoidingView
+              className="flex-1"
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+            >
+            <View className="flex-1 bg-black/30 justify-center px-4">
+              <TouchableOpacity className="absolute inset-0" activeOpacity={1} onPress={() => setShowQuickMessageModal(false)} />
+              <View className="bg-card rounded-3xl px-4 pt-4 pb-4 w-full self-center max-h-[78%]">
                 <View className="flex-row items-center justify-between mb-3">
                   <Text className="text-base font-semibold text-foreground">Cai dat quick message</Text>
                   <TouchableOpacity className="p-1" onPress={() => setShowQuickMessageModal(false)}>
@@ -705,11 +761,13 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                   <Text className="text-white font-semibold">Luu quick message</Text>
                 </TouchableOpacity>
                 <Text className="text-sm font-semibold text-foreground mb-2">Danh sach dang dung</Text>
-                <FlatList
-                  data={Object.entries(quickMessages)}
-                  keyExtractor={([k]) => k}
-                  renderItem={({ item: [keyword, value] }) => (
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'position' : undefined}
+              >
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                  {Object.entries(quickMessages).map(([keyword, value]) => (
                     <TouchableOpacity
+                      key={keyword}
                       className="py-3 border-b border-border/40"
                       onPress={() => {
                         setQuickKeywordInput(keyword);
@@ -726,15 +784,17 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                         </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
-                  )}
-                  ListEmptyComponent={
+                  ))}
+                  {Object.keys(quickMessages).length === 0 && (
                     <View className="py-6 items-center">
                       <Text className="text-onSurfaceVariant">Chua co quick message</Text>
                     </View>
-                  }
-                />
+                  )}
+                </ScrollView>
+              </KeyboardAvoidingView>
               </View>
             </View>
+            </KeyboardAvoidingView>
           </Modal>
         </View>
       )}

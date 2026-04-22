@@ -133,6 +133,11 @@ export function MessageContent({
           <Text style={localStyles.namecardName} numberOfLines={1}>
             {namecard.displayName}
           </Text>
+          {!!namecard.phone && (
+            <Text style={localStyles.namecardPhone} numberOfLines={1}>
+              {namecard.phone}
+            </Text>
+          )}
           <View style={localStyles.namecardActions}>
             <TouchableOpacity
               onPress={async () => {
@@ -361,6 +366,11 @@ const localStyles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 2,
+  },
+  namecardPhone: {
+    fontSize: 13,
+    color: '#475569',
     marginBottom: 6,
   },
   namecardActions: {
@@ -413,17 +423,21 @@ const localStyles = StyleSheet.create({
   },
 });
 
-function parseNamecardFromContent(content: string): { displayName: string; userId: string; avatarUrl?: string } | null {
+function parseNamecardFromContent(content: string): { displayName: string; userId: string; phone?: string; avatarUrl?: string } | null {
   if (!content || !content.startsWith('[Namecard]')) return null;
   const lines = content.split('\n').map((line) => line.trim()).filter(Boolean);
   const displayName = lines[1] || 'Người dùng';
+  const uidLine = lines.find((line) => line.toLowerCase().startsWith('uid:'));
   const idLine = lines.find((line) => line.toLowerCase().startsWith('id:'));
-  if (!idLine) return null;
-  const userId = idLine.slice(3).trim();
+  const userIdSource = uidLine ?? idLine;
+  if (!userIdSource) return null;
+  const userId = userIdSource.slice(userIdSource.indexOf(':') + 1).trim();
   if (!userId) return null;
+  const phoneLine = lines.find((line) => line.toLowerCase().startsWith('phone:'));
+  const phone = phoneLine ? phoneLine.slice(6).trim() : undefined;
   const avatarLine = lines.find((line) => line.toLowerCase().startsWith('avatar:'));
   const avatarUrl = avatarLine ? avatarLine.slice(7).trim() : undefined;
-  return { displayName, userId, avatarUrl };
+  return { displayName, userId, phone, avatarUrl };
 }
 
 function extractFirstUrl(content: string): string | null {
