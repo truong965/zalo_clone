@@ -111,7 +111,9 @@
           "locationWhenInUsePermission": "Cho phép $(PRODUCT_NAME) truy cập vị trí để chia sẻ vị trí hiện tại trong cuộc trò chuyện."
         }
       ],
-      "./plugins/withAndroidQueries"
+      "./plugins/withAndroidQueries",
+      "./plugins/withJetifier",
+      "./plugins/withAndroidComponentFactory"
     ],
     "experiments": {
       "typedRoutes": true,
