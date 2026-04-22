@@ -344,6 +344,17 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
             return typeof candidate === 'string' ? candidate.trim() : '';
       }, []);
 
+      const trimmedInput = message.trim();
+      const quickMessageHints = useMemo(() => {
+            if (!trimmedInput.startsWith('/')) return [];
+            const searchTerm = trimmedInput.slice(1).trim();
+            if (searchTerm.length < 2) return [];
+            const needle = trimmedInput.toLowerCase();
+            return Object.entries(quickMessages)
+                  .filter(([keyword, value]) => keyword.includes(needle) || value.toLowerCase().includes(needle))
+                  .slice(0, 6);
+      }, [quickMessages, trimmedInput]);
+
       const namecardFriends = friendsQuery.data?.pages.flatMap((page) => page.data) ?? [];
 
       const handleSendNamecard = useCallback((friend: any) => {
@@ -602,6 +613,27 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                               </div>
                         </div>
                   </div>
+                  {quickMessageHints.length > 0 && (
+                        <div className="px-3 pb-2">
+                              <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                                    {quickMessageHints.map(([keyword, value], index) => (
+                                          <button
+                                                key={keyword}
+                                                type="button"
+                                                className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${index < quickMessageHints.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                                onClick={() => {
+                                                      setMessage(value);
+                                                      setQuickKeywordInput(keyword);
+                                                      setQuickValueInput(value);
+                                                }}
+                                          >
+                                                <div className="text-xs font-semibold text-blue-600">{keyword}</div>
+                                                <div className="text-sm text-gray-800 truncate">{value}</div>
+                                          </button>
+                                    ))}
+                              </div>
+                        </div>
+                  )}
             </div>
             <Modal
                   title="Chọn bạn để gửi namecard"
