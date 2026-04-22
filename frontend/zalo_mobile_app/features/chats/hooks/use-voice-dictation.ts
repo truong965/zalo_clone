@@ -1,118 +1,76 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import Voice from '@react-native-voice/voice';
-import { requestRecordingPermissionsAsync } from 'expo-audio';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 
 type DictationStartResult =
   | { ok: true }
   | { ok: false; reason: 'unsupported_platform' | 'permission_denied' | 'native_module_unavailable' | 'start_failed' };
 
-const getVoiceSafe = () => {
-  if (!Voice || typeof Voice !== 'object') {
-    return null;
-  }
-  return Voice;
-};
-
-const hasVoiceNativeBridge = (
-  voice: ReturnType<typeof getVoiceSafe>,
-): voice is NonNullable<ReturnType<typeof getVoiceSafe>> => {
-  return !!voice && typeof voice.start === 'function' && typeof voice.isAvailable === 'function';
-};
-
 export function useVoiceDictation() {
   const [isListening, setIsListening] = useState(false);
   const finalResultRef = useRef('');
 
-  useEffect(() => {
-    const voice = getVoiceSafe();
-    if (!voice) {
-      return;
+  useSpeechRecognitionEvent('start', () => {
+    setIsListening(true);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEvent('result', (event) => {
+    // Collect the transcript from the first result entry.
+    // `isFinal` may be false on partial results; we accumulate the latest value.
+    const transcript = event.results[0]?.transcript ?? '';
+    if (transcript) {
+      finalResultRef.current = transcript.trim();
     }
+  });
 
-    try {
-      voice.onSpeechStart = () => setIsListening(true);
-      voice.onSpeechEnd = () => setIsListening(false);
-      voice.onSpeechResults = (event) => {
-        finalResultRef.current = event.value?.[0]?.trim() ?? '';
-      };
-      voice.onSpeechError = () => setIsListening(false);
-    } catch (error) {
-      console.warn('Voice listeners setup skipped', error);
-      return;
-    }
-
-    return () => {
-      const voiceOnCleanup = getVoiceSafe();
-      if (!voiceOnCleanup) {
-        return;
-      }
-
-      try {
-        voiceOnCleanup.destroy?.().catch(() => null);
-      } catch {
-        // no-op
-      }
-      try {
-        voiceOnCleanup.removeAllListeners?.();
-      } catch {
-        // no-op
-      }
-    };
-  }, []);
+  useSpeechRecognitionEvent('error', () => {
+    setIsListening(false);
+  });
 
   const start = useCallback(async (): Promise<DictationStartResult> => {
     if (Platform.OS !== 'android') return { ok: false, reason: 'unsupported_platform' };
+
     try {
-      const voice = getVoiceSafe();
-      if (!hasVoiceNativeBridge(voice)) {
-        return { ok: false, reason: 'native_module_unavailable' };
-      }
-      const { status } = await requestRecordingPermissionsAsync();
-      if (status !== 'granted') {
-        return { ok: false, reason: 'permission_denied' };
-      }
-      let isAvailable = false;
-      try {
-        isAvailable = Boolean(await voice.isAvailable());
-      } catch (error) {
-        const message = String((error as Error)?.message ?? error);
-        if (
-          message.includes('isSpeechAvailable') ||
-          message.includes('Native module cannot be null') ||
-          message.includes('Cannot read property')
-        ) {
-          return { ok: false, reason: 'native_module_unavailable' };
-        }
-        throw error;
-      }
+      // isRecognitionAvailable() is synchronous
+      const isAvailable = ExpoSpeechRecognitionModule.isRecognitionAvailable();
       if (!isAvailable) {
         return { ok: false, reason: 'native_module_unavailable' };
       }
+
+      // Request RECORD_AUDIO + speech recognition permissions
+      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!granted) {
+        return { ok: false, reason: 'permission_denied' };
+      }
+
       finalResultRef.current = '';
-      await voice.start('vi-VN');
+
+      ExpoSpeechRecognitionModule.start({
+        lang: 'vi-VN',
+        interimResults: false,
+        continuous: false,
+      });
+
       return { ok: true };
     } catch (error) {
       console.error('Voice dictation start failed', error);
-      const message = String((error as Error)?.message ?? error);
-      if (
-        message.includes('startSpeech') ||
-        message.includes('isSpeechAvailable') ||
-        message.includes('Native module cannot be null') ||
-        message.includes('Cannot read property')
-      ) {
-        return { ok: false, reason: 'native_module_unavailable' };
-      }
       return { ok: false, reason: 'start_failed' };
     }
   }, []);
 
   const stop = useCallback(async () => {
     try {
-      const voice = getVoiceSafe();
-      await voice?.stop?.();
+      // stop() asks the recognizer to finalise and emit a result event
+      ExpoSpeechRecognitionModule.stop();
     } catch {
-      // no-op
+      // no-op — already stopped or never started
     }
     setIsListening(false);
     return finalResultRef.current;
@@ -120,8 +78,8 @@ export function useVoiceDictation() {
 
   const cancel = useCallback(async () => {
     try {
-      const voice = getVoiceSafe();
-      await voice?.cancel?.();
+      // abort() cancels immediately without emitting a result event
+      ExpoSpeechRecognitionModule.abort();
     } catch {
       // no-op
     }
