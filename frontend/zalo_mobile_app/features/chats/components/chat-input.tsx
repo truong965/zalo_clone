@@ -489,54 +489,55 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
             ) : (
               <View className="flex-row items-center">
                 <TouchableOpacity
-                  className="p-2"
+                  className="p-2.5"
                   onPress={() => setShowExtraOptions(!showExtraOptions)}
                 >
                   <Ionicons
                     name="ellipsis-horizontal"
-                    size={24}
+                    size={26}
                     color={showExtraOptions ? theme.colors.primary : theme.colors.onSurfaceVariant}
                   />
                 </TouchableOpacity>
-                <TouchableOpacity className="p-2" onPress={handleOpenVoicePanel}>
+                <TouchableOpacity className="p-2.5" onPress={handleOpenVoicePanel}>
                   <Ionicons
                     name="mic-outline"
-                    size={24}
+                    size={26}
                     color={isVoiceModeActive ? theme.colors.primary : theme.colors.onSurfaceVariant}
                   />
                 </TouchableOpacity>
-                <TouchableOpacity className="p-2" onPress={handleMediaUpload}>
-                  <Ionicons name="image-outline" size={24} color={theme.colors.onSurfaceVariant} />
+                <TouchableOpacity className="p-2.5" onPress={handleMediaUpload}>
+                  <Ionicons name="image-outline" size={26} color={theme.colors.onSurfaceVariant} />
                 </TouchableOpacity>
               </View>
             )}
           </View>
 
           {showExtraOptions && (
-            <View className="flex-row items-center flex-wrap  bg-muted border-t border-border/50">
-              <TouchableOpacity className="items-center mr-8" onPress={handleDocumentUpload}>
+            <View className="flex-row flex-wrap bg-muted border-t border-border/50 py-3">
+              <TouchableOpacity className="items-center mb-2" style={{ width: '20%' }} onPress={handleDocumentUpload}>
                 <View className="w-14 h-14 rounded-2xl bg-blue-100 items-center justify-center mb-1">
                   <Ionicons name="document-text-outline" size={30} color="#2563eb" />
                 </View>
-                <Text className="text-sm font-medium text-onSurfaceVariant">Tài liệu</Text>
+                <Text className="text-sm font-medium text-onSurfaceVariant text-center">Tài liệu</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity className="items-center mr-8" onPress={() => setShowReminderModal(true)}>
+              <TouchableOpacity className="items-center mb-2" style={{ width: '20%' }} onPress={() => setShowReminderModal(true)}>
                 <View className="w-14 h-14 rounded-2xl bg-orange-100 items-center justify-center mb-1">
                   <Ionicons name="alarm-outline" size={30} color="#ea580c" />
                 </View>
-                <Text className="text-sm font-medium text-onSurfaceVariant">Nhắc hẹn</Text>
+                <Text className="text-sm font-medium text-onSurfaceVariant text-center">Nhắc hẹn</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity className="items-center" onPress={handleOpenNamecardPicker}>
+              <TouchableOpacity className="items-center mb-2" style={{ width: '20%' }} onPress={handleOpenNamecardPicker}>
                 <View className="w-14 h-14 rounded-2xl bg-cyan-100 items-center justify-center mb-1">
                   <Ionicons name="person-circle-outline" size={30} color="#0891b2" />
                 </View>
-                <Text className="text-sm font-medium text-onSurfaceVariant">Namecard</Text>
+                <Text className="text-sm font-medium text-onSurfaceVariant text-center">Namecard</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                className="items-center ml-8"
+                className="items-center mb-2"
+                style={{ width: '20%' }}
                 onPress={() => {
                   setShowExtraOptions(false);
                   setShowQuickMessageModal(true);
@@ -545,14 +546,14 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                 <View className="w-14 h-14 rounded-2xl bg-violet-100 items-center justify-center mb-1">
                   <Ionicons name="flash-outline" size={30} color="#7c3aed" />
                 </View>
-                <Text className="text-sm font-medium text-onSurfaceVariant">Quick message</Text>
+                <Text className="text-sm font-medium text-onSurfaceVariant text-center">Quick message</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity className="items-center ml-8" onPress={handleShareCurrentLocation}>
+              <TouchableOpacity className="items-center mb-2" style={{ width: '20%' }} onPress={handleShareCurrentLocation}>
                 <View className="w-14 h-14 rounded-2xl bg-emerald-100 items-center justify-center mb-1">
                   <Ionicons name="location-outline" size={30} color="#059669" />
                 </View>
-                <Text className="text-sm font-medium text-onSurfaceVariant">Vị trí</Text>
+                <Text className="text-sm font-medium text-onSurfaceVariant text-center">Vị trí</Text>
               </TouchableOpacity>
             </View>
           )}

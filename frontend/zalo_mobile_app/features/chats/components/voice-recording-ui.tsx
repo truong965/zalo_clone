@@ -280,10 +280,6 @@ export function VoiceRecordingUI({
       setIsTapRecording(false);
       return;
     }
-    if (!canSend) {
-      await handleDelete();
-      return;
-    }
     const holdDuration = Date.now() - holdStartedAtRef.current;
     const isTapIntent = holdDuration < 220 && !movedDuringHoldRef.current;
     if (isTapIntent) {
@@ -292,6 +288,10 @@ export function VoiceRecordingUI({
       setIsHolding(false);
       setIsLocked(true);
       setIsTapRecording(true);
+      return;
+    }
+    if (!canSend) {
+      await handleDelete();
       return;
     }
     isHoldingRef.current = false;
@@ -457,7 +457,7 @@ export function VoiceRecordingUI({
             style={[
               styles.sideButton,
               {
-                backgroundColor: theme.colors.elevation.level1,
+                backgroundColor: "rgba(239, 68, 68, 0.12)",
                 opacity:
                   isRecordMode && (hasRecordDraft || isHolding) ? 1 : 0.45,
               },
@@ -471,8 +471,8 @@ export function VoiceRecordingUI({
           >
             <Ionicons
               name="trash"
-              size={22}
-              color={theme.colors.onSurfaceVariant}
+              size={24}
+              color="#ef4444"
             />
           </TouchableOpacity>
 
@@ -502,6 +502,12 @@ export function VoiceRecordingUI({
               style={styles.primaryAction}
               {...holdPanResponder.panHandlers}
             >
+              {/* padding bottom 8 */}
+              <Text
+                style={[styles.primaryLabel, { color: theme.colors.onSurface, marginBottom: 8 }]}
+              >
+                Giữ để ghi
+              </Text>
               <View
                 style={[
                   styles.holdCircle,
@@ -510,11 +516,6 @@ export function VoiceRecordingUI({
               >
                 <Ionicons name="mic" size={36} color="#fff" />
               </View>
-              <Text
-                style={[styles.primaryLabel, { color: theme.colors.onSurface }]}
-              >
-                Giữ để ghi
-              </Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -566,7 +567,7 @@ export function VoiceRecordingUI({
                     : "play"
                   : "lock-closed"
               }
-              size={22}
+              size={24}
               color={theme.colors.onSurfaceVariant}
             />
           </TouchableOpacity>
@@ -744,9 +745,9 @@ const styles = StyleSheet.create({
     minHeight: 96,
   },
   sideButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
   },

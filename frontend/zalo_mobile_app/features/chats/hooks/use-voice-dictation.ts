@@ -14,6 +14,12 @@ const getVoiceSafe = () => {
   return Voice;
 };
 
+const hasVoiceNativeBridge = (
+  voice: ReturnType<typeof getVoiceSafe>,
+): voice is NonNullable<ReturnType<typeof getVoiceSafe>> => {
+  return !!voice && typeof voice.start === 'function' && typeof voice.isAvailable === 'function';
+};
+
 export function useVoiceDictation() {
   const [isListening, setIsListening] = useState(false);
   const finalResultRef = useRef('');
@@ -59,14 +65,27 @@ export function useVoiceDictation() {
     if (Platform.OS !== 'android') return { ok: false, reason: 'unsupported_platform' };
     try {
       const voice = getVoiceSafe();
-      if (!voice) {
+      if (!hasVoiceNativeBridge(voice)) {
         return { ok: false, reason: 'native_module_unavailable' };
       }
       const { status } = await requestRecordingPermissionsAsync();
       if (status !== 'granted') {
         return { ok: false, reason: 'permission_denied' };
       }
-      const isAvailable = await voice.isAvailable();
+      let isAvailable = false;
+      try {
+        isAvailable = Boolean(await voice.isAvailable());
+      } catch (error) {
+        const message = String((error as Error)?.message ?? error);
+        if (
+          message.includes('isSpeechAvailable') ||
+          message.includes('Native module cannot be null') ||
+          message.includes('Cannot read property')
+        ) {
+          return { ok: false, reason: 'native_module_unavailable' };
+        }
+        throw error;
+      }
       if (!isAvailable) {
         return { ok: false, reason: 'native_module_unavailable' };
       }
@@ -75,7 +94,13 @@ export function useVoiceDictation() {
       return { ok: true };
     } catch (error) {
       console.error('Voice dictation start failed', error);
-      if (error instanceof TypeError && String(error.message).includes('startSpeech')) {
+      const message = String((error as Error)?.message ?? error);
+      if (
+        message.includes('startSpeech') ||
+        message.includes('isSpeechAvailable') ||
+        message.includes('Native module cannot be null') ||
+        message.includes('Cannot read property')
+      ) {
         return { ok: false, reason: 'native_module_unavailable' };
       }
       return { ok: false, reason: 'start_failed' };
