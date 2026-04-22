@@ -92,10 +92,15 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
   const androidBaseBottomInset = Math.max(insets.bottom, 2);
   const androidKeyboardOffset =
     Platform.OS === 'android' && keyboardInset > 0 ? keyboardInset + 6 : 0;
+  const voicePanelBottomInset =
+    Platform.OS === 'ios'
+      ? Math.max(insets.bottom, 8)
+      : androidBaseBottomInset + androidKeyboardOffset + 20;
   const isVoiceModeActive = isVoicePanelOpen || isRecording || isUploadingAudio || !!recordingUri;
   const shouldHideInputForVoiceTimeline =
     isVoiceModeActive && (isRecording || isUploadingAudio || !!recordingUri);
-  const voicePanelHeight = keyboardInset > 0 ? keyboardInset : Platform.OS === 'ios' ? 310 : 280;
+  const voicePanelBaseHeight = keyboardInset > 0 ? keyboardInset : Platform.OS === 'ios' ? 320 : 300;
+  const voicePanelHeight = voicePanelBaseHeight + voicePanelBottomInset;
 
   React.useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
@@ -508,7 +513,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
           </View>
 
           {showExtraOptions && (
-            <View className="flex-row items-center flex-wrap px-4 py-4 border-t border-border/50">
+            <View className="flex-row items-center flex-wrap  bg-muted border-t border-border/50">
               <TouchableOpacity className="items-center mr-8" onPress={handleDocumentUpload}>
                 <View className="w-14 h-14 rounded-2xl bg-blue-100 items-center justify-center mb-1">
                   <Ionicons name="document-text-outline" size={30} color="#2563eb" />
@@ -749,7 +754,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
             onSendModeChange={setVoiceSendMode}
             isDictating={isListening}
             onDictatePress={handleDictationPress}
-            bottomInset={0}
+            bottomInset={voicePanelBottomInset}
           />
         </View>
       )}

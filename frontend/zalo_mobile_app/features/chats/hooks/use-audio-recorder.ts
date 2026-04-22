@@ -1,5 +1,6 @@
 import { useAuth } from '@/providers/auth-provider';
 import { mobileApi } from '@/services/api';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -71,6 +72,7 @@ export function useAudioRecorder() {
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const startInFlightRef = useRef(false);
+  const stopInFlightRef = useRef(false);
   const recordedDurationMillisRef = useRef(0);
   const { accessToken } = useAuth();
 
@@ -188,6 +190,10 @@ export function useAudioRecorder() {
   }, [recorder, recordingUri, state.durationMillis]);
 
   const stopAndSend = useCallback(async (): Promise<string | null> => {
+    if (stopInFlightRef.current || isUploadingAudio) {
+      return null;
+    }
+
     if (!accessToken) {
       Toast.show({
         type: 'error',
@@ -198,6 +204,7 @@ export function useAudioRecorder() {
       return null;
     }
 
+    stopInFlightRef.current = true;
     try {
       const currentDurationMillis = Math.max(
         state.durationMillis ?? 0,
@@ -231,12 +238,20 @@ export function useAudioRecorder() {
       // 1. Get dynamic file info from the URI
       const durationSeconds = currentDurationMillis / 1000;
       const { fileName, mimeType } = getFileInfoFromUri(uri, durationSeconds);
+      const fileInfoResult = await FileSystem.getInfoAsync(uri);
+      const fileSize =
+        fileInfoResult.exists && typeof fileInfoResult.size === 'number'
+          ? fileInfoResult.size
+          : 0;
+      if (fileSize <= 0) {
+        throw new Error('Cannot determine recording file size');
+      }
 
       // 2. Re-use 3-step S3 upload process
       const initResponse = await mobileApi.initiateUpload({
         fileName,
         mimeType,
-        fileSize: 1024, // Approximation
+        fileSize,
       }, accessToken);
 
       const fileInfo = {
@@ -260,8 +275,9 @@ export function useAudioRecorder() {
       return null;
     } finally {
       setIsUploadingAudio(false);
+      stopInFlightRef.current = false;
     }
-  }, [accessToken, recorder, recordingUri, state.durationMillis]);
+  }, [accessToken, recorder, recordingUri, state.durationMillis, isUploadingAudio]);
 
   return {
     isRecording,

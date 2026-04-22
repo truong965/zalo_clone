@@ -942,9 +942,38 @@ export const mobileApi = {
                   });
             };
 
+            const uploadWithFetch = async (fileBlob: Blob): Promise<void> => {
+                  const response = await fetch(presignedUrl, {
+                        method: 'PUT',
+                        headers: {
+                              'Content-Type': fileInfo.type || 'application/octet-stream',
+                        },
+                        body: fileBlob,
+                  });
+
+                  if (!response.ok) {
+                        const responsePreview = (await response.text().catch(() => '')).slice(0, 120).trim();
+                        const suffix = responsePreview ? `: ${responsePreview}` : '';
+                        throw new Error(`Upload failed with status ${response.status}${suffix}`);
+                  }
+            };
+
             const shouldRetry = (error: unknown): boolean => {
                   const message = error instanceof Error ? error.message : String(error);
-                  return /status\s(502|503|504)\b/i.test(message) || /timed out/i.test(message);
+                  return /status\s(429|500|502|503|504)\b/i.test(message) || /timed out/i.test(message) || /network error/i.test(message);
+            };
+
+            let cachedBlob: Blob | null = null;
+            const getBlob = async () => {
+                  if (cachedBlob) {
+                        return cachedBlob;
+                  }
+                  const localResponse = await fetch(fileInfo.uri);
+                  if (!localResponse.ok) {
+                        throw new Error(`Cannot read local asset for retry (status ${localResponse.status})`);
+                  }
+                  cachedBlob = await localResponse.blob();
+                  return cachedBlob;
             };
 
             try {
@@ -960,14 +989,23 @@ export const mobileApi = {
 
             await wait(400);
 
-            // Fallback attempt: convert to Blob and re-upload.
-            const localResponse = await fetch(fileInfo.uri);
-            if (!localResponse.ok) {
-                  throw new Error(`Cannot read local asset for retry (status ${localResponse.status})`);
+            try {
+                  // Second attempt: convert to Blob and upload via XHR.
+                  const fileBlob = await getBlob();
+                  await uploadWithXhr(fileBlob);
+                  onProgress?.(100);
+                  return;
+            } catch (secondError) {
+                  if (!shouldRetry(secondError)) {
+                        throw secondError;
+                  }
             }
 
-            const fileBlob = await localResponse.blob();
-            await uploadWithXhr(fileBlob);
+            await wait(800);
+
+            // Third attempt: PUT with fetch + Blob (different transport path than XHR).
+            const fileBlob = await getBlob();
+            await uploadWithFetch(fileBlob);
             onProgress?.(100);
       },
 

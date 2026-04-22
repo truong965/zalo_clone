@@ -389,8 +389,8 @@ export function VoiceRecordingUI({
         styles.container,
         {
           backgroundColor: theme.colors.background,
-          paddingBottom: Math.max(bottomInset, 16),
-          paddingTop: 12,
+          paddingBottom: Math.max(bottomInset + 16, 28),
+          paddingTop: 2,
         },
       ]}
     >
