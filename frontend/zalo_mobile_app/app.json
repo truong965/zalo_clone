@@ -103,7 +103,9 @@
           "contactsPermission": "Cho phép $(PRODUCT_NAME) truy cập danh bạ để tìm kiếm và kết nối với bạn bè."
         }
       ],
-      "./plugins/withAndroidQueries"
+      "./plugins/withAndroidQueries",
+      "./plugins/withJetifier",
+      "./plugins/withAndroidComponentFactory"
     ],
     "experiments": {
       "typedRoutes": true,
