@@ -2,7 +2,11 @@ import React from 'react';
 import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useTranslationStore } from '@/hooks/use-translation-store';
+import { useAuth } from '@/providers/auth-provider';
+import { mobileApi } from '@/services/api';
+import { useCallActions } from '@/features/calls/hooks/use-call-actions';
 import { Message, MessageType } from '@/types/message';
 import { getFullUrl, getReplyPreviewText } from './message-item.utils';
 import { styles } from './message-item.styles';
@@ -11,6 +15,8 @@ import { MessageVideoAttachment } from './attachments/message-video-attachment';
 import { MessageAudioAttachment } from './attachments/message-audio-attachment';
 import { MessageDocumentAttachment } from './attachments/message-document-attachment';
 import { MessageLinkPreview } from './message-link-preview';
+import Toast from 'react-native-toast-message';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 interface Props {
   message: Message;
@@ -35,6 +41,8 @@ export function MessageContent({
   isTranslationHidden = () => false,
   pendingLangs = [],
 }: Props) {
+  const { accessToken } = useAuth();
+  const { initiateCall } = useCallActions();
   const {
     hideTranslation,
     showTranslation,
@@ -55,6 +63,7 @@ export function MessageContent({
   );
   const attachments = message.mediaAttachments || [];
   const firstUrl = extractFirstUrl(message.content || '');
+  const namecard = parseNamecardFromContent(message.content || '');
 
   const isPendingNonText = attachments.length === 0 && !message.parentMessage && !message.replyTo && message.type !== MessageType.TEXT;
 
@@ -115,13 +124,70 @@ export function MessageContent({
         );
       })()}
 
+      {/* Shared namecard */}
+      {namecard && (
+        <View style={localStyles.namecardContainer}>
+          <View style={localStyles.namecardAvatarWrap}>
+            <UserAvatar uri={namecard.avatarUrl ? getFullUrl(namecard.avatarUrl) : undefined} size={46} />
+          </View>
+          <Text style={localStyles.namecardName} numberOfLines={1}>
+            {namecard.displayName}
+          </Text>
+          <View style={localStyles.namecardActions}>
+            <TouchableOpacity
+              onPress={async () => {
+                if (!accessToken) return;
+                try {
+                  const conversation = await mobileApi.getOrCreateDirectConversation(namecard.userId, accessToken);
+                  await initiateCall({
+                    callType: 'VOICE',
+                    peerId: namecard.userId,
+                    peerInfo: {
+                      displayName: namecard.displayName,
+                      avatarUrl: namecard.avatarUrl || null,
+                    },
+                    conversationId: conversation.id,
+                  });
+                } catch (error) {
+                  Toast.show({
+                    type: 'error',
+                    text1: 'Lỗi',
+                    text2: 'Không thể gọi người này lúc này',
+                  });
+                }
+              }}
+            >
+              <Text style={localStyles.namecardLink}>Gọi</Text>
+            </TouchableOpacity>
+            <Text style={localStyles.namecardDivider}>|</Text>
+            <TouchableOpacity
+              onPress={async () => {
+                if (!accessToken) return;
+                try {
+                  const conversation = await mobileApi.getOrCreateDirectConversation(namecard.userId, accessToken);
+                  router.push(`/chat/${conversation.id}`);
+                } catch (error) {
+                  Toast.show({
+                    type: 'error',
+                    text1: 'Lỗi',
+                    text2: 'Không thể mở cuộc trò chuyện',
+                  });
+                }
+              }}
+            >
+              <Text style={localStyles.namecardLink}>Nhắn tin</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Text caption or body */}
-      {!!message.content && (
+      {!!message.content && !namecard && (
         <Text style={[styles.messageText, (attachments.length > 0 || message.parentMessage || message.replyTo || Object.keys(translations).length > 0 || firstUrl) && { marginBottom: 4 }]}>
           {message.content}
         </Text>
       )}
-      {firstUrl && <MessageLinkPreview url={firstUrl} theme={theme} />}
+      {firstUrl && !namecard && <MessageLinkPreview url={firstUrl} theme={theme} />}
 
       {/* Pending status for non-text without attachments */}
       {isPendingNonText && (
@@ -279,6 +345,38 @@ export function MessageContent({
 }
 
 const localStyles = StyleSheet.create({
+  namecardContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  namecardAvatarWrap: {
+    marginBottom: 8,
+  },
+  namecardName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 6,
+  },
+  namecardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  namecardLink: {
+    fontSize: 14,
+    color: '#0284c7',
+    fontWeight: '600',
+  },
+  namecardDivider: {
+    fontSize: 14,
+    color: '#94a3b8',
+  },
   translationContainer: {
     marginTop: 8,
     paddingTop: 8,
@@ -314,6 +412,19 @@ const localStyles = StyleSheet.create({
     fontStyle: 'italic',
   },
 });
+
+function parseNamecardFromContent(content: string): { displayName: string; userId: string; avatarUrl?: string } | null {
+  if (!content || !content.startsWith('[Namecard]')) return null;
+  const lines = content.split('\n').map((line) => line.trim()).filter(Boolean);
+  const displayName = lines[1] || 'Người dùng';
+  const idLine = lines.find((line) => line.toLowerCase().startsWith('id:'));
+  if (!idLine) return null;
+  const userId = idLine.slice(3).trim();
+  if (!userId) return null;
+  const avatarLine = lines.find((line) => line.toLowerCase().startsWith('avatar:'));
+  const avatarUrl = avatarLine ? avatarLine.slice(7).trim() : undefined;
+  return { displayName, userId, avatarUrl };
+}
 
 function extractFirstUrl(content: string): string | null {
   if (!content) return null;
