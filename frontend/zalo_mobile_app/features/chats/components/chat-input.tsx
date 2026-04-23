@@ -420,7 +420,13 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     if (voiceSendMode !== 'stt') return;
 
     if (!isListening) {
+      if (__DEV__) {
+        console.log('[STT_DEBUG] ui: start button pressed');
+      }
       const started = await startDictation();
+      if (__DEV__) {
+        console.log('[STT_DEBUG] ui: start result', started);
+      }
       if (!started.ok) {
         const sttErrorText =
           started.reason === 'permission_denied'
@@ -437,7 +443,16 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
       return;
     }
 
+    if (__DEV__) {
+      console.log('[STT_DEBUG] ui: stop button pressed');
+    }
     const transcript = await stopDictation();
+    if (__DEV__) {
+      console.log('[STT_DEBUG] ui: stop transcript', {
+        transcriptLength: transcript?.length ?? 0,
+        transcript,
+      });
+    }
     if (transcript) {
       setContent((prev) => `${prev}${prev.trim().length > 0 ? ' ' : ''}${transcript}`.trimStart());
       setIsVoicePanelOpen(false);
