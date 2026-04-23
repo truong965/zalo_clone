@@ -88,10 +88,12 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
   } = useAudioRecorder();
   const {
     isListening,
+    liveTranscript,
     start: startDictation,
     stop: stopDictation,
     cancel: cancelDictation,
   } = useVoiceDictation();
+  const sttBaseContentRef = React.useRef('');
   const { createReminder } = useReminders(conversationId);
   const { replyTarget, clearReplyTarget } = useChatStore();
   const friendsQuery = useFriendsList({
@@ -153,6 +155,15 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
 
     void loadQuickMessages();
   }, []);
+
+  React.useEffect(() => {
+    if (!isListening) return;
+
+    const base = sttBaseContentRef.current;
+    const next = liveTranscript.trim();
+    const shouldAddSpace = base.length > 0 && !/\s$/.test(base) && next.length > 0;
+    setContent(`${base}${shouldAddSpace ? ' ' : ''}${next}`);
+  }, [isListening, liveTranscript]);
 
   const persistQuickMessages = async (nextMap: QuickMessageMap) => {
     setQuickMessages(nextMap);
@@ -400,6 +411,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
   const handleCancelVoice = async () => {
     if (voiceSendMode === 'stt') {
       await cancelDictation();
+      setContent(sttBaseContentRef.current);
       setIsVoicePanelOpen(true);
       return;
     }
@@ -420,6 +432,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     if (voiceSendMode !== 'stt') return;
 
     if (!isListening) {
+      sttBaseContentRef.current = content;
       if (__DEV__) {
         console.log('[STT_DEBUG] ui: start button pressed');
       }
@@ -446,17 +459,14 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     if (__DEV__) {
       console.log('[STT_DEBUG] ui: stop button pressed');
     }
-    const transcript = await stopDictation();
+    await stopDictation();
     if (__DEV__) {
       console.log('[STT_DEBUG] ui: stop transcript', {
-        transcriptLength: transcript?.length ?? 0,
-        transcript,
+        transcriptLength: liveTranscript.length,
+        transcript: liveTranscript,
       });
     }
-    if (transcript) {
-      setContent((prev) => `${prev}${prev.trim().length > 0 ? ' ' : ''}${transcript}`.trimStart());
-      setIsVoicePanelOpen(false);
-    }
+    setIsVoicePanelOpen(false);
   };
 
   const handlePickEmoji = (emojiObject: any) => {

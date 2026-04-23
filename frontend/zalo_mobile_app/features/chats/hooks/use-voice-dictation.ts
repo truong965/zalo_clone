@@ -18,6 +18,7 @@ const sttDebugLog = (...args: unknown[]) => {
 
 export function useVoiceDictation() {
   const [isListening, setIsListening] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState('');
   const finalResultRef = useRef('');
 
   useSpeechRecognitionEvent('start', () => {
@@ -34,8 +35,10 @@ export function useVoiceDictation() {
     // Collect the transcript from the first result entry.
     // `isFinal` may be false on partial results; we accumulate the latest value.
     const transcript = event.results[0]?.transcript ?? '';
-    if (transcript) {
-      finalResultRef.current = transcript.trim();
+    const normalizedTranscript = transcript.trim();
+    if (normalizedTranscript) {
+      finalResultRef.current = normalizedTranscript;
+      setLiveTranscript(normalizedTranscript);
       sttDebugLog('event: result', {
         transcriptLength: finalResultRef.current.length,
         transcript: finalResultRef.current,
@@ -72,10 +75,11 @@ export function useVoiceDictation() {
       }
 
       finalResultRef.current = '';
+      setLiveTranscript('');
       sttDebugLog('start: invoking ExpoSpeechRecognitionModule.start');
       ExpoSpeechRecognitionModule.start({
         lang: 'vi-VN',
-        interimResults: false,
+        interimResults: true,
         continuous: false,
       });
 
@@ -96,7 +100,6 @@ export function useVoiceDictation() {
     } catch {
       // no-op — already stopped or never started
     }
-    setIsListening(false);
     sttDebugLog('stop: transcript', {
       transcriptLength: finalResultRef.current.length,
       transcript: finalResultRef.current,
@@ -114,11 +117,13 @@ export function useVoiceDictation() {
     }
     setIsListening(false);
     finalResultRef.current = '';
+    setLiveTranscript('');
     sttDebugLog('cancel: done and cleared transcript');
   }, []);
 
   return {
     isListening,
+    liveTranscript,
     start,
     stop,
     cancel,
