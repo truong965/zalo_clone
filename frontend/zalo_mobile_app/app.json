@@ -59,7 +59,14 @@
     },
     "plugins": [
       "expo-router",
-      "@react-native-voice/voice",
+      "expo-asset",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Cho phép $(PRODUCT_NAME) truy cập micro để nhận dạng giọng nói.",
+          "speechRecognitionPermission": "Cho phép $(PRODUCT_NAME) nhận dạng giọng nói để chuyển thành văn bản."
+        }
+      ],
       [
         "expo-splash-screen",
         {
