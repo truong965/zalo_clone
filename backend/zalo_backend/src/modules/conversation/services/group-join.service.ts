@@ -113,14 +113,20 @@ export class GroupJoinService {
       },
     });
 
-    if (
-      existingRequest &&
-      existingRequest.status === JoinRequestStatus.PENDING
-    ) {
-      throw new ConflictException('Join request already pending');
-    }
-
     if (!group.requireApproval) {
+      if (
+        existingRequest &&
+        existingRequest.status === JoinRequestStatus.PENDING
+      ) {
+        await this.prisma.groupJoinRequest.deleteMany({
+          where: {
+            conversationId: dto.conversationId,
+            userId,
+            status: JoinRequestStatus.PENDING,
+          },
+        });
+      }
+
       await this.autoApproveJoin(dto.conversationId, userId);
 
       this.logger.log(
@@ -131,6 +137,13 @@ export class GroupJoinService {
         status: 'APPROVED',
         message: 'You have joined the group',
       };
+    }
+
+    if (
+      existingRequest &&
+      existingRequest.status === JoinRequestStatus.PENDING
+    ) {
+      throw new ConflictException('Join request already pending');
     }
 
     await this.prisma.groupJoinRequest.upsert({
