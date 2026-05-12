@@ -6,6 +6,7 @@ import { Layout, Menu } from 'antd';
 import {
   DashboardOutlined,
   UserOutlined,
+  TeamOutlined,
   MessageOutlined,
   PhoneOutlined,
   AlertOutlined,
@@ -37,6 +38,12 @@ export function AdminSidebar() {
       icon: <UserOutlined />,
       label: t('layout.admin.users'),
       onClick: () => navigate('/admin/users'),
+    },
+    {
+      key: '/admin/groups',
+      icon: <TeamOutlined />,
+      label: t('layout.admin.groups'),
+      onClick: () => navigate('/admin/groups'),
     },
     {
       key: '/admin/messages',

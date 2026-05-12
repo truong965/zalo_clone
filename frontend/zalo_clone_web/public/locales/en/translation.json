@@ -103,6 +103,7 @@
     "admin": {
       "dashboard": "Dashboard",
       "users": "Users",
+      "groups": "Groups",
       "messages": "Messages",
       "calls": "Calls",
       "activity": "Activity",

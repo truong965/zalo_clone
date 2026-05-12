@@ -27,6 +27,14 @@ import {
       forceLogoutUser,
       getCalls,
       getConversations,
+      getGroups,
+      getGroupDetail,
+      createGroup,
+      updateGroup,
+      addGroupMembers,
+      removeGroupMember,
+      updateGroupMemberRole,
+      forceCloseGroup,
       getActivitySuspended,
       getActivityInactive,
       getActivityHighActivity,
@@ -42,9 +50,15 @@ import type {
       UserListQuery,
       CallListQuery,
       ConversationListQuery,
+      GroupListQuery,
       ActionResponse,
       AdminRole,
+      CreateRoleDto,
       UpdateRoleDto,
+      CreateAdminGroupDto,
+      UpdateAdminGroupDto,
+      AdminGroupDetail,
+      AdminGroupMemberRole,
 } from '../types';
 
 // ============================================================================
@@ -74,6 +88,13 @@ export const adminKeys = {
       // Conversations
       conversations: (params?: ConversationListQuery) =>
             [...adminKeys.all, 'conversations', params] as const,
+
+      // Groups
+      groups: () => [...adminKeys.all, 'groups'] as const,
+      groupList: (params?: GroupListQuery) =>
+            [...adminKeys.groups(), 'list', params] as const,
+      groupDetail: (id: string) =>
+            [...adminKeys.groups(), 'detail', id] as const,
 
       // Activity
       activity: () => [...adminKeys.all, 'activity'] as const,
@@ -152,7 +173,7 @@ export function useAdminUserDetail(id: string | null) {
  * Suspend user mutation. Invalidates user list + detail + activity on success.
  */
 export function useSuspendUser(
-      options?: UseMutationOptions<ActionResponse, any, string, any>
+      options?: UseMutationOptions<ActionResponse, Error, string, unknown>
 ) {
       const qc = useQueryClient();
       return useMutation({
@@ -170,7 +191,7 @@ export function useSuspendUser(
  * Activate user mutation. Invalidates user list + activity on success.
  */
 export function useActivateUser(
-      options?: UseMutationOptions<ActionResponse, any, string, any>
+      options?: UseMutationOptions<ActionResponse, Error, string, unknown>
 ) {
       const qc = useQueryClient();
       return useMutation({
@@ -188,7 +209,7 @@ export function useActivateUser(
  * Force logout mutation. Invalidates user detail (sessions change).
  */
 export function useForceLogoutUser(
-      options?: UseMutationOptions<ActionResponse, any, string, any>
+      options?: UseMutationOptions<ActionResponse, Error, string, unknown>
 ) {
       const qc = useQueryClient();
       return useMutation({
@@ -231,6 +252,124 @@ export function useAdminConversations(params?: ConversationListQuery) {
             queryKey: adminKeys.conversations(params),
             queryFn: () => getConversations(params),
             staleTime: 30_000,
+      });
+}
+
+// ============================================================================
+// Group Hooks
+// ============================================================================
+
+export function useAdminGroups(params?: GroupListQuery) {
+      return useQuery({
+            queryKey: adminKeys.groupList(params),
+            queryFn: () => getGroups(params),
+            staleTime: 30_000,
+      });
+}
+
+export function useAdminGroupDetail(id: string | null) {
+      return useQuery({
+            queryKey: adminKeys.groupDetail(id ?? ''),
+            queryFn: () => getGroupDetail(id!),
+            enabled: !!id,
+            staleTime: 30_000,
+      });
+}
+
+export function useCreateGroup(
+      options?: UseMutationOptions<AdminGroupDetail, Error, CreateAdminGroupDto, unknown>
+) {
+      const qc = useQueryClient();
+      return useMutation({
+            ...options,
+            mutationFn: createGroup,
+            onSuccess: (...args) => {
+                  void qc.invalidateQueries({ queryKey: adminKeys.groups() });
+                  void qc.invalidateQueries({ queryKey: adminKeys.conversations() });
+                  options?.onSuccess?.(...args);
+            },
+      });
+}
+
+export function useUpdateGroup(
+      options?: UseMutationOptions<AdminGroupDetail, Error, UpdateAdminGroupDto & { id: string }, unknown>
+) {
+      const qc = useQueryClient();
+      return useMutation({
+            ...options,
+            mutationFn: updateGroup,
+            onSuccess: (...args) => {
+                  void qc.invalidateQueries({ queryKey: adminKeys.groups() });
+                  void qc.invalidateQueries({ queryKey: adminKeys.conversations() });
+                  options?.onSuccess?.(...args);
+            },
+      });
+}
+
+export function useAddGroupMembers(
+      options?: UseMutationOptions<
+            ActionResponse & { addedCount?: number },
+            Error,
+            { id: string; userIds: string[] },
+            unknown
+      >
+) {
+      const qc = useQueryClient();
+      return useMutation({
+            ...options,
+            mutationFn: addGroupMembers,
+            onSuccess: (...args) => {
+                  void qc.invalidateQueries({ queryKey: adminKeys.groups() });
+                  options?.onSuccess?.(...args);
+            },
+      });
+}
+
+export function useRemoveGroupMember(
+      options?: UseMutationOptions<ActionResponse, Error, { id: string; userId: string }, unknown>
+) {
+      const qc = useQueryClient();
+      return useMutation({
+            ...options,
+            mutationFn: removeGroupMember,
+            onSuccess: (...args) => {
+                  void qc.invalidateQueries({ queryKey: adminKeys.groups() });
+                  options?.onSuccess?.(...args);
+            },
+      });
+}
+
+export function useUpdateGroupMemberRole(
+      options?: UseMutationOptions<
+            ActionResponse,
+            Error,
+            { id: string; userId: string; role: AdminGroupMemberRole },
+            unknown
+      >
+) {
+      const qc = useQueryClient();
+      return useMutation({
+            ...options,
+            mutationFn: updateGroupMemberRole,
+            onSuccess: (...args) => {
+                  void qc.invalidateQueries({ queryKey: adminKeys.groups() });
+                  options?.onSuccess?.(...args);
+            },
+      });
+}
+
+export function useForceCloseGroup(
+      options?: UseMutationOptions<ActionResponse, Error, string, unknown>
+) {
+      const qc = useQueryClient();
+      return useMutation({
+            ...options,
+            mutationFn: forceCloseGroup,
+            onSuccess: (...args) => {
+                  void qc.invalidateQueries({ queryKey: adminKeys.groups() });
+                  void qc.invalidateQueries({ queryKey: adminKeys.conversations() });
+                  options?.onSuccess?.(...args);
+            },
       });
 }
 
@@ -319,7 +458,7 @@ export function useAdminRoles(params?: { current?: number; pageSize?: number }) 
  * Create role mutation.
  */
 export function useCreateRole(
-      options?: UseMutationOptions<AdminRole, any, any, any>
+      options?: UseMutationOptions<AdminRole, Error, CreateRoleDto, unknown>
 ) {
       const qc = useQueryClient();
       return useMutation({
@@ -336,7 +475,7 @@ export function useCreateRole(
  * Update role mutation.
  */
 export function useUpdateRole(
-      options?: UseMutationOptions<AdminRole, any, UpdateRoleDto & { id: string }, any>
+      options?: UseMutationOptions<AdminRole, Error, UpdateRoleDto & { id: string }, unknown>
 ) {
       const qc = useQueryClient();
       return useMutation({
@@ -353,7 +492,7 @@ export function useUpdateRole(
  * Delete role mutation.
  */
 export function useDeleteRole(
-      options?: UseMutationOptions<ActionResponse, any, string, any>
+      options?: UseMutationOptions<ActionResponse, Error, string, unknown>
 ) {
       const qc = useQueryClient();
       return useMutation({
