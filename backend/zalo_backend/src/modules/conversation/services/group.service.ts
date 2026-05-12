@@ -12,6 +12,7 @@ import {
 import { PrismaService } from 'src/database/prisma.service';
 import {
   ConversationType,
+  JoinRequestStatus,
   MemberRole,
   MemberStatus,
   Prisma,
@@ -137,6 +138,14 @@ export class GroupService {
   ) {
     await this.verifyAdmin(conversationId, userId);
 
+    const previousApproval =
+      dto.requireApproval !== undefined
+        ? await this.prisma.conversation.findUnique({
+            where: { id: conversationId },
+            select: { requireApproval: true },
+          })
+        : null;
+
     let newSettings: GroupSettings | undefined;
 
     if (dto.description) {
@@ -160,6 +169,19 @@ export class GroupService {
         updatedAt: new Date(),
       },
     });
+
+    if (dto.requireApproval === false && previousApproval?.requireApproval) {
+      const cleared = await this.prisma.groupJoinRequest.deleteMany({
+        where: {
+          conversationId,
+          status: JoinRequestStatus.PENDING,
+        },
+      });
+
+      this.logger.log(
+        `Cleared ${cleared.count} pending join requests after disabling approval for group ${conversationId}`,
+      );
+    }
 
     await this.eventPublisher
       .publish(
