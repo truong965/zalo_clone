@@ -1,283 +1,255 @@
-# 04 - Domain Class Diagram (Code is Source of Truth)
+# 03 - Class Diagram (Generated from ERD)
 
-> Cập nhật lần cuối: 14/03/2026
-> Phạm vi: Domain model cốt lõi (IAM, Social, Messaging, Media, Call, Reminder)
-> Nguồn sự thật: `backend/zalo_backend/prisma/schema.prisma`
+> Cập nhật lần cuối: 04/05/2026
+> Nguồn sự thật: [01-ERD.md](01-ERD.md), [schema.prisma](../../backend/zalo_backend/prisma/schema.prisma)
 
 ---
 
 ## Mục tiêu
 
-Sơ đồ này chỉ biểu diễn Domain Class Diagram theo đúng hướng OOP:
+Tài liệu này chuyển đổi từ ERD mới sang class diagram để dễ đọc hơn.
 
-- Chỉ gồm thực thể domain và thuộc tính cốt lõi
-- Chỉ gồm quan hệ giữa thực thể: cấu thành (composition), kết hợp (aggregation/association)
-- Không chứa Controller, Service, Gateway, Listener, Infrastructure dependency
+- Bám theo model và quan hệ vật lý trong schema hiện tại
+- Tổng hợp thành 1 sơ đồ duy nhất
+- Không thêm service/controller hoặc logic runtime
 
 ---
 
-## Domain Class Diagram
+## Unified Class Diagram
 
 ```mermaid
+---
+id: 501cf6e6-d901-46dc-8dfb-e91275de452b
+---
 classDiagram
     direction LR
 
-    class User {
-      +UUID id
-      +String phoneNumber
-      +String displayName
+    class users {
+      +String id
+      +String phone_number
+      +String email?
+      +String display_name
+      +String role_id?
       +UserStatus status
-      +DateTime createdAt
-      +updateProfile(displayName, avatarUrl, bio)
-      +changePassword(currentPassword, newPassword)
-      +assignRole(roleId)
-      +deactivate()
+      +Boolean two_factor_enabled
+      +TwoFactorMethod two_factor_method?
     }
 
-    class Role {
-      +UUID id
-      +String name
-      +String description
-      +addPermission(permissionId)
-      +removePermission(permissionId)
-      +hasPermission(apiPath, method) bool
+    class user_tokens {
+      +String id
+      +String user_id
+      +String refresh_token_hash
+      +LoginMethod login_method
+      +String device_id
+      +TokenRevocationReason revoked_reason?
+      +String parent_token_id?
     }
 
-    class Permission {
-      +UUID id
+    class user_devices {
+      +String id
+      +String user_id
+      +String device_id
+      +DeviceType device_type?
+      +Boolean is_trusted
+      +DateTime last_active_at
+    }
+
+    class roles {
+      +String id
       +String name
-      +String apiPath
+      +String description?
+    }
+
+    class permissions {
+      +String id
+      +String name
+      +String api_path
       +String method
       +String module
-      +matches(apiPath, method) bool
     }
 
-    class RolePermission {
-      +UUID roleId
-      +UUID permissionId
+    class role_permissions {
+      +String role_id
+      +String permission_id
     }
 
-    class PrivacySettings {
-      +UUID userId
-      +PrivacyLevel showProfile
-      +PrivacyLevel whoCanMessageMe
-      +PrivacyLevel whoCanCallMe
-      +Boolean showOnlineStatus
-      +Boolean showLastSeen
-      +updatePolicy(showProfile, whoCanMessageMe, whoCanCallMe)
-      +canMessage(requesterId, targetId) bool
-      +canCall(requesterId, targetId) bool
-      +canViewProfile(requesterId, targetId) bool
+    class privacy_settings {
+      +String user_id
+      +PrivacyLevel show_profile
+      +PrivacyLevel who_can_message_me
+      +PrivacyLevel who_can_call_me
+      +Boolean show_online_status
+      +Boolean show_last_seen
     }
 
-    class Friendship {
-      +UUID id
-      +UUID user1Id
-      +UUID user2Id
-      +UUID requesterId
+    class friendships {
+      +String id
+      +String user1_id
+      +String user2_id
+      +String requester_id
       +FriendshipStatus status
-      +sendRequest(requesterId, targetId)
-      +accept(userId)
-      +decline(userId)
-      +cancel(userId)
-      +unfriend(userId)
-      +areFriends(userId1, userId2) bool
+      +DateTime expires_at?
     }
 
-    class Block {
-      +UUID id
-      +UUID blockerId
-      +UUID blockedId
-      +String reason
-      +block(blockerId, blockedId, reason)
-      +unblock(blockerId, blockedId)
-      +isBlocked(userId1, userId2) bool
+    class blocks {
+      +String id
+      +String blocker_id
+      +String blocked_id
+      +String reason?
     }
 
-    class UserContact {
-      +UUID id
-      +UUID ownerId
-      +UUID contactUserId
-      +String aliasName
+    class user_contacts {
+      +String owner_id
+      +String contact_user_id
+      +String alias_name?
       +ContactSource source
-      +add(ownerId, contactUserId, aliasName)
-      +renameAlias(aliasName)
-      +remove(ownerId, contactUserId)
     }
 
-    class Conversation {
-      +UUID id
+    class conversations {
+      +String id
       +ConversationType type
-      +String name
-      +DateTime lastMessageAt
-      +Boolean requireApproval
-      +createDirect(memberA, memberB)
-      +createGroup(name, creatorId, memberIds)
-      +rename(name)
-      +touchLastMessage(messageAt)
-      +dissolve(adminId)
+      +String name?
+      +DateTime last_message_at?
+      +Boolean require_approval
     }
 
-    class ConversationMember {
-      +UUID conversationId
-      +UUID userId
+    class conversation_members {
+      +String conversation_id
+      +String user_id
       +MemberRole role
       +MemberStatus status
-      +Boolean isArchived
-      +Boolean isMuted
-      +Boolean isPinned
-      +Int unreadCount
-      +promoteToAdmin(byUserId)
-      +demoteToMember(byUserId)
-      +markRead(messageId)
-      +toggleArchive(isArchived)
-      +toggleMute(isMuted)
-      +pinConversation()
-      +unpinConversation()
-      +leave()
-      +kick(byUserId)
+      +Int unread_count
+      +Boolean is_archived
+      +Boolean is_muted
+      +Boolean is_pinned
     }
 
-    class GroupJoinRequest {
-      +UUID id
-      +UUID conversationId
-      +UUID userId
-      +UUID inviterId
+    class group_join_requests {
+      +String id
+      +String conversation_id
+      +String user_id
       +JoinRequestStatus status
-      +requestJoin(userId, conversationId)
-      +inviteMember(inviterId, userId)
-      +approve(adminId)
-      +reject(adminId)
-      +cancel(userId)
+      +String inviter_id?
+      +String reviewed_by?
     }
 
-    class Message {
+    class messages {
       +BigInt id
-      +UUID conversationId
-      +UUID senderId
+      +String conversation_id
+      +String sender_id?
       +MessageType type
+      +String content?
+      +BigInt reply_to_message_id?
+      +Int delivered_count
+      +Int seen_count
+      +Int total_recipients
+    }
+
+    class reminders {
+      +String id
+      +String user_id
+      +String conversation_id?
+      +BigInt message_id?
       +String content
-      +BigInt replyToId
-      +Int deliveredCount
-      +Int seenCount
-      +Int totalRecipients
-      +send(senderId, conversationId, content)
-      +reply(senderId, parentMessageId, content)
-      +edit(content)
-      +delete(requesterId)
-      +attachMedia(mediaId)
-      +markDelivered(userId)
-      +markSeen(userId)
+      +DateTime remind_at
+      +Boolean is_triggered
+      +Boolean is_completed
     }
 
-    class MediaAttachment {
-      +UUID id
-      +BigInt messageId
-      +UUID uploadedBy
-      +MediaType mediaType
-      +String originalName
+    class media_attachments {
+      +String id
+      +BigInt message_id?
+      +MediaType media_type
       +BigInt size
-      +MediaProcessingStatus processingStatus
-      +initiateUpload(uploadedBy, mediaType, size)
-      +confirmUpload(uploadId)
-      +markProcessing()
-      +markReady(cdnUrl)
-      +markFailed(error)
-      +softDelete(deletedBy)
+      +MediaProcessingStatus processing_status
+      +String uploaded_by
     }
 
-    class CallHistory {
-      +UUID id
-      +UUID initiatorId
-      +UUID conversationId
-      +CallType callType
+    class call_history {
+      +String id
+      +String initiator_id
+      +CallType call_type
       +CallProvider provider
       +CallStatus status
-      +Int participantCount
-      +start(initiatorId, conversationId, callType)
-      +updateStatus(status)
-      +switchProvider(provider)
-      +heartbeat()
-      +end(endReason)
+      +String conversation_id?
+      +Int participant_count
     }
 
-    class CallParticipant {
-      +UUID id
-      +UUID callId
-      +UUID userId
+    class call_participants {
+      +String id
+      +String call_id
+      +String user_id
       +CallParticipantRole role
       +CallParticipantStatus status
-      +Int duration
-      +join()
-      +reject()
-      +markMissed()
-      +leave()
+      +Int duration?
     }
 
-    class Reminder {
-      +UUID id
-      +UUID userId
-      +UUID conversationId
-      +BigInt messageId
-      +String content
-      +DateTime remindAt
-      +Boolean isTriggered
-      +Boolean isCompleted
-      +create(userId, content, remindAt)
-      +reschedule(remindAt)
-      +markTriggered()
-      +complete()
-      +cancel()
+    class domain_events {
+      +String id
+      +String event_id
+      +EventType event_type
+      +String aggregate_id
+      +String aggregate_type
+      +Int version
+      +String source
+      +DateTime occurred_at
     }
 
-    User "0..*" --> "0..1" Role : belongsTo
-    Role "1" *-- "0..*" RolePermission : owns links
-    Permission "1" *-- "0..*" RolePermission : owns links
+    class processed_events {
+      +String id
+      +String event_id
+      +EventType event_type
+      +Int event_version
+      +String handler_id
+      +String status
+      +Int retry_count
+    }
 
-    User "1" *-- "1" PrivacySettings : profile privacy
+    class search_queries {
+      +String id
+      +String user_id
+      +String keyword
+      +String search_type
+      +Int result_count
+      +Int execution_time_ms
+      +String clicked_result_id?
+    }
 
-    User "1" --> "0..*" Friendship : user1/user2/requester
-    User "1" --> "0..*" Block : blocker/blocked
-    User "1" --> "0..*" UserContact : owner/contact
+    class daily_stats {
+      +DateTime date
+      +Int new_users
+      +Int active_users
+      +Int messages_total
+      +Int calls_total
+      +Int media_uploads
+    }
 
-    Conversation "1" *-- "0..*" ConversationMember : members
-    User "1" --> "0..*" ConversationMember : participates
+      users "0..*" --> "0..1" roles : role
+      users "1" --> "0..*" user_tokens : tokens
+      users "1" --> "0..*" user_devices : devices
+      users "1" --> "0..1" privacy_settings : privacy
+      user_tokens "0..*" --> "0..1" user_tokens : parentToken
+      role_permissions "0..*" --> "1" roles : role
+      role_permissions "0..*" --> "1" permissions : permission
 
-    Conversation "1" *-- "0..*" GroupJoinRequest : join requests
-    User "1" --> "0..*" GroupJoinRequest : requester/inviter/reviewer
+      conversations "1" --> "0..*" conversation_members : members
+      conversations "1" --> "0..*" group_join_requests : join_requests
+      conversations "1" --> "0..*" messages : messages
+      messages "0..*" --> "0..1" messages : parentMessage
 
-    Conversation "1" *-- "0..*" Message : contains
-    User "1" --> "0..*" Message : sends/deletes
-    Message "0..1" --> "0..*" Message : replies
+      reminders "0..*" --> "1" users : user
+      reminders "0..*" --> "0..1" conversations : conversation
+      reminders "0..*" --> "0..1" messages : message
 
-    Message "1" o-- "0..*" MediaAttachment : attachments
-    User "1" --> "0..*" MediaAttachment : uploads
-
-    Conversation "0..1" --> "0..*" CallHistory : call context
-    User "1" --> "0..*" CallHistory : initiates
-    CallHistory "1" *-- "1..*" CallParticipant : participants
-    User "1" --> "0..*" CallParticipant : joins
-
-    User "1" *-- "0..*" Reminder : owns
-    Conversation "0..1" --> "0..*" Reminder : scoped to conversation
-    Message "0..1" --> "0..*" Reminder : scoped to message
+      call_history "1" --> "0..*" call_participants : participants
+    search_queries "0..*" --> "1" users : user
 ```
 
----
-
-## Mapping với code hiện tại
-
-- Prisma schema: `backend/zalo_backend/prisma/schema.prisma`
-- Nhóm IAM: `User`, `Role`, `Permission`, `RolePermission`, `PrivacySettings`
-- Nhóm Social: `Friendship`, `Block`, `UserContact`
-- Nhóm Messaging: `Conversation`, `ConversationMember`, `GroupJoinRequest`, `Message`
-- Nhóm Media: `MediaAttachment`
-- Nhóm Call: `CallHistory`, `CallParticipant`
-- Nhóm Reminder: `Reminder`
+> Ghi chú: `friendships`, `blocks`, `user_contacts` đã decouple FK vật lý sang `users`; `media_attachments.message_id` và `call_history.conversation_id` là khóa mềm.
 
 ---
 
-## Ghi chú
+## Lưu ý đồng bộ
 
-- Trong schema hiện tại không có lớp kế thừa tường minh giữa các model domain; quan hệ chủ đạo là composition/association qua khóa ngoại.
-- Nếu sau này code bổ sung base entity ở mức domain object (ví dụ `AuditableEntity`), có thể mở rộng biểu diễn quan hệ kế thừa trong sơ đồ này.
+- File này là bản đọc dễ hơn của ERD, không thay thế ERD auto-generate.
+- Khi schema đổi, ưu tiên regenerate [01-ERD.md](01-ERD.md) trước, sau đó sync file này.
