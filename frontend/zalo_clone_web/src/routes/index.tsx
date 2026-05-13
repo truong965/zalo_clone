@@ -26,6 +26,7 @@ const CallScreen = lazy(() => import('@/features/call/components/CallScreen').th
 // Admin Pages (lazy)
 const AdminDashboardPage = lazy(() => import('@/pages/admin/dashboard').then(m => ({ default: m.AdminDashboardPage })));
 const AdminUsersPage = lazy(() => import('@/pages/admin/users').then(m => ({ default: m.AdminUsersPage })));
+const AdminGroupsPage = lazy(() => import('@/pages/admin/groups').then(m => ({ default: m.AdminGroupsPage })));
 const AdminMessagesPage = lazy(() => import('@/pages/admin/messages').then(m => ({ default: m.AdminMessagesPage })));
 const AdminCallsPage = lazy(() => import('@/pages/admin/calls').then(m => ({ default: m.AdminCallsPage })));
 const AdminActivityPage = lazy(() => import('@/pages/admin/activity').then(m => ({ default: m.AdminActivityPage })));
@@ -196,6 +197,14 @@ export const router = createBrowserRouter([
                         element: (
                               <Suspense fallback={<PageSkeleton />}>
                                     <AdminUsersPage />
+                              </Suspense>
+                        ),
+                  },
+                  {
+                        path: 'groups',
+                        element: (
+                              <Suspense fallback={<PageSkeleton />}>
+                                    <AdminGroupsPage />
                               </Suspense>
                         ),
                   },

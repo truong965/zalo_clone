@@ -12,6 +12,7 @@ const aiEnabled = process.env.AI_AGENT_ENABLED !== 'false';
 // Controllers
 import { AdminStatsController } from './controllers/admin-stats.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
+import { AdminGroupsController } from './controllers/admin-groups.controller';
 import { AdminManagementController } from './controllers/admin-management.controller';
 import { AdminActivityController } from './controllers/admin-activity.controller';
 import { AdminSystemController } from './controllers/admin-system.controller';
@@ -19,6 +20,7 @@ import { AdminSystemController } from './controllers/admin-system.controller';
 // Services
 import { AdminStatsService } from './services/admin-stats.service';
 import { AdminUsersService } from './services/admin-users.service';
+import { AdminGroupsService } from './services/admin-groups.service';
 import { AdminCallsService } from './services/admin-calls.service';
 import { AdminActivityService } from './services/admin-activity.service';
 import { AdminSystemService } from './services/admin-system.service';
@@ -81,6 +83,7 @@ import { DailyStatsCron } from './cron/daily-stats.cron';
   controllers: [
     AdminStatsController,
     AdminUsersController,
+    AdminGroupsController,
     AdminManagementController,
     AdminActivityController,
     AdminSystemController,
@@ -89,6 +92,7 @@ import { DailyStatsCron } from './cron/daily-stats.cron';
     // Services
     AdminStatsService,
     AdminUsersService,
+    AdminGroupsService,
     AdminCallsService,
     AdminActivityService,
     AdminSystemService,

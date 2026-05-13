@@ -103,6 +103,7 @@
     "admin": {
       "dashboard": "Bảng điều khiển",
       "users": "Người dùng",
+      "groups": "Nhóm",
       "messages": "Tin nhắn",
       "calls": "Cuộc gọi",
       "activity": "Hoạt động",

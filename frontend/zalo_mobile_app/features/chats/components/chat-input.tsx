@@ -88,10 +88,12 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
   } = useAudioRecorder();
   const {
     isListening,
+    liveTranscript,
     start: startDictation,
     stop: stopDictation,
     cancel: cancelDictation,
   } = useVoiceDictation();
+  const sttBaseContentRef = React.useRef('');
   const { createReminder } = useReminders(conversationId);
   const { replyTarget, clearReplyTarget } = useChatStore();
   const friendsQuery = useFriendsList({
@@ -153,6 +155,15 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
 
     void loadQuickMessages();
   }, []);
+
+  React.useEffect(() => {
+    if (!isListening) return;
+
+    const base = sttBaseContentRef.current;
+    const next = liveTranscript.trim();
+    const shouldAddSpace = base.length > 0 && !/\s$/.test(base) && next.length > 0;
+    setContent(`${base}${shouldAddSpace ? ' ' : ''}${next}`);
+  }, [isListening, liveTranscript]);
 
   const persistQuickMessages = async (nextMap: QuickMessageMap) => {
     setQuickMessages(nextMap);
@@ -400,6 +411,7 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
   const handleCancelVoice = async () => {
     if (voiceSendMode === 'stt') {
       await cancelDictation();
+      setContent(sttBaseContentRef.current);
       setIsVoicePanelOpen(true);
       return;
     }
@@ -420,7 +432,14 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
     if (voiceSendMode !== 'stt') return;
 
     if (!isListening) {
+      sttBaseContentRef.current = content;
+      if (__DEV__) {
+        console.log('[STT_DEBUG] ui: start button pressed');
+      }
       const started = await startDictation();
+      if (__DEV__) {
+        console.log('[STT_DEBUG] ui: start result', started);
+      }
       if (!started.ok) {
         const sttErrorText =
           started.reason === 'permission_denied'
@@ -437,11 +456,17 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
       return;
     }
 
-    const transcript = await stopDictation();
-    if (transcript) {
-      setContent((prev) => `${prev}${prev.trim().length > 0 ? ' ' : ''}${transcript}`.trimStart());
-      setIsVoicePanelOpen(false);
+    if (__DEV__) {
+      console.log('[STT_DEBUG] ui: stop button pressed');
     }
+    await stopDictation();
+    if (__DEV__) {
+      console.log('[STT_DEBUG] ui: stop transcript', {
+        transcriptLength: liveTranscript.length,
+        transcript: liveTranscript,
+      });
+    }
+    setIsVoicePanelOpen(false);
   };
 
   const handlePickEmoji = (emojiObject: any) => {
