@@ -111,10 +111,10 @@ api.interceptors.response.use(
       try {
         if (isRefreshing) {
           // console.log('[Axios] Already refreshing... queuing request.');
-          return new Promise((resolve) => {
+          return new Promise((resolve, reject) => {
             addRefreshSubscriber((token: string) => {
               originalRequest.headers.Authorization = `Bearer ${token}`;
-              resolve(api(originalRequest));
+              api(originalRequest).then(resolve).catch(reject);
             });
           });
         }
@@ -132,10 +132,13 @@ api.interceptors.response.use(
         onRefreshed(accessToken);
 
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        console.error('[Axios] Silent refresh failed:', refreshError);
-        authCallbacks?.onLogout();
+        return await api(originalRequest);
+      } catch (refreshError: any) {
+        // If the retry failed due to 401, or refresh itself failed
+        if (refreshError?.config?.url?.includes('/auth/refresh') || refreshError?.response?.status === 401) {
+            console.error('[Axios] Silent refresh failed:', refreshError);
+            authCallbacks?.onLogout();
+        }
         return Promise.reject(ApiError.from(refreshError));
       } finally {
         isRefreshing = false;
