@@ -148,6 +148,75 @@ export interface ConversationListQuery {
 }
 
 // ============================================================================
+// Groups
+// ============================================================================
+
+export type AdminGroupStatusFilter = 'ACTIVE' | 'CLOSED' | 'ALL';
+export type AdminGroupMemberRole = 'ADMIN' | 'MEMBER';
+export type AdminGroupMemberStatus = 'PENDING' | 'ACTIVE' | 'KICKED' | 'LEFT';
+
+export interface AdminGroupListItem {
+      id: string;
+      name: string | null;
+      avatarUrl: string | null;
+      requireApproval: boolean;
+      lastMessageAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+      deletedAt: string | null;
+      activeMemberCount: number;
+      adminCount: number;
+      messageCount: number;
+}
+
+export interface AdminGroupMember {
+      userId: string;
+      role: AdminGroupMemberRole;
+      status: AdminGroupMemberStatus;
+      joinedAt: string;
+      leftAt: string | null;
+      kickedAt: string | null;
+      kickedBy: string | null;
+      user: {
+            id: string;
+            displayName: string;
+            phoneNumber: string;
+            avatarUrl: string | null;
+            status: UserStatus;
+      } | null;
+}
+
+export interface AdminGroupDetail extends AdminGroupListItem {
+      description: string;
+      settings: Record<string, unknown>;
+      messageCount: number;
+      members: AdminGroupMember[];
+}
+
+export interface GroupListQuery {
+      search?: string;
+      status?: AdminGroupStatusFilter;
+      page?: number;
+      limit?: number;
+}
+
+export interface CreateAdminGroupDto {
+      name: string;
+      description?: string;
+      avatarUrl?: string;
+      requireApproval?: boolean;
+      ownerId: string;
+      memberIds: string[];
+}
+
+export interface UpdateAdminGroupDto {
+      name?: string;
+      description?: string;
+      avatarUrl?: string;
+      requireApproval?: boolean;
+}
+
+// ============================================================================
 // Activity
 // ============================================================================
 
@@ -235,5 +304,5 @@ export interface CreateRoleDto {
       permissions?: string[];
 }
 
-export interface UpdateRoleDto extends Partial<CreateRoleDto> { }
+export type UpdateRoleDto = Partial<CreateRoleDto>;
 

@@ -19,6 +19,12 @@ import type {
       CallListQuery,
       AdminConversationItem,
       ConversationListQuery,
+      AdminGroupListItem,
+      AdminGroupDetail,
+      GroupListQuery,
+      CreateAdminGroupDto,
+      UpdateAdminGroupDto,
+      AdminGroupMemberRole,
       SuspendedUser,
       InactiveUser,
       HighActivityUser,
@@ -102,6 +108,75 @@ export async function getConversations(
       params?: ConversationListQuery,
 ): Promise<PaginatedResponse<AdminConversationItem>> {
       const { data: response } = await apiClient.get(E.CONVERSATIONS, { params });
+      return response.data ?? response;
+}
+
+// ============================================================================
+// Groups
+// ============================================================================
+
+export async function getGroups(
+      params?: GroupListQuery,
+): Promise<PaginatedResponse<AdminGroupListItem>> {
+      const { data: response } = await apiClient.get(E.GROUPS.LIST, { params });
+      return response.data ?? response;
+}
+
+export async function getGroupDetail(id: string): Promise<AdminGroupDetail> {
+      const { data: response } = await apiClient.get(E.GROUPS.DETAIL(id));
+      return response.data ?? response;
+}
+
+export async function createGroup(dto: CreateAdminGroupDto): Promise<AdminGroupDetail> {
+      const { data: response } = await apiClient.post(E.GROUPS.CREATE, dto);
+      return response.data ?? response;
+}
+
+export async function updateGroup({
+      id,
+      ...dto
+}: UpdateAdminGroupDto & { id: string }): Promise<AdminGroupDetail> {
+      const { data: response } = await apiClient.patch(E.GROUPS.UPDATE(id), dto);
+      return response.data ?? response;
+}
+
+export async function addGroupMembers({
+      id,
+      userIds,
+}: {
+      id: string;
+      userIds: string[];
+}): Promise<ActionResponse & { addedCount?: number }> {
+      const { data: response } = await apiClient.post(E.GROUPS.ADD_MEMBERS(id), { userIds });
+      return response.data ?? response;
+}
+
+export async function removeGroupMember({
+      id,
+      userId,
+}: {
+      id: string;
+      userId: string;
+}): Promise<ActionResponse> {
+      const { data: response } = await apiClient.delete(E.GROUPS.REMOVE_MEMBER(id, userId));
+      return response.data ?? response;
+}
+
+export async function updateGroupMemberRole({
+      id,
+      userId,
+      role,
+}: {
+      id: string;
+      userId: string;
+      role: AdminGroupMemberRole;
+}): Promise<ActionResponse> {
+      const { data: response } = await apiClient.patch(E.GROUPS.UPDATE_MEMBER_ROLE(id, userId), { role });
+      return response.data ?? response;
+}
+
+export async function forceCloseGroup(id: string): Promise<ActionResponse> {
+      const { data: response } = await apiClient.post(E.GROUPS.FORCE_CLOSE(id));
       return response.data ?? response;
 }
 

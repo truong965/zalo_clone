@@ -188,6 +188,16 @@ export const API_ENDPOINTS = {
       FORCE_LOGOUT: (id: string) => `/api/v1/admin/users/${id}/force-logout`,
     },
     CONVERSATIONS: '/api/v1/admin/conversations',
+    GROUPS: {
+      LIST: '/api/v1/admin/groups',
+      CREATE: '/api/v1/admin/groups',
+      DETAIL: (id: string) => `/api/v1/admin/groups/${id}`,
+      UPDATE: (id: string) => `/api/v1/admin/groups/${id}`,
+      ADD_MEMBERS: (id: string) => `/api/v1/admin/groups/${id}/members`,
+      REMOVE_MEMBER: (id: string, userId: string) => `/api/v1/admin/groups/${id}/members/${userId}`,
+      UPDATE_MEMBER_ROLE: (id: string, userId: string) => `/api/v1/admin/groups/${id}/members/${userId}/role`,
+      FORCE_CLOSE: (id: string) => `/api/v1/admin/groups/${id}/force-close`,
+    },
     CALLS: '/api/v1/admin/calls',
     ACTIVITY: {
       SUSPENDED: '/api/v1/admin/activity/suspended',
