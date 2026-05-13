@@ -186,7 +186,7 @@ export function QrScannerScreen() {
             return (
                   <View className="flex-1 items-center justify-center gap-3 bg-background px-4 py-3">
                         <Text className="text-center text-xl font-bold text-foreground">{t('qr.cameraPermissionTitle')}</Text>
-                        <Text className="text-center text-muted">{t('qr.cameraPermissionSubtitle')}</Text>
+                        <Text className="text-center text-muted-foreground">{t('qr.cameraPermissionSubtitle')}</Text>
                         <Pressable className="mt-1 rounded-xl bg-primary px-5 py-3" onPress={requestPermission}>
                               <Text className="font-bold text-primary-foreground">{t('qr.grantCameraPermission')}</Text>
                         </Pressable>
@@ -470,7 +470,7 @@ export function QrScannerScreen() {
                                     {isProcessing && !groupPreview ? (
                                           <>
                                                 <ActivityIndicator />
-                                                <Text className="mt-2 text-sm text-muted text-center">
+                                                <Text className="mt-2 text-sm text-muted-foreground text-center">
                                                       {t('qr.loadingGroupInfo', 'Đang tải thông tin nhóm...')}
                                                 </Text>
                                           </>
@@ -493,10 +493,10 @@ export function QrScannerScreen() {
                                                 <Text className="mt-3 text-lg font-semibold text-foreground text-center" numberOfLines={2}>
                                                       {groupTitle}
                                                 </Text>
-                                                <Text className="mt-1 text-sm text-muted">{groupMembersText}</Text>
+                                                <Text className="mt-1 text-sm text-muted-foreground">{groupMembersText}</Text>
                                           </>
                                     ) : (
-                                          <Text className="text-sm text-muted text-center">
+                                          <Text className="text-sm text-muted-foreground text-center">
                                                 {t('qr.groupPreviewTitle', 'Thông tin nhóm')}
                                           </Text>
                                     )}
@@ -545,7 +545,7 @@ export function QrScannerScreen() {
                         ) : null}
 
                         <Pressable className="mt-2 items-center rounded-xl border border-border py-2.5" onPress={resetScanner} disabled={isProcessing}>
-                              <Text className="font-bold text-muted">{t('qr.scanAnother')}</Text>
+                              <Text className="font-bold text-muted-foreground">{t('qr.scanAnother')}</Text>
                         </Pressable>
                   </View>
             </View>

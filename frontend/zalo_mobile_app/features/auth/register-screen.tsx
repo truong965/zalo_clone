@@ -2,15 +2,19 @@ import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Alert, ActivityIndicator, Keyboard, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RegisterForm } from '@/features/auth/components/register-form';
 import type { RegisterFormData } from '@/features/auth/schemas/register-schema';
 import { useAuth } from '@/providers/auth-provider';
 import { OtpInput } from '@/components/ui/otp-input';
-import { TextInput } from 'react-native';
 import { PHONE_REGEX } from '@/constants/validation';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const PLACEHOLDER = { light: '#52525b', dark: '#a1a1aa' } as const;
 
 type RegisterStep = 'PHONE' | 'OTP' | 'PROFILE';
 
@@ -19,13 +23,28 @@ export function RegisterScreen() {
       const { register, requestRegisterOtp, verifyRegisterOtp } = useAuth();
       const { t } = useTranslation();
       const loginHref = '/login' as Href;
+      const scheme = useColorScheme() ?? 'light';
+      const placeholderColor = PLACEHOLDER[scheme];
+      const insets = useSafeAreaInsets();
 
       const [step, setStep] = useState<RegisterStep>('PHONE');
       const [phoneNumber, setPhoneNumber] = useState('');
       const [otp, setOtp] = useState('');
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [countdown, setCountdown] = useState(0);
+      const [keyboardVisible, setKeyboardVisible] = useState(false);
       const timerRef = useRef<any>(null);
+
+      useEffect(() => {
+            const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+            const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+            const subShow = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
+            const subHide = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+            return () => {
+                  subShow.remove();
+                  subHide.remove();
+            };
+      }, []);
 
       useEffect(() => {
             return () => {
@@ -108,15 +127,16 @@ export function RegisterScreen() {
                               <View className="gap-6 p-4">
                                     <View>
                                           <Text className="text-3xl font-bold text-foreground">{t('auth.registerTitle')}</Text>
-                                          <Text className="mt-2 text-muted text-lg">Nhập số điện thoại để bắt đầu</Text>
+                                          <Text className="mt-2 text-muted-foreground text-lg">Nhập số điện thoại để bắt đầu</Text>
                                     </View>
                                     <View className="gap-4">
                                           <TextInput
                                                 value={phoneNumber}
                                                 onChangeText={setPhoneNumber}
                                                 placeholder={t('auth.phoneNumber')}
+                                                placeholderTextColor={placeholderColor}
                                                 keyboardType="phone-pad"
-                                                className="h-16 rounded-2xl border border-border bg-secondary px-6 text-xl text-foreground"
+                                                className="h-16 rounded-2xl border border-border bg-background px-6 text-xl text-foreground"
                                                 autoFocus
                                           />
                                           <TouchableOpacity
@@ -142,7 +162,7 @@ export function RegisterScreen() {
                                     </TouchableOpacity>
                                     <View>
                                           <Text className="text-3xl font-bold text-foreground">Xác thực OTP</Text>
-                                          <Text className="mt-2 text-muted text-lg">
+                                          <Text className="mt-2 text-muted-foreground text-lg">
                                                 Mã OTP đã được gửi tới số <Text className="font-bold text-foreground">{phoneNumber}</Text>
                                           </Text>
                                     </View>
@@ -161,7 +181,7 @@ export function RegisterScreen() {
 
                                                 <View className="items-center">
                                                       {countdown > 0 ? (
-                                                            <Text className="text-muted text-base">
+                                                            <Text className="text-muted-foreground text-base">
                                                                   Gửi lại mã sau <Text className="font-bold text-primary">{countdown}s</Text>
                                                             </Text>
                                                       ) : (
@@ -187,16 +207,23 @@ export function RegisterScreen() {
             }
       };
 
-      return (
-            <KeyboardAvoidingView
-                  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                  className="flex-1 bg-background"
-                  keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-                  <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-                        <View className="flex-1 justify-center py-10">
-                              {renderStep()}
-                        </View>
-                  </ScrollView>
+      const content = (
+            <View
+                  style={{
+                        flex: 1,
+                        justifyContent: keyboardVisible ? 'flex-start' : 'center',
+                        paddingTop: keyboardVisible ? 8 : 0,
+                        paddingBottom: insets.bottom + 16,
+                  }}>
+                  {renderStep()}
+            </View>
+      );
+
+      return Platform.OS === 'ios' ? (
+            <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }} className="bg-background" automaticOffset keyboardVerticalOffset={0}>
+                  {content}
             </KeyboardAvoidingView>
+      ) : (
+            <View className="flex-1 bg-background">{content}</View>
       );
 }

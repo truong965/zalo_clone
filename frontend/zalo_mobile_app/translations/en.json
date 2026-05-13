@@ -10,10 +10,11 @@
             "continue": "Continue"
       },
       "auth": {
-            "loginTitle": "Sign in to Zalo Clone",
-            "loginSubtitle": "Sign in to continue",
+            "loginTitle": "Login",
             "phoneNumber": "Phone number",
             "password": "Password",
+            "showPassword": "Show password",
+            "hidePassword": "Hide password",
             "login": "Sign in",
             "registerNow": "No account yet? Register now",
             "missingInfoTitle": "Missing information",

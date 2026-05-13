@@ -7,10 +7,15 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TwoFactorView } from './components/two-factor-view';
 import { useAuth } from '@/providers/auth-provider';
 import type { TwoFactorRequiredResponse } from '@/types/auth';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const PLACEHOLDER = { light: '#52525b', dark: '#a1a1aa' } as const;
 
 export function ForgotPasswordScreen() {
       const router = useRouter();
       const { t } = useTranslation();
+      const scheme = useColorScheme() ?? 'light';
+      const placeholderColor = PLACEHOLDER[scheme];
       const { setTwoFactorData, clear2fa } = useAuth(); // Access internal setters if needed, or just manage local state
 
       const [currentStep, setCurrentStep] = useState(0);
@@ -88,12 +93,13 @@ export function ForgotPasswordScreen() {
                                     <View className="items-center mb-2">
                                           <MaterialCommunityIcons name="account-search-outline" size={64} color="hsl(217.2 91.2% 59.8%)" />
                                           <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.forgotPasswordTitle')}</Text>
-                                          <Text className="text-center text-muted mt-1 px-4">Nhập số điện thoại để khôi phục mật khẩu</Text>
+                                          <Text className="text-center text-muted-foreground mt-1 px-4">Nhập số điện thoại để khôi phục mật khẩu</Text>
                                     </View>
                                     <TextInput
                                           value={identifier}
                                           onChangeText={setIdentifier}
                                           placeholder="Số điện thoại"
+                                          placeholderTextColor={placeholderColor}
                                           keyboardType="phone-pad"
                                           autoCapitalize="none"
                                           className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
@@ -121,12 +127,13 @@ export function ForgotPasswordScreen() {
                                     <View className="items-center mb-2">
                                           <MaterialCommunityIcons name="lock-reset" size={64} color="hsl(217.2 91.2% 59.8%)" />
                                           <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.newPassword')}</Text>
-                                          <Text className="text-center text-muted mt-1">Xác thực thành công. Vui lòng đặt mật khẩu mới.</Text>
+                                          <Text className="text-center text-muted-foreground mt-1">Xác thực thành công. Vui lòng đặt mật khẩu mới.</Text>
                                     </View>
                                     <TextInput
                                           value={newPassword}
                                           onChangeText={setNewPassword}
                                           placeholder={t('auth.newPassword')}
+                                          placeholderTextColor={placeholderColor}
                                           secureTextEntry
                                           className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
                                     />
@@ -134,6 +141,7 @@ export function ForgotPasswordScreen() {
                                           value={confirmPassword}
                                           onChangeText={setConfirmPassword}
                                           placeholder={t('auth.confirmPassword')}
+                                          placeholderTextColor={placeholderColor}
                                           secureTextEntry
                                           className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
                                     />
@@ -151,7 +159,7 @@ export function ForgotPasswordScreen() {
                                     <MaterialCommunityIcons name="check-circle-outline" size={80} color="#10b981" />
                                     <View className="items-center gap-2">
                                           <Text className="text-2xl font-bold text-foreground">Thành công!</Text>
-                                          <Text className="text-center text-muted px-6">Mật khẩu của bạn đã được thay đổi. Bạn có thể đăng nhập ngay bây giờ.</Text>
+                                          <Text className="text-center text-muted-foreground px-6">Mật khẩu của bạn đã được thay đổi. Bạn có thể đăng nhập ngay bây giờ.</Text>
                                     </View>
                                     <Pressable
                                           onPress={() => router.replace('/login')}
@@ -177,7 +185,7 @@ export function ForgotPasswordScreen() {
 
                               {currentStep === 0 && (
                                     <Pressable onPress={() => router.back()} className="mt-6 items-center">
-                                          <Text className="text-muted">{t('auth.backToLogin')}</Text>
+                                          <Text className="text-muted-foreground">{t('auth.backToLogin')}</Text>
                                     </Pressable>
                               )}
                         </View>
