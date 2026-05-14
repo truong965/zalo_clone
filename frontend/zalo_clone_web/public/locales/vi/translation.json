@@ -116,6 +116,7 @@
       "contacts": "Danh bạ",
       "calls": "Cuộc gọi",
       "settings": "Cài đặt",
+      "accountMenu": "Tài khoản và hồ sơ",
       "logout": "Đăng xuất",
       "profile": "Hồ sơ cá nhân",
       "logoutConfirmTitle": "Đăng xuất",
@@ -208,7 +209,9 @@
   },
   "chat": {
     "sidebar": {
-      "searchPlaceholder": "Tìm kiếm",
+      "searchPlaceholder": "Tìm kiếm tin nhắn, tên, nhóm...",
+      "addFriendTooltip": "Tìm số điện thoại / thêm bạn",
+      "createGroupTooltip": "Tạo nhóm mới",
       "tabAll": "Tất cả",
       "tabUnread": "Chưa đọc",
       "tabArchived": "Lưu trữ",
@@ -235,7 +238,13 @@
       "dateFormatSameYear": "D [tháng] M",
       "dateFormatOtherYear": "D [tháng] M, YYYY"
     },
+    "emptyState": {
+      "title": "Chọn một cuộc trò chuyện",
+      "subtitle": "Chọn hội thoại bên trái để xem tin nhắn và tiếp tục trò chuyện."
+    },
     "header": {
+      "aiAssistant": "Trợ lý AI",
+      "aiSummaryButton": "Tóm tắt AI",
       "online": "Đang hoạt động",
       "offline": "Ngoại tuyến",
       "accessJustNow": "Truy cập 1 phút trước",
@@ -261,6 +270,13 @@
       "sendImageVideo": "Gửi hình ảnh / video",
       "attachFile": "Đính kèm file / audio",
       "setReminder": "Nhắc hẹn",
+      "namecard": "Danh thiếp",
+      "quickMessage": "Tin nhắn nhanh",
+      "shareLocation": "Vị trí hiện tại",
+      "locationShared": "Đã chia sẻ vị trí",
+      "locationDenied": "Không thể lấy vị trí hiện tại",
+      "locationUnsupported": "Trình duyệt không hỗ trợ định vị",
+      "emojiSearchPlaceholder": "Tìm emoji...",
       "placeholder": "Nhập tin nhắn",
       "placeholderEmpty": "Chọn một cuộc trò chuyện để bắt đầu",
       "emoji": "Biểu cảm",
@@ -476,7 +492,9 @@
     },
     "contactList": {
       "header": "Gợi ý kết bạn từ danh bạ",
-      "searchPlaceholder": "Tìm trong danh bạ...",
+      "searchPlaceholder": "Tìm tên, số điện thoại trong danh bạ...",
+      "noSuggestionsBanner": "Hiện không có gợi ý kết bạn từ danh bạ đồng bộ. Dưới đây là danh sách liên lạc của bạn.",
+      "suggestionsEmptyTitle": "Gợi ý kết bạn",
       "noSearchResults": "Không tìm thấy liên hệ phù hợp",
       "noContacts": "Chưa có liên hệ nào trong danh bạ",
       "menu": {
@@ -733,6 +751,10 @@
       "title": "Tạo nhóm",
       "cancel": "Hủy",
       "create": "Tạo nhóm",
+      "incompleteTitle": "Chưa đủ điều kiện tạo nhóm",
+      "requirementsTitle": "Điều kiện tạo nhóm",
+      "missingNameHint": "Nhập tên nhóm",
+      "missingMembersHint": "Chọn ít nhất 2 thành viên",
       "cancelConfirmTitle": "Hủy tạo nhóm?",
       "cancelConfirmContent": "Các thông tin bạn đã nhập và thành viên đã chọn sẽ không được lưu.",
       "cancelConfirmClose": "Hủy tạo nhóm",

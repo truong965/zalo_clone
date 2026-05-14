@@ -116,6 +116,7 @@
       "contacts": "Contacts",
       "calls": "Calls",
       "settings": "Settings",
+      "accountMenu": "Account & profile",
       "logout": "Logout",
       "profile": "Profile",
       "logoutConfirmTitle": "Logout",
@@ -208,7 +209,9 @@
   },
   "chat": {
     "sidebar": {
-      "searchPlaceholder": "Search",
+      "searchPlaceholder": "Search messages, names, groups...",
+      "addFriendTooltip": "Find by phone / add friend",
+      "createGroupTooltip": "Create new group",
       "tabAll": "All",
       "tabUnread": "Unread",
       "tabArchived": "Archived",
@@ -235,7 +238,13 @@
       "dateFormatSameYear": "MMMM D",
       "dateFormatOtherYear": "MMMM D, YYYY"
     },
+    "emptyState": {
+      "title": "Pick a conversation",
+      "subtitle": "Choose a chat on the left to read messages and continue talking."
+    },
     "header": {
+      "aiAssistant": "AI assistant",
+      "aiSummaryButton": "AI summary",
       "online": "Active now",
       "offline": "Offline",
       "accessJustNow": "Active 1m ago",
@@ -261,6 +270,13 @@
       "sendImageVideo": "Send image / video",
       "attachFile": "Attach file / audio",
       "setReminder": "Set reminder",
+      "namecard": "Name card",
+      "quickMessage": "Quick message",
+      "shareLocation": "Current location",
+      "locationShared": "Location shared",
+      "locationDenied": "Could not get your location",
+      "locationUnsupported": "Geolocation is not supported in this browser",
+      "emojiSearchPlaceholder": "Search emoji...",
       "placeholder": "Type a message",
       "placeholderEmpty": "Select a conversation to start",
       "emoji": "Stickers / Emojis",
@@ -476,7 +492,9 @@
     },
     "contactList": {
       "header": "Friend suggestions from contacts",
-      "searchPlaceholder": "Search in contacts...",
+      "searchPlaceholder": "Search name or phone in contacts...",
+      "noSuggestionsBanner": "No mutual-contact friend suggestions right now. Your contacts are listed below.",
+      "suggestionsEmptyTitle": "Friend suggestions",
       "noSearchResults": "No matching contacts found",
       "noContacts": "No contacts in phonebook yet",
       "menu": {
@@ -718,6 +736,10 @@
       "title": "Create Group",
       "cancel": "Cancel",
       "create": "Create Group",
+      "incompleteTitle": "Cannot create group yet",
+      "requirementsTitle": "Requirements",
+      "missingNameHint": "Enter a group name",
+      "missingMembersHint": "Select at least 2 members",
       "cancelConfirmTitle": "Cancel Group Creation?",
       "cancelConfirmContent": "The information you entered and selected members will not be saved.",
       "cancelConfirmClose": "Cancel Creation",

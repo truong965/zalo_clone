@@ -8,13 +8,12 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { Modal, Button, Alert } from 'antd';
+import { Modal, Button, Alert, notification } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { ErrorBoundary } from '@/components/shared/error-boundary';
 import {
       useCreateGroupStore,
       selectSelectedCount,
-      selectCanCreate,
 } from '../../stores/create-group.store';
 import { useCreateGroup } from '../../hooks/use-create-group';
 import { GroupInfoHeader } from './group-info-header';
@@ -32,7 +31,6 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
       const isOpen = useCreateGroupStore((s) => s.isOpen);
       const error = useCreateGroupStore((s) => s.error);
       const selectedCount = useCreateGroupStore(selectSelectedCount);
-      const canCreate = useCreateGroupStore(selectCanCreate);
       const close = useCreateGroupStore((s) => s.close);
       const groupName = useCreateGroupStore((s) => s.groupName);
 
@@ -56,12 +54,38 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
       };
 
       const handleOk = async () => {
+            const nameOk = groupName.trim().length > 0;
+            const membersOk = selectedCount >= 2;
+            if (!nameOk || !membersOk) {
+                  const missing: string[] = [];
+                  if (!nameOk) {
+                        missing.push(t('conversation.createGroup.missingNameHint'));
+                  }
+                  if (!membersOk) {
+                        missing.push(t('conversation.createGroup.missingMembersHint'));
+                  }
+                  notification.warning({
+                        message: t('conversation.createGroup.incompleteTitle'),
+                        description: missing.join(' · '),
+                        placement: 'top',
+                  });
+                  return;
+            }
+
             const conversationId = await handleCreate();
             if (conversationId) {
                   onCreated?.(conversationId);
             }
       };
 
+      const requirementHints: string[] = [];
+      if (groupName.trim().length === 0) {
+            requirementHints.push(t('conversation.createGroup.missingNameHint'));
+      }
+      if (selectedCount < 2) {
+            requirementHints.push(t('conversation.createGroup.missingMembersHint'));
+      }
+      const showRequirementsBanner = requirementHints.length > 0 && !isCreating;
       return (
             <Modal
                   title={t('conversation.createGroup.title')}
@@ -78,7 +102,7 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
                               <Button
                                     type="primary"
                                     onClick={handleOk}
-                                    disabled={!canCreate}
+                                    disabled={isCreating}
                                     loading={isCreating}
                               >
                                     {t('conversation.createGroup.create')}
@@ -100,6 +124,16 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
 
                   {/* Group info: avatar + name */}
                   <GroupInfoHeader />
+
+                  {showRequirementsBanner ? (
+                        <Alert
+                              type="info"
+                              showIcon
+                              className="mx-4 mb-2"
+                              message={t('conversation.createGroup.requirementsTitle')}
+                              description={requirementHints.join(' · ')}
+                        />
+                  ) : null}
 
                   {/* ErrorBoundary inside Modal — catches content errors without breaking the modal shell */}
                   <ErrorBoundary>
