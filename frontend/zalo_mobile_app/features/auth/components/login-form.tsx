@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
 import { loginSchema, type LoginFormData } from '@/features/auth/schemas/login-schema';
+import { PasswordInput } from '@/features/auth/components/password-input';
 
 type LoginFormProps = {
       isSubmitting: boolean;
@@ -60,14 +61,13 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
                         name="password"
                         render={({ field: { onChange, onBlur, value } }) => (
                               <View className="gap-1">
-                                    <TextInput
+                                    <PasswordInput
                                           value={value}
                                           onBlur={onBlur}
                                           onChangeText={onChange}
                                           placeholder={t('auth.password')}
-                                          secureTextEntry
                                           autoCapitalize="none"
-                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground pr-12"
                                     />
                                     {errors.password ? (
                                           <Text className="text-sm text-danger">{t(errors.password.message ?? 'auth.validation.passwordRequired')}</Text>

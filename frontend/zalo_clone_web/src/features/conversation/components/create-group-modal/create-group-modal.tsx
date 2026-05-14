@@ -130,7 +130,7 @@ export function CreateGroupModal({ onCreated }: CreateGroupModalProps) {
                               type="info"
                               showIcon
                               className="mx-4 mb-2"
-                              message={t('conversation.createGroup.requirementsTitle')}
+                              //message={t('conversation.createGroup.requirementsTitle')}
                               description={requirementHints.join(' · ')}
                         />
                   ) : null}

@@ -5,6 +5,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View
 import { mobileApi } from '@/services/api';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TwoFactorView } from './components/two-factor-view';
+import { PasswordInput } from '@/features/auth/components/password-input';
 import { useAuth } from '@/providers/auth-provider';
 import type { TwoFactorRequiredResponse } from '@/types/auth';
 
@@ -123,19 +124,17 @@ export function ForgotPasswordScreen() {
                                           <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.newPassword')}</Text>
                                           <Text className="text-center text-muted mt-1">Xác thực thành công. Vui lòng đặt mật khẩu mới.</Text>
                                     </View>
-                                    <TextInput
+                                    <PasswordInput
                                           value={newPassword}
                                           onChangeText={setNewPassword}
                                           placeholder={t('auth.newPassword')}
-                                          secureTextEntry
-                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground pr-12"
                                     />
-                                    <TextInput
+                                    <PasswordInput
                                           value={confirmPassword}
                                           onChangeText={setConfirmPassword}
                                           placeholder={t('auth.confirmPassword')}
-                                          secureTextEntry
-                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground pr-12"
                                     />
                                     <Pressable
                                           onPress={handleResetSubmit}
