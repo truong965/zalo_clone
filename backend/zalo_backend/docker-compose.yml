@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d zalo_clone_db" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zalo_clone_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,33 +30,33 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    ports:
-      - "9000:9000" # API
-      - "9001:9001" # Console UI
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      MINIO_API_CORS_ALLOW_ORIGIN: "*"
-      MINIO_SERVER_URL: ${MINIO_PUBLIC_URL} # <-- thêm dòng này
-      MINIO_BROWSER_REDIRECT_URL: ${MINIO_PUBLIC_URL} # <-- thêm dòng này
+  # minio:
+  #   image: minio/minio:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9000:9000" # API
+  #     - "9001:9001" # Console UI
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  #     MINIO_API_CORS_ALLOW_ORIGIN: "*"
+  #     MINIO_SERVER_URL: ${MINIO_PUBLIC_URL} # <-- thêm dòng này
+  #     MINIO_BROWSER_REDIRECT_URL: ${MINIO_PUBLIC_URL} # <-- thêm dòng này
 
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-      - ./mc-config:/root/.mc
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  #   command: server /data --console-address ":9001"
+  #   volumes:
+  #     - minio_data:/data
+  #     - ./mc-config:/root/.mc
+  #   healthcheck:
+  #     test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # 4. TURN Server (coturn) — WebRTC media relay
   # PRODUCTION NOTES:
@@ -108,17 +108,17 @@ services:
       start_period: 10s
 
   # MinIO Client - Auto-create bucket
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "set -e; echo 'Waiting for MinIO to start...'; sleep 5; mc
-      alias set myminio http://minio:9000 minioadmin minioadmin; mc mb
-      myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set download
-      myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1
-      myminio/zalo-clone-media-dev --prefix 'temp/' || true; echo 'MinIO bucket
-      initialized with lifecycle rule (anonymous download enabled for dev)'; "
+  # minio-init:
+  #   image: minio/mc:latest
+  #   depends_on:
+  #     - minio
+  #   entrypoint: >
+  #     /bin/sh -c "set -e; echo 'Waiting for MinIO to start...'; sleep 5; mc
+  #     alias set myminio http://minio:9000 minioadmin minioadmin; mc mb
+  #     myminio/zalo-clone-media-dev --ignore-existing; mc anonymous set download
+  #     myminio/zalo-clone-media-dev; mc ilm add --expiry-days 1
+  #     myminio/zalo-clone-media-dev --prefix 'temp/' || true; echo 'MinIO bucket
+  #     initialized with lifecycle rule (anonymous download enabled for dev)'; "
 
   cloudflared:
     image: cloudflare/cloudflared:latest
