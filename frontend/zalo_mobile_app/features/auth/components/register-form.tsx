@@ -14,6 +14,7 @@ import { registerSchema, type RegisterFormData } from '@/features/auth/schemas/r
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const INPUT_ICON = { light: '#52525b', dark: '#a1a1aa' } as const;
+import { PasswordInput } from '@/features/auth/components/password-input';
 
 type RegisterFormProps = {
       isSubmitting: boolean;
@@ -98,7 +99,7 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                         name="password"
                         render={({ field: { onChange, onBlur, value } }) => (
                               <View className="gap-1">
-                                    <TextInput
+                                    <PasswordInput
                                           value={value}
                                           onBlur={onBlur}
                                           onChangeText={onChange}
@@ -106,7 +107,7 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                                           placeholderTextColor={placeholderColor}
                                           secureTextEntry
                                           autoCapitalize="none"
-                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground pr-12"
                                     />
                                     {errors.password ? (
                                           <Text className="text-sm text-destructive">{t(errors.password.message ?? 'auth.validation.passwordRequired')}</Text>
@@ -178,7 +179,7 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                         name="confirmPassword"
                         render={({ field: { onChange, onBlur, value } }) => (
                               <View className="gap-1">
-                                    <TextInput
+                                    <PasswordInput
                                           value={value}
                                           onBlur={onBlur}
                                           onChangeText={onChange}
@@ -186,7 +187,7 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                                           placeholderTextColor={placeholderColor}
                                           secureTextEntry
                                           autoCapitalize="none"
-                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground pr-12"
                                     />
                                     {errors.confirmPassword ? (
                                           <Text className="text-sm text-destructive">{t(errors.confirmPassword.message ?? 'auth.validation.confirmPasswordRequired')}</Text>

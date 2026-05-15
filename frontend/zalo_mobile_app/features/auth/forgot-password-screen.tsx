@@ -5,6 +5,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View
 import { mobileApi } from '@/services/api';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TwoFactorView } from './components/two-factor-view';
+import { PasswordInput } from '@/features/auth/components/password-input';
 import { useAuth } from '@/providers/auth-provider';
 import type { TwoFactorRequiredResponse } from '@/types/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -35,7 +36,7 @@ export function ForgotPasswordScreen() {
             setIsLoading(true);
             try {
                   const result = await mobileApi.forgotPassword({ identifier });
-                  
+
                   if (result && 'status' in result && result.status === '2FA_REQUIRED') {
                         setLocalTwoFactorData(result);
                         // We also need to set it in AuthProvider because TwoFactorView reads from there
@@ -115,7 +116,7 @@ export function ForgotPasswordScreen() {
                   case 1:
                         return (
                               <View className="min-h-[400px]">
-                                    <TwoFactorView 
+                                    <TwoFactorView
                                           onSuccess={handleTwoFactorSuccess}
                                           onCancel={() => setCurrentStep(0)}
                                     />
@@ -129,21 +130,21 @@ export function ForgotPasswordScreen() {
                                           <Text className="text-xl font-bold mt-2 text-foreground">{t('auth.newPassword')}</Text>
                                           <Text className="text-center text-muted-foreground mt-1">Xác thực thành công. Vui lòng đặt mật khẩu mới.</Text>
                                     </View>
-                                    <TextInput
+                                    <PasswordInput
                                           value={newPassword}
                                           onChangeText={setNewPassword}
                                           placeholder={t('auth.newPassword')}
                                           placeholderTextColor={placeholderColor}
                                           secureTextEntry
-                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground pr-12"
                                     />
-                                    <TextInput
+                                    <PasswordInput
                                           value={confirmPassword}
                                           onChangeText={setConfirmPassword}
                                           placeholder={t('auth.confirmPassword')}
                                           placeholderTextColor={placeholderColor}
                                           secureTextEntry
-                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground pr-12"
                                     />
                                     <Pressable
                                           onPress={handleResetSubmit}
@@ -180,7 +181,7 @@ export function ForgotPasswordScreen() {
                   <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
                         <View className="rounded-3xl bg-secondary p-6 shadow-sm border border-border">
                               <View className={currentStep === 1 ? "" : "mt-8"}>
-                                  {renderStep()}
+                                    {renderStep()}
                               </View>
 
                               {currentStep === 0 && (

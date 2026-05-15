@@ -2,11 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link } from 'expo-router';
 import type { Href } from 'expo-router';
-import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
+import { PasswordInput } from '@/features/auth/components/password-input';
 import { loginSchema, type LoginFormData } from '@/features/auth/schemas/login-schema';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -21,7 +21,6 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
       const { t } = useTranslation();
       const scheme = useColorScheme() ?? 'light';
       const iconMuted = ICON[scheme];
-      const [showPassword, setShowPassword] = useState(false);
 
       const registerHref = '/register' as Href;
       const forgotPasswordHref = '/forgot-password' as Href;
@@ -48,8 +47,15 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
                                     <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                           {t('auth.phoneNumber')}
                                     </Text>
+
                                     <View className="flex-row items-center rounded-2xl border border-border bg-background px-3.5">
-                                          <Ionicons name="call-outline" size={20} color={iconMuted} style={{ marginRight: 8 }} />
+                                          <Ionicons
+                                                name="call-outline"
+                                                size={20}
+                                                color={iconMuted}
+                                                style={{ marginRight: 8 }}
+                                          />
+
                                           <TextInput
                                                 value={value}
                                                 onBlur={onBlur}
@@ -63,6 +69,7 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
                                                 className="min-h-[52px] flex-1 py-3 text-[16px] text-foreground"
                                           />
                                     </View>
+
                                     {errors.phoneNumber ? (
                                           <Text className="mt-1.5 text-sm text-destructive">
                                                 {t(errors.phoneNumber.message ?? 'auth.validation.phoneRequired')}
@@ -80,33 +87,15 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
                                     <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                           {t('auth.password')}
                                     </Text>
-                                    <View className="flex-row items-center rounded-2xl border border-border bg-background px-3.5">
-                                          <Ionicons name="lock-closed-outline" size={20} color={iconMuted} style={{ marginRight: 8 }} />
-                                          <TextInput
-                                                value={value}
-                                                onBlur={onBlur}
-                                                onChangeText={onChange}
-                                                placeholder={t('auth.password')}
-                                                placeholderTextColor={iconMuted}
-                                                secureTextEntry={!showPassword}
-                                                autoCapitalize="none"
-                                                autoCorrect={false}
-                                                textContentType="password"
-                                                className="min-h-[52px] flex-1 py-3 pr-2 text-[16px] text-foreground"
-                                          />
-                                          <Pressable
-                                                onPress={() => setShowPassword((v) => !v)}
-                                                hitSlop={12}
-                                                accessibilityRole="button"
-                                                accessibilityLabel={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
-                                                className="p-1.5">
-                                                <Ionicons
-                                                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                                                      size={22}
-                                                      color={iconMuted}
-                                                />
-                                          </Pressable>
-                                    </View>
+
+                                    <PasswordInput
+                                          value={value}
+                                          onBlur={onBlur}
+                                          onChangeText={onChange}
+                                          placeholder={t('auth.password')}
+                                          autoCapitalize="none"
+                                    />
+
                                     {errors.password ? (
                                           <Text className="mt-1.5 text-sm text-destructive">
                                                 {t(errors.password.message ?? 'auth.validation.passwordRequired')}
@@ -123,16 +112,21 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps) {
                         {isSubmitting ? (
                               <ActivityIndicator color="#ffffff" />
                         ) : (
-                              <Text className="text-[16px] font-bold text-primary-foreground">{t('auth.login')}</Text>
+                              <Text className="text-[16px] font-bold text-primary-foreground">
+                                    {t('auth.login')}
+                              </Text>
                         )}
                   </Pressable>
 
                   <View className="items-center gap-3">
                         <Link href={forgotPasswordHref} asChild>
                               <Pressable hitSlop={8}>
-                                    <Text className="text-[15px] text-muted-foreground">{t('auth.forgotPassword')}</Text>
+                                    <Text className="text-[15px] text-muted-foreground">
+                                          {t('auth.forgotPassword')}
+                                    </Text>
                               </Pressable>
                         </Link>
+
                         <Link href={registerHref} asChild>
                               <Pressable hitSlop={8}>
                                     <Text className="text-center text-[15px] font-semibold leading-5 text-primary">
