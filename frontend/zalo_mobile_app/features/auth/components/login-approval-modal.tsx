@@ -67,7 +67,7 @@ export function LoginApprovalModal() {
             <Text className="text-center text-2xl font-bold text-foreground">
               Yêu cầu đăng nhập
             </Text>
-            <Text className="mt-2 text-center text-muted">
+            <Text className="mt-2 text-center text-muted-foreground">
               Có một yêu cầu đăng nhập mới vào tài khoản của bạn
             </Text>
           </View>
