@@ -160,7 +160,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                   FontSize,
                   Placeholder.configure({
                         placeholder: () => {
-                              if (showFormattingToolbarRef.current) return 'Nhấn Ctrl + Shift + X để định dạng tin nhắn';
+                              if (showFormattingToolbarRef.current) return t('chat.input.formattingPlaceholder');
                               return conversationIdRef.current ? t('chat.input.placeholder') : t('chat.input.placeholderEmpty');
                         },
                   }),
@@ -567,7 +567,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                                     />
                               </Tooltip>
 
-                              <Tooltip title="Định dạng tin nhắn" placement="top">
+                              <Tooltip title={t('chat.input.formattingToggle')} placement="top">
                                     <Button
                                           type="text"
                                           icon={<FontSizeOutlined />}
@@ -578,7 +578,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                                     />
                               </Tooltip>
 
-                              <Tooltip title="Namecard" placement="top">
+                              <Tooltip title={t('chat.input.namecard')} placement="top">
                                     <Button
                                           type="text"
                                           icon={<IdcardOutlined />}
@@ -589,7 +589,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                                     />
                               </Tooltip>
 
-                              <Tooltip title="Quick message" placement="top">
+                              <Tooltip title={t('chat.input.quickMessage')} placement="top">
                                     <Button
                                           type="text"
                                           icon={<ThunderboltOutlined />}
@@ -600,7 +600,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                                     />
                               </Tooltip>
 
-                              <Tooltip title="Vị trí hiện tại" placement="top">
+                              <Tooltip title={t('chat.input.shareLocation')} placement="top">
                                     <Button
                                           type="text"
                                           icon={<EnvironmentOutlined />}

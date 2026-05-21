@@ -285,7 +285,27 @@
       "errorHasFiles": "Please try again or remove failed files before sending",
       "errorNoSuccess": "No files were uploaded successfully",
       "errorEmpty": "No valid content or files to send",
-      "errorUploadAll": "Upload failed. Please try the failed files again."
+      "errorUploadAll": "Upload failed. Please try the failed files again.",
+      "formattingToggle": "Message Formatting",
+      "formattingPlaceholder": "Format message"
+    },
+    "formatting": {
+      "bold": "Bold (Ctrl + B)",
+      "italic": "Italic (Ctrl + I)",
+      "underline": "Underline (Ctrl + U)",
+      "strikethrough": "Strikethrough",
+      "textColor": "Text color",
+      "fontSize": "Font size",
+      "fontSizeLarge": "Large",
+      "fontSizeMedium": "Medium",
+      "fontSizeSmall": "Small",
+      "clearFormat": "Clear formatting",
+      "bulletList": "Bullet list",
+      "orderedList": "Numbered list",
+      "indent": "Indent sub-list (Tab)",
+      "outdent": "Outdent (Shift + Tab)",
+      "undo": "Undo (Ctrl + Z)",
+      "redo": "Redo (Ctrl + Y)"
     },
     "messageList": {
       "today": "Today",

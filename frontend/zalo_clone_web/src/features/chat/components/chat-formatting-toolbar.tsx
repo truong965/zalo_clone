@@ -51,9 +51,9 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
   const isMedium = !isLarge && !isSmall;
 
   const fontSizeItems: MenuProps['items'] = [
-    { key: '18px', label: 'Lớn', style: { fontSize: '18px' }, icon: isLarge ? <CheckOutlined /> : <span style={{ width: 14, display: 'inline-block' }} /> },
-    { key: '15px', label: 'Trung bình', style: { fontSize: '15px' }, icon: isMedium ? <CheckOutlined /> : <span style={{ width: 14, display: 'inline-block' }} /> },
-    { key: '13px', label: 'Nhỏ', style: { fontSize: '13px' }, icon: isSmall ? <CheckOutlined /> : <span style={{ width: 14, display: 'inline-block' }} /> },
+    { key: '18px', label: t('chat.formatting.fontSizeLarge'), style: { fontSize: '18px' }, icon: isLarge ? <CheckOutlined /> : <span style={{ width: 14, display: 'inline-block' }} /> },
+    { key: '15px', label: t('chat.formatting.fontSizeMedium'), style: { fontSize: '15px' }, icon: isMedium ? <CheckOutlined /> : <span style={{ width: 14, display: 'inline-block' }} /> },
+    { key: '13px', label: t('chat.formatting.fontSizeSmall'), style: { fontSize: '13px' }, icon: isSmall ? <CheckOutlined /> : <span style={{ width: 14, display: 'inline-block' }} /> },
   ];
 
   const handleFontSizeClick: MenuProps['onClick'] = ({ key }) => {
@@ -64,26 +64,26 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
     {
       key: 'outdent',
       icon: <MenuFoldOutlined />,
-      label: 'Bỏ lùi đầu dòng (Shift + Tab)',
+      label: t('chat.formatting.outdent'),
       disabled: !editor.can().liftListItem('listItem'),
     },
     {
       key: 'undo',
       icon: <UndoOutlined />,
-      label: 'Hoàn tác (Ctrl + Z)',
+      label: t('chat.formatting.undo'),
       disabled: !editor.can().undo(),
     },
     {
       key: 'redo',
       icon: <RedoOutlined />,
-      label: 'Khôi phục hoàn tác (Ctrl + Y)',
+      label: t('chat.formatting.redo'),
       disabled: !editor.can().redo(),
     },
   ];
 
   return (
     <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-100 flex-wrap">
-      <Tooltip title="In đậm (Ctrl + B)" placement="top">
+      <Tooltip title={t('chat.formatting.bold')} placement="top">
         <Button
           type="text"
           icon={<BoldOutlined />}
@@ -91,7 +91,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
           onClick={() => editor.chain().focus().toggleBold().run()}
         />
       </Tooltip>
-      <Tooltip title="In nghiêng (Ctrl + I)" placement="top">
+      <Tooltip title={t('chat.formatting.italic')} placement="top">
         <Button
           type="text"
           icon={<ItalicOutlined />}
@@ -99,7 +99,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
           onClick={() => editor.chain().focus().toggleItalic().run()}
         />
       </Tooltip>
-      <Tooltip title="Gạch chân (Ctrl + U)" placement="top">
+      <Tooltip title={t('chat.formatting.underline')} placement="top">
         <Button
           type="text"
           icon={<UnderlineOutlined />}
@@ -107,7 +107,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
           onClick={() => editor.chain().focus().toggleUnderline().run()}
         />
       </Tooltip>
-      <Tooltip title="Gạch ngang" placement="top">
+      <Tooltip title={t('chat.formatting.strikethrough')} placement="top">
         <Button
           type="text"
           icon={<StrikethroughOutlined />}
@@ -118,13 +118,12 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
 
       <div className="w-[1px] h-4 bg-gray-300 mx-1" />
 
-      <Tooltip title="Màu chữ" placement="top">
+      <Tooltip title={t('chat.formatting.textColor')} placement="top">
         <Button
           type="text"
           icon={<FontColorsOutlined />}
           className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 w-8 h-8 flex items-center justify-center rounded"
           onClick={() => {
-            // Simplified: toggle primary color or reset
             if (editor.isActive('textStyle', { color: '#005ae0' })) {
               editor.chain().focus().unsetColor().run();
             } else {
@@ -135,7 +134,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
       </Tooltip>
 
       <Dropdown menu={{ items: fontSizeItems, onClick: handleFontSizeClick }} trigger={['click']} placement="top">
-        <Tooltip title="Cỡ chữ" placement="top">
+        <Tooltip title={t('chat.formatting.fontSize')} placement="top">
           <Button
             type="text"
             icon={<FontSizeOutlined />}
@@ -144,7 +143,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
         </Tooltip>
       </Dropdown>
 
-      <Tooltip title="Xóa định dạng" placement="top">
+      <Tooltip title={t('chat.formatting.clearFormat')} placement="top">
         <Button
           type="text"
           icon={<ClearOutlined />}
@@ -155,7 +154,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
 
       <div className="w-[1px] h-4 bg-gray-300 mx-1" />
 
-      <Tooltip title="Danh sách dấu chấm" placement="top">
+      <Tooltip title={t('chat.formatting.bulletList')} placement="top">
         <Button
           type="text"
           icon={<UnorderedListOutlined />}
@@ -163,7 +162,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         />
       </Tooltip>
-      <Tooltip title="Danh sách đánh số" placement="top">
+      <Tooltip title={t('chat.formatting.orderedList')} placement="top">
         <Button
           type="text"
           icon={<OrderedListOutlined />}
@@ -171,7 +170,7 @@ export function ChatFormattingToolbar({ editor }: ChatFormattingToolbarProps) {
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         />
       </Tooltip>
-      <Tooltip title="Lùi đầu dòng danh sách con (Tab)" placement="top">
+      <Tooltip title={t('chat.formatting.indent')} placement="top">
         <Button
           type="text"
           icon={<MenuUnfoldOutlined />}

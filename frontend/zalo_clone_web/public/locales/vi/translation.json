@@ -285,7 +285,27 @@
       "errorHasFiles": "Vui lòng thử lại hoặc xóa các file lỗi trước khi gửi",
       "errorNoSuccess": "Không có file nào upload thành công",
       "errorEmpty": "Không có nội dung hoặc file hợp lệ để gửi",
-      "errorUploadAll": "Upload thất bại. Vui lòng thử lại các file lỗi."
+      "errorUploadAll": "Upload thất bại. Vui lòng thử lại các file lỗi.",
+      "formattingToggle": "Định dạng văn bản",
+      "formattingPlaceholder": "Định dạng tin nhắn"
+    },
+    "formatting": {
+      "bold": "In đậm (Ctrl + B)",
+      "italic": "In nghiêng (Ctrl + I)",
+      "underline": "Gạch chân (Ctrl + U)",
+      "strikethrough": "Gạch ngang",
+      "textColor": "Màu chữ",
+      "fontSize": "Cỡ chữ",
+      "fontSizeLarge": "Lớn",
+      "fontSizeMedium": "Trung bình",
+      "fontSizeSmall": "Nhỏ",
+      "clearFormat": "Xóa định dạng",
+      "bulletList": "Danh sách dấu chấm",
+      "orderedList": "Danh sách đánh số",
+      "indent": "Lùi đầu dòng danh sách con (Tab)",
+      "outdent": "Bỏ lùi đầu dòng (Shift + Tab)",
+      "undo": "Hoàn tác (Ctrl + Z)",
+      "redo": "Khôi phục hoàn tác (Ctrl + Y)"
     },
     "messageList": {
       "today": "Hôm nay",
