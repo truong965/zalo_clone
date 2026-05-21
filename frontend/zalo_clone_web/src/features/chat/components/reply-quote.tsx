@@ -50,7 +50,14 @@ export function ReplyQuote({ parentMessage, onJumpToMessage }: ReplyQuoteProps) 
 
       const getContentPreview = (parent: MessageParentMessage): string => {
             if (parent.deletedAt) return t('chat.messageList.deletedMessage');
-            if (parent.content) return parent.content;
+            if (parent.content) {
+                  const raw = parent.content;
+                  if (/<[a-z][\s\S]*>/i.test(raw)) {
+                        const doc = new DOMParser().parseFromString(raw, 'text/html');
+                        return doc.body.textContent || '';
+                  }
+                  return raw;
+            }
             const attachment = parent.mediaAttachments?.[0];
             if (attachment) {
                   const typeLabel = attachment.mediaType === 'IMAGE' ? t('chat.input.sendImageVideo')

@@ -38,7 +38,14 @@ export function ReplyPreviewBar({ target, onCancel }: ReplyPreviewBarProps) {
       const attachment = target.mediaAttachments?.[0];
 
       const getPreviewText = (target: ReplyTarget): string => {
-            if (target.content) return target.content;
+            if (target.content) {
+                  const raw = target.content;
+                  if (/<[a-z][\s\S]*>/i.test(raw)) {
+                        const doc = new DOMParser().parseFromString(raw, 'text/html');
+                        return doc.body.textContent || '';
+                  }
+                  return raw;
+            }
             const attachment = target.mediaAttachments?.[0];
             if (attachment) {
                   const typeLabel = attachment.mediaType === 'IMAGE' ? t('chat.input.sendImageVideo')

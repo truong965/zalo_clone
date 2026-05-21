@@ -33,7 +33,13 @@ function PinnedItemPreview({ item, t }: { item: PinnedMessageItem; t: any }) {
             return <span className="italic text-gray-400">{t('chat.messageList.deletedMessage')}</span>;
       }
       if (item.content) {
-            return <span>{truncate(item.content, 60)}</span>;
+            const raw = item.content;
+            let stripped = raw;
+            if (/<[a-z][\s\S]*>/i.test(raw)) {
+                  const doc = new DOMParser().parseFromString(raw, 'text/html');
+                  stripped = doc.body.textContent || '';
+            }
+            return <span>{truncate(stripped, 60)}</span>;
       }
       if (item.mediaAttachments?.length) {
             const mediaType = item.mediaAttachments[0].mediaType;

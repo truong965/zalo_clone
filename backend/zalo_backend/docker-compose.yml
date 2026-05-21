@@ -129,8 +129,6 @@ services:
       - ./cloudflare:/etc/cloudflared:ro # mount thư mục chứa credentials + config
     extra_hosts:
       - "host.docker.internal:host-gateway" # cho phép gọi ra host (cần thiết trên Linux)
-    depends_on:
-      - minio
     profiles:
       - tunnel # chỉ chạy khi thêm --profile tunnel (không ảnh hưởng người không dùng tunnel)
 

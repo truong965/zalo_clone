@@ -352,7 +352,13 @@ export function MessageList({
 
                   return (
                         <div className="space-y-2">
-                              {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
+                              {msg.content && (
+                                    /<[a-z][\s\S]*>/i.test(msg.content) ? (
+                                          <div className="ProseMirror whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.content }} />
+                                    ) : (
+                                          <div className="whitespace-pre-wrap">{msg.content}</div>
+                                    )
+                              )}
 
                               {/* Image grid
                                    - 1 image  : natural size (no forced h-32 / full-width)
@@ -422,7 +428,11 @@ export function MessageList({
                   );
             }
 
-            return <div className="whitespace-pre-wrap">{msg.content ?? ''}</div>;
+            const content = msg.content ?? '';
+            if (/<[a-z][\s\S]*>/i.test(content)) {
+                  return <div className="ProseMirror whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: content }} />;
+            }
+            return <div className="whitespace-pre-wrap">{content}</div>;
       }
 
       const handleTranslate = async (msg: ChatMessage, lang: string) => {
