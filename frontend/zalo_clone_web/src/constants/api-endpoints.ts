@@ -174,6 +174,15 @@ export const API_ENDPOINTS = {
     BY_CONVERSATION: (conversationId: string) => `/api/v1/reminders/conversation/${conversationId}`,
   },
 
+  POLLS: {
+    BASE: '/api/v1/polls',
+    BY_ID: (id: string) => `/api/v1/polls/${id}`,
+    BY_MESSAGE: (messageId: string) => `/api/v1/polls/message/${messageId}`,
+    VOTE: (id: string) => `/api/v1/polls/${id}/vote`,
+    OPTIONS: (id: string) => `/api/v1/polls/${id}/options`,
+    CLOSE: (id: string) => `/api/v1/polls/${id}/close`,
+  },
+
   // Admin Panel
   ADMIN: {
     STATS: {

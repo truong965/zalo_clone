@@ -199,6 +199,12 @@ export const SocketEvents = {
   /** Server → Client: Reminder list changed (created/updated/deleted) */
   REMINDER_UPDATED: 'reminder:updated',
 
+  // === POLL EVENTS (group only) ===
+  /** Server → Client: Poll vote counts / bars updated */
+  POLL_VOTE_UPDATED: 'poll:voteUpdated',
+  /** Server → Client: Poll was closed */
+  POLL_CLOSED: 'poll:closed',
+
   // === CONVERSATION PREFERENCE EVENTS (Server → Client, personal) ===
   /** User archived/unarchived a conversation (cross-device sync) */
   CONVERSATION_ARCHIVED: 'conversation:archived',

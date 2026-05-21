@@ -6,7 +6,8 @@ export const MessageType = {
   STICKER: 'STICKER',
   SYSTEM: 'SYSTEM',
   AUDIO: 'AUDIO',
-  VOICE: 'VOICE'
+  VOICE: 'VOICE',
+  POLL: 'POLL',
 } as const;
 
 export type MessageType = typeof MessageType[keyof typeof MessageType];
@@ -17,12 +18,15 @@ export interface Sender {
   avatarUrl?: string;
 }
 
+import type { PollDetail } from './poll';
+
 export interface Message {
   id: string;
   conversationId: string;
   senderId: string;
   content?: string;
   type: MessageType;
+  poll?: PollDetail;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;

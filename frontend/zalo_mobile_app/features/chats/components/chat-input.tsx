@@ -40,6 +40,8 @@ interface ChatInputProps {
     localAssets?: any[],
   ) => void;
   conversationId?: string;
+  isGroup?: boolean;
+  onCreatePoll?: () => void;
 }
 
 type QuickMessageMap = Record<string, string>;
@@ -58,7 +60,7 @@ const getFriendPhoneNumber = (friend: Friend): string => {
   return typeof candidate === 'string' ? candidate.trim() : '';
 };
 
-export function ChatInput({ onSend, conversationId }: ChatInputProps) {
+export function ChatInput({ onSend, conversationId, isGroup = false, onCreatePoll }: ChatInputProps) {
   const [content, setContent] = useState('');
   const [voiceSendMode, setVoiceSendMode] = useState<'record' | 'stt'>('record');
   const [isVoicePanelOpen, setIsVoicePanelOpen] = useState(false);
@@ -601,6 +603,22 @@ export function ChatInput({ onSend, conversationId }: ChatInputProps) {
                 </View>
                 <Text className="text-sm font-medium text-onSurfaceVariant text-center">Nhắc hẹn</Text>
               </TouchableOpacity>
+
+              {isGroup && onCreatePoll ? (
+                <TouchableOpacity
+                  className="items-center mb-2"
+                  style={{ width: '20%' }}
+                  onPress={() => {
+                    setShowExtraOptions(false);
+                    onCreatePoll();
+                  }}
+                >
+                  <View className="w-14 h-14 rounded-2xl bg-indigo-100 items-center justify-center mb-1">
+                    <Ionicons name="bar-chart-outline" size={30} color="#4f46e5" />
+                  </View>
+                  <Text className="text-sm font-medium text-onSurfaceVariant text-center">Bình chọn</Text>
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity className="items-center mb-2" style={{ width: '20%' }} onPress={handleOpenNamecardPicker}>
                 <View className="w-14 h-14 rounded-2xl bg-cyan-100 items-center justify-center mb-1">

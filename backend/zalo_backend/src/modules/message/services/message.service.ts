@@ -40,6 +40,7 @@ import { PermissionAction } from '@common/constants/permission-actions.constant'
 import { CursorPaginationHelper } from '@common/utils/cursor-pagination.helper';
 import type { CursorPaginatedResult } from '@common/interfaces/paginated-result.interface';
 import { DisplayNameResolver } from '@shared/services';
+import { PollService } from '@modules/poll/services/poll.service';
 
 /**
  * Reusable Prisma select shape for reply-to message preview.
@@ -127,6 +128,7 @@ export class MessageService {
     private readonly interactionAuth: InteractionAuthorizationService,
     private readonly displayNameResolver: DisplayNameResolver,
     private readonly eventEmitter: EventEmitter2,
+    private readonly pollService: PollService,
     @Inject(redisConfig.KEY)
     private readonly config: ConfigType<typeof redisConfig>,
     @Inject(s3Config.KEY)
@@ -218,6 +220,20 @@ export class MessageService {
     T extends { id: bigint; parentMessage?: { id: bigint } | null },
   >(message: T): Promise<T & { mediaAttachments: any[]; parentMessage?: any }> {
     const [enriched] = await this.enrichMessagesWithMedia([message]);
+    return enriched;
+  }
+
+  private async enrichMessagesForViewer<
+    T extends { id: bigint; type: MessageType; parentMessage?: { id: bigint } | null },
+  >(messages: T[], viewerId: string) {
+    const withMedia = await this.enrichMessagesWithMedia(messages);
+    return this.pollService.enrichMessagesWithPolls(withMedia, viewerId);
+  }
+
+  private async enrichSingleMessageForViewer<
+    T extends { id: bigint; type: MessageType; parentMessage?: { id: bigint } | null },
+  >(message: T, viewerId: string) {
+    const [enriched] = await this.enrichMessagesForViewer([message], viewerId);
     return enriched;
   }
 
@@ -465,7 +481,7 @@ export class MessageService {
       },
     });
     const fullMessageWithMedia =
-      await this.enrichSingleMessageWithMedia(_fullMessage);
+      await this.enrichSingleMessageForViewer(_fullMessage, senderId);
     const fullMessage = await this.hydrateSingleMessageWithSender(
       fullMessageWithMedia,
       senderId,
@@ -847,7 +863,10 @@ export class MessageService {
       },
     });
 
-    const messagesWithMedia = await this.enrichMessagesWithMedia(rawMessages);
+    const messagesWithMedia = await this.enrichMessagesForViewer(
+      rawMessages,
+      viewerId,
+    );
     const hydrated = await this.hydrateMessagesWithSenders(
       messagesWithMedia,
       viewerId,
@@ -883,7 +902,7 @@ export class MessageService {
       },
     });
     const existingMessageWithMedia =
-      await this.enrichSingleMessageWithMedia(_existingMessage);
+      await this.enrichSingleMessageForViewer(_existingMessage, viewerId);
     const existingMessage = await this.hydrateSingleMessageWithSender(
       existingMessageWithMedia,
       viewerId,
@@ -1025,7 +1044,7 @@ export class MessageService {
           },
         });
         const existingWithMedia =
-          await this.enrichSingleMessageWithMedia(_existing);
+          await this.enrichSingleMessageForViewer(_existing, viewerId);
         const existing = await this.hydrateSingleMessageWithSender(
           existingWithMedia,
           viewerId,
@@ -1192,7 +1211,7 @@ export class MessageService {
     }
 
     const _messages = visibleMessages.slice(0, targetCount);
-    const messagesWithMedia = await this.enrichMessagesWithMedia(_messages);
+    const messagesWithMedia = await this.enrichMessagesForViewer(_messages, userId);
     const messages = await this.hydrateMessagesWithSenders(
       messagesWithMedia,
       userId,
@@ -1306,7 +1325,7 @@ export class MessageService {
       .map((message) => this.sanitizeParentMessageForViewer(message, userId));
 
     const allMessagesWithMedia =
-      await this.enrichMessagesWithMedia(visibleMessages);
+      await this.enrichMessagesForViewer(visibleMessages, userId);
     const allMessages = await this.hydrateMessagesWithSenders(
       allMessagesWithMedia,
       userId,

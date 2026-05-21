@@ -73,6 +73,7 @@ STICKER STICKER
 SYSTEM SYSTEM
 AUDIO AUDIO
 VOICE VOICE
+POLL POLL
         }
     
 
@@ -207,6 +208,9 @@ MEDIA_UPLOADED MEDIA_UPLOADED
 MEDIA_DELETED MEDIA_DELETED
 REMINDER_CREATED REMINDER_CREATED
 REMINDER_TRIGGERED REMINDER_TRIGGERED
+POLL_CREATED POLL_CREATED
+POLL_VOTE_CHANGED POLL_VOTE_CHANGED
+POLL_CLOSED POLL_CLOSED
 CONVERSATION_ARCHIVED CONVERSATION_ARCHIVED
 CONVERSATION_MUTED CONVERSATION_MUTED
         }
@@ -606,6 +610,39 @@ EMAIL EMAIL
     }
   
 
+  "polls" {
+    String id "🗝️"
+    String conversation_id 
+    BigInt message_id 
+    String creator_id 
+    String question 
+    Boolean is_multiple_choices 
+    Boolean allow_add_options 
+    Boolean is_closed 
+    DateTime closed_at "❓"
+    String closed_by "❓"
+    DateTime created_at 
+    DateTime updated_at 
+    }
+  
+
+  "poll_options" {
+    String id "🗝️"
+    String poll_id 
+    String text 
+    Int sort_order 
+    String created_by "❓"
+    }
+  
+
+  "poll_votes" {
+    String poll_id 
+    String option_id 
+    String user_id 
+    DateTime created_at 
+    }
+  
+
   "daily_stats" {
     DateTime date "🗝️"
     Int new_users 
@@ -663,4 +700,9 @@ EMAIL EMAIL
     "reminders" }o--|| users : "user"
     "reminders" }o--|o conversations : "conversation"
     "reminders" }o--|o messages : "message"
+    "polls" }o--|| conversations : "conversation"
+    "polls" |o--|| messages : "message"
+    "poll_options" }o--|| polls : "poll"
+    "poll_votes" }o--|| polls : "poll"
+    "poll_votes" }o--|| poll_options : "option"
 ```

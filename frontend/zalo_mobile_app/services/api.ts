@@ -30,6 +30,11 @@ import type {
 import type { Message, RecentMediaItemDto } from '@/types/message';
 import type { PrivacySettings, UpdatePrivacySettingsPayload } from '@/types/privacy';
 import type { CreateReminderParams, ReminderItem, UpdateReminderParams } from '@/types/reminder';
+import type {
+  CreatePollParams,
+  PollDetail,
+  VotePollParams,
+} from '@/types/poll';
 import { getStableDeviceId } from '@/utils/device-identity';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
@@ -497,14 +502,14 @@ export const mobileApi = {
       },
 
       requestRegisterOtp(payload: RequestRegisterOtpPayload) {
-            return apiRequest<void>('/api/v1/auth/register-otp/request', {
+            return apiRequest<void>('/api/v1/auth/register/otp-request', {
                   method: 'POST',
                   body: JSON.stringify(payload),
             });
       },
 
       verifyRegisterOtp(payload: VerifyRegisterOtpPayload) {
-            return apiRequest<void>('/api/v1/auth/register-otp/verify', {
+            return apiRequest<void>('/api/v1/auth/register/otp-verify', {
                   method: 'POST',
                   body: JSON.stringify(payload),
             });
@@ -1064,6 +1069,46 @@ export const mobileApi = {
 
       getUndelivered(accessToken: string) {
             return apiRequest<ReminderItem[]>('/api/v1/reminders/undelivered', { method: 'GET' }, accessToken);
+      },
+
+      createPoll(params: CreatePollParams, accessToken: string) {
+            return apiRequest<{ poll: PollDetail; pollMessage: Message; systemMessage: Message }>(
+                  '/api/v1/polls',
+                  { method: 'POST', body: JSON.stringify(params) },
+                  accessToken,
+            );
+      },
+
+      getPollById(pollId: string, accessToken: string) {
+            return apiRequest<PollDetail>(`/api/v1/polls/${pollId}`, { method: 'GET' }, accessToken);
+      },
+
+      votePoll(pollId: string, params: VotePollParams, accessToken: string) {
+            const body =
+                  params.toggleOptionId != null
+                        ? { toggleOptionId: params.toggleOptionId }
+                        : { optionIds: params.optionIds ?? [] };
+            return apiRequest<PollDetail>(
+                  `/api/v1/polls/${pollId}/vote`,
+                  { method: 'POST', body: JSON.stringify(body) },
+                  accessToken,
+            );
+      },
+
+      addPollOption(pollId: string, text: string, accessToken: string) {
+            return apiRequest<PollDetail>(
+                  `/api/v1/polls/${pollId}/options`,
+                  { method: 'POST', body: JSON.stringify({ text }) },
+                  accessToken,
+            );
+      },
+
+      closePoll(pollId: string, accessToken: string) {
+            return apiRequest<PollDetail>(
+                  `/api/v1/polls/${pollId}/close`,
+                  { method: 'PATCH' },
+                  accessToken,
+            );
       },
 
       getPinnedMessages(conversationId: string, accessToken: string) {

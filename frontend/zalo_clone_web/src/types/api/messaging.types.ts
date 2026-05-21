@@ -5,6 +5,7 @@
  */
 
 import type { MediaType, MediaProcessingStatus } from './media.types';
+import type { PollDetail } from './poll.types';
 
 // ============================================================================
 // ENUMS
@@ -19,6 +20,7 @@ export const MessageType = {
       SYSTEM: 'SYSTEM',
       AUDIO: 'AUDIO',
       VOICE: 'VOICE',
+      POLL: 'POLL',
 } as const;
 
 export type MessageType = (typeof MessageType)[keyof typeof MessageType];
@@ -107,6 +109,8 @@ export interface MessageListItem extends Message {
       sender?: MessageSender | null;
       parentMessage?: MessageParentMessage | null;
       mediaAttachments?: MessageMediaAttachmentItem[];
+      /** Populated for POLL messages in group chats */
+      poll?: PollDetail;
       /** Number of recipients who received a delivery ack (group only) */
       deliveredCount?: number;
       /** Number of recipients who have seen the message (group counter / direct derived) */

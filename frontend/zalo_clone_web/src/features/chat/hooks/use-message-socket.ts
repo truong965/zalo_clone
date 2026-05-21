@@ -4,7 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/hooks/use-socket';
 import { socketManager } from '@/lib/socket';
 import { SocketEvents } from '@/constants/socket-events';
-import type { MessageListItem } from '@/types/api';
+import type { MessageListItem, PollVoteUpdatedPayload } from '@/types/api';
+import { applyPollUpdateToCache } from '@/features/poll/utils/poll-cache';
 import { useAuthStore } from '@/features/auth';
 import { useTranslationStore } from '../stores/use-translation-store';
 import {
@@ -255,6 +256,20 @@ export function useMessageSocket(params: {
             socket.on(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
             socket.on(SocketEvents.AI_TRANSLATE, onAiTranslate);
 
+            const onPollVoteUpdated = (payload: PollVoteUpdatedPayload) => {
+                  const currentConversationId = conversationIdRef.current;
+                  const key = messagesQueryKeyRef.current;
+                  if (!currentConversationId || payload.conversationId !== currentConversationId) {
+                        return;
+                  }
+                  applyPollUpdateToCache(queryClient, key, {
+                        messageId: payload.messageId,
+                        poll: payload.poll,
+                  });
+            };
+
+            socket.on(SocketEvents.POLL_VOTE_UPDATED, onPollVoteUpdated);
+
             return () => {
                   socket.off(SocketEvents.MESSAGE_NEW, onMessageNew);
                   socket.off(SocketEvents.MESSAGES_SYNC, onMessagesSync);
@@ -265,6 +280,7 @@ export function useMessageSocket(params: {
                   socket.off(SocketEvents.ERROR, onSocketError);
                   socket.off(SocketEvents.TYPING_STATUS, onTypingStatusEvent);
                   socket.off(SocketEvents.AI_TRANSLATE, onAiTranslate);
+                  socket.off(SocketEvents.POLL_VOTE_UPDATED, onPollVoteUpdated);
             };
       }, [socket, isConnected, queryClient, setTranslation, finishTranslation]);
 

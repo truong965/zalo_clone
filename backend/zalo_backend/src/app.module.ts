@@ -35,6 +35,7 @@ import { ContactModule } from './modules/contact/contact.module';
 import { CallModule } from './modules/call/call.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReminderModule } from './modules/reminder/reminder.module';
+import { PollModule } from './modules/poll/poll.module';
 import { AdminModule } from './modules/admin/admin.module';
 
 // Configs
@@ -187,6 +188,7 @@ const aiEnabled = process.env.AI_AGENT_ENABLED !== 'false';
     CallModule, // CALL PHASE 1: Call history + signaling gateway
     NotificationsModule, // PHASE 5: Push Notifications (FCM + Web Push)
     ReminderModule, // PHASE 4: Reminders (PostgreSQL polling scheduler)
+    PollModule, // Group chat polls
     FriendshipModule, // PHASE 6: Standalone Friendship Module (Independent)
     PrivacyModule,
     SearchEngineModule, // Privacy settings & permissions (Independent)

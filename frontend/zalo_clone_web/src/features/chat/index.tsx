@@ -31,6 +31,9 @@ import { CreateGroupModal } from '@/features/conversation/components/create-grou
 import { useCreateGroupStore } from '@/features/conversation';
 import { SearchPanel } from '@/features/search/components/SearchPanel';
 import { useReminders, CreateReminderModal } from '@/features/reminder';
+import { CreatePollModal, usePollMutations } from '@/features/poll';
+import { applyPollUpdateToCache } from '@/features/poll/utils/poll-cache';
+import type { PollDetail } from '@/types/api';
 
 // ── Cross-feature hooks ──────────────────────────────────────────────────
 import { useConversationListRealtime, usePinConversation, usePinMessage, useArchivedConversationsList, useMuteConversation, useArchiveConversation } from '@/features/conversation';
@@ -126,6 +129,8 @@ export function ChatFeature() {
       // ── Reminder state ──────────────────────────────────────────────────────────
       const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
       const { createReminder, isCreating: isReminderCreating } = useReminders();
+      const [createPollOpen, setCreatePollOpen] = useState(false);
+      const { createPoll, isCreating: isPollCreating } = usePollMutations();
 
       // ── AI Summary Trigger ──────────────────────────────────────────────────
       const [aiSummaryTrigger, setAiSummaryTrigger] = useState<{ count: number; startMessageId: string | undefined } | null>(null);
@@ -478,6 +483,13 @@ export function ChatFeature() {
             limit: 50,
             messagesContainerRef,
       });
+
+      const handlePollUpdated = useCallback(
+            (messageId: string, poll: PollDetail) => {
+                  applyPollUpdateToCache(queryClient, messagesQueryKey, { messageId, poll });
+            },
+            [queryClient, messagesQueryKey],
+      );
 
       // ── Invalidate on reconnect ──────────────────────────────────────────
       useEffect(() => {
@@ -835,6 +847,7 @@ export function ChatFeature() {
                                                 onUnpinMessage={unpinMessage}
                                                 onRecallMessage={handleRecallMessage}
                                                 onDeleteForMeMessage={handleDeleteForMeMessage}
+                                                onPollUpdated={handlePollUpdated}
                                           />
 
                                           {replyTarget && (
@@ -849,6 +862,8 @@ export function ChatFeature() {
                                                 onSend={handleSendMessage}
                                                 onTypingChange={handleTypingChange}
                                                 onSetReminder={handleSetReminder}
+                                                isGroup={selectedConversation.type === 'GROUP'}
+                                                onCreatePoll={() => setCreatePollOpen(true)}
                                           />
                                     </>
                               ) : selectedId ? (
@@ -937,6 +952,14 @@ export function ChatFeature() {
                         messageId={reminderTarget?.messageId || undefined}
                         defaultContent={reminderTarget?.content || undefined}
                         isSubmitting={isReminderCreating}
+                  />
+
+                  <CreatePollModal
+                        open={createPollOpen}
+                        onClose={() => setCreatePollOpen(false)}
+                        conversationId={selectedId}
+                        onSubmit={createPoll}
+                        isSubmitting={isPollCreating}
                   />
             </>
       );

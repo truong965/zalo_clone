@@ -22,3 +22,4 @@ export * from './messaging.types';
 export * from './conversation.types';
 export * from './system.types';
 export * from './reminder.types';
+export * from './poll.types';

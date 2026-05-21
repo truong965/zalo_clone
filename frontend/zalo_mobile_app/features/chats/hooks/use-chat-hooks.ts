@@ -16,6 +16,7 @@ import {
   applySendFailedToCache,
   applySentAckToCache,
   upsertMessageToCache,
+  applyPollUpdateToCache,
   MessageDeletedForMePayload,
   MessageRecalledPayload,
   MessageSentAckPayload,
@@ -584,6 +585,22 @@ export function useChatRealtime(
     socket.on(SocketEvents.AI_RESPONSE_ERROR, handleAiTranslateError);
     socket.on(SocketEvents.ERROR, handleError);
 
+    const handlePollVoteUpdated = (payload: {
+      pollId: string;
+      messageId: string;
+      conversationId: string;
+      poll: import('@/types/poll').PollDetail;
+    }) => {
+      if (String(payload.conversationId) !== String(conversationId)) return;
+      applyPollUpdateToCache(
+        queryClient,
+        messagesQueryKey(conversationId, 'older'),
+        { messageId: payload.messageId, poll: payload.poll },
+      );
+    };
+
+    socket.on(SocketEvents.POLL_VOTE_UPDATED, handlePollVoteUpdated);
+
     return () => {
       socket.off(SocketEvents.MESSAGE_NEW, handleNewMessage);
       socket.off(SocketEvents.MESSAGE_SENT_ACK, handleSentAck);
@@ -598,6 +615,7 @@ export function useChatRealtime(
       socket.off(SocketEvents.AI_STREAM_ERROR, handleAiTranslateError);
       socket.off(SocketEvents.AI_RESPONSE_ERROR, handleAiTranslateError);
       socket.off(SocketEvents.ERROR, handleError);
+      socket.off(SocketEvents.POLL_VOTE_UPDATED, handlePollVoteUpdated);
     };
     // jumpRefs là object ref — stable reference, không cần trong deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps

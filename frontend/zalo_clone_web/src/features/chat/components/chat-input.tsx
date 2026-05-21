@@ -24,6 +24,7 @@ import {
       IdcardOutlined,
       ThunderboltOutlined,
       FontSizeOutlined,
+      BarChartOutlined,
 } from '@ant-design/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
@@ -93,13 +94,23 @@ interface ChatInputProps {
       onTypingChange?: (isTyping: boolean) => void;
       /** Called when user clicks the reminder toolbar button */
       onSetReminder?: () => void;
+      /** Group chat only — open create poll modal */
+      isGroup?: boolean;
+      onCreatePoll?: () => void;
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
-export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminder }: ChatInputProps) {
+export function ChatInput({
+      conversationId,
+      onSend,
+      onTypingChange,
+      onSetReminder,
+      isGroup = false,
+      onCreatePoll,
+}: ChatInputProps) {
       const { t } = useTranslation();
       const [message, setMessage] = useState('');
       const [isSending, setIsSending] = useState(false);
@@ -566,6 +577,19 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                                           onClick={onSetReminder}
                                     />
                               </Tooltip>
+
+                              {isGroup && onCreatePoll ? (
+                                    <Tooltip title="Tạo bình chọn" placement="top">
+                                          <Button
+                                                type="text"
+                                                icon={<BarChartOutlined />}
+                                                className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                                size="middle"
+                                                disabled={isDisabled}
+                                                onClick={onCreatePoll}
+                                          />
+                                    </Tooltip>
+                              ) : null}
 
                               <Tooltip title={t('chat.input.formattingToggle')} placement="top">
                                     <Button
