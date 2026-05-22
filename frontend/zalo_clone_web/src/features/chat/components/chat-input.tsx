@@ -579,7 +579,7 @@ export function ChatInput({
                               </Tooltip>
 
                               {isGroup && onCreatePoll ? (
-                                    <Tooltip title="Tạo bình chọn" placement="top">
+                                    <Tooltip title={t('poll.create.title')} placement="top">
                                           <Button
                                                 type="text"
                                                 icon={<BarChartOutlined />}

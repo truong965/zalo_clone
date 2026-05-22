@@ -1,5 +1,6 @@
 import { Modal, List, Avatar } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { PollDetail } from '@/types/api';
 
 interface PollDetailModalProps {
@@ -9,9 +10,11 @@ interface PollDetailModalProps {
 }
 
 export function PollDetailModal({ open, onClose, poll }: PollDetailModalProps) {
+      const { t } = useTranslation();
+
       return (
             <Modal
-                  title="Chi tiết bình chọn"
+                  title={t('poll.detailTitle')}
                   open={open}
                   onCancel={onClose}
                   footer={null}
@@ -22,8 +25,8 @@ export function PollDetailModal({ open, onClose, poll }: PollDetailModalProps) {
                         <div className="space-y-4 py-2">
                               <p className="font-medium text-gray-800">{poll.question}</p>
                               <p className="text-[13px] text-gray-500">
-                                    {poll.totalVoters} người đã bình chọn
-                                    {poll.isClosed ? ' · Đã kết thúc' : ''}
+                                    {t('poll.voters', { count: poll.totalVoters })}
+                                    {poll.isClosed ? ` · ${t('poll.closed')}` : ''}
                               </p>
                               {poll.options.map((opt) => (
                                     <div key={opt.id} className="border-b border-gray-50 pb-3 last:border-0">
@@ -36,7 +39,7 @@ export function PollDetailModal({ open, onClose, poll }: PollDetailModalProps) {
                                           <List
                                                 size="small"
                                                 dataSource={opt.voters}
-                                                locale={{ emptyText: 'Chưa có phiếu' }}
+                                                locale={{ emptyText: t('poll.noVoters') }}
                                                 renderItem={(v) => (
                                                       <List.Item className="!px-0 !py-1">
                                                             <List.Item.Meta

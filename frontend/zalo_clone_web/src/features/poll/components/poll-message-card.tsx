@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, message as antMessage } from 'antd';
+import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/features/chat/types';
 import type { PollDetail } from '@/types/api';
 import { PollOptionRow } from './poll-option-row';
@@ -14,6 +15,7 @@ interface PollMessageCardProps {
 
 export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
       const poll = msg.poll;
+      const { t } = useTranslation();
       const { user } = useAuth();
       const { votePoll, addPollOption, closePoll, isVoting, isAddingOption, isClosing } =
             usePollMutations();
@@ -51,7 +53,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
       if (!localPoll) {
             return (
                   <div className="rounded-2xl bg-white border border-gray-100 px-4 py-3 text-gray-500 text-sm">
-                        Đang tải bình chọn...
+                        {t('poll.loading')}
                   </div>
             );
       }
@@ -69,7 +71,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                         });
                         applyPoll(updated);
                   } catch {
-                        antMessage.error('Không thể bỏ chọn');
+                        antMessage.error(t('poll.errorUnvote'));
                   }
                   return;
             }
@@ -95,7 +97,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                   });
                   applyPoll(updated);
             } catch {
-                  antMessage.error('Không thể gửi bình chọn');
+                  antMessage.error(t('poll.errorVote'));
             }
       };
 
@@ -107,7 +109,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                   setNewOptionText('');
                   applyPoll(updated);
             } catch {
-                  antMessage.error('Không thể thêm phương án');
+                  antMessage.error(t('poll.errorAddOption'));
             }
       };
 
@@ -116,7 +118,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                   const updated = await closePoll(localPoll.id);
                   applyPoll(updated);
             } catch {
-                  antMessage.error('Không thể kết thúc bình chọn');
+                  antMessage.error(t('poll.errorClose'));
             }
       };
 
@@ -136,9 +138,9 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                         </p>
                         <p className="text-[12px] text-gray-400 mb-3">
                               {localPoll.isMultipleChoices
-                                    ? 'Chọn nhiều phương án'
-                                    : 'Chọn một phương án'}
-                              {localPoll.isClosed ? ' · Đã kết thúc' : ''}
+                                    ? t('poll.multipleChoice')
+                                    : t('poll.singleChoice')}
+                              {localPoll.isClosed ? ` · ${t('poll.closed')}` : ''}
                         </p>
 
                         <div className="space-y-2">
@@ -164,7 +166,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                               <div className="flex gap-2 mt-3">
                                     <Input
                                           size="small"
-                                          placeholder="Thêm phương án mới"
+                                          placeholder={t('poll.addOptionModal.placeholder')}
                                           value={newOptionText}
                                           onChange={(e) => setNewOptionText(e.target.value)}
                                           onPressEnter={() => void handleAddOption()}
@@ -174,7 +176,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                                           loading={isAddingOption}
                                           onClick={() => void handleAddOption()}
                                     >
-                                          Thêm
+                                          {t('poll.addOptionModal.confirm')}
                                     </Button>
                               </div>
                         )}
@@ -185,7 +187,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                                     className="text-[13px] text-blue-600 hover:underline"
                                     onClick={() => setDetailOpen(true)}
                               >
-                                    Xem chi tiết
+                                    {t('poll.viewDetail')}
                               </button>
                               <div className="flex gap-2">
                                     {!localPoll.isClosed && (
@@ -196,7 +198,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                                                 disabled={!canSubmit}
                                                 onClick={() => void handleSubmitVote()}
                                           >
-                                                Bình chọn
+                                                {t('poll.vote')}
                                           </Button>
                                     )}
                               </div>
@@ -209,7 +211,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                                     disabled={isClosing}
                                     onClick={() => void handleClose()}
                               >
-                                    Kết thúc bình chọn
+                                    {t('poll.closePoll')}
                               </button>
                         )}
                   </div>
