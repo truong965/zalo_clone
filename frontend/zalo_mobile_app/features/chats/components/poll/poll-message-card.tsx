@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,10 @@ import {
   Modal,
   ScrollView,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -28,7 +32,18 @@ export function PollMessageCard({ message, onPollUpdated }: PollMessageCardProps
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [newOptionText, setNewOptionText] = useState('');
   const [detailVisible, setDetailVisible] = useState(false);
+  const [addOptionVisible, setAddOptionVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const addInputRef = useRef<TextInput>(null);
+
+  // Đóng modal sau khi keyboard đã hạ xuống hoàn toàn để tránh nhấp nháy
+  const closeAddModal = useCallback(() => {
+    Keyboard.dismiss();
+    setTimeout(() => {
+      setAddOptionVisible(false);
+      setNewOptionText('');
+    }, Platform.OS === 'android' ? 120 : 50);
+  }, []);
 
   useEffect(() => {
     if (message.poll) {
@@ -94,7 +109,7 @@ export function PollMessageCard({ message, onPollUpdated }: PollMessageCardProps
     setLoading(true);
     try {
       const updated = await mobileApi.addPollOption(localPoll.id, text, accessToken);
-      setNewOptionText('');
+      closeAddModal();
       applyPoll(updated);
     } catch {
       Toast.show({ type: 'error', text1: 'Không thể thêm phương án' });
@@ -181,17 +196,12 @@ export function PollMessageCard({ message, onPollUpdated }: PollMessageCardProps
         })}
 
         {localPoll.allowAddOptions && !localPoll.isClosed && (
-          <View style={styles.addRow}>
-            <TextInput
-              style={styles.addInput}
-              placeholder="Thêm phương án"
-              value={newOptionText}
-              onChangeText={setNewOptionText}
-            />
-            <TouchableOpacity onPress={() => void handleAddOption()} disabled={loading}>
-              <Text style={styles.link}>Thêm</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.addOptionBtn}
+            onPress={() => setAddOptionVisible(true)}
+          >
+            <Text style={styles.addOptionBtnText}>+ Thêm phương án</Text>
+          </TouchableOpacity>
         )}
 
         <View style={styles.footer}>
@@ -220,6 +230,7 @@ export function PollMessageCard({ message, onPollUpdated }: PollMessageCardProps
         )}
       </View>
 
+      {/* Detail modal */}
       <Modal visible={detailVisible} animationType="slide" onRequestClose={() => setDetailVisible(false)}>
         <View style={styles.detailModal}>
           <View style={styles.detailHeader}>
@@ -244,6 +255,63 @@ export function PollMessageCard({ message, onPollUpdated }: PollMessageCardProps
             ))}
           </ScrollView>
         </View>
+      </Modal>
+
+      {/* Add option bottom-sheet modal */}
+      <Modal
+        visible={addOptionVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAddModal}
+        onShow={() => {
+          setTimeout(() => addInputRef.current?.focus(), 100);
+        }}
+      >
+        <KeyboardAvoidingView
+          style={styles.addModalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeAddModal}
+          />
+          <View style={styles.addModalSheet}>
+            <Text style={styles.addModalTitle}>Thêm phương án mới</Text>
+            <TextInput
+              ref={addInputRef}
+              style={styles.addModalInput}
+              placeholder="Nhập phương án..."
+              placeholderTextColor="#9ca3af"
+              value={newOptionText}
+              onChangeText={setNewOptionText}
+              onSubmitEditing={() => void handleAddOption()}
+              returnKeyType="done"
+              maxLength={200}
+            />
+            <View style={styles.addModalActions}>
+              <TouchableOpacity
+                style={styles.addModalCancel}
+                onPress={closeAddModal}
+              >
+                <Text style={styles.addModalCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.addModalConfirm,
+                  (!newOptionText.trim() || loading) && styles.addModalConfirmDisabled,
+                ]}
+                disabled={!newOptionText.trim() || loading}
+                onPress={() => void handleAddOption()}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.addModalConfirmText}>Thêm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -282,15 +350,65 @@ const styles = StyleSheet.create({
   voters: { flexDirection: 'row', marginTop: 6 },
   avatar: { width: 22, height: 22, borderRadius: 11, marginRight: -6, borderWidth: 1, borderColor: '#fff' },
   avatarPlaceholder: { backgroundColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center' },
-  addRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  addInput: {
+  addOptionBtn: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderStyle: 'dashed',
+    alignSelf: 'flex-start',
+  },
+  addOptionBtnText: { color: '#3b82f6', fontSize: 13, fontWeight: '500' },
+  addModalOverlay: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  addModalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  addModalTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 14 },
+  addModalInput: {
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 14,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#111827',
+    backgroundColor: '#f9fafb',
+    marginBottom: 16,
   },
+  addModalActions: { flexDirection: 'row', gap: 10 },
+  addModalCancel: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+  },
+  addModalCancelText: { color: '#6b7280', fontSize: 14, fontWeight: '500' },
+  addModalConfirm: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: '#0068ff',
+    alignItems: 'center',
+  },
+  addModalConfirmDisabled: { opacity: 0.4 },
+  addModalConfirmText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
