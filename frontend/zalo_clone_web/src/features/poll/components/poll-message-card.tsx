@@ -217,8 +217,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                   <PollDetailModal
                         open={detailOpen}
                         onClose={() => setDetailOpen(false)}
-                        pollId={localPoll.id}
-                        initialPoll={localPoll}
+                        poll={localPoll}
                   />
             </>
       );

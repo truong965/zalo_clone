@@ -1,29 +1,14 @@
-import { Modal, List, Avatar, Spin } from 'antd';
+import { Modal, List, Avatar } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
-import { pollApi } from '../api/poll.api';
 import type { PollDetail } from '@/types/api';
 
 interface PollDetailModalProps {
       open: boolean;
       onClose: () => void;
-      pollId: string | null;
-      initialPoll?: PollDetail | null;
+      poll: PollDetail | null;
 }
 
-export function PollDetailModal({
-      open,
-      onClose,
-      pollId,
-      initialPoll,
-}: PollDetailModalProps) {
-      const { data: poll, isLoading } = useQuery({
-            queryKey: ['poll', pollId],
-            queryFn: () => pollApi.getPollById(pollId!),
-            enabled: open && !!pollId,
-            initialData: initialPoll ?? undefined,
-      });
-
+export function PollDetailModal({ open, onClose, poll }: PollDetailModalProps) {
       return (
             <Modal
                   title="Chi tiết bình chọn"
@@ -33,11 +18,7 @@ export function PollDetailModal({
                   width={480}
                   destroyOnHidden
             >
-                  {isLoading && !poll ? (
-                        <div className="flex justify-center py-8">
-                              <Spin />
-                        </div>
-                  ) : poll ? (
+                  {poll ? (
                         <div className="space-y-4 py-2">
                               <p className="font-medium text-gray-800">{poll.question}</p>
                               <p className="text-[13px] text-gray-500">
