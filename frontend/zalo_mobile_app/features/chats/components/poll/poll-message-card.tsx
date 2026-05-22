@@ -23,7 +23,7 @@ interface PollMessageCardProps {
 }
 
 export function PollMessageCard({ message, onPollUpdated }: PollMessageCardProps) {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [localPoll, setLocalPoll] = useState<PollDetail | null>(message.poll ?? null);
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [newOptionText, setNewOptionText] = useState('');
@@ -213,7 +213,7 @@ export function PollMessageCard({ message, onPollUpdated }: PollMessageCardProps
           )}
         </View>
 
-        {!localPoll.isClosed && (
+        {!localPoll.isClosed && user?.id === localPoll.creatorId && (
           <TouchableOpacity onPress={() => void handleClose()} disabled={loading}>
             <Text style={styles.closeLink}>Kết thúc bình chọn</Text>
           </TouchableOpacity>

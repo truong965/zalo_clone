@@ -5,6 +5,7 @@ import type { PollDetail } from '@/types/api';
 import { PollOptionRow } from './poll-option-row';
 import { PollDetailModal } from './poll-detail-modal';
 import { usePollMutations } from '../hooks/use-poll-mutations';
+import { useAuth } from '@/features/auth/hooks/use-auth';
 
 interface PollMessageCardProps {
       msg: ChatMessage;
@@ -13,6 +14,7 @@ interface PollMessageCardProps {
 
 export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
       const poll = msg.poll;
+      const { user } = useAuth();
       const { votePoll, addPollOption, closePoll, isVoting, isAddingOption, isClosing } =
             usePollMutations();
 
@@ -200,7 +202,7 @@ export function PollMessageCard({ msg, onPollUpdated }: PollMessageCardProps) {
                               </div>
                         </div>
 
-                        {!localPoll.isClosed && (
+                        {!localPoll.isClosed && user?.id === localPoll.creatorId && (
                               <button
                                     type="button"
                                     className="text-[12px] text-gray-400 hover:text-gray-600 mt-2"
