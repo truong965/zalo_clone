@@ -164,11 +164,28 @@ export class SqsMediaConsumer implements OnModuleInit, OnModuleDestroy {
             }
 
             let jobData: MediaJobData;
+
             try {
                   jobData = JSON.parse(msg.Body) as MediaJobData;
-            } catch {
-                  this.logger.error(`[${label}] Failed to parse SQS message body`);
-                  // Delete malformed message — no point retrying
+
+                  if (
+                        !jobData ||
+                        !jobData.payload ||
+                        !jobData.payload.mediaId
+                  ) {
+                        this.logger.error(
+                              `[${label}] Invalid payload: ${msg.Body}`,
+                        );
+
+                        await this.deleteMessage(queueUrl, receiptHandle);
+                        return;
+                  }
+
+            } catch (error) {
+                  this.logger.error(
+                        `[${label}] Failed to parse SQS message body: ${(error as Error).message}`,
+                  );
+
                   await this.deleteMessage(queueUrl, receiptHandle);
                   return;
             }

@@ -11,6 +11,10 @@ import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 
 import { registerSchema, type RegisterFormData } from '@/features/auth/schemas/register-schema';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const INPUT_ICON = { light: '#52525b', dark: '#a1a1aa' } as const;
+import { PasswordInput } from '@/features/auth/components/password-input';
 
 type RegisterFormProps = {
       isSubmitting: boolean;
@@ -21,6 +25,8 @@ type RegisterFormProps = {
 export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: RegisterFormProps) {
       const { t } = useTranslation();
       const loginHref = '/login' as Href;
+      const scheme = useColorScheme() ?? 'light';
+      const placeholderColor = INPUT_ICON[scheme];
 
       const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -54,10 +60,11 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                                           onBlur={onBlur}
                                           onChangeText={onChange}
                                           placeholder={t('auth.displayName')}
+                                          placeholderTextColor={placeholderColor}
                                           className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
                                     />
                                     {errors.displayName ? (
-                                          <Text className="text-sm text-danger">{t(errors.displayName.message ?? 'auth.validation.displayNameRequired')}</Text>
+                                          <Text className="text-sm text-destructive">{t(errors.displayName.message ?? 'auth.validation.displayNameRequired')}</Text>
                                     ) : null}
                               </View>
                         )}
@@ -74,12 +81,13 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                                                 onBlur={onBlur}
                                                 onChangeText={onChange}
                                                 placeholder={t('auth.phoneNumber')}
+                                                placeholderTextColor={placeholderColor}
                                                 keyboardType="phone-pad"
                                                 autoCapitalize="none"
                                                 className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
                                           />
                                           {errors.phoneNumber ? (
-                                                <Text className="text-sm text-danger">{t(errors.phoneNumber.message ?? 'auth.validation.phoneRequired')}</Text>
+                                                <Text className="text-sm text-destructive">{t(errors.phoneNumber.message ?? 'auth.validation.phoneRequired')}</Text>
                                           ) : null}
                                     </View>
                               )}
@@ -91,17 +99,18 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                         name="password"
                         render={({ field: { onChange, onBlur, value } }) => (
                               <View className="gap-1">
-                                    <TextInput
+                                    <PasswordInput
                                           value={value}
                                           onBlur={onBlur}
                                           onChangeText={onChange}
                                           placeholder={t('auth.password')}
+                                          placeholderTextColor={placeholderColor}
                                           secureTextEntry
                                           autoCapitalize="none"
-                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground pr-12"
                                     />
                                     {errors.password ? (
-                                          <Text className="text-sm text-danger">{t(errors.password.message ?? 'auth.validation.passwordRequired')}</Text>
+                                          <Text className="text-sm text-destructive">{t(errors.password.message ?? 'auth.validation.passwordRequired')}</Text>
                                     ) : null}
                               </View>
                         )}
@@ -140,7 +149,7 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                                                 <Text className="text-base text-foreground">
                                                       {value instanceof Date ? format(value, 'dd/MM/yyyy') : t('common.unknown')}
                                                 </Text>
-                                                <Ionicons name="calendar-outline" size={20} color="#8E8E93" />
+                                                <Ionicons name="calendar-outline" size={20} color={placeholderColor} />
                                           </TouchableOpacity>
 
                                           {showDatePicker && (
@@ -158,7 +167,7 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                                                 />
                                           )}
                                           {errors.dateOfBirth ? (
-                                                <Text className="text-sm text-danger">{t(errors.dateOfBirth.message as any)}</Text>
+                                                <Text className="text-sm text-destructive">{t(errors.dateOfBirth.message as any)}</Text>
                                           ) : null}
                                     </View>
                               )}
@@ -170,17 +179,18 @@ export function RegisterForm({ isSubmitting, onSubmit, hidePhone = false }: Regi
                         name="confirmPassword"
                         render={({ field: { onChange, onBlur, value } }) => (
                               <View className="gap-1">
-                                    <TextInput
+                                    <PasswordInput
                                           value={value}
                                           onBlur={onBlur}
                                           onChangeText={onChange}
                                           placeholder={t('auth.confirmPassword')}
+                                          placeholderTextColor={placeholderColor}
                                           secureTextEntry
                                           autoCapitalize="none"
-                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground"
+                                          className="rounded-xl border border-border bg-background px-3 py-2.5 text-base text-foreground pr-12"
                                     />
                                     {errors.confirmPassword ? (
-                                          <Text className="text-sm text-danger">{t(errors.confirmPassword.message ?? 'auth.validation.confirmPasswordRequired')}</Text>
+                                          <Text className="text-sm text-destructive">{t(errors.confirmPassword.message ?? 'auth.validation.confirmPasswordRequired')}</Text>
                                     ) : null}
                               </View>
                         )}

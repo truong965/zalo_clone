@@ -11,9 +11,10 @@
       },
       "auth": {
             "loginTitle": "Đăng nhập Zalo",
-            "loginSubtitle": "Đăng nhập tài khoản để tiếp tục",
             "phoneNumber": "Số điện thoại",
             "password": "Mật khẩu",
+            "showPassword": "Hiện mật khẩu",
+            "hidePassword": "Ẩn mật khẩu",
             "login": "Đăng nhập",
             "registerNow": "Chưa có tài khoản? Đăng ký ngay",
             "missingInfoTitle": "Thiếu thông tin",
