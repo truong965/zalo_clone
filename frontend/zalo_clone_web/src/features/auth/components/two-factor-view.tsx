@@ -26,7 +26,6 @@ export const TwoFactorView: React.FC<TwoFactorViewProps> = ({ data, onSuccess, o
   const [timeLeft, setTimeLeft] = useState(90); // 90 seconds timeout for PUSH/OTP verification
   const [resendCooldown, setResendCooldown] = useState(data.autoTriggered ? 45 : 0); // 45s cooldown for anti-spam
   const timerRef = useRef<any>(null);
-  const cooldownRef = useRef<any>(null);
 
   // Handle Cooldown Timer (1s ticks)
   useEffect(() => {

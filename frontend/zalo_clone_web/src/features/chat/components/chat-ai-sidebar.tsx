@@ -242,7 +242,6 @@ export function ChatAiSidebar({ conversationId, onClose }: ChatAiSidebarProps) {
   const activeRequest = activeRequestId ? conversationState?.requests[activeRequestId] ?? null : null;
   const isLoading = Boolean(activeRequest && activeRequest.status !== 'completed' && activeRequest.status !== 'error');
   const streamingContent = activeRequest?.content ?? '';
-  const streamingThought = activeRequest?.thought ?? '';
   const aiSummaryStartMessageId = useChatStore((s) => s.aiSummaryStartMessageId);
   const setAiSummaryStartMessageId = useChatStore((s) => s.setAiSummaryStartMessageId);
   const hydrateAiConversation = useChatStore((s) => s.hydrateAiConversation);

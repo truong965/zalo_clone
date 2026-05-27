@@ -23,7 +23,6 @@ import type {
       SearchNewMatchPayload,
       SearchResultRemovedPayload,
       SearchSuggestionsPayload,
-      SearchErrorPayload,
       SearchSubscribeAck,
       SearchUnsubscribeAck,
       SearchUpdateQueryAck,

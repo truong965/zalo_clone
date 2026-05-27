@@ -18,9 +18,6 @@
 
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { notification } from 'antd';
-import { socketManager } from '@/lib/socket';
-import { SocketEvents } from '@/constants/socket-events';
 import { useCallSocket } from '../hooks/use-call-socket';
 import { useWebRTCCall } from '../hooks/use-webrtc-call';
 import { useDailyCall } from '../hooks/use-daily-call';

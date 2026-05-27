@@ -19,7 +19,6 @@ import {
       SendOutlined,
       LoadingOutlined,
       ClockCircleOutlined,
-      MoreOutlined,
       EnvironmentOutlined,
       IdcardOutlined,
       ThunderboltOutlined,

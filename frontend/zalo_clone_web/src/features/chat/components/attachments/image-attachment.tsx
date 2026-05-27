@@ -45,12 +45,6 @@ export function ImageAttachment({ attachment, className, isSingle = false, onCli
             ?? attachment._localUrl
             ?? undefined;
 
-      const fullSrc = attachment.cdnUrl
-            ?? attachment.optimizedUrl
-            ?? attachment.thumbnailUrl
-            ?? attachment._localUrl
-            ?? undefined;
-
       const isProcessing = !isReady && !isFailed;
 
       // Single-image: let the image dictate its own size (capped at a readable max).

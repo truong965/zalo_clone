@@ -8,8 +8,7 @@ import {
   notification,
   Skeleton,
   Modal,
-  Tooltip,
-  Divider
+  Tooltip
 } from 'antd';
 import {
   MobileOutlined,
@@ -19,7 +18,6 @@ import {
   InfoCircleOutlined,
   WarningOutlined,
   EnvironmentOutlined,
-  ClockCircleOutlined,
   HistoryOutlined
 } from '@ant-design/icons';
 import { useDeviceSessions, useRevokeSession } from '../api/device.api';
