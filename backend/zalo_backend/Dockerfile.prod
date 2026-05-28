@@ -23,7 +23,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma Client
-RUN npx prisma generate
+RUN mkdir -p /doc/architecture && npx prisma generate
 
 # Build application
 RUN npm run build
