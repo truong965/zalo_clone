@@ -606,6 +606,7 @@ export function ChatFeature() {
                         const isReadyWithoutThumb =
                               a.processingStatus === 'READY' &&
                               !a.thumbnailUrl &&
+                              !a.cdnUrl &&
                               (a.mediaType === 'VIDEO' || a.mediaType === 'IMAGE');
                         if (isPending || isReadyWithoutThumb) {
                               ids.push(a.id);

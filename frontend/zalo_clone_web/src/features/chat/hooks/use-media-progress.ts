@@ -89,7 +89,8 @@ function updateAttachmentInCache(
                   // thumbnailUrl later. We must apply the thumbnail even when status stays READY.
                   const statusUnchanged = existing.processingStatus === processingStatus;
                   const thumbnailWillUpdate = payload.thumbnailUrl && !existing.thumbnailUrl;
-                  if (statusUnchanged && !thumbnailWillUpdate) return msg;
+                  const cdnWillUpdate = payload.cdnUrl && !existing.cdnUrl;
+                  if (statusUnchanged && !thumbnailWillUpdate && !cdnWillUpdate) return msg;
 
                   pageChanged = true;
 
@@ -196,7 +197,7 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
             //   • If still processing, retry every POLL_INTERVAL_MS up to MAX_RETRIES.
             //   • Clean up all pending timers on effect teardown.
             const POLL_INTERVAL_MS = 3_000;
-            const MAX_RETRIES = 20; // ~60 s max wait
+            const MAX_RETRIES = 10; // ~30 s max wait
 
             // Map mediaId -> cancel function so we can clean up on unmount.
             const pollCancels = new Map<string, () => void>();
@@ -230,9 +231,16 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                                     const needsThumb =
                                           result.processingStatus === 'READY' &&
                                           !result.thumbnailUrl &&
+                                          !result.cdnUrl &&
                                           (result.mediaType === 'VIDEO' || result.mediaType === 'IMAGE');
 
-                                    if ((result.processingStatus === 'READY' && !needsThumb) || result.processingStatus === 'FAILED') {
+                                    const retriesExhausted = retries >= MAX_RETRIES;
+                                    const terminal =
+                                          result.processingStatus === 'FAILED' ||
+                                          (result.processingStatus === 'READY' && !needsThumb) ||
+                                          retriesExhausted;
+
+                                    if (terminal) {
                                           // DEBUG: Log completion
                                           // console.log(`✅ [MediaProgress] Media ${mediaId} processing complete:`, result.processingStatus);
 
@@ -241,14 +249,13 @@ export function useMediaProgress({ messagesQueryKey, mediaIds }: UseMediaProgres
                                                 (prev) => updateAttachmentInCache(prev, mediaId, {
                                                       status: result.processingStatus === 'READY' ? 'completed' : 'failed',
                                                       progress: result.processingStatus === 'READY' ? 100 : 0,
-                                                      thumbnailUrl: result.thumbnailUrl ?? undefined,
+                                                      thumbnailUrl: result.thumbnailUrl ?? result.cdnUrl ?? undefined,
                                                       // Pass cdnUrl so user B can actually display the image.
                                                       cdnUrl: result.cdnUrl,
                                                 }),
                                           );
                                           // Remove from checkedIdsRef so if it re-enters pendingMediaIds
                                           // (shouldn't happen but defensive), polling can restart.
-                                          checkedIdsRef.current.delete(mediaId);
                                           // Terminal state reached — stop polling.
                                     } else if (retries < MAX_RETRIES) {
                                           retries++;
