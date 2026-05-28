@@ -34,6 +34,7 @@ COPY backend/zalo_media_worker ./backend/zalo_media_worker
 
 # Generate Prisma client and build NestJS app
 WORKDIR /app/backend/zalo_media_worker
+RUN mkdir -p /app/doc/architecture
 RUN npm run prisma:generate && \
     npm run build && \
     npm prune --production
