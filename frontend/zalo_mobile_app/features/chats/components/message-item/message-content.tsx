@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, StyleSheet, useWindowDimensions } from 'react-native';
 import { Text } from 'react-native-paper';
+import RenderHtml from 'react-native-render-html';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslationStore } from '@/hooks/use-translation-store';
@@ -49,6 +50,8 @@ export function MessageContent({
     clearTranslations
   } = useTranslationStore();
 
+  const { width } = useWindowDimensions();
+
   const msgId = String(message.id);
   const recalled = Boolean(
     message.metadata &&
@@ -64,6 +67,12 @@ export function MessageContent({
   const attachments = message.mediaAttachments || [];
   const firstUrl = extractFirstUrl(message.content || '');
   const namecard = parseNamecardFromContent(message.content || '');
+
+  const isHtml = /<[a-z][\s\S]*>/i.test(message.content || '');
+  const stripHtml = (html: string) => {
+    return isHtml ? html.replace(/<[^>]*>?/gm, '') : html;
+  };
+  const textContent = message.content ? stripHtml(message.content) : '';
 
   const isPendingNonText = attachments.length === 0 && !message.parentMessage && !message.replyTo && message.type !== MessageType.TEXT;
 
@@ -188,9 +197,25 @@ export function MessageContent({
 
       {/* Text caption or body */}
       {!!message.content && !namecard && (
-        <Text style={[styles.messageText, (attachments.length > 0 || message.parentMessage || message.replyTo || Object.keys(translations).length > 0 || firstUrl) && { marginBottom: 4 }]}>
-          {message.content}
-        </Text>
+        <View style={[(attachments.length > 0 || message.parentMessage || message.replyTo || Object.keys(translations).length > 0 || firstUrl) && { marginBottom: 4 }]}>
+          {isHtml ? (
+            <RenderHtml
+              contentWidth={width * 0.7}
+              source={{ html: message.content }}
+              tagsStyles={{
+                p: { margin: 0, padding: 0 },
+                s: { textDecorationLine: 'line-through' },
+                u: { textDecorationLine: 'underline' }
+              }}
+              baseStyle={{ fontSize: 15, color: isMe ? '#111827' : '#111827' }}
+              enableExperimentalMarginCollapsing={true}
+            />
+          ) : (
+            <Text style={styles.messageText}>
+              {textContent}
+            </Text>
+          )}
+        </View>
       )}
       {firstUrl && !namecard && <MessageLinkPreview url={firstUrl} theme={theme} />}
 

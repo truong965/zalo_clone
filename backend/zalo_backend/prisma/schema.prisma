@@ -95,6 +95,7 @@ enum MessageType {
   SYSTEM // notification
   AUDIO
   VOICE
+  POLL // group poll card
 
   @@map("message_type")
 }
@@ -257,6 +258,11 @@ enum EventType {
   // Reminder Domain
   REMINDER_CREATED
   REMINDER_TRIGGERED
+
+  // Poll Domain
+  POLL_CREATED
+  POLL_VOTE_CHANGED
+  POLL_CLOSED
 
   // Conversation Preference Domain
   CONVERSATION_ARCHIVED
@@ -696,6 +702,7 @@ model Conversation {
   // [DECOUPLED - Phase 2.2]: Remove physical relation to CallHistory
   // calls        CallHistory[]      @relation("CallsInConversation")
   reminders    Reminder[]
+  polls        Poll[]
 
   @@index([lastMessageAt(sort: Desc)])
   @@map("conversations")
@@ -833,6 +840,7 @@ model Message {
   // [DECOUPLED - Phase 2.1]: Remove physical relation to MediaAttachment
   // mediaAttachments MediaAttachment[]
   reminders        Reminder[]
+  poll             Poll?
 
   @@index([conversationId, createdAt(sort: Desc)])
   @@index([senderId, createdAt(sort: Desc)])
@@ -1141,6 +1149,75 @@ model Reminder {
   @@index([isTriggered, isCompleted, remindAt(sort: Asc)], map: "idx_reminder_pending_poll")
   @@index([userId, isCompleted, remindAt])
   @@map("reminders")
+}
+
+// ============================================================================
+// 17b. GROUP POLL MODULE
+// ============================================================================
+
+/**
+ * Model: Poll
+ * Group-only interactive poll linked 1:1 to a POLL message.
+ */
+model Poll {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId    String    @map("conversation_id") @db.Uuid
+  messageId         BigInt    @unique @map("message_id")
+  creatorId         String    @map("creator_id") @db.Uuid
+
+  question          String    @db.VarChar(500)
+  isMultipleChoices Boolean   @default(false) @map("is_multiple_choices")
+  allowAddOptions   Boolean   @default(false) @map("allow_add_options")
+  isClosed          Boolean   @default(false) @map("is_closed")
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz
+  closedById        String?   @map("closed_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  options      PollOption[]
+  votes        PollVote[]
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@map("polls")
+}
+
+/**
+ * Model: PollOption
+ * A selectable answer for a poll.
+ */
+model PollOption {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pollId      String  @map("poll_id") @db.Uuid
+  text        String  @db.VarChar(200)
+  sortOrder   Int     @default(0) @map("sort_order")
+  createdById String? @map("created_by") @db.Uuid
+
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@index([pollId, sortOrder])
+  @@map("poll_options")
+}
+
+/**
+ * Model: PollVote
+ * One row per user per option. Toggle = delete row.
+ */
+model PollVote {
+  pollId    String   @map("poll_id") @db.Uuid
+  optionId  String   @map("option_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, optionId, userId])
+  @@index([pollId, userId])
+  @@map("poll_votes")
 }
 
 // ============================================================================

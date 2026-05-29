@@ -285,7 +285,27 @@
       "errorHasFiles": "Vui lòng thử lại hoặc xóa các file lỗi trước khi gửi",
       "errorNoSuccess": "Không có file nào upload thành công",
       "errorEmpty": "Không có nội dung hoặc file hợp lệ để gửi",
-      "errorUploadAll": "Upload thất bại. Vui lòng thử lại các file lỗi."
+      "errorUploadAll": "Upload thất bại. Vui lòng thử lại các file lỗi.",
+      "formattingToggle": "Định dạng văn bản",
+      "formattingPlaceholder": "Định dạng tin nhắn"
+    },
+    "formatting": {
+      "bold": "In đậm (Ctrl + B)",
+      "italic": "In nghiêng (Ctrl + I)",
+      "underline": "Gạch chân (Ctrl + U)",
+      "strikethrough": "Gạch ngang",
+      "textColor": "Màu chữ",
+      "fontSize": "Cỡ chữ",
+      "fontSizeLarge": "Lớn",
+      "fontSizeMedium": "Trung bình",
+      "fontSizeSmall": "Nhỏ",
+      "clearFormat": "Xóa định dạng",
+      "bulletList": "Danh sách dấu chấm",
+      "orderedList": "Danh sách đánh số",
+      "indent": "Lùi đầu dòng danh sách con (Tab)",
+      "outdent": "Bỏ lùi đầu dòng (Shift + Tab)",
+      "undo": "Hoàn tác (Ctrl + Z)",
+      "redo": "Khôi phục hoàn tác (Ctrl + Y)"
     },
     "messageList": {
       "today": "Hôm nay",
@@ -866,6 +886,45 @@
       "deleteConfirmTitle": "Xóa nhắc hẹn này?",
       "deleteConfirmOk": "Xóa",
       "deleteConfirmCancel": "Hủy"
+    }
+  },
+  "poll": {
+    "loading": "Đang tải bình chọn...",
+    "singleChoice": "Chọn một phương án",
+    "multipleChoice": "Chọn nhiều phương án",
+    "closed": "Đã kết thúc",
+    "voters": "{{count}} người đã bình chọn",
+    "viewDetail": "Xem chi tiết",
+    "vote": "Bình chọn",
+    "addOption": "+ Thêm phương án",
+    "closePoll": "Kết thúc bình chọn",
+    "errorVote": "Không thể gửi bình chọn",
+    "errorUnvote": "Không thể bỏ chọn",
+    "errorAddOption": "Không thể thêm phương án",
+    "errorClose": "Không thể kết thúc bình chọn",
+    "detailTitle": "Chi tiết bình chọn",
+    "noVoters": "Chưa có phiếu",
+    "addOptionModal": {
+      "title": "Thêm phương án mới",
+      "placeholder": "Nhập phương án...",
+      "cancel": "Hủy",
+      "confirm": "Thêm"
+    },
+    "create": {
+      "title": "Tạo bình chọn",
+      "questionLabel": "Câu hỏi",
+      "questionPlaceholder": "Nhập câu hỏi",
+      "optionsLabel": "Phương án",
+      "optionPlaceholder": "Phương án {{index}}",
+      "addOption": "Thêm phương án",
+      "multipleChoices": "Chọn nhiều phương án",
+      "allowAddOptions": "Có thể thêm phương án mới",
+      "cancel": "Hủy",
+      "submit": "Tạo",
+      "maxOptions": "Tối đa {{max}} phương án",
+      "errorNoQuestion": "Vui lòng nhập câu hỏi",
+      "errorMinOptions": "Cần ít nhất {{min}} phương án",
+      "success": "Đã tạo bình chọn"
     }
   }
 }

@@ -431,4 +431,9 @@ erDiagram
     "reminders" }o--|| users : "user"
     "reminders" }o--|o conversations : "conversation"
     "reminders" }o--|o messages : "message"
+    "polls" }o--|| conversations : "conversation"
+    "polls" |o--|| messages : "message"
+    "poll_options" }o--|| polls : "poll"
+    "poll_votes" }o--|| polls : "poll"
+    "poll_votes" }o--|| poll_options : "option"
 ```

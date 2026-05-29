@@ -285,7 +285,27 @@
       "errorHasFiles": "Please try again or remove failed files before sending",
       "errorNoSuccess": "No files were uploaded successfully",
       "errorEmpty": "No valid content or files to send",
-      "errorUploadAll": "Upload failed. Please try the failed files again."
+      "errorUploadAll": "Upload failed. Please try the failed files again.",
+      "formattingToggle": "Message Formatting",
+      "formattingPlaceholder": "Format message"
+    },
+    "formatting": {
+      "bold": "Bold (Ctrl + B)",
+      "italic": "Italic (Ctrl + I)",
+      "underline": "Underline (Ctrl + U)",
+      "strikethrough": "Strikethrough",
+      "textColor": "Text color",
+      "fontSize": "Font size",
+      "fontSizeLarge": "Large",
+      "fontSizeMedium": "Medium",
+      "fontSizeSmall": "Small",
+      "clearFormat": "Clear formatting",
+      "bulletList": "Bullet list",
+      "orderedList": "Numbered list",
+      "indent": "Indent sub-list (Tab)",
+      "outdent": "Outdent (Shift + Tab)",
+      "undo": "Undo (Ctrl + Z)",
+      "redo": "Redo (Ctrl + Y)"
     },
     "messageList": {
       "today": "Today",
@@ -851,6 +871,45 @@
       "deleteConfirmTitle": "Delete this reminder?",
       "deleteConfirmOk": "Delete",
       "deleteConfirmCancel": "Cancel"
+    }
+  },
+  "poll": {
+    "loading": "Loading poll...",
+    "singleChoice": "Choose one option",
+    "multipleChoice": "Choose multiple options",
+    "closed": "Ended",
+    "voters": "{{count}} voted",
+    "viewDetail": "View details",
+    "vote": "Vote",
+    "addOption": "+ Add option",
+    "closePoll": "End poll",
+    "errorVote": "Could not submit vote",
+    "errorUnvote": "Could not remove vote",
+    "errorAddOption": "Could not add option",
+    "errorClose": "Could not end poll",
+    "detailTitle": "Poll details",
+    "noVoters": "No votes yet",
+    "addOptionModal": {
+      "title": "Add new option",
+      "placeholder": "Enter option...",
+      "cancel": "Cancel",
+      "confirm": "Add"
+    },
+    "create": {
+      "title": "Create Poll",
+      "questionLabel": "Question",
+      "questionPlaceholder": "Enter question",
+      "optionsLabel": "Options",
+      "optionPlaceholder": "Option {{index}}",
+      "addOption": "Add option",
+      "multipleChoices": "Multiple choices",
+      "allowAddOptions": "Allow adding new options",
+      "cancel": "Cancel",
+      "submit": "Create",
+      "maxOptions": "Maximum {{max}} options",
+      "errorNoQuestion": "Please enter a question",
+      "errorMinOptions": "Need at least {{min}} options",
+      "success": "Poll created"
     }
   }
 }

@@ -99,7 +99,11 @@ export function getMessagePreviewText(
   
   // 1. Prioritize text content (caption or text message)
   if (msg.content && msg.content.trim().length > 0) {
-    return msg.content;
+    const rawContent = msg.content;
+    if (/<[a-z][\s\S]*>/i.test(rawContent)) {
+      return rawContent.replace(/<[^>]*>?/gm, '');
+    }
+    return rawContent;
   }
   
   // 2. Fallback to media attachments label

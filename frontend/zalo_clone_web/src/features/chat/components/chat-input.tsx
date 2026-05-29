@@ -22,6 +22,8 @@ import {
       EnvironmentOutlined,
       IdcardOutlined,
       ThunderboltOutlined,
+      FontSizeOutlined,
+      BarChartOutlined,
 } from '@ant-design/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import EmojiPicker, { type EmojiClickData, Theme } from 'emoji-picker-react';
@@ -31,6 +33,14 @@ import { batchFilesByType } from '../utils/batch-files';
 import type { MessageType } from '@/types/api';
 import { useTranslation } from 'react-i18next';
 import { useFriendsList } from '@/features/contacts';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Color from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style';
+import Placeholder from '@tiptap/extension-placeholder';
+import { ChatFormattingToolbar } from './chat-formatting-toolbar';
+import { FontSize } from '../utils/tiptap-font-size';
 
 const { TextArea } = Input;
 
@@ -83,13 +93,23 @@ interface ChatInputProps {
       onTypingChange?: (isTyping: boolean) => void;
       /** Called when user clicks the reminder toolbar button */
       onSetReminder?: () => void;
+      /** Group chat only — open create poll modal */
+      isGroup?: boolean;
+      onCreatePoll?: () => void;
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
-export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminder }: ChatInputProps) {
+export function ChatInput({
+      conversationId,
+      onSend,
+      onTypingChange,
+      onSetReminder,
+      isGroup = false,
+      onCreatePoll,
+}: ChatInputProps) {
       const { t } = useTranslation();
       const [message, setMessage] = useState('');
       const [isSending, setIsSending] = useState(false);
@@ -100,6 +120,10 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
       const [quickMessages, setQuickMessages] = useState<QuickMessageMap>(DEFAULT_QUICK_MESSAGES);
       const [quickKeywordInput, setQuickKeywordInput] = useState('/hello');
       const [quickValueInput, setQuickValueInput] = useState(DEFAULT_QUICK_MESSAGES['/hello']);
+      const [showFormattingToolbar, setShowFormattingToolbar] = useState(false);
+
+      const showFormattingToolbarRef = useRef(showFormattingToolbar);
+      const conversationIdRef = useRef(conversationId);
 
       const isTypingRef = useRef(false);
       const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,6 +151,76 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
             search: namecardSearch.trim() || undefined,
             conversationId: conversationId ?? undefined,
       });
+
+      const handleEditorKeyDown = useCallback((view: any, event: KeyboardEvent) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleSend();
+                  return true;
+            }
+            return false;
+      }, []); // handleSend will be bound later via ref if needed, or we just rely on latest closure
+
+      const editor = useEditor({
+            extensions: [
+                  StarterKit,
+                  Underline,
+                  TextStyle,
+                  Color,
+                  FontSize,
+                  Placeholder.configure({
+                        placeholder: () => {
+                              if (showFormattingToolbarRef.current) return t('chat.input.formattingPlaceholder');
+                              return conversationIdRef.current ? t('chat.input.placeholder') : t('chat.input.placeholderEmpty');
+                        },
+                  }),
+            ],
+            content: '',
+            editorProps: {
+                  attributes: {
+                        class: 'prose prose-sm max-w-none focus:outline-none min-h-[40px] max-h-[120px] overflow-y-auto px-1 py-1 text-[15px]',
+                  },
+                  handleKeyDown: (view, event) => {
+                        // 1. Shift + Enter
+                        if (event.key === 'Enter' && event.shiftKey) {
+                              if (editor?.isActive('listItem')) {
+                                    event.preventDefault();
+                                    editor.chain().focus().splitListItem('listItem').run();
+                                    return true;
+                              }
+                              return false; // let TipTap do hard break
+                        }
+
+                        // 2. Enter without Shift
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault();
+                              document.getElementById('hidden-send-btn')?.click();
+                              return true;
+                        }
+
+                        return false;
+                  },
+            },
+            onUpdate: ({ editor }) => {
+                  const html = editor.getHTML();
+                  const text = editor.getText();
+                  setMessage(text.trim() === '' ? '' : html);
+                  emitTypingStart();
+            },
+            onBlur: () => {
+                  emitTypingStop();
+            },
+      });
+
+      useEffect(() => {
+            showFormattingToolbarRef.current = showFormattingToolbar;
+            if (editor) editor.view.dispatch(editor.state.tr);
+      }, [showFormattingToolbar, editor]);
+
+      useEffect(() => {
+            conversationIdRef.current = conversationId;
+            if (editor) editor.view.dispatch(editor.state.tr);
+      }, [conversationId, editor]);
 
       useEffect(() => {
             return () => {
@@ -226,9 +320,10 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
       const handleSend = useCallback(async () => {
             if (!conversationId || !onSend) return;
 
-            const text = message.trim();
-            const mappedText = quickMessages[text.toLowerCase()];
-            const finalText = mappedText || text;
+            const htmlContent = editor ? editor.getHTML() : message;
+            const plainText = editor ? editor.getText().trim() : message.trim();
+            const mappedText = quickMessages[plainText.toLowerCase()];
+            const finalText = mappedText || (plainText === '' ? '' : htmlContent);
             const hasMedia = fileCount > 0;
 
             // js-early-exit: nothing to send
@@ -322,6 +417,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
                   }
 
                   setMessage('');
+                  if (editor) editor.commands.clearContent();
                   clearAll();
             } catch {
                   // Upload errors are shown per-file in FilePreviewPanel.
@@ -343,7 +439,7 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
             return typeof candidate === 'string' ? candidate.trim() : '';
       }, []);
 
-      const trimmedInput = message.trim();
+      const trimmedInput = editor ? editor.getText().trim() : message.trim();
       const quickMessageHints = useMemo(() => {
             if (!trimmedInput.startsWith('/')) return [];
             const searchTerm = trimmedInput.slice(1).trim();
@@ -417,307 +513,316 @@ export function ChatInput({ conversationId, onSend, onTypingChange, onSetReminde
 
       return (
             <>
-            <div className="bg-white border-t border-gray-200">
-                  {/* Hidden file inputs */}
-                  <input
-                        ref={imageVideoInputRef}
-                        type="file"
-                        multiple
-                        accept={IMAGE_VIDEO_ACCEPT}
-                        className="hidden"
-                        onChange={handleFileSelected}
-                  />
-                  <input
-                        ref={docAudioInputRef}
-                        type="file"
-                        multiple
-                        accept={DOC_AUDIO_ACCEPT}
-                        className="hidden"
-                        onChange={handleFileSelected}
-                  />
-
-                  {/* FILE PREVIEW PANEL (above toolbar, conditional) */}
-                  {showPreviewPanel ? (
-                        <FilePreviewPanel
-                              files={pendingFiles}
-                              onRemove={removeFile}
-                              onRetry={retryFile}
-                              disabled={isUploading || isSending}
+                  <div className="bg-white border-t border-gray-200">
+                        {/* Hidden file inputs */}
+                        <input
+                              ref={imageVideoInputRef}
+                              type="file"
+                              multiple
+                              accept={IMAGE_VIDEO_ACCEPT}
+                              className="hidden"
+                              onChange={handleFileSelected}
                         />
-                  ) : null}
+                        <input
+                              ref={docAudioInputRef}
+                              type="file"
+                              multiple
+                              accept={DOC_AUDIO_ACCEPT}
+                              className="hidden"
+                              onChange={handleFileSelected}
+                        />
 
-                  {/* 1. TOOLBAR */}
-                  <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-50">
-                        {/* <Tooltip title="Gửi Sticker" placement="top">
-                              <Button
-                                    type="text"
-                                    icon={<SmileOutlined />}
-                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
-                                    size="middle"
-                                    disabled={isDisabled}
+                        {/* FILE PREVIEW PANEL (above toolbar, conditional) */}
+                        {showPreviewPanel ? (
+                              <FilePreviewPanel
+                                    files={pendingFiles}
+                                    onRemove={removeFile}
+                                    onRetry={retryFile}
+                                    disabled={isUploading || isSending}
                               />
-                        </Tooltip> */}
+                        ) : null}
 
-                        <Tooltip title={t('chat.input.sendImageVideo')} placement="top">
-                              <Button
-                                    type="text"
-                                    icon={<PictureOutlined />}
-                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
-                                    size="middle"
-                                    disabled={isDisabled || isUploading}
-                                    onClick={openImageVideoPicker}
-                              />
-                        </Tooltip>
+                        {/* 1. TOOLBAR */}
+                        <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-50">
+                              <Tooltip title={t('chat.input.sendImageVideo')} placement="top">
+                                    <Button
+                                          type="text"
+                                          icon={<PictureOutlined />}
+                                          className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                          size="middle"
+                                          disabled={isDisabled || isUploading}
+                                          onClick={openImageVideoPicker}
+                                    />
+                              </Tooltip>
 
-                        <Tooltip title={t('chat.input.attachFile')} placement="top">
-                              <Button
-                                    type="text"
-                                    icon={<PaperClipOutlined />}
-                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
-                                    size="middle"
-                                    disabled={isDisabled || isUploading}
-                                    onClick={openDocAudioPicker}
-                              />
-                        </Tooltip>
+                              <Tooltip title={t('chat.input.attachFile')} placement="top">
+                                    <Button
+                                          type="text"
+                                          icon={<PaperClipOutlined />}
+                                          className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                          size="middle"
+                                          disabled={isDisabled || isUploading}
+                                          onClick={openDocAudioPicker}
+                                    />
+                              </Tooltip>
 
-                        <Tooltip title={t('chat.input.setReminder')} placement="top">
-                              <Button
-                                    type="text"
-                                    icon={<ClockCircleOutlined />}
-                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
-                                    size="middle"
-                                    disabled={isDisabled}
-                                    onClick={onSetReminder}
-                              />
-                        </Tooltip>
+                              <Tooltip title={t('chat.input.setReminder')} placement="top">
+                                    <Button
+                                          type="text"
+                                          icon={<ClockCircleOutlined />}
+                                          className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                          size="middle"
+                                          disabled={isDisabled}
+                                          onClick={onSetReminder}
+                                    />
+                              </Tooltip>
 
-                        <Tooltip title="Namecard" placement="top">
-                              <Button
-                                    type="text"
-                                    icon={<IdcardOutlined />}
-                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
-                                    size="middle"
-                                    disabled={isDisabled || isUploading || isSending}
-                                    onClick={() => setShowNamecardModal(true)}
-                              />
-                        </Tooltip>
-
-                        <Tooltip title="Quick message" placement="top">
-                              <Button
-                                    type="text"
-                                    icon={<ThunderboltOutlined />}
-                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
-                                    size="middle"
-                                    disabled={isDisabled || isUploading || isSending}
-                                    onClick={() => setShowQuickMessageModal(true)}
-                              />
-                        </Tooltip>
-
-                        <Tooltip title="Vị trí hiện tại" placement="top">
-                              <Button
-                                    type="text"
-                                    icon={<EnvironmentOutlined />}
-                                    className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
-                                    size="middle"
-                                    disabled={isDisabled || isUploading || isSending}
-                                    onClick={handleShareCurrentLocation}
-                              />
-                        </Tooltip>
-                  </div>
-
-                  {/* 2. INPUT AREA */}
-                  <div className="p-3 flex items-end gap-2">
-                        {/* Text Area */}
-                        <div className="flex-1 relative">
-                              <TextArea
-                                    value={message}
-                                    onChange={(e) => {
-                                          setMessage(e.target.value);
-                                          emitTypingStart();
-                                    }}
-                                    placeholder={conversationId ? t('chat.input.placeholder') : t('chat.input.placeholderEmpty')}
-                                    autoSize={{ minRows: 1, maxRows: 5 }}
-                                    className="!bg-transparent !resize-none pr-8 text-[15px]"
-                                    variant="borderless"
-                                    disabled={isDisabled}
-                                    onBlur={emitTypingStop}
-                                    onPressEnter={(e) => {
-                                          if (!e.shiftKey) {
-                                                e.preventDefault();
-                                                void handleSend();
-                                          }
-                                    }}
-                              />
-                        </div>
-
-                        {/* Action Buttons Right Side */}
-                        <div className="flex items-center gap-2 pb-1">
-                              {/* Biểu cảm */}
-                              <div className="relative">
-                                    <Tooltip title={t('chat.input.emoji')} open={showEmojiPicker ? false : undefined}>
+                              {isGroup && onCreatePoll ? (
+                                    <Tooltip title={t('poll.create.title')} placement="top">
                                           <Button
-                                                ref={emojiButtonRef}
                                                 type="text"
-                                                icon={
-                                                      <SmileOutlined
-                                                            className={`text-xl transition-colors ${showEmojiPicker ? 'text-yellow-500' : 'text-gray-500'
-                                                                  }`}
-                                                      />
-                                                }
-                                                className="hover:bg-gray-100 hover:text-yellow-500 rounded-full w-8 h-8 flex items-center justify-center"
+                                                icon={<BarChartOutlined />}
+                                                className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                                size="middle"
                                                 disabled={isDisabled}
-                                                onClick={() => setShowEmojiPicker((prev) => !prev)}
+                                                onClick={onCreatePoll}
                                           />
                                     </Tooltip>
+                              ) : null}
 
-                                    {showEmojiPicker && (
-                                          <div
-                                                ref={emojiPickerRef}
-                                                className="absolute bottom-10 right-0 z-50 shadow-xl rounded-xl overflow-hidden"
-                                          >
-                                                <EmojiPicker
-                                                      onEmojiClick={(emojiData: EmojiClickData) => {
-                                                            setMessage((prev) => prev + emojiData.emoji);
-                                                      }}
-                                                      theme={Theme.LIGHT}
-                                                      lazyLoadEmojis
-                                                      searchPlaceHolder="Tìm emoji..."
-                                                      width={320}
-                                                      height={400}
-                                                />
-                                          </div>
-                                    )}
-                              </div>
+                              <Tooltip title={t('chat.input.formattingToggle')} placement="top">
+                                    <Button
+                                          type="text"
+                                          icon={<FontSizeOutlined />}
+                                          className={`rounded ${showFormattingToolbar ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'}`}
+                                          size="middle"
+                                          disabled={isDisabled || isUploading || isSending}
+                                          onClick={() => setShowFormattingToolbar((prev) => !prev)}
+                                    />
+                              </Tooltip>
 
-                              {/* Send button */}
-                              <div className="border-l border-gray-200 pl-2">
-                                    <Tooltip title={fileCount > 0 ? t('chat.input.uploadSend') : t('chat.input.send')}>
-                                          <Button
-                                                type="text"
-                                                disabled={!canSend}
-                                                icon={
-                                                      isSending || isUploading ? (
-                                                            <LoadingOutlined className="text-xl text-blue-500" />
-                                                      ) : (
-                                                            <SendOutlined
-                                                                  className={`text-xl ${canSend ? 'text-blue-600' : 'text-gray-400'}`}
-                                                                  rotate={-45}
+                              <Tooltip title={t('chat.input.namecard')} placement="top">
+                                    <Button
+                                          type="text"
+                                          icon={<IdcardOutlined />}
+                                          className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                          size="middle"
+                                          disabled={isDisabled || isUploading || isSending}
+                                          onClick={() => setShowNamecardModal(true)}
+                                    />
+                              </Tooltip>
+
+                              <Tooltip title={t('chat.input.quickMessage')} placement="top">
+                                    <Button
+                                          type="text"
+                                          icon={<ThunderboltOutlined />}
+                                          className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                          size="middle"
+                                          disabled={isDisabled || isUploading || isSending}
+                                          onClick={() => setShowQuickMessageModal(true)}
+                                    />
+                              </Tooltip>
+
+                              <Tooltip title={t('chat.input.shareLocation')} placement="top">
+                                    <Button
+                                          type="text"
+                                          icon={<EnvironmentOutlined />}
+                                          className="text-gray-600 hover:bg-gray-100 hover:text-blue-600 rounded"
+                                          size="middle"
+                                          disabled={isDisabled || isUploading || isSending}
+                                          onClick={handleShareCurrentLocation}
+                                    />
+                              </Tooltip>
+                        </div>
+
+                        {/* 2. INPUT AREA */}
+                        <div className="flex flex-col">
+                              {showFormattingToolbar && <ChatFormattingToolbar editor={editor} />}
+                              <div className="p-3 flex items-end gap-2">
+                                    {/* Editor Area */}
+                                    <div className="flex-1 relative">
+                                          <EditorContent editor={editor} disabled={isDisabled} />
+                                    </div>
+
+                                    {/* Action Buttons Right Side */}
+                                    <div className="flex items-center gap-2 pb-1">
+                                          {/* Biểu cảm */}
+                                          <div className="relative">
+                                                <Tooltip title={t('chat.input.emoji')} open={showEmojiPicker ? false : undefined}>
+                                                      <Button
+                                                            ref={emojiButtonRef}
+                                                            type="text"
+                                                            icon={
+                                                                  <SmileOutlined
+                                                                        className={`text-xl transition-colors ${showEmojiPicker ? 'text-yellow-500' : 'text-gray-500'
+                                                                              }`}
+                                                                  />
+                                                            }
+                                                            className="hover:bg-gray-100 hover:text-yellow-500 rounded-full w-8 h-8 flex items-center justify-center"
+                                                            disabled={isDisabled}
+                                                            onClick={() => setShowEmojiPicker((prev) => !prev)}
+                                                      />
+                                                </Tooltip>
+
+                                                {showEmojiPicker && (
+                                                      <div
+                                                            ref={emojiPickerRef}
+                                                            className="absolute bottom-10 right-0 z-50 shadow-xl rounded-xl overflow-hidden"
+                                                      >
+                                                            <EmojiPicker
+                                                                  onEmojiClick={(emojiData: EmojiClickData) => {
+                                                                        if (editor) {
+                                                                              editor.commands.insertContent(emojiData.emoji);
+                                                                        } else {
+                                                                              setMessage((prev) => prev + emojiData.emoji);
+                                                                        }
+                                                                  }}
+                                                                  theme={Theme.LIGHT}
+                                                                  lazyLoadEmojis
+                                                                  searchPlaceHolder="Tìm emoji..."
+                                                                  width={320}
+                                                                  height={400}
                                                             />
-                                                      )
-                                                }
-                                                className="hover:bg-blue-50 w-10 h-10 flex items-center justify-center rounded-lg"
-                                                onClick={() => void handleSend()}
-                                          />
-                                    </Tooltip>
-                              </div>
-                        </div>
-                  </div>
-                  {quickMessageHints.length > 0 && (
-                        <div className="px-3 pb-2">
-                              <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                                    {quickMessageHints.map(([keyword, value], index) => (
-                                          <button
-                                                key={keyword}
-                                                type="button"
-                                                className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${index < quickMessageHints.length - 1 ? 'border-b border-gray-200' : ''}`}
-                                                onClick={() => {
-                                                      setMessage(value);
-                                                      setQuickKeywordInput(keyword);
-                                                      setQuickValueInput(value);
-                                                }}
-                                          >
-                                                <div className="text-xs font-semibold text-blue-600">{keyword}</div>
-                                                <div className="text-sm text-gray-800 truncate">{value}</div>
-                                          </button>
-                                    ))}
-                              </div>
-                        </div>
-                  )}
-            </div>
-            <Modal
-                  title="Chọn bạn để gửi namecard"
-                  open={showNamecardModal}
-                  onCancel={() => {
-                        setShowNamecardModal(false);
-                        setNamecardSearch('');
-                  }}
-                  footer={null}
-            >
-                  <Input
-                        value={namecardSearch}
-                        onChange={(e) => setNamecardSearch(e.target.value)}
-                        placeholder="Tìm bạn bè..."
-                        className="mb-3"
-                  />
-                  <div className="max-h-[360px] overflow-y-auto">
-                        {namecardFriends.map((friend: any) => {
-                              const displayName = friend?.resolvedDisplayName || friend?.displayName || 'Người dùng';
-                              const phone = getFriendPhoneNumber(friend);
-                              return (
-                                    <button
-                                          key={friend.friendshipId}
-                                          type="button"
-                                          onClick={() => handleSendNamecard(friend)}
-                                          className="w-full text-left px-2 py-2 rounded-lg hover:bg-gray-50 border-b border-gray-100"
-                                    >
-                                          <div className="text-sm font-medium text-gray-900">{displayName}</div>
-                                          <div className="text-xs text-gray-500">{phone || friend.userId}</div>
-                                    </button>
-                              );
-                        })}
-                        {namecardFriends.length === 0 && (
-                              <div className="text-center text-sm text-gray-500 py-6">Không có dữ liệu bạn bè</div>
-                        )}
-                  </div>
-            </Modal>
+                                                      </div>
+                                                )}
+                                          </div>
 
-            <Modal
-                  title="Cài đặt quick message"
-                  open={showQuickMessageModal}
-                  onCancel={() => setShowQuickMessageModal(false)}
-                  footer={null}
-            >
-                  <p className="text-xs text-gray-500 mb-2">
-                        Khi nhập đúng /keyword và gửi, nội dung sẽ tự thay bằng quick message tương ứng.
-                  </p>
-                  <Input
-                        value={quickKeywordInput}
-                        onChange={(e) => setQuickKeywordInput(e.target.value)}
-                        placeholder="/hello"
-                        className="mb-2"
-                  />
-                  <Input
-                        value={quickValueInput}
-                        onChange={(e) => setQuickValueInput(e.target.value)}
-                        placeholder="Nội dung quick message"
-                        className="mb-3"
-                  />
-                  <Button type="primary" block className="mb-3" onClick={handleSaveQuickMessage}>
-                        Lưu quick message
-                  </Button>
-                  <div className="max-h-[320px] overflow-y-auto border rounded-lg">
-                        {Object.entries(quickMessages).map(([keyword, value]) => (
-                              <div key={keyword} className="px-3 py-2 border-b last:border-b-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                          <button
-                                                type="button"
-                                                className="text-left flex-1"
-                                                onClick={() => {
-                                                      setQuickKeywordInput(keyword);
-                                                      setQuickValueInput(value);
-                                                }}
-                                          >
-                                                <div className="text-xs font-semibold text-blue-600">{keyword}</div>
-                                                <div className="text-sm text-gray-800">{value}</div>
-                                          </button>
-                                          <Button danger type="text" size="small" onClick={() => handleDeleteQuickMessage(keyword)}>
-                                                Xóa
-                                          </Button>
+                                          {/* Send button */}
+                                          <div className="border-l border-gray-200 pl-2">
+                                                <button id="hidden-send-btn" className="hidden" onClick={() => void handleSend()} />
+                                                <Tooltip title={fileCount > 0 ? t('chat.input.uploadSend') : t('chat.input.send')}>
+                                                      <Button
+                                                            type="text"
+                                                            disabled={!canSend}
+                                                            icon={
+                                                                  isSending || isUploading ? (
+                                                                        <LoadingOutlined className="text-xl text-blue-500" />
+                                                                  ) : (
+                                                                        <SendOutlined
+                                                                              className={`text-xl ${canSend ? 'text-blue-600' : 'text-gray-400'}`}
+                                                                              rotate={-45}
+                                                                        />
+                                                                  )
+                                                            }
+                                                            className="hover:bg-blue-50 w-10 h-10 flex items-center justify-center rounded-lg"
+                                                            onClick={() => void handleSend()}
+                                                      />
+                                                </Tooltip>
+                                          </div>
                                     </div>
                               </div>
-                        ))}
+                              {quickMessageHints.length > 0 && (
+                                    <div className="px-3 pb-2">
+                                          <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                                                {quickMessageHints.map(([keyword, value], index) => (
+                                                      <button
+                                                            key={keyword}
+                                                            type="button"
+                                                            className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${index < quickMessageHints.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                                            onClick={() => {
+                                                                  if (editor) {
+                                                                        editor.commands.setContent(value);
+                                                                        editor.commands.focus('end');
+                                                                  } else {
+                                                                        setMessage(value);
+                                                                  }
+                                                                  setQuickKeywordInput(keyword);
+                                                                  setQuickValueInput(value);
+                                                            }}
+                                                      >
+                                                            <div className="text-xs font-semibold text-blue-600">{keyword}</div>
+                                                            <div className="text-sm text-gray-800 truncate">{value}</div>
+                                                      </button>
+                                                ))}
+                                          </div>
+                                    </div>
+                              )}
+                        </div>
+                        <Modal
+                              title="Chọn bạn để gửi namecard"
+                              open={showNamecardModal}
+                              onCancel={() => {
+                                    setShowNamecardModal(false);
+                                    setNamecardSearch('');
+                              }}
+                              footer={null}
+                        >
+                              <Input
+                                    value={namecardSearch}
+                                    onChange={(e) => setNamecardSearch(e.target.value)}
+                                    placeholder="Tìm bạn bè..."
+                                    className="mb-3"
+                              />
+                              <div className="max-h-[360px] overflow-y-auto">
+                                    {namecardFriends.map((friend: any) => {
+                                          const displayName = friend?.resolvedDisplayName || friend?.displayName || 'Người dùng';
+                                          const phone = getFriendPhoneNumber(friend);
+                                          return (
+                                                <button
+                                                      key={friend.friendshipId}
+                                                      type="button"
+                                                      onClick={() => handleSendNamecard(friend)}
+                                                      className="w-full text-left px-2 py-2 rounded-lg hover:bg-gray-50 border-b border-gray-100"
+                                                >
+                                                      <div className="text-sm font-medium text-gray-900">{displayName}</div>
+                                                      <div className="text-xs text-gray-500">{phone || friend.userId}</div>
+                                                </button>
+                                          );
+                                    })}
+                                    {namecardFriends.length === 0 && (
+                                          <div className="text-center text-sm text-gray-500 py-6">Không có dữ liệu bạn bè</div>
+                                    )}
+                              </div>
+                        </Modal>
+
+                        <Modal
+                              title="Cài đặt quick message"
+                              open={showQuickMessageModal}
+                              onCancel={() => setShowQuickMessageModal(false)}
+                              footer={null}
+                        >
+                              <p className="text-xs text-gray-500 mb-2">
+                                    Khi nhập đúng /keyword và gửi, nội dung sẽ tự thay bằng quick message tương ứng.
+                              </p>
+                              <Input
+                                    value={quickKeywordInput}
+                                    onChange={(e) => setQuickKeywordInput(e.target.value)}
+                                    placeholder="/hello"
+                                    className="mb-2"
+                              />
+                              <Input
+                                    value={quickValueInput}
+                                    onChange={(e) => setQuickValueInput(e.target.value)}
+                                    placeholder="Nội dung quick message"
+                                    className="mb-3"
+                              />
+                              <Button type="primary" block className="mb-3" onClick={handleSaveQuickMessage}>
+                                    Lưu quick message
+                              </Button>
+                              <div className="max-h-[320px] overflow-y-auto border rounded-lg">
+                                    {Object.entries(quickMessages).map(([keyword, value]) => (
+                                          <div key={keyword} className="px-3 py-2 border-b last:border-b-0">
+                                                <div className="flex items-start justify-between gap-2">
+                                                      <button
+                                                            type="button"
+                                                            className="text-left flex-1"
+                                                            onClick={() => {
+                                                                  setQuickKeywordInput(keyword);
+                                                                  setQuickValueInput(value);
+                                                            }}
+                                                      >
+                                                            <div className="text-xs font-semibold text-blue-600">{keyword}</div>
+                                                            <div className="text-sm text-gray-800">{value}</div>
+                                                      </button>
+                                                      <Button danger type="text" size="small" onClick={() => handleDeleteQuickMessage(keyword)}>
+                                                            Xóa
+                                                      </Button>
+                                                </div>
+                                          </div>
+                                    ))}
+                              </div>
+                        </Modal>
                   </div>
-            </Modal>
             </>
       );
 }

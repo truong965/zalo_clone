@@ -14,6 +14,8 @@ import { useChatStore } from '../stores/chat.store';
 import { useForwardMessageStore } from '../stores/forward-message.store';
 import { API_ENDPOINTS } from '@/constants/api-endpoints';
 import { MediaPreviewModal } from './media-preview-modal';
+import { PollMessageCard } from '@/features/poll';
+import type { PollDetail } from '@/types/api';
 
 interface MessageListProps {
       messages: ChatMessage[];
@@ -46,6 +48,7 @@ interface MessageListProps {
       onRecallMessage?: (msg: ChatMessage) => void;
       /** Called when user clicks "Xóa ở phía bạn" */
       onDeleteForMeMessage?: (msg: ChatMessage) => void;
+      onPollUpdated?: (messageId: string, poll: PollDetail) => void;
 
 }
 
@@ -286,6 +289,7 @@ export function MessageList({
       onUnpinMessage,
       onRecallMessage,
       onDeleteForMeMessage,
+      onPollUpdated,
 }: MessageListProps) {
       const { t } = useTranslation();
       const {
@@ -352,7 +356,13 @@ export function MessageList({
 
                   return (
                         <div className="space-y-2">
-                              {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
+                              {msg.content && (
+                                    /<[a-z][\s\S]*>/i.test(msg.content) ? (
+                                          <div className="ProseMirror whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.content }} />
+                                    ) : (
+                                          <div className="whitespace-pre-wrap">{msg.content}</div>
+                                    )
+                              )}
 
                               {/* Image grid
                                    - 1 image  : natural size (no forced h-32 / full-width)
@@ -422,7 +432,11 @@ export function MessageList({
                   );
             }
 
-            return <div className="whitespace-pre-wrap">{msg.content ?? ''}</div>;
+            const content = msg.content ?? '';
+            if (/<[a-z][\s\S]*>/i.test(content)) {
+                  return <div className="ProseMirror whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: content }} />;
+            }
+            return <div className="whitespace-pre-wrap">{content}</div>;
       }
 
       const handleTranslate = async (msg: ChatMessage, lang: string) => {
@@ -490,6 +504,16 @@ export function MessageList({
                                                 {msg.type === 'SYSTEM' ? (
                                                       <div data-message-id={msg.id}>
                                                             <CallLogEntry msg={msg} t={t} />
+                                                      </div>
+                                                ) : msg.type === 'POLL' ? (
+                                                      <div
+                                                            data-message-id={msg.id}
+                                                            className={`flex group ${msg.senderSide === 'me' ? 'justify-end' : 'justify-start'}`}
+                                                      >
+                                                            <PollMessageCard
+                                                                  msg={msg}
+                                                                  onPollUpdated={onPollUpdated}
+                                                            />
                                                       </div>
                                                 ) : (() => {
                                                       // Build menu config once, shared between contextMenu + hover button

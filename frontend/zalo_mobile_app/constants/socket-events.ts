@@ -138,4 +138,8 @@ export const SocketEvents = {
   // Contacts
   CONTACT_ALIAS_UPDATED: 'contact:aliasUpdated',
   CONTACTS_SYNCED: 'contact:synced',
+
+  // Polls (group only)
+  POLL_VOTE_UPDATED: 'poll:voteUpdated',
+  POLL_CLOSED: 'poll:closed',
 } as const;

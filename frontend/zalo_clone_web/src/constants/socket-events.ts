@@ -185,6 +185,10 @@ export const SocketEvents = {
       /** Server → Client: Reminder list changed */
       REMINDER_UPDATED: 'reminder:updated',
 
+      // === POLL EVENTS ===
+      POLL_VOTE_UPDATED: 'poll:voteUpdated',
+      POLL_CLOSED: 'poll:closed',
+
       // === BLOCK EVENTS ===
       USER_BLOCKED: 'user:blocked',
 } as const;

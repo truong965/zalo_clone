@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../types';
+import type { PollDetail } from '@/types/api';
 import { Badge, FloatButton, Button } from 'antd';
 import { DownOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons';
 import { MessageList } from './message-list';
@@ -38,6 +39,7 @@ interface ChatContentProps {
       onRecallMessage?: (msg: ChatMessage) => void;
       /** Called when user clicks "Xóa ở phía bạn" */
       onDeleteForMeMessage?: (msg: ChatMessage) => void;
+      onPollUpdated?: (messageId: string, poll: PollDetail) => void;
 
 }
 
@@ -66,6 +68,7 @@ export function ChatContent({
       onUnpinMessage,
       onRecallMessage,
       onDeleteForMeMessage,
+      onPollUpdated,
 }: ChatContentProps) {
       // Unified bottom indicator:
       // 1. isJumpedAway → "Quay về tin nhắn mới nhất" button
@@ -100,6 +103,7 @@ export function ChatContent({
                         onUnpinMessage={onUnpinMessage}
                         onRecallMessage={onRecallMessage}
                         onDeleteForMeMessage={onDeleteForMeMessage}
+                        onPollUpdated={onPollUpdated}
                   />
                   {showReturnToLatest && (
                         <div className="sticky bottom-4 ml-auto mr-4 w-fit z-10">

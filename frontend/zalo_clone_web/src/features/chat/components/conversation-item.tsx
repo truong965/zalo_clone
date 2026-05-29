@@ -34,7 +34,12 @@ function getLastMessagePreview(data: ConversationUI, t: any): string {
             return t('chat.conversationItem.previewMessage');
       }
 
-      return msg.content ?? '';
+      const rawContent = msg.content ?? '';
+      if (/<[a-z][\s\S]*>/i.test(rawContent)) {
+            const doc = new DOMParser().parseFromString(rawContent, 'text/html');
+            return doc.body.textContent || '';
+      }
+      return rawContent;
 }
 
 export function ConversationItem({ data, isSelected, onClick, onTogglePin, onToggleMute, onToggleArchive }: ConversationItemProps) {

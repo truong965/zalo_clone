@@ -85,6 +85,11 @@ export const InternalEventNames = {
   REMINDER_DELETED: 'reminder.deleted',
   REMINDER_UPDATED: 'reminder.updated',
 
+  // Poll
+  POLL_CREATED: 'poll.created',
+  POLL_VOTE_CHANGED: 'poll.vote.changed',
+  POLL_CLOSED: 'poll.closed',
+
   // AI unified response contract (Phase 0 scaffold)
   AI_RESPONSE_STARTED: 'ai.response.started',
   AI_RESPONSE_PROGRESS: 'ai.response.progress',

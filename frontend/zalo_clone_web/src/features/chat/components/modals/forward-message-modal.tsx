@@ -145,8 +145,16 @@ export function ForwardMessageModal() {
         }
     };
 
+    const stripHtml = (html: string) => {
+        if (/<[a-z][\s\S]*>/i.test(html)) {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            return doc.body.textContent || '';
+        }
+        return html;
+    };
+
     const sourcePreview =
-        sourceMessage?.content?.trim() || (hasMedia ? 'Tệp đính kèm' : 'Tin nhắn');
+        (sourceMessage?.content ? stripHtml(sourceMessage.content).trim() : '') || (hasMedia ? 'Tệp đính kèm' : 'Tin nhắn');
 
     const selCount = selectedConversationIds.length;
 

@@ -6,6 +6,7 @@
 
 import { InfiniteData, QueryClient, QueryKey } from '@tanstack/react-query';
 import { Message } from '@/types/message';
+import type { PollDetail } from '@/types/poll';
 
 // ============================================================================
 // SHARED TYPE ALIASES
@@ -444,5 +445,24 @@ export function applyMessageDeletedForMeToCache(
 
     if (!anyChange) return prev;
     return { ...prev, pages };
+  });
+}
+
+export function applyPollUpdateToCache(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  payload: { messageId: string; poll: PollDetail },
+) {
+  queryClient.setQueryData<MessagesInfiniteData>(queryKey, (prev) => {
+    if (!prev) return prev;
+    return {
+      ...prev,
+      pages: prev.pages.map((page) => ({
+        ...page,
+        data: page.data.map((msg) =>
+          msg.id === payload.messageId ? { ...msg, poll: payload.poll } : msg,
+        ),
+      })),
+    };
   });
 }

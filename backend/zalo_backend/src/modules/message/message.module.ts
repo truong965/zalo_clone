@@ -10,6 +10,7 @@ import { SharedModule } from '@shared/shared.module';
 import { AuthorizationModule } from '@modules/authorization/authorization.module';
 import { SocketModule } from 'src/socket/socket.module';
 import { ConversationModule } from '@modules/conversation/conversation.module';
+import { PollModule } from '@modules/poll/poll.module';
 import { IdempotencyModule } from '@common/idempotency/idempotency.module';
 import s3Config from 'src/config/s3.config';
 
@@ -56,6 +57,7 @@ import { MessageGateway } from './message.gateway';
     AuthorizationModule,
     SocketModule,
     ConversationModule,
+    PollModule,
     IdempotencyModule,
   ],
   controllers: [MessageController],

@@ -41,6 +41,11 @@ import { MediaViewerModal } from '@/features/chats/components/media-viewer-modal
 import { useCallStore } from '@/features/calls/stores/call.store';
 import { ActiveGroupCallBanner } from '@/features/chats/components/ActiveGroupCallBanner';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { PollMessageCard } from '@/features/chats/components/poll/poll-message-card';
+import { CreatePollModal } from '@/features/chats/components/poll/create-poll-modal';
+import { applyPollUpdateToCache } from '@/features/chats/utils/message-cache-helpers';
+import { messagesQueryKey } from '@/features/chats/hooks/use-chat-hooks';
+import type { PollDetail } from '@/types/poll';
 
 const uuidv4 = () =>
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -60,6 +65,7 @@ const ChatMessage = React.memo(
     onRetry, conversationId, isPinned, onPin, onUnpin,
     onRecall, onDeleteForMe,
     onForward,
+    onPollUpdated,
   }: {
     item: Message;
     isMe: boolean;
@@ -81,8 +87,19 @@ const ChatMessage = React.memo(
     onRecall?: (msg: Message) => void;
     onDeleteForMe?: (msg: Message) => void;
     onForward?: (msg: Message) => void;
+    onPollUpdated?: (messageId: string, poll: PollDetail) => void;
   }) => {
     if (item.type === MessageType.SYSTEM) return <SystemMessage message={item} />;
+    if (item.type === MessageType.POLL) {
+      return (
+        <View style={{ flexDirection: 'column' }}>
+          {showSeparator && <MessageSeparator date={item.createdAt} />}
+          <View style={{ paddingHorizontal: 12, paddingVertical: 4, alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+            <PollMessageCard message={item} onPollUpdated={onPollUpdated} />
+          </View>
+        </View>
+      );
+    }
     return (
       <View style={{ flexDirection: 'column' }}>
         {showSeparator && <MessageSeparator date={item.createdAt} />}
@@ -303,6 +320,32 @@ export default function ChatDetailScreen() {
 
   const isGroup = conversation?.type === 'GROUP';
   const isDirect = !isGroup;
+  const [createPollVisible, setCreatePollVisible] = React.useState(false);
+  const [isCreatingPoll, setIsCreatingPoll] = React.useState(false);
+
+  const handlePollUpdated = useCallback(
+    (messageId: string, poll: PollDetail) => {
+      if (!id) return;
+      applyPollUpdateToCache(queryClient, messagesQueryKey(id, 'older'), {
+        messageId,
+        poll,
+      });
+    },
+    [id, queryClient],
+  );
+
+  const handleCreatePoll = useCallback(
+    async (params: import('@/types/poll').CreatePollParams) => {
+      if (!accessToken) return;
+      setIsCreatingPoll(true);
+      try {
+        await mobileApi.createPoll(params, accessToken);
+      } finally {
+        setIsCreatingPoll(false);
+      }
+    },
+    [accessToken],
+  );
 
   // Sync active group call status on mount
   useEffect(() => {
@@ -467,13 +510,14 @@ export default function ChatDetailScreen() {
           onRecall={handleRecall}
           onDeleteForMe={handleDeleteForMe}
           onForward={handleForward}
+          onPollUpdated={handlePollUpdated}
           isHighlighted={item.id.toString() === highlightedId?.toString()}
         />
       );
     },
     [user?.id, messages, isGroup, isDirect, latestMyMessageId,
       setSelectedMsgForMenu, jumpToMessage, handleMediaPress, handleRetry,
-      handleRecall, handleDeleteForMe, handleForward, highlightedId],
+      handleRecall, handleDeleteForMe, handleForward, handlePollUpdated, highlightedId],
   );
 
   const handleSend = useCallback(
@@ -575,7 +619,12 @@ export default function ChatDetailScreen() {
           )}
         </View>
 
-        <ChatInput onSend={handleSend} conversationId={id} />
+        <ChatInput
+          onSend={handleSend}
+          conversationId={id}
+          isGroup={isGroup}
+          onCreatePoll={isGroup ? () => setCreatePollVisible(true) : undefined}
+        />
       </KeyboardAvoidingView>
 
       <MessageActionSheet
@@ -630,6 +679,16 @@ export default function ChatDetailScreen() {
         items={allMediaItems}
         initialIndex={viewerState.initialIndex}
       />
+
+      {isGroup && id ? (
+        <CreatePollModal
+          visible={createPollVisible}
+          onClose={() => setCreatePollVisible(false)}
+          conversationId={id}
+          onSubmit={handleCreatePoll}
+          isSubmitting={isCreatingPoll}
+        />
+      ) : null}
     </View>
   );
 }

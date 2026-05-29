@@ -124,8 +124,13 @@ export function ForwardMessageModal({
     }, [conversations, search]);
 
     const hasMedia = (sourceMessage?.mediaAttachments?.length ?? 0) > 0;
+    
+    const stripHtml = (html: string) => {
+        return /<[a-z][\s\S]*>/i.test(html) ? html.replace(/<[^>]*>?/gm, '') : html;
+    };
+
     const sourcePreview =
-        sourceMessage?.content?.trim() ||
+        (sourceMessage?.content ? stripHtml(sourceMessage.content).trim() : '') ||
         (hasMedia ? 'Nội dung sẽ được chuyển tiếp' : 'Nội dung sẽ được chuyển tiếp');
 
     /* ── reset ── */
