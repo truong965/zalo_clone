@@ -14,7 +14,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   DOCKERHUB_BACKEND_IMAGE: trungmai965/zalo_backend
   DOCKERHUB_MEDIA_WORKER_IMAGE: trungmai965/zalo_media_worker
-  EC2_STACK_DIR: ~/zalo_stack
+  EC2_STACK_DIR: /home/ubuntu/zalo_stack
   AWS_REGION: ap-southeast-1
 
 jobs:
@@ -85,7 +85,7 @@ jobs:
           set -euo pipefail
 
           ARTIFACT_URI="$1"
-          STACK_DIR="$HOME/zalo_stack"
+          STACK_DIR="/home/ubuntu/zalo_stack"
 
           mkdir -p "$STACK_DIR"
           cd "$STACK_DIR"
