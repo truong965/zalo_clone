@@ -571,7 +571,8 @@ services:
     volumes:
       - ai_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${AI_POSTGRES_USER} -d ${AI_POSTGRES_DB}"]
+      test:
+        ["CMD-SHELL", "pg_isready -U ${AI_POSTGRES_USER} -d ${AI_POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -671,7 +672,7 @@ scp -i /d/HKII-2025-2026/zalo_backend_key_pair.pem \
 SSH vào EC2:
 
 ```bash
-ssh -i /d/HKII-2025-2026/zalo_backend_key_pair.pem ubuntu@<BACKEND_ELASTIC_IP>
+ssh -i /d/HKII-2025-2026/zalo_backend_key_pair.pem ubuntu@18.136.25.102
 ```
 
 Trên EC2:
