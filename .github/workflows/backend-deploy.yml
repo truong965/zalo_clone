@@ -127,7 +127,18 @@ jobs:
           done
 
           echo ">>> Checking nginx health endpoint..."
-          docker compose -f docker-compose.prod.yml --env-file .env exec -T nginx wget -qO- http://localhost/health
+          for i in $(seq 1 10); do
+            if curl -fsS http://localhost/health; then
+              echo
+              break
+            fi
+            if [ "$i" = "10" ]; then
+              echo "Nginx healthcheck timed out."
+              docker compose -f docker-compose.prod.yml --env-file .env logs --tail=80 nginx
+              exit 1
+            fi
+            sleep 3
+          done
 
           echo ">>> Pruning dangling images..."
           docker image prune -f
