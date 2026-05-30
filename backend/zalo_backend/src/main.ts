@@ -97,6 +97,7 @@ async function bootstrap() {
   logger.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
   logger.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
   logger.log(`🏥 Health Check: http://localhost:${port}/api/v1/health`);
-  logger.log(`🔌 Socket.IO: ws://localhost:${port}/socket.io`);
+  logger.log(`🔌 Socket.IO (update): ws://localhost:${port}/socket.io`);
+  logger.log(`create by: Truong`);
 }
 bootstrap();
