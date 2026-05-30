@@ -42,8 +42,6 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { ChatFormattingToolbar } from './chat-formatting-toolbar';
 import { FontSize } from '../utils/tiptap-font-size';
 
-const { TextArea } = Input;
-
 // ============================================================================
 // FILE INPUT ACCEPT STRINGS (split for UX — two buttons, two filters)
 // ============================================================================
@@ -152,15 +150,6 @@ export function ChatInput({
             conversationId: conversationId ?? undefined,
       });
 
-      const handleEditorKeyDown = useCallback((view: any, event: KeyboardEvent) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  void handleSend();
-                  return true;
-            }
-            return false;
-      }, []); // handleSend will be bound later via ref if needed, or we just rely on latest closure
-
       const editor = useEditor({
             extensions: [
                   StarterKit,
@@ -180,7 +169,7 @@ export function ChatInput({
                   attributes: {
                         class: 'prose prose-sm max-w-none focus:outline-none min-h-[40px] max-h-[120px] overflow-y-auto px-1 py-1 text-[15px]',
                   },
-                  handleKeyDown: (view, event) => {
+                  handleKeyDown: (_view, event) => {
                         // 1. Shift + Enter
                         if (event.key === 'Enter' && event.shiftKey) {
                               if (editor?.isActive('listItem')) {

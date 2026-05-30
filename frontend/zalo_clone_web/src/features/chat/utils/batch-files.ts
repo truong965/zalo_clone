@@ -45,6 +45,7 @@ const MESSAGE_TYPE_LIMITS: Record<MessageType, number> = {
       STICKER: 0,
       SYSTEM: 0,
       VOICE: 1,
+      POLL: 0,
 };
 
 // ============================================================================
