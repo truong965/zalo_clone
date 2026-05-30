@@ -20,6 +20,8 @@ import type { TwoFactorRequiredResponse } from '@/types/api';
 const { Title, Text } = Typography;
 
 export function LoginPage() {
+  console.log('Login page deploy check: 2026-05-30');
+
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [api, contextHolder] = notification.useNotification();
